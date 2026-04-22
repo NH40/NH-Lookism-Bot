@@ -33,13 +33,19 @@ class TitleService:
             user_id=user.id,
             title_id=title_id,
             set_id=cfg.set_id,
-            granted_by=admin_tg_id,
+            granted_by=admin_tg_id,  # уже BigInteger в модели
         )
         session.add(record)
         await session.flush()
 
         await self._apply_title_bonus(session, user, title_id)
         await self._check_set_completion(session, user, cfg.set_id)
+
+        from app.services.business_service import business_service
+        await business_service._recalc_income(session, user)
+        from app.repositories.squad_repo import squad_repo
+        await squad_repo.update_user_combat_power(session, user)
+
         return {"ok": True, "title": cfg.name}
 
     async def revoke_title(

@@ -21,5 +21,7 @@ class UserDonatTitle(Base):
     user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     title_id: Mapped[str] = mapped_column(String(64), nullable=False)
     set_id: Mapped[str | None] = mapped_column(String(64))
-    granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    granted_by: Mapped[int | None] = mapped_column(BigInteger)  # ← BigInteger!
+    granted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    granted_by: Mapped[int | None] = mapped_column(BigInteger)

@@ -37,7 +37,7 @@ class AdminService:
     async def give_tickets(
         self, session: AsyncSession, user: User, count: int
     ) -> None:
-        user.tickets = user.tickets + count
+        user.tickets += count  # без ограничения max
         await session.flush()
 
     async def give_tui(self, session: AsyncSession, user: User) -> None:

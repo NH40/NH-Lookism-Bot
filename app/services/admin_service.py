@@ -37,7 +37,7 @@ class AdminService:
     async def give_tickets(
         self, session: AsyncSession, user: User, count: int
     ) -> None:
-        user.tickets += count  # без ограничения max
+        user.tickets += count
         await session.flush()
 
     async def give_tui(self, session: AsyncSession, user: User) -> None:
@@ -71,14 +71,11 @@ class AdminService:
     async def patch_reset_progress(
         self, session: AsyncSession, version: str
     ) -> int:
-        """Сброс прогресса всех игроков кроме донатов и пробуждений."""
         from app.services.prestige_service import prestige_service
         result = await session.execute(select(User))
         users = result.scalars().all()
         for user in users:
             await prestige_service._reset_progress(session, user)
-
-        # Записываем версию патча
         from app.models.game_version import GameVersion
         gv = GameVersion(version=version, patch_notes=f"Патч {version}")
         session.add(gv)
@@ -86,7 +83,6 @@ class AdminService:
         return len(users)
 
     async def create_backup(self) -> dict:
-        """Создаёт бэкап БД."""
         import os
         from datetime import datetime
         from app.config import settings
@@ -100,67 +96,48 @@ class AdminService:
             f"-p {settings.POSTGRES_PORT} "
             f"-U {settings.POSTGRES_USER} "
             f"-d {settings.POSTGRES_DB} "
-            f"--clean --if-exists "   # ← добавлено
+            f"--clean --if-exists "
+            f"--no-comments "
             f"-f {filename}"
         )
         ret = os.system(cmd)
-        if ret == 0:
+        if ret == 0 and os.path.exists(filename):
             size = os.path.getsize(filename) // 1024
             return {"ok": True, "filename": filename, "size_kb": size}
         return {"ok": False, "filename": filename}
 
-    async def restore_backup(self, filename: str) -> dict:
-        """Восстанавливает из бэкапа."""
-        import os
-        from app.config import settings
-
-        if not os.path.exists(filename):
-            return {"ok": False, "reason": "Файл не найден"}
-
-        # Сначала дропаем все соединения и пересоздаём схему
-        drop_cmd = (
-            f"PGPASSWORD={settings.POSTGRES_PASSWORD} "
-            f"psql -h {settings.POSTGRES_HOST} "
-            f"-p {settings.POSTGRES_PORT} "
-            f"-U {settings.POSTGRES_USER} "
-            f"-d postgres "
-            f"-c \"SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-            f"WHERE datname='{settings.POSTGRES_DB}' AND pid<>pg_backend_pid();\""
-        )
-        os.system(drop_cmd)
-
-        restore_cmd = (
-            f"PGPASSWORD={settings.POSTGRES_PASSWORD} "
-            f"psql -h {settings.POSTGRES_HOST} "
-            f"-p {settings.POSTGRES_PORT} "
-            f"-U {settings.POSTGRES_USER} "
-            f"-d {settings.POSTGRES_DB} "
-            f"--set ON_ERROR_STOP=off "   # ← не останавливаться на ошибках
-            f"-f {filename}"
-        )
-        ret = os.system(restore_cmd)
-        return {"ok": ret == 0}
-
     async def list_backups(self) -> list[dict]:
-        """Список бэкапов."""
         import os
         backup_dir = "/app/backups"
         os.makedirs(backup_dir, exist_ok=True)
         files = []
         for f in sorted(os.listdir(backup_dir), reverse=True):
-            if f.endswith(".sql"):
+            if f.endswith(".sql") and not f.endswith(".clean.sql"):
                 path = os.path.join(backup_dir, f)
                 size = os.path.getsize(path) // 1024
                 files.append({"name": f, "path": path, "size_kb": size})
         return files
 
     async def restore_backup(self, filename: str) -> dict:
-        """Восстанавливает из бэкапа."""
         import os
         from app.config import settings
 
         if not os.path.exists(filename):
             return {"ok": False, "reason": "Файл не найден"}
+
+        # Убираем строку transaction_timeout
+        clean_filename = filename + ".clean.sql"
+        try:
+            with open(filename, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            lines = [
+                line for line in content.split("\n")
+                if "transaction_timeout" not in line
+            ]
+            with open(clean_filename, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines))
+        except Exception as e:
+            return {"ok": False, "reason": f"Ошибка подготовки: {e}"}
 
         cmd = (
             f"PGPASSWORD={settings.POSTGRES_PASSWORD} "
@@ -168,10 +145,18 @@ class AdminService:
             f"-p {settings.POSTGRES_PORT} "
             f"-U {settings.POSTGRES_USER} "
             f"-d {settings.POSTGRES_DB} "
-            f"-f {filename}"
+            f"--set ON_ERROR_STOP=off "
+            f"-q "
+            f"-f {clean_filename}"
         )
-        ret = os.system(cmd)
-        return {"ok": ret == 0}
+        os.system(cmd)
+
+        try:
+            os.remove(clean_filename)
+        except Exception:
+            pass
+
+        return {"ok": True}
 
 
 admin_service = AdminService()

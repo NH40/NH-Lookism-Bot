@@ -1,8 +1,4 @@
 import random
-
-from requests import session
-from app.models import user
-from app.services import prestige_service
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.models.city import City, District, FistBot
@@ -12,7 +8,6 @@ from app.repositories.city_repo import city_repo
 from app.repositories.user_repo import user_repo
 from app.data.squad import ATTACK_WIN_INFLUENCE_BONUS
 from app.data.cities import DISTRICT_BASE_POWER
-
 
 # ── КД атаки по фазам (секунды) ─────────────────────────────────────────────
 ATTACK_CD: dict[str, int] = {
@@ -30,7 +25,6 @@ FIST_BOT_CONFIGS = [
     {"name": "Пэк", "ratio": 1.10},
     {"name": "Ли",  "ratio": 1.20},
 ]
-
 
 class GameService:
 

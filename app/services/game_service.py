@@ -1,4 +1,8 @@
 import random
+
+from requests import session
+from app.models import user
+from app.services import prestige_service
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.models.city import City, District, FistBot
@@ -492,8 +496,8 @@ class GameService:
         self, session: AsyncSession, user: User
     ) -> dict:
         """Уничтожение банды — полный сброс."""
-        from app.services.prestige_service import PrestigeService
-        await PrestigeService()._reset_progress(session, user)
+        from app.services.prestige_service import prestige_service
+        await prestige_service._reset_progress(session, user)
         return {
             "ok": True, "destroyed": True,
             "message": "💀 Ваша банда уничтожена! Начинайте сначала."
@@ -502,15 +506,15 @@ class GameService:
     async def _destroy_king(
         self, session: AsyncSession, user: User
     ) -> dict:
-        from app.services.prestige_service import PrestigeService
-        await PrestigeService()._reset_progress(session, user)
+        from app.services.prestige_service import prestige_service
+        await prestige_service._reset_progress(session, user)
         return {"ok": True, "destroyed": True, "message": "💀 Вы потеряли все города!"}
 
     async def _destroy_fist(
         self, session: AsyncSession, user: User
     ) -> dict:
-        from app.services.prestige_service import PrestigeService
-        await PrestigeService()._reset_progress(session, user)
+        from app.services.prestige_service import prestige_service
+        await prestige_service._reset_progress(session, user)
         return {"ok": True, "destroyed": True, "message": "💀 Вы потеряли все города кулака!"}
 
 

@@ -5,17 +5,29 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.models.user import User
+from app.models.game_version import GameVersion
 from app.utils.keyboards.common import back_kb
 from app.utils.formatters import fmt_num, fmt_power
 
 router = Router()
 
-GAME_VERSION = "1.0.1"
+DEFAULT_VERSION = "1.0.0"
 
 
 class SettingsFSM(StatesGroup):
     waiting_gang_name = State()
+
+
+async def get_current_version(session: AsyncSession) -> str:
+    result = await session.execute(
+        select(GameVersion)
+        .order_by(GameVersion.applied_at.desc())
+        .limit(1)
+    )
+    gv = result.scalar_one_or_none()
+    return gv.version if gv else DEFAULT_VERSION
 
 
 @router.callback_query(F.data == "settings")
@@ -23,19 +35,31 @@ async def cb_settings(cb: CallbackQuery, session: AsyncSession, user: User):
     user.settings_opened += 1
     await session.flush()
 
+    version = await get_current_version(session)
+
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="📊 Мой профиль",        callback_data="profile"))
-    builder.row(InlineKeyboardButton(text="✏️ Сменить название банды", callback_data="change_gang_name"))
+    builder.row(InlineKeyboardButton(
+        text="📊 Мой профиль", callback_data="profile"
+    ))
+    builder.row(InlineKeyboardButton(
+        text="✏️ Сменить название банды", callback_data="change_gang_name"
+    ))
     notif_text = f"🔔 Уведомления: {'ВКЛ' if user.notifications_enabled else 'ВЫКЛ'}"
-    builder.row(InlineKeyboardButton(text=notif_text,              callback_data="toggle_notifications"))
-    builder.row(InlineKeyboardButton(text="🔗 Реферальная ссылка", callback_data="referral_info"))
-    builder.row(InlineKeyboardButton(text="◀️ Назад",              callback_data="main_menu"))
+    builder.row(InlineKeyboardButton(
+        text=notif_text, callback_data="toggle_notifications"
+    ))
+    builder.row(InlineKeyboardButton(
+        text="🔗 Реферальная ссылка", callback_data="referral_info"
+    ))
+    builder.row(InlineKeyboardButton(
+        text="◀️ Назад", callback_data="main_menu"
+    ))
 
     await cb.message.edit_text(
         f"⚙️ <b>Настройки</b>\n\n"
         f"🏴 Название банды: {user.gang_name or 'не задано'}\n"
         f"🔔 Уведомления: {'ВКЛ' if user.notifications_enabled else 'ВЫКЛ'}\n"
-        f"🔖 Версия: {GAME_VERSION}\n\n"
+        f"🔖 Версия: {version}\n\n"
         f"Выбери действие:",
         reply_markup=builder.as_markup(),
         parse_mode="HTML",
@@ -50,7 +74,9 @@ async def cb_referral_info(cb: CallbackQuery, session: AsyncSession, user: User)
     ref_link = f"https://t.me/lookism_batlle_bot?start=ref_{user.tg_id}"
 
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="◀️ К настройкам", callback_data="settings"))
+    builder.row(InlineKeyboardButton(
+        text="◀️ К настройкам", callback_data="settings"
+    ))
 
     students_str = ""
     if students:

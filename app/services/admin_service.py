@@ -100,6 +100,7 @@ class AdminService:
             f"-p {settings.POSTGRES_PORT} "
             f"-U {settings.POSTGRES_USER} "
             f"-d {settings.POSTGRES_DB} "
+            f"--clean --if-exists "   # ← добавлено
             f"-f {filename}"
         )
         ret = os.system(cmd)
@@ -107,6 +108,38 @@ class AdminService:
             size = os.path.getsize(filename) // 1024
             return {"ok": True, "filename": filename, "size_kb": size}
         return {"ok": False, "filename": filename}
+
+    async def restore_backup(self, filename: str) -> dict:
+        """Восстанавливает из бэкапа."""
+        import os
+        from app.config import settings
+
+        if not os.path.exists(filename):
+            return {"ok": False, "reason": "Файл не найден"}
+
+        # Сначала дропаем все соединения и пересоздаём схему
+        drop_cmd = (
+            f"PGPASSWORD={settings.POSTGRES_PASSWORD} "
+            f"psql -h {settings.POSTGRES_HOST} "
+            f"-p {settings.POSTGRES_PORT} "
+            f"-U {settings.POSTGRES_USER} "
+            f"-d postgres "
+            f"-c \"SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+            f"WHERE datname='{settings.POSTGRES_DB}' AND pid<>pg_backend_pid();\""
+        )
+        os.system(drop_cmd)
+
+        restore_cmd = (
+            f"PGPASSWORD={settings.POSTGRES_PASSWORD} "
+            f"psql -h {settings.POSTGRES_HOST} "
+            f"-p {settings.POSTGRES_PORT} "
+            f"-U {settings.POSTGRES_USER} "
+            f"-d {settings.POSTGRES_DB} "
+            f"--set ON_ERROR_STOP=off "   # ← не останавливаться на ошибках
+            f"-f {filename}"
+        )
+        ret = os.system(restore_cmd)
+        return {"ok": ret == 0}
 
     async def list_backups(self) -> list[dict]:
         """Список бэкапов."""

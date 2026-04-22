@@ -4,7 +4,7 @@ from aiogram.filters import CommandStart, Command
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.utils.keyboards.common import main_menu_kb, back_kb
-from app.utils.formatters import fmt_num, fmt_power, phase_label, phase_emoji
+from app.utils.formatters import fmt_num, fmt_power, phase_label
 
 router = Router()
 
@@ -18,17 +18,104 @@ def _phase_emoji(phase: str) -> str:
     }.get(phase, "🏴")
 
 
-def _main_menu_text(user: User) -> str:
-    phase_str = f"{_phase_emoji(user.phase)} Фаза: {phase_label(user.phase)}"
+async def _main_menu_text(session: AsyncSession, user: User) -> str:
+    from app.models.skill import UserMastery
+    from sqlalchemy import select
+    from app.services.potion_service import potion_service
+    from datetime import datetime, timezone
+
+    # Мастерство
+    r = await session.execute(
+        select(UserMastery).where(UserMastery.user_id == user.id)
+    )
+    mastery = r.scalar_one_or_none()
+
+    bonus_map  = {0: 0, 1: 5,  2: 10, 3: 20, 4: 30}
+    speed_map  = {0: 0, 1: 5,  2: 10, 3: 15, 4: 20}
+
+    mastery_lines = []
+    if mastery:
+        if mastery.strength > 0:
+            mastery_lines.append(f"  💪 Сила {mastery.strength}/4 (+{bonus_map[mastery.strength]}% мощи)")
+        if mastery.speed > 0:
+            mastery_lines.append(f"  ⚡ Скорость {mastery.speed}/4 (-{speed_map[mastery.speed]}% КД)")
+        if mastery.endurance > 0:
+            mastery_lines.append(f"  🛡 Выносливость {mastery.endurance}/4 (+{speed_map[mastery.endurance]}% порог)")
+        if mastery.technique > 0:
+            mastery_lines.append(f"  🏋 Техника {mastery.technique}/4 (+{bonus_map[mastery.technique]}% трен./доход)")
+
+    # Путь навыков
+    path_emoji = {
+        "businessman": "💼", "romantic": "💝", "monster": "👹"
+    }
+    path_name = {
+        "businessman": "Бизнесмен", "romantic": "Романтик", "monster": "Монстр"
+    }
+    path_line = ""
+    if user.skill_path:
+        emoji = path_emoji.get(user.skill_path, "🛤")
+        name = path_name.get(user.skill_path, user.skill_path)
+        path_line = f"  {emoji} Путь: {name}"
+
+    # Активные зелья
+    potions = await potion_service.get_active(session, user.id)
+    now = datetime.now(timezone.utc)
+    potion_lines = []
+    potion_emoji = {
+        "power":    "⚔️",
+        "wealth":   "💰",
+        "influence":"⚡",
+        "training": "🏋",
+        "luck":     "🍀",
+    }
+    potion_name = {
+        "power":    "Сила",
+        "wealth":   "Богатство",
+        "influence":"Влияние",
+        "training": "Тренировка",
+        "luck":     "Удача",
+    }
+    for p in potions:
+        remaining = max(0, int((p.expires_at - now).total_seconds()))
+        m, s = divmod(remaining, 60)
+        time_str = f"{m}м {s}с" if m else f"{s}с"
+        emoji = potion_emoji.get(p.potion_type, "🧪")
+        name = potion_name.get(p.potion_type, p.potion_type)
+        potion_lines.append(f"  {emoji} {name} +{p.bonus_value}% ({time_str})")
+
+    # УИ статус
+    ui_line = ""
+    if user.ultra_instinct or user.true_ultra_instinct:
+        tui = " TUI" if user.true_ultra_instinct else ""
+        ui_line = f"  🤖 УИ{tui} активен"
+
+    # Собираем блок бафов
+    buff_lines = []
+    if mastery_lines:
+        buff_lines.append("━━━ ⚔️ Мастерство ━━━")
+        buff_lines.extend(mastery_lines)
+    if path_line or ui_line:
+        buff_lines.append("━━━ 🛤 Развитие ━━━")
+        if path_line:
+            buff_lines.append(path_line)
+        if ui_line:
+            buff_lines.append(ui_line)
+    if potion_lines:
+        buff_lines.append("━━━ 🧪 Активные зелья ━━━")
+        buff_lines.extend(potion_lines)
+
+    buff_section = ("\n" + "\n".join(buff_lines)) if buff_lines else ""
+
     return (
         f"👤 {user.full_name}\n"
-        f"{'🏴 Банда: ' + user.gang_name if user.gang_name else ''}\n"
-        f"{'─' * 20}\n"
-        f"📍 {phase_str}\n"
+        + (f"🏴 Банда: {user.gang_name}\n" if user.gang_name else "")
+        + f"{'─' * 20}\n"
+        f"{_phase_emoji(user.phase)} Фаза: {phase_label(user.phase)}\n"
         f"💰 NHCoin: {fmt_num(user.nh_coins)}\n"
         f"⚡ Влияние: {fmt_num(user.influence)}\n"
-        f"💪 Боевая мощь: {fmt_num(user.combat_power)}\n\n"
-        f"Выбери раздел:"
+        f"💪 Боевая мощь: {fmt_num(user.combat_power)}"
+        + buff_section
+        + "\n\nВыбери раздел:"
     )
 
 
@@ -37,16 +124,12 @@ async def cmd_start(
     message: Message, session: AsyncSession,
     user: User, is_new_user: bool
 ):
-    # Реферальная ссылка
     args = message.text.split()
     if is_new_user and len(args) > 1 and args[1].startswith("ref_"):
         try:
             teacher_tg_id = int(args[1].replace("ref_", ""))
             from app.services.referral_service import referral_service
-            await referral_service.register_with_referral(
-                session, user, teacher_tg_id
-            )
-            # Бонус новому игроку
+            await referral_service.register_with_referral(session, user, teacher_tg_id)
             user.nh_coins += 2000
             await session.flush()
         except Exception:
@@ -62,8 +145,9 @@ async def cmd_start(
             parse_mode="HTML",
         )
     else:
+        text = await _main_menu_text(session, user)
         await message.answer(
-            _main_menu_text(user),
+            text,
             reply_markup=main_menu_kb(),
             parse_mode="HTML",
         )
@@ -71,9 +155,10 @@ async def cmd_start(
 
 @router.callback_query(F.data == "main_menu")
 async def cb_main_menu(cb: CallbackQuery, session: AsyncSession, user: User):
+    text = await _main_menu_text(session, user)
     try:
         await cb.message.edit_text(
-            _main_menu_text(user),
+            text,
             reply_markup=main_menu_kb(),
             parse_mode="HTML",
         )
@@ -92,7 +177,6 @@ async def cb_profile(cb: CallbackQuery, session: AsyncSession, user: User):
     titles_str = await title_repo.get_titles_display(session, user.id)
     districts = await city_repo.get_user_district_count(session, user.id)
     info = await business_service.get_income_breakdown(session, user)
-    potions_str = await potion_service.get_active_summary(session, user.id)
 
     prestige_str = ""
     if user.prestige_level > 0:
@@ -114,6 +198,7 @@ async def cb_profile(cb: CallbackQuery, session: AsyncSession, user: User):
         f"NHCoin: {fmt_num(user.nh_coins)}\n"
         f"Доход: {fmt_num(info['base_income'])}/мин"
         + (f" → {fmt_num(info['final_income'])}/мин" if info['final_income'] != info['base_income'] else "")
+        + (f" (+{info['total_bonus_percent']}%)" if info['total_bonus_percent'] else "")
         + f"\n\n━━━ ⚔️ Боевые ━━━\n"
         f"Мощь: {fmt_num(user.combat_power)}\n"
         f"Влияние: {fmt_num(user.influence)}\n\n"
@@ -122,7 +207,6 @@ async def cb_profile(cb: CallbackQuery, session: AsyncSession, user: User):
         + prestige_str
         + f"\n\n━━━ 💎 Титулы ━━━\n"
         + titles_str
-        + (f"\n\n🧪 Зелья:\n{potions_str}" if potions_str else "")
     )
     await cb.message.edit_text(
         text,

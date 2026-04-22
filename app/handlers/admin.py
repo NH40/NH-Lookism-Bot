@@ -267,16 +267,56 @@ async def cb_adm_grant_title(cb: CallbackQuery, session: AsyncSession, user: Use
 
     result = await title_service.grant_title(session, found, title_id, user.tg_id)
     if result["ok"]:
-        await cb.answer(f"✅ Титул {result['title']} выдан!")
+        await cb.answer(f"✅ {result['title']} выдан!")
     else:
         await cb.answer(result["reason"], show_alert=True)
 
-    # Обновляем экран сета
-    from app.data.titles import DONAT_TITLE_MAP
+    # Показываем сет заново — НЕ меняем cb.data, вызываем напрямую
+    from app.data.titles import DONAT_TITLE_MAP, DONAT_TITLES, DONAT_SET_MAP
+    from app.models.title import UserDonatTitle
     cfg = DONAT_TITLE_MAP.get(title_id)
-    if cfg:
-        cb.data = f"adm_grantset:{tg_id}:{cfg.set_id}"
-        await cb_adm_grantset(cb, session, user)
+    if not cfg:
+        return
+
+    set_id = cfg.set_id
+    s = DONAT_SET_MAP.get(set_id)
+    owned_r = await session.execute(
+        select(UserDonatTitle.title_id).where(UserDonatTitle.user_id == found.id)
+    )
+    owned = set(owned_r.scalars().all())
+    titles_in_set = [t for t in DONAT_TITLES if t.set_id == set_id]
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text=f"🔱 Выдать весь сет ({s.name if s else set_id})",
+        callback_data=f"adm_grantset_all:{tg_id}:{set_id}"
+    ))
+    builder.row(InlineKeyboardButton(
+        text="─── Отдельные титулы ───", callback_data="noop"
+    ))
+    for t in titles_in_set:
+        status = "✅" if t.title_id in owned else "❌"
+        builder.row(InlineKeyboardButton(
+            text=f"{status} {t.emoji} {t.name} — {t.price_rub}₽",
+            callback_data=f"adm_grant_title:{tg_id}:{t.title_id}"
+        ))
+    builder.row(InlineKeyboardButton(
+        text="◀️ Назад", callback_data=f"adm_title:{tg_id}"
+    ))
+
+    lines = [f"📦 <b>{s.name if s else set_id}</b>\n"]
+    for t in titles_in_set:
+        status = "✅" if t.title_id in owned else "❌"
+        lines.append(f"{status} {t.emoji} {t.name}\n  {t.bonus_description}")
+
+    try:
+        await cb.message.edit_text(
+            "\n".join(lines),
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("adm_untitle:"))

@@ -48,13 +48,13 @@ async def _ui_recruit(session: AsyncSession, user):
         return
     await squad_service.recruit(session, user)
 
-
 async def auction_tick():
     async with AsyncSessionFactory() as session:
         async with session.begin():
-            # Завершаем если есть активный и время вышло
             result = await auction_service.finish_auction(session)
-            if result is not None:
+
+            if result is not None and not result.get("continued"):
+                # Аукцион завершён полностью
                 if result.get("winner_id"):
                     await _notify_auction_winner(session, result)
 

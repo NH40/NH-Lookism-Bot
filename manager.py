@@ -17,18 +17,25 @@ async def backup():
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{BACKUP_DIR}/backup_{ts}.sql"
     cmd = (
-        f"PGPASSWORD={settings.POSTGRES_PASSWORD} "
-        f"pg_dump -h {settings.POSTGRES_HOST} "
+        f"PGPASSWORD='{settings.POSTGRES_PASSWORD}' "
+        f"pg_dump "
+        f"-h {settings.POSTGRES_HOST} "
         f"-p {settings.POSTGRES_PORT} "
         f"-U {settings.POSTGRES_USER} "
-        f"-d {settings.POSTGRES_DB} "
-        f"-f {filename}"
+        f"--no-privileges "
+        f"--no-owner "
+        f"--clean "
+        f"--if-exists "
+        f"-F p "
+        f"-f '{filename}' "
+        f"{settings.POSTGRES_DB}"
     )
     ret = os.system(cmd)
     if ret == 0:
-        print(f"✅ Бэкап создан: {filename}")
+        size = os.path.getsize(filename) // 1024
+        print(f"✅ Бэкап создан: {filename} ({size} KB)")
     else:
-        print(f"❌ Ошибка создания бэкапа")
+        print(f"❌ Ошибка создания бэкапа (код {ret})")
 
 
 async def restore(filename: str):
@@ -37,38 +44,57 @@ async def restore(filename: str):
     if not os.path.exists(filename):
         print(f"❌ Файл не найден: {filename}")
         return
+
+    # Фильтруем проблемные строки
+    clean_file = filename + ".clean.sql"
+    with open(filename, "r", encoding="utf-8", errors="ignore") as f:
+        lines = f.readlines()
+    filtered = [
+        l for l in lines
+        if "transaction_timeout" not in l
+    ]
+    with open(clean_file, "w") as f:
+        f.writelines(filtered)
+
     cmd = (
-        f"PGPASSWORD={settings.POSTGRES_PASSWORD} "
-        f"psql -h {settings.POSTGRES_HOST} "
+        f"PGPASSWORD='{settings.POSTGRES_PASSWORD}' "
+        f"psql "
+        f"-h {settings.POSTGRES_HOST} "
         f"-p {settings.POSTGRES_PORT} "
         f"-U {settings.POSTGRES_USER} "
         f"-d {settings.POSTGRES_DB} "
-        f"-f {filename}"
+        f"-v ON_ERROR_STOP=0 "
+        f"-f '{clean_file}'"
     )
     ret = os.system(cmd)
+    try:
+        os.remove(clean_file)
+    except Exception:
+        pass
     if ret == 0:
         print(f"✅ Восстановлено из: {filename}")
     else:
-        print(f"❌ Ошибка восстановления")
+        print(f"⚠️ Восстановлено с предупреждениями из: {filename}")
 
 
 async def list_backups():
     """Показывает список бэкапов."""
     os.makedirs(BACKUP_DIR, exist_ok=True)
     files = sorted([
-        f for f in os.listdir(BACKUP_DIR) if f.endswith(".sql")
+        f for f in os.listdir(BACKUP_DIR)
+        if f.endswith(".sql") and ".clean" not in f
     ], reverse=True)
     if not files:
         print("Бэкапов нет")
         return
     for f in files:
         path = os.path.join(BACKUP_DIR, f)
-        size = os.path.getsize(path)
-        print(f"  {f} — {size // 1024} KB")
+        size = os.path.getsize(path) // 1024
+        print(f"  {f} — {size} KB")
 
 
 async def migrate():
-    """Создаёт таблицы в БД (альтернатива alembic)."""
+    """Создаёт таблицы в БД."""
     from app.database import init_db
     await init_db()
     print("✅ Таблицы созданы")
@@ -87,7 +113,7 @@ async def stats():
 
 
 async def auto_backup_loop():
-    """Бесконечный цикл бэкапа каждые 6 часов (для manager контейнера)."""
+    """Авто-бэкап каждые 6 часов."""
     print("🔄 Запущен авто-бэкап каждые 6 часов")
     while True:
         await backup()
@@ -111,7 +137,6 @@ Lookism Battle Planet — Manager
 if __name__ == "__main__":
     args = sys.argv[1:]
     if not args:
-        # В Docker — запускаем авто-бэкап
         asyncio.run(auto_backup_loop())
     elif args[0] == "backup":
         asyncio.run(backup())

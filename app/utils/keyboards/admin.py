@@ -5,6 +5,13 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 def admin_main_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="🔍 Найти игрока",  callback_data="admin_find"))
+    # В admin_main_kb добавить:
+    builder.row(InlineKeyboardButton(
+        text="📢 Рассылка всем", callback_data="admin_broadcast"
+    ))
+    builder.row(InlineKeyboardButton(
+        text="👥 Действия со всеми", callback_data="admin_bulk"
+    ))
     builder.row(
         InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats"),
         InlineKeyboardButton(text="💾 Бэкап",      callback_data="admin_backup"),

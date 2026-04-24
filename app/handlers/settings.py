@@ -52,6 +52,9 @@ async def cb_settings(cb: CallbackQuery, session: AsyncSession, user: User):
         text="🔗 Реферальная ссылка", callback_data="referral_info"
     ))
     builder.row(InlineKeyboardButton(
+        text="💀 Удалить банду", callback_data="delete_gang_confirm"
+    ))
+    builder.row(InlineKeyboardButton(
         text="◀️ Назад", callback_data="main_menu"
     ))
 
@@ -142,3 +145,32 @@ async def cb_toggle_notifications(
     user.notifications_enabled = not user.notifications_enabled
     await session.flush()
     await cb_settings(cb, session, user)
+
+@router.callback_query(F.data == "delete_gang_confirm")
+async def cb_delete_gang_confirm(cb: CallbackQuery, session: AsyncSession, user: User):
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text="✅ Да, удалить", callback_data="delete_gang_do"
+    ))
+    builder.row(InlineKeyboardButton(
+        text="❌ Отмена", callback_data="settings"
+    ))
+    await cb.message.edit_text(
+        "💀 <b>Удаление банды</b>\n\n"
+        "Весь прогресс будет сброшен!\n"
+        "Донаты и пробуждения сохранятся.\n\n"
+        "Подтвердить?",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(F.data == "delete_gang_do")
+async def cb_delete_gang_do(cb: CallbackQuery, session: AsyncSession, user: User):
+    from app.services.prestige_service import prestige_service
+    await prestige_service._reset_progress(session, user)
+    await cb.message.edit_text(
+        "💀 <b>Банда удалена.</b>\n\nНачинай сначала!",
+        reply_markup=back_kb("main_menu"),
+        parse_mode="HTML",
+    )

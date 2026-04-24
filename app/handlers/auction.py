@@ -17,19 +17,17 @@ class AuctionFSM(StatesGroup):
     waiting_bid = State()
 
 
-def _format_remaining(seconds: int) -> str:
+def _fmt_time(seconds: int) -> str:
     if seconds <= 0:
         return "завершается..."
     m, s = divmod(seconds, 60)
-    if m:
-        return f"{m}м {s}с"
-    return f"{s}с"
+    return f"{m}м {s}с" if m else f"{s}с"
 
 
 async def _render_auction(
     cb: CallbackQuery, session: AsyncSession, user: User
 ) -> None:
-    data = await auction_service.get_auction_display(session, user)
+    data = await auction_service.get_display_data(session, user)
 
     if not data["active"]:
         builder = InlineKeyboardBuilder()
@@ -49,64 +47,50 @@ async def _render_auction(
             pass
         return
 
-    remaining_str = _format_remaining(data["remaining"])
     leader_str = data["leader_name"]
     if data["is_leader"]:
         leader_str = f"👑 {leader_str} (вы лидируете!)"
-
-    current_bid = data["current_bid"]
-    min_next = data["min_next_bid"]
-
-    # Быстрые ставки (+5%, +10%, +50%)
-    bid_5 = max(min_next, int(current_bid * 1.05)) if current_bid > 0 else min_next
-    bid_10 = max(min_next, int(current_bid * 1.10)) if current_bid > 0 else int(min_next * 1.1)
-    bid_50 = max(min_next, int(current_bid * 1.50)) if current_bid > 0 else int(min_next * 1.5)
-
-    builder = InlineKeyboardBuilder()
-    builder.row(
-        InlineKeyboardButton(
-            text=f"📈 +5% ({fmt_num(bid_5)})",
-            callback_data=f"auction_quick_bid:{bid_5}"
-        ),
-        InlineKeyboardButton(
-            text=f"📈 +10% ({fmt_num(bid_10)})",
-            callback_data=f"auction_quick_bid:{bid_10}"
-        ),
-        InlineKeyboardButton(
-            text=f"📈 +50% ({fmt_num(bid_50)})",
-            callback_data=f"auction_quick_bid:{bid_50}"
-        ),
-    )
-    builder.row(InlineKeyboardButton(
-        text="✏️ Своя ставка",
-        callback_data="auction_custom_bid"
-    ))
-    builder.row(InlineKeyboardButton(
-        text="🔄 Обновить",
-        callback_data="auction"
-    ))
-    builder.row(InlineKeyboardButton(
-        text="◀️ Главное меню",
-        callback_data="main_menu"
-    ))
 
     text = (
         f"{data['tier_emoji']} <b>Аукцион — {data['tier_name']}</b>\n"
         f"Раунд {data['current_round']}/{data['total_rounds']}\n\n"
         f"🎁 Лот: {data['reward_str']}\n"
-        f"💰 Текущая ставка: {fmt_num(current_bid)} NHCoin\n"
+        f"💰 Текущая ставка: {fmt_num(data['current_bid'])} NHCoin\n"
         f"📊 Ставок: {data['bids_count']}\n"
         f"👑 Лидер: {leader_str}\n"
-        f"⏱ Осталось: {remaining_str}\n\n"
+        f"⏱ Осталось: {_fmt_time(data['remaining'])}\n\n"
         f"💼 Твой баланс: {fmt_num(user.nh_coins)} NHCoin\n"
-        f"📌 Мин. ставка: {fmt_num(min_next)} NHCoin"
+        f"📌 Мин. ставка: {fmt_num(data['min_next_bid'])} NHCoin"
     )
+
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text=f"📈 +5% ({fmt_num(data['bid_5'])})",
+            callback_data=f"auction_bid:{data['bid_5']}"
+        ),
+        InlineKeyboardButton(
+            text=f"📈 +10% ({fmt_num(data['bid_10'])})",
+            callback_data=f"auction_bid:{data['bid_10']}"
+        ),
+        InlineKeyboardButton(
+            text=f"📈 +50% ({fmt_num(data['bid_50'])})",
+            callback_data=f"auction_bid:{data['bid_50']}"
+        ),
+    )
+    builder.row(InlineKeyboardButton(
+        text="✏️ Своя ставка", callback_data="auction_custom"
+    ))
+    builder.row(InlineKeyboardButton(
+        text="🔄 Обновить", callback_data="auction"
+    ))
+    builder.row(InlineKeyboardButton(
+        text="◀️ Главное меню", callback_data="main_menu"
+    ))
 
     try:
         await cb.message.edit_text(
-            text,
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
+            text, reply_markup=builder.as_markup(), parse_mode="HTML"
         )
     except Exception:
         pass
@@ -118,10 +102,8 @@ async def cb_auction(cb: CallbackQuery, session: AsyncSession, user: User):
     await cb.answer()
 
 
-@router.callback_query(F.data.startswith("auction_quick_bid:"))
-async def cb_auction_quick_bid(
-    cb: CallbackQuery, session: AsyncSession, user: User
-):
+@router.callback_query(F.data.startswith("auction_bid:"))
+async def cb_auction_bid(cb: CallbackQuery, session: AsyncSession, user: User):
     amount = int(cb.data.split(":")[1])
     result = await auction_service.place_bid(session, user, amount)
     if result["ok"]:
@@ -131,26 +113,31 @@ async def cb_auction_quick_bid(
     await _render_auction(cb, session, user)
 
 
-@router.callback_query(F.data == "auction_custom_bid")
-async def cb_auction_custom_bid(
+@router.callback_query(F.data == "auction_custom")
+async def cb_auction_custom(
     cb: CallbackQuery, session: AsyncSession,
     user: User, state: FSMContext
 ):
-    data = await auction_service.get_auction_display(session, user)
+    data = await auction_service.get_display_data(session, user)
     if not data["active"]:
         await cb.answer("Аукцион не активен", show_alert=True)
         return
 
     await state.set_state(AuctionFSM.waiting_bid)
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="auction"))
-    await cb.message.edit_text(
-        f"✏️ <b>Введите сумму ставки</b>\n\n"
-        f"Минимальная ставка: {fmt_num(data['min_next_bid'])} NHCoin\n"
-        f"Ваш баланс: {fmt_num(user.nh_coins)} NHCoin",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
+    builder.row(InlineKeyboardButton(
+        text="◀️ Назад", callback_data="auction"
+    ))
+    try:
+        await cb.message.edit_text(
+            f"✏️ <b>Введите сумму ставки</b>\n\n"
+            f"Мин. ставка: {fmt_num(data['min_next_bid'])} NHCoin\n"
+            f"Твой баланс: {fmt_num(user.nh_coins)} NHCoin",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
 
 
 @router.message(AuctionFSM.waiting_bid)
@@ -160,7 +147,9 @@ async def msg_auction_bid(
 ):
     await state.clear()
     try:
-        amount = int(message.text.strip().replace(",", "").replace(" ", ""))
+        amount = int(
+            message.text.strip().replace(",", "").replace(" ", "")
+        )
         if amount <= 0:
             raise ValueError
     except ValueError:

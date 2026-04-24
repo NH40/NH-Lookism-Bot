@@ -12,15 +12,15 @@ class CharacterRankConfig:
 
 
 CHARACTER_RANKS: list[CharacterRankConfig] = [
-    CharacterRankConfig("member",      "Член банды",           100,     500,     44),
-    CharacterRankConfig("boss",        "Глава группировки",    500,     1500,    25),
-    CharacterRankConfig("king",        "Король",               1500,    4000,    15),
-    CharacterRankConfig("strong_king", "Сильный король",       4000,    10000,   10),
-    CharacterRankConfig("gen_zero",    "Нулевое поколение",    10000,   30000,   3),
-    CharacterRankConfig("new_legend",  "Новая легенда",        30000,   50000,   1.5),
-    CharacterRankConfig("legend",      "Легенда",              50000,   900000,  1),
-    CharacterRankConfig("peak",        "Вершина",              1000000, 2000000, 0.49),
-    CharacterRankConfig("absolute",    "Абсолют",              5000000, 5000000, 0.01),
+    CharacterRankConfig("member",      "Член банды",           100,     500,     45),
+    CharacterRankConfig("boss",        "Глава группировки",    500,     1500,    30),
+    CharacterRankConfig("king",        "Король",               1500,    4000,    12.0),
+    CharacterRankConfig("strong_king", "Сильный король",       4000,    10000,   7.0),
+    CharacterRankConfig("gen_zero",    "Нулевое поколение",    10000,   30000,   3.5),
+    CharacterRankConfig("new_legend",  "Новая легенда",        30000,   50000,   2.1),
+    CharacterRankConfig("legend",      "Легенда",              50000,   900000,  0.3),
+    CharacterRankConfig("peak",        "Вершина",              1000000, 2000000, 0.15),
+    CharacterRankConfig("absolute",    "Абсолют",              5000000, 5000000, 0.05),
 ]
 
 RANK_CONFIG_MAP: dict[str, CharacterRankConfig] = {
@@ -52,9 +52,12 @@ CHARACTERS: list[dict] = [
     {"name": "Xiaolung (Staff)", "rank": "member", "power": 260, "desc": "Директор 3 филиала Workers, мастер невидимого оружия гуань дао."},
 
     # Глава группировки (min 1500, max 4000)
-    {"name": "Jay (Weapon)", "rank": "king", "power": 1800, "desc": "Молчаливый богач, мастер Systema и Kali, использует любые предметы как оружие."},
-    {"name": "Vasco (Base)", "rank": "king", "power": 1900, "desc": "Лидер Burn Knuckles, добрый великан с татуировками, ученик Брекдака."},
-    {"name": "Vin Jin (Current)", "rank": "king", "power": 2000, "desc": "Носитель очков-велосипед, скрывает лицо, ученик Муджина из Чхонняна."},
+    {"name": "Olli", "rank": "boss", "power": 1500, "desc": "Босс хостела Б, человек что не чувствует боль"},
+    {"name": "Jay (Weapon)", "rank": "boss", "power": 1800, "desc": "Молчаливый богач, мастер Systema и Kali, использует любые предметы как оружие."},
+    {"name": "Vasco (Base)", "rank": "boss", "power": 2000, "desc": "Лидер горячих кулаков, добрый великан с татуировками, ученик Брекдака."},
+    {"name": "Vin Jin (Current)", "rank": "boss", "power": 2020, "desc": "Носитель очков с семислойным стеклом, скрывает лицо, сын Муджина и ученик Шестипалого."},
+
+
     {"name": "Sinu (Current)", "rank": "king", "power": 2500, "desc": "Бывший лидер Big Deal, непобедимый в ближнем бою, пользователь невидимых атак."},
     {"name": "Zack (Base)", "rank": "king", "power": 1700, "desc": "Бывший задира, теперь боксёр с железной волей и техникой Гонсоба."},
     {"name": "Seokdu (Prime)", "rank": "king", "power": 2200, "desc": "Король Соын, мастер ударов головой, проиграл троим из второго поколения."},

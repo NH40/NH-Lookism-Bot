@@ -1,43 +1,45 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from app.scheduler.tasks import income_tick, ultra_instinct_tick, auction_tick
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 def setup_scheduler() -> AsyncIOScheduler:
-    scheduler = AsyncIOScheduler(timezone="UTC")
+    # Импортируем внутри функции чтобы избежать циклических импортов
+    from app.scheduler.tasks import (
+        income_tick,
+        ultra_instinct_tick,
+        auction_round_tick,
+        auction_start_tick,
+    )
 
-    # Доход — каждую минуту
+    scheduler = AsyncIOScheduler()
+
     scheduler.add_job(
         income_tick,
         trigger=IntervalTrigger(minutes=1),
         id="income_tick",
-        replace_existing=True,
-        max_instances=1,
-        misfire_grace_time=30,
+        name="income_tick",
     )
-
-    # УИ авто-действия — каждую минуту
     scheduler.add_job(
         ultra_instinct_tick,
         trigger=IntervalTrigger(minutes=1),
-        id="ui_tick",
-        replace_existing=True,
-        max_instances=1,
-        misfire_grace_time=30,
+        id="ultra_instinct_tick",
+        name="ultra_instinct_tick",
     )
-
-    # Аукцион — каждую минуту
     scheduler.add_job(
-        auction_tick,
-        trigger=IntervalTrigger(minutes=1),
-        id="auction_tick",
-        replace_existing=True,
-        max_instances=1,
-        misfire_grace_time=30,
+        auction_round_tick,
+        trigger=IntervalTrigger(seconds=30),
+        id="auction_round_tick",
+        name="auction_round_tick",
+    )
+    scheduler.add_job(
+        auction_start_tick,
+        trigger=IntervalTrigger(minutes=20),
+        id="auction_start_tick",
+        name="auction_start_tick",
     )
 
-    logger.info("Scheduler configured with 3 jobs")
+    logger.info("Scheduler configured with 4 jobs")
     return scheduler

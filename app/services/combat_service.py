@@ -85,3 +85,4 @@ async def fight_player(
         "defender_power": defender_power,
         "effective_defense": effective_defense,
     }
+

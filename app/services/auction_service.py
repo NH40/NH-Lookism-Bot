@@ -5,16 +5,15 @@ from sqlalchemy import select
 from app.models.auction import Auction, AuctionLot, AuctionBid
 from app.models.user import User
 
+AUCTION_ROUND_SECONDS = 60   # 1 минута на раунд
+BID_EXTEND_SECONDS = 10      # +10 сек при ставке
 
-AUCTION_ROUND_DURATION = 20  # минут на раунд
-
-# Тиры аукциона: название, редкость, раунды, мин ставка
 AUCTION_TIERS = {
-    1: {"name": "Бронзовый",    "emoji": "🟫", "rounds": 2, "min_bid": 500,    "reward_type": "coins",     "color": "common"},
-    2: {"name": "Серебряный",   "emoji": "⬜", "rounds": 2, "min_bid": 2000,   "reward_type": "potion",    "color": "uncommon"},
-    3: {"name": "Золотой",      "emoji": "🟨", "rounds": 3, "min_bid": 5000,   "reward_type": "character", "color": "rare"},
-    4: {"name": "Платиновый",   "emoji": "🟦", "rounds": 3, "min_bid": 15000,  "reward_type": "character", "color": "epic"},
-    5: {"name": "Королевский",  "emoji": "🟧", "rounds": 4, "min_bid": 50000,  "reward_type": "character", "color": "legendary"},
+    1: {"name": "Бронзовый",   "emoji": "🟫", "rounds": 2, "min_bid": 500,   "reward_type": "coins"},
+    2: {"name": "Серебряный",  "emoji": "⬜", "rounds": 2, "min_bid": 2000,  "reward_type": "potion"},
+    3: {"name": "Золотой",     "emoji": "🟨", "rounds": 3, "min_bid": 5000,  "reward_type": "character"},
+    4: {"name": "Платиновый",  "emoji": "🟦", "rounds": 3, "min_bid": 15000, "reward_type": "character"},
+    5: {"name": "Королевский", "emoji": "🟧", "rounds": 4, "min_bid": 50000, "reward_type": "character"},
 }
 
 RANK_BY_TIER = {
@@ -26,9 +25,7 @@ RANK_BY_TIER = {
 
 class AuctionService:
 
-    async def get_active_auction(
-        self, session: AsyncSession
-    ) -> Auction | None:
+    async def get_active_auction(self, session: AsyncSession) -> Auction | None:
         result = await session.execute(
             select(Auction)
             .where(Auction.is_active == True)
@@ -41,12 +38,14 @@ class AuctionService:
         tier = random.randint(1, 5)
         cfg = AUCTION_TIERS[tier]
         now = datetime.now(timezone.utc)
-
         auction = Auction(
             tier=tier,
             is_active=True,
+            current_round=1,
             started_at=now,
-            ends_at=now + timedelta(minutes=AUCTION_ROUND_DURATION),
+            ends_at=now + timedelta(seconds=AUCTION_ROUND_SECONDS),
+            final_bid=0,
+            winner_id=None,
         )
         session.add(auction)
         await session.flush()
@@ -92,10 +91,13 @@ class AuctionService:
 
         now = datetime.now(timezone.utc)
         if now >= auction.ends_at:
-            return {"ok": False, "reason": "Раунд завершён, ждите следующего"}
+            return {"ok": False, "reason": "Раунд завершён"}
 
         lot_r = await session.execute(
-            select(AuctionLot).where(AuctionLot.auction_id == auction.id)
+            select(AuctionLot)
+            .where(AuctionLot.auction_id == auction.id)
+            .order_by(AuctionLot.id.desc())
+            .limit(1)
         )
         lot = lot_r.scalar_one_or_none()
         if not lot:
@@ -113,69 +115,124 @@ class AuctionService:
             prev_r = await session.execute(
                 select(User).where(User.id == auction.winner_id)
             )
-            prev_winner = prev_r.scalar_one_or_none()
-            if prev_winner:
-                prev_winner.nh_coins += auction.final_bid
+            prev = prev_r.scalar_one_or_none()
+            if prev:
+                prev.nh_coins += auction.final_bid
 
         user.nh_coins -= amount
         auction.winner_id = user.id
         auction.final_bid = amount
 
-        bid = AuctionBid(
+        # Продлеваем таймер раунда на BID_EXTEND_SECONDS
+        remaining = (auction.ends_at - now).total_seconds()
+        if remaining < BID_EXTEND_SECONDS:
+            auction.ends_at = now + timedelta(seconds=BID_EXTEND_SECONDS)
+
+        session.add(AuctionBid(
             auction_id=auction.id,
             user_id=user.id,
             amount=amount,
-        )
-        session.add(bid)
+        ))
         await session.flush()
-        return {"ok": True, "bid": amount}
+        return {
+            "ok": True,
+            "bid": amount,
+            "new_ends_at": auction.ends_at,
+        }
 
-    async def finish_auction(self, session: AsyncSession) -> dict | None:
+    async def tick(self, session: AsyncSession) -> dict | None:
+        """
+        Вызывается каждую минуту планировщиком.
+        Возвращает событие: round_end или auction_end или None.
+        """
         auction = await self.get_active_auction(session)
         if not auction:
-            return None
+            await self.start_new_auction(session)
+            return {"event": "started"}
 
         now = datetime.now(timezone.utc)
         if now < auction.ends_at:
-            return None
+            return None  # раунд ещё идёт
 
         cfg = AUCTION_TIERS.get(auction.tier, {})
         total_rounds = cfg.get("rounds", 2)
-
-        # Считаем текущий раунд (по количеству завершённых)
-        elapsed = (now - auction.started_at).total_seconds() / 60
-        current_round = int(elapsed / AUCTION_ROUND_DURATION) + 1
-
-        if current_round < total_rounds:
-            # Продлеваем аукцион на следующий раунд
-            auction.ends_at = auction.ends_at + timedelta(minutes=AUCTION_ROUND_DURATION)
-            await session.flush()
-            return {"continued": True, "round": current_round + 1, "total": total_rounds}
-
-        # Финальный раунд — завершаем
-        auction.is_active = False
-        await session.flush()
+        current_round = auction.current_round or 1
 
         lot_r = await session.execute(
-            select(AuctionLot).where(AuctionLot.auction_id == auction.id)
+            select(AuctionLot)
+            .where(AuctionLot.auction_id == auction.id)
+            .order_by(AuctionLot.id.desc())
+            .limit(1)
         )
         lot = lot_r.scalar_one_or_none()
 
-        if auction.winner_id and lot:
+        winner_info = None
+        if auction.winner_id:
             winner_r = await session.execute(
                 select(User).where(User.id == auction.winner_id)
             )
             winner = winner_r.scalar_one_or_none()
             if winner:
-                await self._deliver_reward(session, winner, lot)
-                winner.auction_wins += 1
-                await session.flush()
+                winner_info = {
+                    "id": winner.id,
+                    "tg_id": winner.tg_id,
+                    "name": winner.full_name,
+                    "bid": auction.final_bid,
+                    "notifications": winner.notifications_enabled,
+                }
+                # Выдаём награду сразу после раунда
+                if lot:
+                    await self._deliver_reward(session, winner, lot)
+                    winner.auction_wins += 1
 
-        return {
-            "winner_id": auction.winner_id,
-            "reward": lot.reward_data if lot else None,
-            "tier": auction.tier,
-        }
+        if current_round >= total_rounds:
+            # Аукцион завершён
+            auction.is_active = False
+            await session.flush()
+            return {
+                "event": "auction_end",
+                "tier": auction.tier,
+                "tier_name": cfg.get("name", ""),
+                "tier_emoji": cfg.get("emoji", "🏛"),
+                "round": current_round,
+                "total_rounds": total_rounds,
+                "winner": winner_info,
+                "lot": lot,
+            }
+        else:
+            # Следующий раунд — генерируем новый лот
+            auction.current_round = current_round + 1
+            auction.final_bid = 0
+            auction.winner_id = None
+            auction.ends_at = now + timedelta(seconds=AUCTION_ROUND_SECONDS)
+
+            # Новый лот для следующего раунда
+            if lot:
+                lot.min_bid = max(
+                    cfg.get("min_bid", 500),
+                    int(auction.final_bid * 1.1) if auction.final_bid else cfg.get("min_bid", 500)
+                )
+            new_reward = await self._generate_reward(auction.tier)
+            new_lot = AuctionLot(
+                auction_id=auction.id,
+                reward_type=cfg["reward_type"],
+                reward_data=new_reward,
+                min_bid=cfg.get("min_bid", 500),
+            )
+            session.add(new_lot)
+            await session.flush()
+
+            return {
+                "event": "round_end",
+                "tier": auction.tier,
+                "tier_name": cfg.get("name", ""),
+                "tier_emoji": cfg.get("emoji", "🏛"),
+                "round": current_round,
+                "total_rounds": total_rounds,
+                "next_round": current_round + 1,
+                "winner": winner_info,
+                "lot": lot,
+            }
 
     async def _deliver_reward(
         self, session: AsyncSession, user: User, lot: AuctionLot
@@ -206,10 +263,9 @@ class AuctionService:
             from app.repositories.squad_repo import squad_repo
             await squad_repo.update_user_combat_power(session, user)
 
-    async def get_auction_display(
+    async def get_display_data(
         self, session: AsyncSession, user: User
     ) -> dict:
-        """Данные для отображения аукциона."""
         auction = await self.get_active_auction(session)
         if not auction:
             return {"active": False}
@@ -218,17 +274,19 @@ class AuctionService:
         now = datetime.now(timezone.utc)
         cfg = AUCTION_TIERS.get(auction.tier, {})
         total_rounds = cfg.get("rounds", 2)
-        elapsed = (now - auction.started_at).total_seconds() / 60
-        current_round = min(int(elapsed / AUCTION_ROUND_DURATION) + 1, total_rounds)
+        current_round = auction.current_round or 1
         remaining = max(0, int((auction.ends_at - now).total_seconds()))
 
         lot_r = await session.execute(
-            select(AuctionLot).where(AuctionLot.auction_id == auction.id)
+            select(AuctionLot)
+            .where(AuctionLot.auction_id == auction.id)
+            .order_by(AuctionLot.id.desc())
+            .limit(1)
         )
         lot = lot_r.scalar_one_or_none()
 
-        # Лидер
         leader_name = "Ставок нет"
+        is_leader = False
         if auction.winner_id:
             leader_r = await session.execute(
                 select(User).where(User.id == auction.winner_id)
@@ -236,14 +294,13 @@ class AuctionService:
             leader = leader_r.scalar_one_or_none()
             if leader:
                 leader_name = leader.full_name
+                is_leader = leader.id == user.id
 
-        # Количество ставок
-        bids_count_r = await session.execute(
+        bids_r = await session.execute(
             select(AuctionBid).where(AuctionBid.auction_id == auction.id)
         )
-        bids_count = len(bids_count_r.scalars().all())
+        bids_count = len(bids_r.scalars().all())
 
-        # Лот
         reward_str = "Неизвестно"
         if lot:
             try:
@@ -253,16 +310,20 @@ class AuctionService:
                 elif lot.reward_type == "potion":
                     reward_str = f"🧪 {data.get('name', 'Зелье')}"
                 elif lot.reward_type == "character":
-                    from app.data.characters import RANK_CONFIG_MAP, RANK_EMOJI
+                    from app.data.characters import RANK_EMOJI, RANK_CONFIG_MAP
                     rank = data.get("rank", "")
                     emoji = RANK_EMOJI.get(rank, "❓")
-                    cfg2 = RANK_CONFIG_MAP.get(rank)
-                    label = cfg2.label if cfg2 else rank
-                    reward_str = f"{emoji} {data['character']} [{label}] — {data['power']:,} мощи"
+                    rc = RANK_CONFIG_MAP.get(rank)
+                    label = rc.label if rc else rank
+                    reward_str = f"{emoji} {data['character']} [{label}] {data['power']:,} мощи"
             except Exception:
                 pass
 
         min_next = max(lot.min_bid if lot else 0, auction.final_bid + 1)
+        cur = auction.final_bid
+        bid_5  = max(min_next, int(cur * 1.05)) if cur > 0 else min_next
+        bid_10 = max(min_next, int(cur * 1.10)) if cur > 0 else int(min_next * 1.1)
+        bid_50 = max(min_next, int(cur * 1.50)) if cur > 0 else int(min_next * 1.5)
 
         return {
             "active": True,
@@ -274,12 +335,14 @@ class AuctionService:
             "total_rounds": total_rounds,
             "remaining": remaining,
             "reward_str": reward_str,
-            "current_bid": auction.final_bid,
+            "current_bid": cur,
             "min_next_bid": min_next,
+            "bid_5": bid_5,
+            "bid_10": bid_10,
+            "bid_50": bid_50,
             "leader_name": leader_name,
+            "is_leader": is_leader,
             "bids_count": bids_count,
-            "is_leader": auction.winner_id == user.id,
-            "lot": lot,
         }
 
 

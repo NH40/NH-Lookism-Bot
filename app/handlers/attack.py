@@ -301,22 +301,28 @@ async def cb_do_attack(cb: CallbackQuery, session: AsyncSession, user: User):
     from aiogram.types import InlineKeyboardButton
 
     if result["win"]:
+        extra_left = result.get("extra_attacks_left", 0)
+        extra_str = f"\n⚡ Ещё атак без КД: {extra_left}" if extra_left > 0 else ""
         crit_str = " ⚡<b>КРИТ!</b>" if result.get("is_crit") else ""
         text = (
             f"✅ <b>Победа!{crit_str}</b>\n\n"
-            f"Район {result['district']} захвачен!\n"
-            f"Прогресс: {result['captured']}/{result['total']}\n\n"
-            f"💪 Ваша мощь: {fmt_num(result['user_power'])}\n"
+            f"Район #{result.get('district_num', '?')} захвачен!\n"
+            f"Твоих районов: {result.get('owned_by_me', '?')}/{result.get('total', '?')}\n\n"
+            f"💪 Твоя мощь: {fmt_num(result['user_power'])}\n"
             f"🏴 Мощь района: {fmt_num(result['district_power'])}"
+            + extra_str
         )
     else:
+        extra_left = result.get("extra_attacks_left", 0)
+        extra_str = f"\n⚡ Ещё атак без КД: {extra_left}" if extra_left > 0 else ""
         text = (
             f"❌ <b>Поражение!</b>\n\n"
             f"Район потерян!\n"
-            f"Осталось районов: {result['districts_left']}\n\n"
-            f"💪 Ваша мощь: {fmt_num(result['user_power'])}\n"
+            f"Твоих районов: {result.get('districts_left', '?')}\n\n"
+            f"💪 Твоя мощь: {fmt_num(result['user_power'])}\n"
             f"🏴 Мощь района: {fmt_num(result['district_power'])}"
-        )
+            + extra_str
+    )
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(

@@ -1,3 +1,4 @@
+from app.models import user
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from app.models.user import User
@@ -128,55 +129,66 @@ class TitleService:
     async def _apply_title_bonus(
         self, session: AsyncSession, user: User, title_id: str
     ) -> None:
-        # Применяем бонусы по title_id
         if title_id == "fist_power":
-            pass  # mult применяется в squad_repo
+            pass
         elif title_id == "romantic_recruit":
             user.recruit_count_bonus += 100
         elif title_id == "great_influence":
-            pass  # проверяется при бою
+            pass
         elif title_id == "genius_training":
             user.train_bonus_percent += 70
         elif title_id == "genius_business":
             user.income_bonus_percent += 50
         elif title_id == "genius_weapon":
-            pass  # mult в squad_repo
+            pass
         elif title_id == "genius_combat":
-            user.skill_path_bonus_multiplier = max(
-                user.skill_path_bonus_multiplier, 1.20
-            )
+            user.skill_path_bonus_multiplier = max(user.skill_path_bonus_multiplier, 1.20)
         elif title_id == "genius_hacking":
             user.recruit_count_bonus += 30
         elif title_id == "genius_medicine":
-            user.skill_path_bonus_multiplier = max(
-                user.skill_path_bonus_multiplier, 1.30
-            )
+            user.skill_path_bonus_multiplier = max(user.skill_path_bonus_multiplier, 1.30)
         elif title_id == "genius_scale":
             user.train_bonus_percent += 15
             user.income_bonus_percent += 15
             user.recruit_count_bonus += 15
         elif title_id == "legend_1gen":
-            pass  # крит в combat_service
+            pass
         elif title_id == "monster_training":
             user.train_bonus_percent += 100
         elif title_id == "reverse_eyes":
             user.ticket_cd_reduction += 30
         elif title_id == "selection":
-            pass  # влияет на веса гачи
+            pass
         elif title_id == "manager_fav":
             user.ticket_chance = min(95, user.ticket_chance + 10)
         elif title_id == "concentration":
             user.ticket_cd_reduction += 30
         elif title_id == "focus":
-            pass  # КД вербовки/тренировки — применяется в squad_service
+            pass
         elif title_id == "ui_title":
             user.ultra_instinct = True
             user.max_tickets += 3
+        # НЕ трогаем extra_attack_count здесь — он управляется через double_attack
 
-        # Обновляем extra_attack_count
-        if user.double_attack:
-            if user.extra_attack_count < 1:
-                user.extra_attack_count = 1
+    def _apply_set_bonus(self, user: User, set_id: str) -> None:
+        if set_id == "strongest_0gen":
+            user.influence = int(user.influence * 2.0)
+            user.ticket_chance = min(95, user.ticket_chance + 5)
+            user.double_recruit = True
+        elif set_id == "genius_maker":
+            user.train_bonus_percent = int(user.train_bonus_percent * 1.20)
+            user.income_bonus_percent = int(user.income_bonus_percent * 1.20)
+            user.recruit_count_bonus = int(user.recruit_count_bonus * 1.20)
+        elif set_id == "monster":
+            user.double_attack = True
+            # extra_attack_count восстанавливается в _handle_attack_cd
+            # Здесь просто устанавливаем начальный запас
+            if user.skill_path == "monster" and user.double_train:
+                user.extra_attack_count = 2  # 3 атаки
+            else:
+                user.extra_attack_count = 1  # 2 атаки
+        elif set_id == "flow":
+            user.ticket_cd_reduction += 15
 
     async def _check_set_completion(
         self, session: AsyncSession, user: User, set_id: str
@@ -186,29 +198,6 @@ class TitleService:
         if all(tid in owned for tid in titles_in_set):
             self._apply_set_bonus(user, set_id)
             await session.flush()
-
-    def _apply_set_bonus(self, user: User, set_id: str) -> None:
-        if set_id == "strongest_0gen":
-            user.influence = int(user.influence * 2.0)
-            user.ticket_chance = min(95, user.ticket_chance + 5)
-            user.double_recruit = True
-        elif set_id == "genius_maker":
-            # Все баффы гениев ×1.20 — уже применены через _apply_title_bonus
-            # Дополнительный бонус сета
-            user.train_bonus_percent = int(user.train_bonus_percent * 1.20)
-            user.income_bonus_percent = int(user.income_bonus_percent * 1.20)
-            user.recruit_count_bonus = int(user.recruit_count_bonus * 1.20)
-        elif set_id == "monster":
-            # Мощь ×2 — в squad_repo, double_attack
-            user.double_attack = True
-            if user.extra_attack_count < 1:
-                user.extra_attack_count = 1
-            # Если ещё и путь монстра — 3 атаки
-            if user.skill_path == "monster":
-                user.extra_attack_count = 2
-        elif set_id == "flow":
-            # Все КД -15% дополнительно — через ticket_cd_reduction
-            user.ticket_cd_reduction += 15
 
     # ── Достижения ──────────────────────────────────────────────────────────
 

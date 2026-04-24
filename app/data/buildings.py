@@ -13,7 +13,7 @@ class BuildingConfig:
 
 BUILDINGS: list[BuildingConfig] = [
     # Легальные
-    BuildingConfig("gym",        "Спортзал",        "🏋",  "legal",     15,  2),
+    BuildingConfig("gym",        "Спортзал",        "🏋",  "legal",     5,  1),
     BuildingConfig("cafe",       "Кафе",            "☕",  "legal",     25,  2),
     BuildingConfig("shop",       "Магазин",         "🏪",  "legal",     40,  4),
     BuildingConfig("hotel",      "Отель",           "🏨",  "legal",     80,  8),

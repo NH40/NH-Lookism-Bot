@@ -4,6 +4,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.client.default import DefaultBotProperties
+from app.bot_instance import set_bot
 from app.config import settings
 from app.database import init_db
 from app.middlewares.db_session import DbSessionMiddleware
@@ -36,6 +37,7 @@ async def main():
         token=settings.BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
+    set_bot(bot)
 
     # FSM Storage — Redis
     storage = RedisStorage.from_url(settings.redis_url)

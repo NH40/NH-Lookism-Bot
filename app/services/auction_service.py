@@ -18,7 +18,7 @@ TIER_WEIGHTS = {
 }
 
 AUCTION_TIERS = {
-    1: {"name": "Бронзовый",   "emoji": "🟫", "rounds": 2, "min_bid": 500,   "reward_type": "coins"},
+    1: {"name": "Бронзовый",   "emoji": "🟫", "rounds": 2, "min_bid": 500,   "reward_type": "tickets"},
     2: {"name": "Серебряный",  "emoji": "⬜", "rounds": 2, "min_bid": 2000,  "reward_type": "potion"},
     3: {"name": "Золотой",     "emoji": "🟨", "rounds": 3, "min_bid": 5000,  "reward_type": "character"},
     4: {"name": "Платиновый",  "emoji": "🟦", "rounds": 3, "min_bid": 15000, "reward_type": "character"},
@@ -108,10 +108,9 @@ class AuctionService:
         import json
         cfg = AUCTION_TIERS[tier]
 
-        if cfg["reward_type"] == "coins":
-            # Тир 1: монеты
-            amount = random.randint(1000, 5000) * tier
-            return json.dumps({"coins": amount})
+        if cfg["reward_type"] == "tickets":
+            amount = random.randint(1, 3) * tier  # 1-3 тикета
+            return json.dumps({"tickets": amount})
 
         elif cfg["reward_type"] == "potion":
             # Тир 2: зелье
@@ -278,8 +277,9 @@ class AuctionService:
     ) -> None:
         import json
         data = json.loads(lot.reward_data)
-        if lot.reward_type == "coins":
-            user.nh_coins += data["coins"]
+        if lot.reward_type == "tickets":
+            data = json.loads(lot.reward_data)
+            user.tickets += data["tickets"]
         elif lot.reward_type == "potion":
             from app.data.shop import POTION_MAP
             cfg = POTION_MAP.get(data["potion_id"])
@@ -350,8 +350,8 @@ class AuctionService:
         if lot:
             try:
                 data = json.loads(lot.reward_data)
-                if lot.reward_type == "coins":
-                    reward_str = f"💰 {data['coins']:,} NHCoin"
+                if lot.reward_type == "tickets":
+                    reward_str = f"🎟 {data['tickets']} тикетов"
                 elif lot.reward_type == "potion":
                     reward_str = f"🧪 {data.get('name', 'Зелье')}"
                 elif lot.reward_type == "character":

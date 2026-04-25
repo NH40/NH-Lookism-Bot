@@ -74,16 +74,18 @@ class UserRepo:
     async def get_rank_by_power(
         self, session: AsyncSession, user_id: int
     ) -> int:
-        """Возвращает позицию игрока в топе по боевой мощи (начиная с 1)."""
-        user = await self.get_by_id(session, user_id)
-        if not user:
-            return 9999
-        count = await session.scalar(
+        from sqlalchemy import func
+        user_r = await session.execute(
+            select(User.combat_power).where(User.id == user_id)
+        )
+        my_power = user_r.scalar_one_or_none() or 0
+
+        rank = await session.scalar(
             select(func.count(User.id)).where(
-                User.combat_power > user.combat_power
+                User.combat_power > my_power
             )
         )
-        return (count or 0) + 1
+        return (rank or 0) + 1
 
     async def get_all_with_income(
         self, session: AsyncSession

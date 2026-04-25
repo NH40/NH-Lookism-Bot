@@ -5,6 +5,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from app.models.user import User
 from app.services.game_service import game_service
 from app.services.cooldown_service import cooldown_service
@@ -12,7 +13,6 @@ from app.repositories.city_repo import city_repo
 from app.repositories.user_repo import user_repo
 from app.utils.keyboards.common import back_kb, confirm_kb
 from app.utils.formatters import fmt_power, fmt_num, fmt_ttl, phase_label
-from sqlalchemy import select, func
 from app.models.city import District
 
 router = Router()
@@ -55,15 +55,11 @@ async def build_attack_menu(
                 session, user.sector
             )
             builder = InlineKeyboardBuilder()
-            # Группируем по типу
             type_names = {
-                1: "4 района", 2: "8 районов",
-                3: "16 районов", 4: "32 района", 5: "64 района"
+                1: "4р", 2: "8р",
+                3: "16р", 4: "32р", 5: "64р"
             }
-            current_type = None
-            for city in cities[:30]:  # показываем первые 30
-                if city.type_id != current_type:
-                    current_type = city.type_id
+            for city in cities[:30]:
                 builder.button(
                     text=f"🏙 {city.name} [{type_names.get(city.type_id, '?')}]",
                     callback_data=f"choose_city:{city.id}"
@@ -84,17 +80,18 @@ async def build_attack_menu(
         if not situation["ok"]:
             return situation["reason"], back_kb("main_menu")
 
-        city = situation["city"]
-        my_d = situation["my_districts"]
-        total_d = situation["total_districts"]
+        city      = situation["city"]
+        my_d      = situation["my_districts"]
+        total_d   = situation["total_districts"]
         bot_power = situation["bot_district_power"]
-        rivals = situation["rivals"]
-        next_bot = situation["next_bot_district"]
+        rivals    = situation["rivals"]
+        next_bot  = situation["next_bot_district"]
 
-        # Строим текст
         extra_str = ""
         if user.extra_attack_count > 0:
             extra_str = f"\n⚡ Доп. атак: {user.extra_attack_count}"
+
+        cd_str = f"\n⏳ КД: {fmt_ttl(cd)}" if cd > 0 else ""
 
         rival_str = ""
         if rivals:
@@ -103,17 +100,28 @@ async def build_attack_menu(
                 rival_str += (
                     f"\n  ⚔️ {r['name']} | "
                     f"💪 {fmt_num(r['combat_power'])} | "
-                    f"🏘 {r['districts']} р."
+                    f"🏘 {r['districts']}р."
                 )
 
+        next_district_str = ""
+        if bot_power and next_bot:
+            next_district_str = (
+                f"\n\n⚔️ Следующий район #{next_bot.number}: "
+                f"🤖 {fmt_num(bot_power)} мощи"
+            )
+        elif not next_bot:
+            next_district_str = "\n\n✅ Все районы захвачены!"
+
         text = (
-            f"⚔️ <b>{city.name}</b> [{city.type_id * 4} → {city.total_districts} р.]\n"
-            f"📍 Сектор {user.sector}\n\n"
+            f"⚔️ <b>Атака — Фаза Банды</b>\n\n"
+            f"🏙 Город: <b>{city.name}</b>\n"
+            f"📍 Сектор {user.sector} | {city.total_districts} районов\n\n"
             f"🏘 Твоих районов: {my_d}/{total_d}\n"
             f"💪 Твоя мощь: {fmt_num(user.combat_power)}\n"
             f"🎯 Влияние: {fmt_num(user.influence)}"
             + extra_str
-            + (f"\n\n🤖 Мощь следующего района #{next_bot.number if next_bot else '?'}: {fmt_num(bot_power)}" if bot_power else "")
+            + cd_str
+            + next_district_str
             + rival_str
         )
 
@@ -124,9 +132,10 @@ async def build_attack_menu(
                 callback_data="attack_cd"
             ))
         else:
-            atk_label = "⚔️ Атаковать район"
             if user.extra_attack_count > 0:
-                atk_label = f"⚡ Атаковать ({user.extra_attack_count + 1} атаки!)"
+                atk_label = f"⚡ Атаковать (ещё {user.extra_attack_count + 1} атаки)"
+            else:
+                atk_label = "⚔️ Атаковать район"
             builder.row(InlineKeyboardButton(
                 text=atk_label,
                 callback_data="do_attack"
@@ -145,13 +154,12 @@ async def build_attack_menu(
 
     # ── КОРОЛЬ ──────────────────────────────────────────────────────────────
     elif user.phase == "king":
-        cities = await city_repo.get_available_king_cities(session, user.sector or "Н")
-
-        from sqlalchemy import select as sa_select, func
-        from app.models.city import District
+        cities = await city_repo.get_available_king_cities(
+            session, user.sector or "Н"
+        )
 
         my_city_ids_r = await session.execute(
-            sa_select(District.city_id).where(
+            select(District.city_id).where(
                 District.owner_id == user.id,
                 District.is_captured == True,
             ).distinct()
@@ -159,7 +167,6 @@ async def build_attack_menu(
         my_city_ids = set(my_city_ids_r.scalars().all())
 
         builder = InlineKeyboardBuilder()
-        # Показываем по 3 города каждого типа (5 типов × 3 = 15 кнопок)
         type_counts: dict[int, int] = {}
         for city in cities:
             type_id = city.type_id or 1
@@ -168,15 +175,18 @@ async def build_attack_menu(
             type_counts[type_id] = type_counts.get(type_id, 0) + 1
 
             my_in_city = await session.scalar(
-                sa_select(func.count(District.id)).where(
+                select(func.count(District.id)).where(
                     District.owner_id == user.id,
                     District.city_id == city.id,
                     District.is_captured == True,
                 )
             ) or 0
 
-            if city.owner_id and city.owner_id != user.id:
-                defender = await user_repo.get_by_id(session, city.owner_id)
+            dominant_id = await game_service._get_city_dominant_player(
+                session, city.id, user.id
+            )
+            if dominant_id:
+                defender = await user_repo.get_by_id(session, dominant_id)
                 def_power = int(defender.combat_power * 0.7) if defender else 0
                 def_str = f"👤{fmt_num(def_power)}"
             else:
@@ -189,16 +199,33 @@ async def build_attack_menu(
                 def_str = f"🤖{fmt_num(bot_power)}"
 
             my_str = f"[моих:{my_in_city}] " if my_in_city > 0 else ""
-            size_emoji = {1: "🏘", 2: "🏙", 3: "🌆", 4: "🌇", 5: "🌃"}.get(type_id, "🏙")
+            size_emoji = {
+                1: "🏘", 2: "🏙", 3: "🌆", 4: "🌇", 5: "🌃"
+            }.get(type_id, "🏙")
+            free_r = await session.scalar(
+                select(func.count(District.id)).where(
+                    District.city_id == city.id,
+                    District.is_captured == False,
+                    District.owner_id == None,
+                )
+            ) or 0
             builder.button(
-                text=f"{size_emoji} {city.name} {my_str}{city.captured_districts}/{city.total_districts}р | {def_str}",
+                text=(
+                    f"{size_emoji} {city.name} {my_str}"
+                    f"{city.captured_districts}/{city.total_districts}р | {def_str}"
+                ),
                 callback_data=f"king_attack:{city.id}"
             )
 
         builder.adjust(1)
-        builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
+        builder.row(InlineKeyboardButton(
+            text="◀️ Главное меню", callback_data="main_menu"
+        ))
 
-        extra_str = f"\n⚡ Доп. атак: {user.extra_attack_count}" if user.extra_attack_count > 0 else ""
+        extra_str = (
+            f"\n⚡ Доп. атак: {user.extra_attack_count}"
+            if user.extra_attack_count > 0 else ""
+        )
         cd_str = f"\n⏳ КД: {fmt_ttl(cd)}" if cd > 0 else ""
 
         text = (
@@ -212,33 +239,39 @@ async def build_attack_menu(
 
     # ── КУЛАК ───────────────────────────────────────────────────────────────
     elif user.phase == "fist":
+        from datetime import datetime, timezone
         bots = await game_service.get_fist_bots(session, user)
-        now = datetime.now(timezone.utc)
+        now  = datetime.now(timezone.utc)
 
-        extra_str = f"\n⚡ Доп. атак: {user.extra_attack_count}" if user.extra_attack_count > 0 else ""
+        extra_str = (
+            f"\n⚡ Доп. атак: {user.extra_attack_count}"
+            if user.extra_attack_count > 0 else ""
+        )
+        cd_str = f"\n⏳ КД: {fmt_ttl(cd)}" if cd > 0 else ""
+
         text = (
             f"✊ <b>Атака — Фаза Кулака</b>\n\n"
             f"Побед: {user.fist_wins}/10\n"
             f"Городов: {user.fist_cities_count}\n"
             f"💪 Твоя мощь: {fmt_num(user.combat_power)}"
-            + extra_str +
+            + extra_str + cd_str +
             f"\n\n<b>Выбери противника:</b>"
         )
 
         builder = InlineKeyboardBuilder()
         for bot in bots:
-            on_cd = bot.cooldown_until and bot.cooldown_until > now
-            cd_str = ""
+            on_cd  = bot.cooldown_until and bot.cooldown_until > now
+            cd_str_bot = ""
             if on_cd:
-                remaining = int((bot.cooldown_until - now).total_seconds())
-                cd_str = f" ⏳{fmt_ttl(remaining)}"
+                remaining  = int((bot.cooldown_until - now).total_seconds())
+                cd_str_bot = f" ⏳{fmt_ttl(remaining)}"
             ratio_pct = int(bot.power_ratio * 100)
             icon = "🔒" if on_cd else "⚔️"
             builder.button(
                 text=(
                     f"{icon} {bot.name} | "
                     f"💪 {fmt_num(bot.current_power)} ({ratio_pct}%)"
-                    f"{cd_str}"
+                    f"{cd_str_bot}"
                 ),
                 callback_data=f"fist_bot:{bot.id}"
             )
@@ -278,6 +311,8 @@ async def build_attack_menu(
     return "⚔️ Атака недоступна", back_kb("main_menu")
 
 
+# ── Колбэки ─────────────────────────────────────────────────────────────────
+
 @router.callback_query(F.data == "attack")
 async def cb_attack(cb: CallbackQuery, session: AsyncSession, user: User):
     text, kb = await build_attack_menu(session, user)
@@ -295,7 +330,9 @@ async def cb_attack_cd(cb: CallbackQuery, session: AsyncSession, user: User):
 
 
 @router.callback_query(F.data.startswith("choose_sector:"))
-async def cb_choose_sector(cb: CallbackQuery, session: AsyncSession, user: User):
+async def cb_choose_sector(
+    cb: CallbackQuery, session: AsyncSession, user: User
+):
     sector = cb.data.split(":")[1]
     result = await game_service.choose_sector(session, user, sector)
     if result["ok"]:
@@ -310,9 +347,11 @@ async def cb_choose_sector(cb: CallbackQuery, session: AsyncSession, user: User)
 
 
 @router.callback_query(F.data.startswith("choose_city:"))
-async def cb_choose_city(cb: CallbackQuery, session: AsyncSession, user: User):
+async def cb_choose_city(
+    cb: CallbackQuery, session: AsyncSession, user: User
+):
     city_id = int(cb.data.split(":")[1])
-    result = await game_service.choose_gang_city(session, user, city_id)
+    result  = await game_service.choose_gang_city(session, user, city_id)
     if result["ok"]:
         await cb.answer(f"✅ {result['city']} выбран!")
         text, kb = await build_attack_menu(session, user)
@@ -349,7 +388,10 @@ async def cb_do_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         return
 
     extra_left = result.get("extra_attacks_left", 0)
-    extra_str = f"\n⚡ Ещё атак без КД: {extra_left}" if extra_left > 0 else ""
+    extra_str  = (
+        f"\n⚡ Ещё атак без КД: {extra_left}"
+        if extra_left > 0 else ""
+    )
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
@@ -367,16 +409,18 @@ async def cb_do_attack(cb: CallbackQuery, session: AsyncSession, user: User):
             f"Твоих районов: {result['my_districts']}/{result['total']}\n"
             f"Районов в городе: {result['city_captured']}/{result['total']}\n\n"
             f"💪 Твоя мощь: {fmt_num(result['user_power'])}\n"
-            f"🏴 Мощь района: {fmt_num(result['district_power'])}"
+            f"🏴 Мощь района #{result['district_num']}: "
+            f"{fmt_num(result['district_power'])}"
             + extra_str
         )
     else:
         text = (
             f"❌ <b>Поражение!</b>\n\n"
-            f"Район потерян!\n"
+            f"Район #{result.get('district_num', '?')} устоял!\n"
             f"Твоих районов: {result['my_districts']}\n\n"
             f"💪 Твоя мощь: {fmt_num(result['user_power'])}\n"
-            f"🏴 Мощь района: {fmt_num(result['district_power'])}"
+            f"🏴 Мощь района #{result.get('district_num', '?')}: "
+            f"{fmt_num(result['district_power'])}"
             + extra_str
         )
 
@@ -392,7 +436,7 @@ async def cb_pvp_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         return
 
     situation = await game_service.gang_get_situation(session, user)
-    rivals = situation.get("rivals", [])
+    rivals    = situation.get("rivals", [])
 
     if not rivals:
         await cb.answer("Нет соперников в городе", show_alert=True)
@@ -401,7 +445,11 @@ async def cb_pvp_attack(cb: CallbackQuery, session: AsyncSession, user: User):
     builder = InlineKeyboardBuilder()
     for r in rivals[:5]:
         builder.button(
-            text=f"⚔️ {r['name']} | 💪 {fmt_num(r['combat_power'])} | 🏘 {r['districts']}р.",
+            text=(
+                f"⚔️ {r['name']} | "
+                f"💪 {fmt_num(r['combat_power'])} | "
+                f"🏘 {r['districts']}р."
+            ),
             callback_data=f"gang_pvp:{r['id']}"
         )
     builder.adjust(1)
@@ -420,7 +468,7 @@ async def cb_pvp_attack(cb: CallbackQuery, session: AsyncSession, user: User):
 @router.callback_query(F.data.startswith("gang_pvp:"))
 async def cb_gang_pvp(cb: CallbackQuery, session: AsyncSession, user: User):
     defender_id = int(cb.data.split(":")[1])
-    result = await game_service.gang_attack_pvp(session, user, defender_id)
+    result      = await game_service.gang_attack_pvp(session, user, defender_id)
 
     if result.get("promoted"):
         await cb.message.edit_text(
@@ -458,7 +506,7 @@ async def cb_gang_pvp(cb: CallbackQuery, session: AsyncSession, user: User):
 @router.callback_query(F.data.startswith("king_attack:"))
 async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
     city_id = int(cb.data.split(":")[1])
-    result = await game_service.king_attack(session, user, city_id)
+    result  = await game_service.king_attack(session, user, city_id)
 
     if result.get("promoted"):
         await cb.message.edit_text(
@@ -473,28 +521,58 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         return
 
     crit_str = " ⚡КРИТ!" if result.get("is_crit") else ""
-    if result["win"]:
-        text = (
-            f"✅ <b>Победа!{crit_str}</b>\n\n"
-            f"Город: <b>{result['city']}</b>\n"
-            f"Захвачено районов: <b>+{result.get('districts_gained', 0)}</b>\n"
-            f"Моих районов в городе: {result.get('my_in_city', 0)}\n"
-            f"Всего в городе: {result.get('city_captured', 0)}/{result.get('city_total', 0)}\n\n"
-            f"Городов с районами: {result['cities_count']}/10\n\n"
-            f"💪 Твоя мощь: {fmt_num(result['user_power'])}\n"
-            f"🤖 Мощь противника: {fmt_num(result['bot_power'])}"
-        )
+
+    # Проверяем PvP или бот
+    is_pvp = result.get("defender_name") is not None
+
+    if is_pvp:
+        if result["win"]:
+            taken = result.get("districts_taken", 0)
+            text = (
+                f"✅ <b>Победа в PvP!{crit_str}</b>\n\n"
+                f"Противник: <b>{result['defender_name']}</b>\n"
+                f"Город: <b>{result['city']}</b>\n"
+                f"Забрано районов: +{taken}\n"
+                f"Моих в городе: {result.get('my_in_city', 0)}\n\n"
+                f"Городов с районами: {result.get('cities_count', 0)}/10\n\n"
+                f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
+                f"⚔️ Его мощь: {fmt_num(result['defender_power'])}"
+            )
+        else:
+            text = (
+                f"❌ <b>Поражение в PvP!</b>\n\n"
+                f"Противник: <b>{result['defender_name']}</b>\n"
+                f"Город: <b>{result['city']}</b>\n\n"
+                f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
+                f"⚔️ Его мощь: {fmt_num(result['defender_power'])}"
+            )
     else:
-        text = (
-            f"❌ <b>Поражение!</b>\n\n"
-            f"Город: <b>{result['city']}</b>\n"
-            f"Районов в городе: {result.get('city_captured', 0)}/{result.get('city_total', 0)}\n\n"
-            f"💪 Твоя мощь: {fmt_num(result['user_power'])}\n"
-            f"🤖 Мощь противника: {fmt_num(result['bot_power'])}"
-        )
+        if result["win"]:
+            text = (
+                f"✅ <b>Победа!{crit_str}</b>\n\n"
+                f"Город: <b>{result['city']}</b>\n"
+                f"Захвачено районов: <b>+{result.get('districts_gained', 0)}</b>\n"
+                f"Моих районов в городе: {result.get('my_in_city', 0)}\n"
+                f"Всего в городе: "
+                f"{result.get('city_captured', 0)}/{result.get('city_total', 0)}\n\n"
+                f"Городов с районами: {result['cities_count']}/10\n\n"
+                f"💪 Твоя мощь: {fmt_num(result['user_power'])}\n"
+                f"🤖 Мощь противника: {fmt_num(result['bot_power'])}"
+            )
+        else:
+            text = (
+                f"❌ <b>Поражение!</b>\n\n"
+                f"Город: <b>{result['city']}</b>\n"
+                f"Районов в городе: "
+                f"{result.get('city_captured', 0)}/{result.get('city_total', 0)}\n\n"
+                f"💪 Твоя мощь: {fmt_num(result['user_power'])}\n"
+                f"🤖 Мощь противника: {fmt_num(result['bot_power'])}"
+            )
+
     await cb.message.edit_text(
         text, reply_markup=back_kb("attack"), parse_mode="HTML"
     )
+
 
 @router.callback_query(F.data.startswith("fist_bot:"))
 async def cb_fist_bot(cb: CallbackQuery, session: AsyncSession, user: User):
@@ -545,7 +623,9 @@ async def cb_fist_bot(cb: CallbackQuery, session: AsyncSession, user: User):
 
 
 @router.callback_query(F.data == "fist_pvp_list")
-async def cb_fist_pvp_list(cb: CallbackQuery, session: AsyncSession, user: User):
+async def cb_fist_pvp_list(
+    cb: CallbackQuery, session: AsyncSession, user: User
+):
     rivals = await user_repo.get_fist_players(session, user.id)
     if not rivals:
         await cb.answer("Нет доступных кулаков для PvP", show_alert=True)
@@ -577,7 +657,7 @@ async def cb_fist_pvp_list(cb: CallbackQuery, session: AsyncSession, user: User)
 @router.callback_query(F.data.startswith("fist_pvp:"))
 async def cb_fist_pvp(cb: CallbackQuery, session: AsyncSession, user: User):
     defender_id = int(cb.data.split(":")[1])
-    result = await game_service.fist_pvp_attack(session, user, defender_id)
+    result      = await game_service.fist_pvp_attack(session, user, defender_id)
 
     if result.get("promoted"):
         await cb.message.edit_text(
@@ -612,7 +692,9 @@ async def cb_fist_pvp(cb: CallbackQuery, session: AsyncSession, user: User):
 
 
 @router.callback_query(F.data == "do_prestige")
-async def cb_do_prestige(cb: CallbackQuery, session: AsyncSession, user: User):
+async def cb_do_prestige(
+    cb: CallbackQuery, session: AsyncSession, user: User
+):
     from app.services.prestige_service import prestige_service
     ok, reason = prestige_service.can_prestige(user)
     if not ok:
@@ -634,7 +716,9 @@ async def cb_do_prestige(cb: CallbackQuery, session: AsyncSession, user: User):
 
 
 @router.callback_query(F.data == "prestige_confirm")
-async def cb_prestige_confirm(cb: CallbackQuery, session: AsyncSession, user: User):
+async def cb_prestige_confirm(
+    cb: CallbackQuery, session: AsyncSession, user: User
+):
     from app.services.prestige_service import prestige_service
     result = await prestige_service.do_prestige(session, user)
     if result["ok"]:

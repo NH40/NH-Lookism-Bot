@@ -11,17 +11,13 @@ class SquadRepo:
     async def update_user_combat_power(
         self, session: AsyncSession, user: User
     ) -> int:
-        """
-        ЕДИНСТВЕННОЕ место расчёта боевой мощи.
-        squad_power + char_power + teacher_bonus,
-        с учётом донат-множителей.
-        """
+        """Единственное место расчёта боевой мощи."""
+
         # 1. Мощь отряда
         result = await session.execute(
             select(SquadMember).where(SquadMember.user_id == user.id)
         )
         members = result.scalars().all()
-
         squad_power = 0
         for m in members:
             rank_cfg = RANKS_BY_ID.get(m.rank)
@@ -32,10 +28,10 @@ class SquadRepo:
 
         # Бонус мастерства силы
         from app.models.skill import UserMastery
-        mastery_result = await session.execute(
+        mastery_r = await session.execute(
             select(UserMastery).where(UserMastery.user_id == user.id)
         )
-        mastery = mastery_result.scalar_one_or_none()
+        mastery = mastery_r.scalar_one_or_none()
         if mastery:
             strength_bonus = {0: 0, 1: 5, 2: 10, 3: 20, 4: 30}
             squad_power = int(
@@ -43,27 +39,39 @@ class SquadRepo:
             )
 
         # 2. Мощь персонажей
-        char_result = await session.execute(
+        char_r = await session.execute(
             select(func.sum(UserCharacter.power)).where(
                 UserCharacter.user_id == user.id
             )
         )
-        char_power = char_result.scalar() or 0
+        char_power = char_r.scalar() or 0
 
         # 3. Бонус от учителя
-        teacher_bonus = user.teacher_power_bonus
+        teacher_bonus = user.teacher_power_bonus or 0
 
         total = squad_power + char_power + teacher_bonus
 
-        # 4. Донат-множители combat_power_mult
+        # 4. Донат-множители
         from app.repositories.title_repo import title_repo
         mult = await title_repo.get_combat_power_mult(session, user.id)
         total = int(total * mult)
 
-        # 5. Пробуждение (prestige даёт +5% за уровень к базе отряда)
+        # 5. Пробуждение (+5% за уровень)
         if user.prestige_level > 0:
             prestige_mult = 1 + (user.prestige_level * 5 / 100)
             total = int(total * prestige_mult)
+
+        # Зелье боевой мощи
+        try:
+            from app.services.potion_service import potion_service
+            potion_bonus = await potion_service.get_power_bonus(session, user.id)
+            if potion_bonus > 0:
+                total = int(total * (1 + potion_bonus / 100))
+        except Exception:
+            pass
+
+        # Ограничиваем разумным максимумом (BIGINT safe)
+        total = min(total, 9_000_000_000_000)
 
         user.combat_power = total
         await session.flush()

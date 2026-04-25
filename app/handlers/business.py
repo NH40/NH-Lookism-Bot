@@ -73,7 +73,8 @@ async def _show_business_main(
     try:
         await cb.message.edit_text(
             f"🏢 <b>Бизнес</b>\n\n"
-            f"📍 Путь: {path_info.get('color','')} {path_info.get('emoji','')} {path_info.get('name','')}"
+            f"📍 Путь: {path_info.get('color','')} "
+            f"{path_info.get('emoji','')} {path_info.get('name','')}"
             f"{influence_note}\n"
             f"{'─'*22}\n"
             f"💰 Базовый доход: {fmt_num(info['base_income'])}/мин\n"
@@ -148,8 +149,7 @@ async def cb_biz_my_buildings(
         ))
         try:
             await cb.message.edit_text(
-                "🏢 <b>Мои здания</b>\n\n"
-                "У тебя пока нет зданий.\nПострой первое!",
+                "🏢 <b>Мои здания</b>\n\nЗданий нет. Построй первое!",
                 reply_markup=builder.as_markup(),
                 parse_mode="HTML",
             )
@@ -159,7 +159,6 @@ async def cb_biz_my_buildings(
 
     info = await business_service.get_income_breakdown(session, user)
 
-    # Группируем по city_id
     city_buildings: dict[int, list] = {}
     for b in buildings:
         key = b.city_id or 0
@@ -198,20 +197,10 @@ async def cb_biz_my_buildings(
         pass
 
 
-@router.callback_query(F.data.startswith("biz_city:"))
-async def cb_biz_city(
-    cb: CallbackQuery, session: AsyncSession, user: User
-):
-    city_id = int(cb.data.split(":")[1])
-
-    result = await session.execute(
-        select(UserBuilding).where(
-            UserBuilding.user_id == user.id,
-            UserBuilding.city_id == (city_id if city_id else None),
-            UserBuilding.is_active == True,
-        )
-    )
-    buildings = result.scalars().all()
+async def _show_city_buildings(
+    message, session: AsyncSession, user: User, city_id: int
+) -> None:
+    buildings = await building_repo.get_city_buildings(session, user.id, city_id)
 
     city_name = "Без города"
     districts_in_city = 0
@@ -226,19 +215,16 @@ async def cb_biz_city(
             )
         ) or 0
 
-    used_districts = await session.scalar(
-        select(func.sum(UserBuilding.district_cost)).where(
-            UserBuilding.user_id == user.id,
-            UserBuilding.city_id == (city_id if city_id else None),
-            UserBuilding.is_active == True,
-        )
-    ) or 0
-
+    used_districts = await building_repo.get_used_districts_in_city(
+        session, user.id, city_id
+    )
     free_districts = districts_in_city - used_districts
 
     lines = [
         f"🏙 <b>{city_name}</b>\n",
-        f"🏘 Районов: {districts_in_city} | Занято: {used_districts} | Свободно: {free_districts}\n",
+        f"🏘 Районов: {districts_in_city} | "
+        f"Занято: {used_districts} | "
+        f"Свободно: {free_districts}\n",
         f"{'─'*22}\n",
     ]
 
@@ -265,20 +251,29 @@ async def cb_biz_city(
             callback_data=f"biz_demolish:{b.id}:{city_id}"
         ))
     builder.row(InlineKeyboardButton(
-        text="🏗 Построить здесь", callback_data=f"biz_build_city:{city_id}"
+        text="🏗 Построить здесь",
+        callback_data=f"biz_build_city:{city_id}"
     ))
     builder.row(InlineKeyboardButton(
         text="◀️ Назад", callback_data="biz_my_buildings"
     ))
 
     try:
-        await cb.message.edit_text(
+        await message.edit_text(
             "".join(lines),
             reply_markup=builder.as_markup(),
             parse_mode="HTML",
         )
     except Exception:
         pass
+
+
+@router.callback_query(F.data.startswith("biz_city:"))
+async def cb_biz_city(
+    cb: CallbackQuery, session: AsyncSession, user: User
+):
+    city_id = int(cb.data.split(":")[1])
+    await _show_city_buildings(cb.message, session, user, city_id)
 
 
 @router.callback_query(F.data.startswith("biz_demolish:"))
@@ -303,98 +298,16 @@ async def cb_biz_demolish(
     if building.count > 1:
         cost_per = building.district_cost // building.count
         building.count -= 1
-        building.district_cost -= cost_per
+        building.district_cost = max(0, building.district_cost - cost_per)
+        await session.flush()
     else:
-        building.is_active = False
-        building.count = 0
+        # Полностью удаляем из БД — районы освобождаются
+        await session.delete(building)
+        await session.flush()
 
-    await session.flush()
     await business_service._recalc_income(session, user)
-    await cb.answer("🔨 Здание снесено!")
-
-    # Показываем город напрямую — без изменения cb.data
+    await cb.answer("🔨 Здание снесено! Районы освобождены.")
     await _show_city_buildings(cb.message, session, user, city_id)
-
-
-async def _show_city_buildings(
-    message, session: AsyncSession, user: User, city_id: int
-) -> None:
-    """Отдельная функция отрисовки города — не трогает cb.data."""
-    result = await session.execute(
-        select(UserBuilding).where(
-            UserBuilding.user_id == user.id,
-            UserBuilding.city_id == (city_id if city_id else None),
-            UserBuilding.is_active == True,
-        )
-    )
-    buildings = result.scalars().all()
-
-    city_name = "Без города"
-    districts_in_city = 0
-    if city_id:
-        city = await city_repo.get_city(session, city_id)
-        city_name = city.name if city else f"Город {city_id}"
-        districts_in_city = await session.scalar(
-            select(func.count(District.id)).where(
-                District.owner_id == user.id,
-                District.city_id == city_id,
-                District.is_captured == True,
-            )
-        ) or 0
-
-    used_districts = await session.scalar(
-        select(func.sum(UserBuilding.district_cost)).where(
-            UserBuilding.user_id == user.id,
-            UserBuilding.city_id == (city_id if city_id else None),
-            UserBuilding.is_active == True,
-        )
-    ) or 0
-
-    free_districts = districts_in_city - used_districts
-
-    lines = [
-        f"🏙 <b>{city_name}</b>\n",
-        f"🏘 Районов: {districts_in_city} | Занято: {used_districts} | Свободно: {free_districts}\n",
-        f"{'─'*22}\n",
-    ]
-
-    if not buildings:
-        lines.append("Зданий нет")
-    else:
-        for b in buildings:
-            cfg = BUILDINGS_BY_ID.get(b.building_type)
-            name = cfg.name if cfg else b.building_type
-            emoji = cfg.emoji if cfg else "🏢"
-            income = b.base_income * b.count
-            lines.append(
-                f"{emoji} <b>{name}</b> ×{b.count}\n"
-                f"  💰 {fmt_num(income)}/мин | 🏘 {b.district_cost}р.\n"
-            )
-
-    builder = InlineKeyboardBuilder()
-    for b in buildings:
-        cfg = BUILDINGS_BY_ID.get(b.building_type)
-        name = cfg.name if cfg else b.building_type
-        emoji = cfg.emoji if cfg else "🏢"
-        builder.row(InlineKeyboardButton(
-            text=f"🔨 Снести {emoji} {name} ×{b.count}",
-            callback_data=f"biz_demolish:{b.id}:{city_id}"
-        ))
-    builder.row(InlineKeyboardButton(
-        text="🏗 Построить здесь", callback_data=f"biz_build_city:{city_id}"
-    ))
-    builder.row(InlineKeyboardButton(
-        text="◀️ Назад", callback_data="biz_my_buildings"
-    ))
-
-    try:
-        await message.edit_text(
-            "".join(lines),
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
 
 
 @router.callback_query(F.data == "biz_build")
@@ -416,7 +329,8 @@ async def cb_biz_build(
         cost = max(1, int(b.district_cost * (1 - discount / 100)))
         can = "✅" if free >= cost else "❌"
         builder.row(InlineKeyboardButton(
-            text=f"{can} {b.emoji} {b.name} | 💰 {fmt_num(b.base_income)}/мин | 🏘 {cost}р.",
+            text=f"{can} {b.emoji} {b.name} | "
+                 f"💰 {fmt_num(b.base_income)}/мин | 🏘 {cost}р.",
             callback_data=f"biz_select_building:{b.id}"
         ))
     builder.row(InlineKeyboardButton(
@@ -441,7 +355,6 @@ async def cb_biz_build(
 async def cb_biz_build_city(
     cb: CallbackQuery, session: AsyncSession, user: User
 ):
-    """Строительство в конкретном городе — выбор здания."""
     city_id = int(cb.data.split(":")[1])
     if not user.business_path:
         await cb.answer("Сначала выберите путь", show_alert=True)
@@ -457,14 +370,9 @@ async def cb_biz_build_city(
         )
     ) or 0
 
-    used_in_city = await session.scalar(
-        select(func.sum(UserBuilding.district_cost)).where(
-            UserBuilding.user_id == user.id,
-            UserBuilding.city_id == city_id,
-            UserBuilding.is_active == True,
-        )
-    ) or 0
-
+    used_in_city = await building_repo.get_used_districts_in_city(
+        session, user.id, city_id
+    )
     free = districts_in_city - used_in_city
 
     builder = InlineKeyboardBuilder()
@@ -473,7 +381,8 @@ async def cb_biz_build_city(
         cost = max(1, int(b.district_cost * (1 - discount / 100)))
         can = "✅" if free >= cost else "❌"
         builder.row(InlineKeyboardButton(
-            text=f"{can} {b.emoji} {b.name} | 💰 {fmt_num(b.base_income)}/мин | 🏘 {cost}р.",
+            text=f"{can} {b.emoji} {b.name} | "
+                 f"💰 {fmt_num(b.base_income)}/мин | 🏘 {cost}р.",
             callback_data=f"biz_build_in:{b.id}:{city_id}"
         ))
     builder.row(InlineKeyboardButton(
@@ -504,7 +413,6 @@ async def cb_biz_select_building(
         await cb.answer("Здание не найдено", show_alert=True)
         return
 
-    # Города где есть районы
     result = await session.execute(
         select(City.id, City.name).distinct()
         .join(District, District.city_id == City.id)
@@ -524,21 +432,17 @@ async def cb_biz_select_building(
 
     builder = InlineKeyboardBuilder()
     for city_id, city_name in cities_with_districts:
-        free = await session.scalar(
+        districts_count = await session.scalar(
             select(func.count(District.id)).where(
                 District.owner_id == user.id,
                 District.city_id == city_id,
                 District.is_captured == True,
             )
         ) or 0
-        used = await session.scalar(
-            select(func.sum(UserBuilding.district_cost)).where(
-                UserBuilding.user_id == user.id,
-                UserBuilding.city_id == city_id,
-                UserBuilding.is_active == True,
-            )
-        ) or 0
-        free_in_city = free - used
+        used = await building_repo.get_used_districts_in_city(
+            session, user.id, city_id
+        )
+        free_in_city = districts_count - used
         can = "✅" if free_in_city >= cost else "❌"
         builder.row(InlineKeyboardButton(
             text=f"{can} 🏙 {city_name} | 🏘 свободно: {free_in_city}",

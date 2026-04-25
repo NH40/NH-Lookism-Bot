@@ -142,7 +142,7 @@ DONAT_SETS: list[DonatSet] = [
     DonatSet("strongest_0gen", "Сильнейший 0 поколения",
         "Влияние +100%, +5% шанс тикета, 2 прокрутки тикета подряд", 750),
     DonatSet("genius_maker", "Создатель гениев",
-        "Увеличение всех баффов гениев на 20%", 1050),
+        "Увеличение всех баффов гениев на 20%", 1150),
     DonatSet("monster", "Монстр",
         "Боевая мощь +100%, атака 2 раза подряд, шанс сильнейшей карточки ×5", 1200),
     DonatSet("flow", "Поток",
@@ -160,7 +160,7 @@ DONAT_TITLES: list[DonatTitle] = [
     DonatTitle("great_influence", "Великий",      "strongest_0gen", "Влияние не падает ниже 100",           "Мин. влияние = 100",            100, "🛡"),
     # Создатель гениев
     DonatTitle("genius_training", "Гений тренировок",        "genius_maker", "Тренировки +70%",             "+70% тренировки",    50,  "🏋️"),
-    DonatTitle("genius_business", "Гений бизнеса",           "genius_maker", "Доход +50%",                  "+50% доход",         100, "💼"),
+    DonatTitle("genius_business", "Гений бизнеса",           "genius_maker", "Доход +50%",                  "+50% доход",         200, "💼"),
     DonatTitle("genius_weapon",   "Гений оружия",            "genius_maker", "Боевая мощь +15%",            "+15% боевая мощь",   150, "🔫"),
     DonatTitle("genius_combat",   "Гений боёв",              "genius_maker", "Навыки пути +20%",            "+20% навыки",        100, "⚔️"),
     DonatTitle("genius_hacking",  "Гений хакинга",           "genius_maker", "Вербовка +30%",               "+30% вербовка",      80,  "💻"),

@@ -13,21 +13,48 @@ class BuildingRepo:
             select(UserBuilding).where(
                 UserBuilding.user_id == user_id,
                 UserBuilding.is_active == True,
-            )
+                UserBuilding.count > 0,
+            ).order_by(UserBuilding.city_id, UserBuilding.id)
         )
         return result.scalars().all()
 
     async def get_used_districts(
         self, session: AsyncSession, user_id: int
     ) -> int:
-        """Сколько районов потрачено на здания."""
         result = await session.scalar(
             select(func.sum(UserBuilding.district_cost)).where(
                 UserBuilding.user_id == user_id,
                 UserBuilding.is_active == True,
+                UserBuilding.count > 0,
             )
         )
         return result or 0
+
+    async def get_used_districts_in_city(
+        self, session: AsyncSession, user_id: int, city_id: int
+    ) -> int:
+        result = await session.scalar(
+            select(func.sum(UserBuilding.district_cost)).where(
+                UserBuilding.user_id == user_id,
+                UserBuilding.city_id == city_id,
+                UserBuilding.is_active == True,
+                UserBuilding.count > 0,
+            )
+        )
+        return result or 0
+
+    async def get_city_buildings(
+        self, session: AsyncSession, user_id: int, city_id: int
+    ) -> list[UserBuilding]:
+        result = await session.execute(
+            select(UserBuilding).where(
+                UserBuilding.user_id == user_id,
+                UserBuilding.city_id == city_id,
+                UserBuilding.is_active == True,
+                UserBuilding.count > 0,
+            )
+        )
+        return result.scalars().all()
 
     async def calc_base_income(
         self, session: AsyncSession, user_id: int
@@ -38,6 +65,7 @@ class BuildingRepo:
             ).where(
                 UserBuilding.user_id == user_id,
                 UserBuilding.is_active == True,
+                UserBuilding.count > 0,
             )
         )
         return result or 0
@@ -46,23 +74,22 @@ class BuildingRepo:
         self, session: AsyncSession, user_id: int, districts_lost: int
     ) -> int:
         """При потере районов деактивирует здания (самые новые первыми)."""
-        buildings = await session.execute(
+        buildings_r = await session.execute(
             select(UserBuilding).where(
                 UserBuilding.user_id == user_id,
                 UserBuilding.is_active == True,
-            ).order_by(UserBuilding.created_at.desc())
+                UserBuilding.count > 0,
+            ).order_by(UserBuilding.id.desc())
         )
-        buildings = buildings.scalars().all()
-
+        buildings = buildings_r.scalars().all()
         freed = 0
         deactivated = 0
         for b in buildings:
             if freed >= districts_lost:
                 break
-            b.is_active = False
+            await session.delete(b)
             freed += b.district_cost
             deactivated += 1
-
         await session.flush()
         return deactivated
 
@@ -78,9 +105,7 @@ class BuildingRepo:
             name = cfg.name if cfg else b.building_type
             emoji = cfg.emoji if cfg else "🏢"
             income = b.base_income * b.count
-            lines.append(
-                f"{emoji} {name} ×{b.count} — {income}/мин"
-            )
+            lines.append(f"{emoji} {name} ×{b.count} — {income}/мин")
         return "\n".join(lines)
 
 

@@ -1,12 +1,11 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from app.models.user import User
 from app.models.squad_member import SquadMember
 from app.models.building import UserBuilding
 from app.models.character import UserCharacter
 from app.models.city import District
 from app.models.skill import UserMastery, UserPathSkills
-
 
 MAX_PRESTIGE = 10
 
@@ -36,7 +35,7 @@ class PrestigeService:
         return {"ok": True, "level": user.prestige_level}
 
     async def _reset_progress(self, session: AsyncSession, user: User) -> None:
-        """Сброс прогресса кроме донатов и пробуждений."""
+        """Сброс прогресса кроме донатов, пробуждений и достижений."""
         user.phase = "gang"
         user.sector = None
         user.gang_city_id = None
@@ -66,7 +65,6 @@ class PrestigeService:
         user.skill_path_points = 0
         user.skill_path_bonus_multiplier = 1.0
 
-        # Чистим таблицы
         await session.execute(
             delete(SquadMember).where(SquadMember.user_id == user.id)
         )
@@ -84,7 +82,6 @@ class PrestigeService:
         )
 
         # Сбрасываем мастерство
-        from sqlalchemy import select
         r = await session.execute(
             select(UserMastery).where(UserMastery.user_id == user.id)
         )
@@ -99,7 +96,49 @@ class PrestigeService:
         from app.services.title_service import title_service
         await title_service.reapply_all_titles(session, user)
 
+        # Восстанавливаем бонусы достижений (перманентные)
+        await self._reapply_achievement_bonuses(session, user)
+
         await session.flush()
+
+    async def _reapply_achievement_bonuses(
+        self, session: AsyncSession, user: User
+    ) -> None:
+        """Восстанавливает % бонусы от достижений после вайпа."""
+        from app.models.title import UserAchievement
+        from app.data.titles import ACHIEVEMENT_MAP
+
+        result = await session.execute(
+            select(UserAchievement).where(
+                UserAchievement.user_id == user.id,
+                UserAchievement.claimed == True,
+            )
+        )
+        achievements = result.scalars().all()
+
+        pct_map = {
+            "coins_and_income":    5,
+            "coins_and_income_2":  2,
+            "coins_and_income_3":  3,
+            "coins_and_income_7":  7,
+            "coins_and_income_10": 10,
+            "coins_and_income_15": 15,
+        }
+
+        for ach_record in achievements:
+            ach = ACHIEVEMENT_MAP.get(ach_record.achievement_id)
+            if not ach:
+                continue
+
+            key = ach.bonus_key
+            val = ach.bonus_value
+
+            # Восстанавливаем только % бонусы и очки пути
+            # Монеты НЕ возвращаем — они уже были выданы при получении
+            if key == "path_points":
+                user.skill_path_points += val
+            elif key in pct_map:
+                user.income_bonus_percent += pct_map[key]
 
 
 prestige_service = PrestigeService()

@@ -1,18 +1,18 @@
 from dataclasses import dataclass
 
-@dataclass
+@dataclass(frozen=True)
 class Achievement:
     achievement_id: str
     name: str
-    emoji: str
     description: str
-    secret: bool
-    reward_coins: int
-    reward_income_bonus: int   # % к доходу
-    # Условие проверяется в title_service
-    check_field: str | None    # поле User
-    check_value: int | None    # минимальное значение
-    check_type: str            # "gte" | "phase" | "top" | "special"
+    condition_key: str
+    condition_value: int
+    bonus_description: str
+    bonus_key: str
+    bonus_value: int
+    secret: bool = False
+    parent_id: Optional[str] = None
+    permanent: bool = True  # ← бонус сохраняется после вайпа
 
 ACHIEVEMENTS: list[Achievement] = [
     # ── Боевая сила ─────────────────────────────────────────────────────────

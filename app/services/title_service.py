@@ -1,4 +1,3 @@
-from app.models import user
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from app.models.user import User
@@ -7,6 +6,7 @@ from app.data.titles import (
     DONAT_TITLE_MAP, DONAT_SET_MAP, DONAT_SETS, DONAT_TITLES,
     ACHIEVEMENTS, ACHIEVEMENT_MAP,
 )
+
 
 class TitleService:
 
@@ -33,7 +33,7 @@ class TitleService:
             user_id=user.id,
             title_id=title_id,
             set_id=cfg.set_id,
-            granted_by=admin_tg_id,  # уже BigInteger в модели
+            granted_by=admin_tg_id,
         )
         session.add(record)
         await session.flush()
@@ -99,7 +99,7 @@ class TitleService:
         title_ids = await self.get_user_titles(session, user.id)
         for title_id in title_ids:
             await self._apply_title_bonus(session, user, title_id)
-        # Проверяем все сеты
+
         owned = set(title_ids)
         for s in DONAT_SETS:
             titles_in_set = [t.title_id for t in DONAT_TITLES if t.set_id == s.set_id]
@@ -112,8 +112,18 @@ class TitleService:
         await squad_repo.update_user_combat_power(session, user)
         await session.flush()
 
+    async def has_set(
+        self, session: AsyncSession, user_id: int, set_id: str
+    ) -> bool:
+        titles_in_set = [t.title_id for t in DONAT_TITLES if t.set_id == set_id]
+        if not titles_in_set:
+            return False
+        owned = set(await self.get_user_titles(session, user_id))
+        return all(tid in owned for tid in titles_in_set)
+
     def _reset_donat_bonuses(self, user: User) -> None:
         user.ultra_instinct = False
+        user.true_ultra_instinct = False
         user.double_recruit = False
         user.double_attack = False
         user.extra_attack_count = 0
@@ -129,29 +139,33 @@ class TitleService:
         self, session: AsyncSession, user: User, title_id: str
     ) -> None:
         if title_id == "fist_power":
-            pass
+            pass  # mult применяется в squad_repo через get_combat_power_mult
         elif title_id == "romantic_recruit":
             user.recruit_count_bonus += 100
         elif title_id == "great_influence":
-            pass
+            pass  # проверяется при бою
         elif title_id == "genius_training":
             user.train_bonus_percent += 70
         elif title_id == "genius_business":
             user.income_bonus_percent += 50
         elif title_id == "genius_weapon":
-            pass
+            pass  # mult в squad_repo
         elif title_id == "genius_combat":
-            user.skill_path_bonus_multiplier = max(user.skill_path_bonus_multiplier, 1.20)
+            user.skill_path_bonus_multiplier = max(
+                user.skill_path_bonus_multiplier, 1.20
+            )
         elif title_id == "genius_hacking":
             user.recruit_count_bonus += 30
         elif title_id == "genius_medicine":
-            user.skill_path_bonus_multiplier = max(user.skill_path_bonus_multiplier, 1.30)
+            user.skill_path_bonus_multiplier = max(
+                user.skill_path_bonus_multiplier, 1.30
+            )
         elif title_id == "genius_scale":
             user.train_bonus_percent += 15
             user.income_bonus_percent += 15
             user.recruit_count_bonus += 15
         elif title_id == "legend_1gen":
-            pass
+            pass  # крит в combat_service
         elif title_id == "monster_training":
             user.train_bonus_percent += 100
         elif title_id == "reverse_eyes":
@@ -166,8 +180,8 @@ class TitleService:
             pass
         elif title_id == "ui_title":
             user.ultra_instinct = True
-            user.max_tickets += 3
-        # НЕ трогаем extra_attack_count здесь — он управляется через double_attack
+            user.true_ultra_instinct = True
+            user.max_tickets = 999999  # TUI = бесконечное хранилище
 
     def _apply_set_bonus(self, user: User, set_id: str) -> None:
         if set_id == "strongest_0gen":
@@ -180,14 +194,16 @@ class TitleService:
             user.recruit_count_bonus = int(user.recruit_count_bonus * 1.20)
         elif set_id == "monster":
             user.double_attack = True
-            # extra_attack_count восстанавливается в _handle_attack_cd
-            # Здесь просто устанавливаем начальный запас
-            if user.skill_path == "monster" and user.double_train:
+            if user.skill_path == "monster":
                 user.extra_attack_count = 2  # 3 атаки
             else:
                 user.extra_attack_count = 1  # 2 атаки
         elif set_id == "flow":
             user.ticket_cd_reduction += 15
+        elif set_id == "ui_set":
+            user.ultra_instinct = True
+            user.true_ultra_instinct = True
+            user.max_tickets = 999999
 
     async def _check_set_completion(
         self, session: AsyncSession, user: User, set_id: str
@@ -305,7 +321,6 @@ class TitleService:
         elif key == "quest_reward":
             user.nh_coins += val
             user.income_bonus_percent += 3
-            # Выдаём случайного персонажа
             from app.services.deck_service import deck_service
             if user.tickets <= 0:
                 user.tickets = 1

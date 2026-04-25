@@ -23,13 +23,13 @@ class User(Base):
     fist_cities_count: Mapped[int] = mapped_column(Integer, default=0)
 
     # ── Ресурсы ────────────────────────────────────────────────────────────
-    nh_coins: Mapped[int] = mapped_column(Integer, default=0)
-    influence: Mapped[int] = mapped_column(Integer, default=100)
-    combat_power: Mapped[int] = mapped_column(Integer, default=0)
+    nh_coins: Mapped[int] = mapped_column(BigInteger, default=0)
+    influence: Mapped[int] = mapped_column(BigInteger, default=100)
+    combat_power: Mapped[int] = mapped_column(BigInteger, default=0)
 
     # ── Бизнес ────────────────────────────────────────────────────────────
     business_path: Mapped[str | None] = mapped_column(String(16))
-    income_per_minute: Mapped[int] = mapped_column(Integer, default=0)
+    income_per_minute: Mapped[int] = mapped_column(BigInteger, default=0)
 
     # ── Бонусы к доходу ───────────────────────────────────────────────────
     income_bonus_percent: Mapped[int] = mapped_column(Integer, default=0)
@@ -77,9 +77,9 @@ class User(Base):
     ui_auto_ticket: Mapped[bool] = mapped_column(Boolean, default=True)
     ui_auto_pull: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    # ── Статистика для достижений ─────────────────────────────────────────
+    # ── Статистика ────────────────────────────────────────────────────────
     total_wins: Mapped[int] = mapped_column(Integer, default=0)
-    coins_spent: Mapped[int] = mapped_column(Integer, default=0)
+    coins_spent: Mapped[int] = mapped_column(BigInteger, default=0)
     auction_wins: Mapped[int] = mapped_column(Integer, default=0)
     settings_opened: Mapped[int] = mapped_column(Integer, default=0)
 
@@ -90,8 +90,12 @@ class User(Base):
 
     # ── Настройки ─────────────────────────────────────────────────────────
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     def __repr__(self) -> str:
         return f"<User id={self.id} tg_id={self.tg_id} phase={self.phase}>"

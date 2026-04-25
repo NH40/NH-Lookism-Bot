@@ -6,7 +6,6 @@ logger = logging.getLogger(__name__)
 
 
 def setup_scheduler() -> AsyncIOScheduler:
-    # Импортируем внутри функции чтобы избежать циклических импортов
     from app.scheduler.tasks import (
         income_tick,
         ultra_instinct_tick,
@@ -28,15 +27,17 @@ def setup_scheduler() -> AsyncIOScheduler:
         id="ultra_instinct_tick",
         name="ultra_instinct_tick",
     )
+    # Аукцион тикает каждые 30 секунд
     scheduler.add_job(
         auction_round_tick,
         trigger=IntervalTrigger(seconds=30),
         id="auction_round_tick",
         name="auction_round_tick",
     )
+    # Новый аукцион раз в 15 минут (случайно 10-20)
     scheduler.add_job(
         auction_start_tick,
-        trigger=IntervalTrigger(minutes=20),
+        trigger=IntervalTrigger(minutes=15),
         id="auction_start_tick",
         name="auction_start_tick",
     )

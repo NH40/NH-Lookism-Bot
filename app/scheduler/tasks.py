@@ -49,7 +49,7 @@ async def _ui_recruit(session: AsyncSession, user):
 
 
 async def auction_round_tick():
-    """Каждую минуту — обрабатываем текущий раунд аукциона."""
+    """Каждые 30 сек — обрабатываем текущий раунд аукциона."""
     async with AsyncSessionFactory() as session:
         async with session.begin():
             result = await auction_service.tick(session)
@@ -63,13 +63,19 @@ async def auction_round_tick():
 
 
 async def auction_start_tick():
-    """Раз в 20 минут — запускаем новый аукцион если нет активного."""
+    """Каждые 15 мин — запускаем новый аукцион если пауза прошла."""
     async with AsyncSessionFactory() as session:
         async with session.begin():
             active = await auction_service.get_active_auction(session)
-            if not active:
-                await auction_service.start_new_auction(session)
-                logger.info("New auction started")
+            if active:
+                return  # уже идёт
+
+            new_auction = await auction_service.start_new_auction(session)
+            if new_auction:
+                tier_name = auction_service.AUCTION_TIERS.get(
+                    new_auction.tier, {}
+                ).get("name", "")
+                logger.info(f"New auction started: {tier_name} (tier {new_auction.tier})")
 
 
 async def _fmt_reward(lot) -> str:
@@ -94,8 +100,6 @@ async def _fmt_reward(lot) -> str:
 async def _notify_round_end(result: dict):
     try:
         from app.main import bot
-        from sqlalchemy import select
-        from app.models.user import User
 
         winner = result.get("winner")
         tier_emoji = result["tier_emoji"]
@@ -106,16 +110,15 @@ async def _notify_round_end(result: dict):
         reward_str = await _fmt_reward(result.get("lot"))
 
         winner_line = (
-            f"👑 Победитель: {winner['name']} — {winner['bid']:,} NHCoin"
+            f"👑 {winner['name']} — {winner['bid']:,} NHCoin"
             if winner else "Ставок не было"
         )
 
         text = (
-            f"{tier_emoji} <b>Аукцион — {tier_name}</b>\n"
-            f"Раунд {round_num}/{total} завершён!\n\n"
+            f"{tier_emoji} <b>Аукцион {tier_name} — Раунд {round_num}/{total}</b>\n\n"
             f"🎁 Лот: {reward_str}\n"
-            f"{winner_line}\n\n"
-            f"➡️ Раунд {next_round} уже начался!"
+            f"Победитель: {winner_line}\n\n"
+            f"➡️ Раунд {next_round} начался!"
         )
 
         async with AsyncSessionFactory() as session:
@@ -144,24 +147,24 @@ async def _notify_auction_end(result: dict):
         reward_str = await _fmt_reward(result.get("lot"))
 
         winner_line = (
-            f"👑 Победитель: <b>{winner['name']}</b> — {winner['bid']:,} NHCoin"
-            if winner else "Никто не сделал ставок"
+            f"👑 <b>{winner['name']}</b> — {winner['bid']:,} NHCoin"
+            if winner else "Ставок не было"
         )
 
         text = (
             f"{tier_emoji} <b>Аукцион {tier_name} завершён!</b>\n\n"
             f"🎁 Лот: {reward_str}\n"
-            f"{winner_line}\n\n"
-            f"🏛 Следующий аукцион через ~20 минут"
+            f"Победитель: {winner_line}\n\n"
+            f"🏛 Следующий аукцион через 10-20 минут"
         )
 
-        # Победителю отдельное уведомление
+        # Победителю отдельно
         if winner and winner.get("notifications"):
             try:
                 await bot.send_message(
                     winner["tg_id"],
                     f"🎉 <b>Вы победили на аукционе!</b>\n\n"
-                    f"Награда {reward_str} уже у вас!\n"
+                    f"🎁 {reward_str} уже у вас!\n"
                     f"Потрачено: {winner['bid']:,} NHCoin",
                     parse_mode="HTML",
                 )

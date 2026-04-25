@@ -6,6 +6,7 @@ from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.models.user import User
 from app.services.admin_service import admin_service
 from app.services.title_service import title_service
@@ -27,6 +28,9 @@ class AdminFSM(StatesGroup):
     waiting_tickets = State()
     waiting_patch_version = State()
     waiting_restore_confirm = State()
+    waiting_broadcast = State()
+    waiting_bulk_coins = State()
+    waiting_bulk_tickets = State()
 
 
 # ── Главное меню ────────────────────────────────────────────────────────────
@@ -54,10 +58,7 @@ async def cb_admin_stats(cb: CallbackQuery, session: AsyncSession, user: User):
     phase_lines = "\n".join(
         f"  {phase_label(p)}: {c}" for p, c in stats["phases"].items()
     )
-
-    # Последняя версия патча
     from app.models.game_version import GameVersion
-    from sqlalchemy import select
     gv_result = await session.execute(
         select(GameVersion).order_by(GameVersion.applied_at.desc()).limit(1)
     )
@@ -158,108 +159,12 @@ async def cb_adm_title(cb: CallbackQuery, user: User):
     )
 
 
-@router.callback_query(F.data.startswith("adm_grantset:"))
-async def cb_adm_grantset(cb: CallbackQuery, session: AsyncSession, user: User):
-    if not is_admin(user.tg_id):
-        return
-    parts = cb.data.split(":")
-    tg_id = int(parts[1])
-    set_id = parts[2]
-
-    found = await admin_service.find_user(session, str(tg_id))
-    if not found:
-        await cb.answer("Игрок не найден", show_alert=True)
-        return
-
-    from app.data.titles import DONAT_SET_MAP, DONAT_TITLES
-    s = DONAT_SET_MAP.get(set_id)
-    if not s:
-        await cb.answer("Сет не найден", show_alert=True)
-        return
-
-    # Показываем состав сета с кнопками выдачи каждого + кнопка "выдать весь сет"
-    from app.models.title import UserDonatTitle
-    from sqlalchemy import select
-    owned_r = await session.execute(
-        select(UserDonatTitle.title_id).where(UserDonatTitle.user_id == found.id)
-    )
-    owned = set(owned_r.scalars().all())
-
-    titles_in_set = [t for t in DONAT_TITLES if t.set_id == set_id]
-
-    builder = InlineKeyboardBuilder()
-    # Кнопка выдать весь сет
-    builder.row(InlineKeyboardButton(
-        text=f"🔱 Выдать весь сет ({s.name})",
-        callback_data=f"adm_grantset_all:{tg_id}:{set_id}"
-    ))
-    builder.row(InlineKeyboardButton(
-        text="─── Отдельные титулы ───",
-        callback_data="noop"
-    ))
-    # Кнопки отдельных титулов
-    for t in titles_in_set:
-        is_owned = t.title_id in owned
-        status = "✅" if is_owned else "❌"
-        builder.row(InlineKeyboardButton(
-            text=f"{status} {t.emoji} {t.name} — {t.price_rub}₽",
-            callback_data=f"adm_grant_title:{tg_id}:{t.title_id}"
-        ))
-    builder.row(InlineKeyboardButton(
-        text="◀️ Назад", callback_data=f"adm_title:{tg_id}"
-    ))
-
-    lines = [f"📦 <b>{s.name}</b>\n", f"Бонус сета: {s.set_bonus}\n\nСостав:"]
-    for t in titles_in_set:
-        status = "✅" if t.title_id in owned else "❌"
-        lines.append(f"{status} {t.emoji} {t.name}\n  {t.bonus_description}")
-
-    await cb.message.edit_text(
-        "\n".join(lines),
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
-
-
-@router.callback_query(F.data.startswith("adm_grantset_all:"))
-async def cb_adm_grantset_all(cb: CallbackQuery, session: AsyncSession, user: User):
-    if not is_admin(user.tg_id):
-        return
-    parts = cb.data.split(":")
-    tg_id = int(parts[1])
-    set_id = parts[2]
-
-    found = await admin_service.find_user(session, str(tg_id))
-    if not found:
-        await cb.answer("Игрок не найден", show_alert=True)
-        return
-
-    from app.data.titles import DONAT_TITLES, DONAT_SET_MAP
-    s = DONAT_SET_MAP.get(set_id)
-    title_ids = [t.title_id for t in DONAT_TITLES if t.set_id == set_id]
-    count = 0
-    for tid in title_ids:
-        result = await title_service.grant_title(session, found, tid, user.tg_id)
-        if result["ok"]:
-            count += 1
-
-    await cb.answer(f"✅ Выдано {count} титулов сета {s.name if s else set_id}")
-    await cb.message.edit_text(
-        f"✅ Сет <b>{s.name if s else set_id}</b> выдан игроку {found.full_name}\n"
-        f"Выдано титулов: {count}",
-        reply_markup=back_kb(f"adm_user:{tg_id}"),
-        parse_mode="HTML",
-    )
-
-
 async def _show_set_panel(
     message, session: AsyncSession, user: User,
     tg_id: int, set_id: str, found_user
 ):
-    """Показывает панель сета — используется после выдачи/снятия титула."""
     from app.data.titles import DONAT_TITLE_MAP, DONAT_TITLES, DONAT_SET_MAP
     from app.models.title import UserDonatTitle
-    from sqlalchemy import select
 
     s = DONAT_SET_MAP.get(set_id)
     owned_r = await session.execute(
@@ -311,12 +216,10 @@ async def cb_adm_grantset(cb: CallbackQuery, session: AsyncSession, user: User):
     parts = cb.data.split(":")
     tg_id = int(parts[1])
     set_id = parts[2]
-
     found = await admin_service.find_user(session, str(tg_id))
     if not found:
         await cb.answer("Игрок не найден", show_alert=True)
         return
-
     await _show_set_panel(cb.message, session, user, tg_id, set_id, found)
 
 
@@ -327,7 +230,6 @@ async def cb_adm_grantset_all(cb: CallbackQuery, session: AsyncSession, user: Us
     parts = cb.data.split(":")
     tg_id = int(parts[1])
     set_id = parts[2]
-
     found = await admin_service.find_user(session, str(tg_id))
     if not found:
         await cb.answer("Игрок не найден", show_alert=True)
@@ -353,7 +255,6 @@ async def cb_adm_grant_title(cb: CallbackQuery, session: AsyncSession, user: Use
     parts = cb.data.split(":")
     tg_id = int(parts[1])
     title_id = parts[2]
-
     found = await admin_service.find_user(session, str(tg_id))
     if not found:
         await cb.answer("Игрок не найден", show_alert=True)
@@ -365,13 +266,10 @@ async def cb_adm_grant_title(cb: CallbackQuery, session: AsyncSession, user: Use
     else:
         await cb.answer(result["reason"], show_alert=True)
 
-    # Показываем панель сета через отдельную функцию (не трогаем cb.data)
     from app.data.titles import DONAT_TITLE_MAP
     cfg = DONAT_TITLE_MAP.get(title_id)
     if cfg:
-        await _show_set_panel(
-            cb.message, session, user, tg_id, cfg.set_id, found
-        )
+        await _show_set_panel(cb.message, session, user, tg_id, cfg.set_id, found)
 
 
 @router.callback_query(F.data.startswith("adm_untitle:"))
@@ -422,8 +320,28 @@ async def cb_adm_revoke(cb: CallbackQuery, session: AsyncSession, user: User):
     result = await title_service.revoke_title(session, found, title_id)
     if result["ok"]:
         await cb.answer("✅ Титул снят")
-        cb.data = f"adm_untitle:{tg_id}"
-        await cb_adm_untitle(cb, session, user)
+        # Перерисовываем список напрямую
+        owned = await title_service.get_user_titles(session, found.id)
+        from app.data.titles import DONAT_TITLE_MAP
+        builder = InlineKeyboardBuilder()
+        for tid in owned:
+            cfg = DONAT_TITLE_MAP.get(tid)
+            if cfg:
+                builder.row(InlineKeyboardButton(
+                    text=f"❌ {cfg.emoji} {cfg.name}",
+                    callback_data=f"adm_revoke:{tg_id}:{tid}"
+                ))
+        builder.row(InlineKeyboardButton(
+            text="◀️ Назад", callback_data=f"adm_user:{tg_id}"
+        ))
+        try:
+            await cb.message.edit_text(
+                f"❌ Выберите титул для снятия с {found.full_name}:",
+                reply_markup=builder.as_markup(),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
     else:
         await cb.answer("Ошибка", show_alert=True)
 
@@ -584,7 +502,6 @@ async def msg_patch_version(
         return
     version = message.text.strip()
 
-    # Валидация формата версии
     import re
     if not re.match(r"^\d+\.\d+\.\d+$", version):
         await message.answer(
@@ -622,10 +539,10 @@ async def cb_admin_patch_confirm(
     version = cb.data.split(":", 1)[1]
     count = await admin_service.patch_reset_progress(session, version)
 
-    # Рассылка о патче
-    from sqlalchemy import select
+    # Используем bot из callback
+    bot = cb.bot
+
     from app.models.user import User as UserModel
-    from app.main import bot
     users_r = await session.execute(
         select(UserModel).where(UserModel.notifications_enabled == True)
     )
@@ -655,7 +572,6 @@ async def cb_admin_patch_confirm(
 async def cb_admin_backup(cb: CallbackQuery, session: AsyncSession, user: User):
     if not is_admin(user.tg_id):
         return
-
     backups = await admin_service.list_backups()
 
     builder = InlineKeyboardBuilder()
@@ -663,7 +579,6 @@ async def cb_admin_backup(cb: CallbackQuery, session: AsyncSession, user: User):
         text="💾 Создать новый бэкап",
         callback_data="admin_backup_create"
     ))
-
     if backups:
         builder.row(InlineKeyboardButton(
             text="─── Восстановить из ───",
@@ -674,16 +589,16 @@ async def cb_admin_backup(cb: CallbackQuery, session: AsyncSession, user: User):
                 text=f"📁 {b['name']} ({b['size_kb']} KB)",
                 callback_data=f"admin_restore:{b['name']}"
             ))
-
-    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="admin_main"))
+    builder.row(InlineKeyboardButton(
+        text="◀️ Назад", callback_data="admin_main"
+    ))
 
     backup_list = "\n".join(
         f"  📁 {b['name']} — {b['size_kb']} KB" for b in backups[:8]
     ) if backups else "  Бэкапов нет"
 
     await cb.message.edit_text(
-        f"💾 <b>Бэкапы</b>\n\n"
-        f"Список бэкапов:\n{backup_list}",
+        f"💾 <b>Бэкапы</b>\n\nСписок бэкапов:\n{backup_list}",
         reply_markup=builder.as_markup(),
         parse_mode="HTML",
     )
@@ -716,7 +631,6 @@ async def cb_admin_restore(cb: CallbackQuery, user: User, state: FSMContext):
     if not is_admin(user.tg_id):
         return
     filename = cb.data.split(":", 1)[1]
-    filepath = f"/app/backups/{filename}"
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
@@ -760,15 +674,8 @@ async def cb_admin_restore_confirm(
             parse_mode="HTML",
         )
 
-class AdminFSM(StatesGroup):
-    waiting_search = State()
-    waiting_coins = State()
-    waiting_tickets = State()
-    waiting_patch_version = State()
-    waiting_broadcast = State()
-    waiting_bulk_coins = State()
-    waiting_bulk_tickets = State()
 
+# ── Рассылка ────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "admin_broadcast")
 async def cb_admin_broadcast(cb: CallbackQuery, user: User, state: FSMContext):
@@ -794,17 +701,19 @@ async def msg_broadcast(
     await state.clear()
     text = message.text.strip()
 
-    from app.main import bot
     from app.models.user import User as UserModel
-    from sqlalchemy import select
 
-    # Получаем всех пользователей через текущую сессию
     users_r = await session.execute(select(UserModel))
-    users = users_r.scalars().all()
+    all_users = users_r.scalars().all()
+
+    # Берём бот из самого сообщения — он всегда доступен
+    bot = message.bot
 
     sent = 0
     failed = 0
-    for u in users:
+    blocked = 0
+
+    for u in all_users:
         try:
             await bot.send_message(
                 u.tg_id,
@@ -812,16 +721,23 @@ async def msg_broadcast(
                 parse_mode="HTML",
             )
             sent += 1
-        except Exception:
-            failed += 1
+        except Exception as e:
+            err = str(e).lower()
+            if "blocked" in err or "forbidden" in err or "deactivated" in err:
+                blocked += 1
+            else:
+                failed += 1
 
     await message.answer(
-        f"✅ Рассылка завершена!\n"
-        f"Отправлено: {sent}\n"
-        f"Не доставлено: {failed}",
+        f"✅ Рассылка завершена!\n\n"
+        f"👥 Всего: {len(all_users)}\n"
+        f"✅ Отправлено: {sent}\n"
+        f"🚫 Заблокировали: {blocked}\n"
+        f"❌ Ошибки: {failed}",
         reply_markup=back_kb("admin_main"),
     )
 
+# ── Действия со всеми ───────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "admin_bulk")
 async def cb_admin_bulk(cb: CallbackQuery, user: User):
@@ -839,8 +755,7 @@ async def cb_admin_bulk(cb: CallbackQuery, user: User):
     ))
     try:
         await cb.message.edit_text(
-            "👥 <b>Действия со всеми игроками</b>\n\n"
-            "Выбери действие:",
+            "👥 <b>Действия со всеми игроками</b>\n\nВыбери действие:",
             reply_markup=builder.as_markup(),
             parse_mode="HTML",
         )
@@ -858,6 +773,7 @@ async def cb_admin_bulk_coins(cb: CallbackQuery, user: User, state: FSMContext):
         reply_markup=back_kb("admin_bulk"),
     )
 
+
 @router.message(AdminFSM.waiting_bulk_coins)
 async def msg_bulk_coins(
     message: Message, session: AsyncSession,
@@ -873,7 +789,6 @@ async def msg_bulk_coins(
         return
 
     from app.models.user import User as UserModel
-    from sqlalchemy import select
     users_r = await session.execute(select(UserModel))
     users = users_r.scalars().all()
     for u in users:
@@ -884,6 +799,7 @@ async def msg_bulk_coins(
         f"✅ Выдано {fmt_num(amount)} монет {len(users)} игрокам!",
         reply_markup=back_kb("admin_main"),
     )
+
 
 @router.callback_query(F.data == "admin_bulk_tickets")
 async def cb_admin_bulk_tickets(cb: CallbackQuery, user: User, state: FSMContext):
@@ -911,7 +827,6 @@ async def msg_bulk_tickets(
         return
 
     from app.models.user import User as UserModel
-    from sqlalchemy import select
     users_r = await session.execute(select(UserModel))
     users = users_r.scalars().all()
     for u in users:
@@ -922,6 +837,9 @@ async def msg_bulk_tickets(
         f"✅ Выдано {count} тикетов {len(users)} игрокам!",
         reply_markup=back_kb("admin_main"),
     )
+
+
+# ── Утилиты ─────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "noop")
 async def cb_noop(cb: CallbackQuery):

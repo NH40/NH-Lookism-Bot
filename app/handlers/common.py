@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.utils.keyboards.common import main_menu_kb, back_kb
 from app.utils.formatters import fmt_num, fmt_power, phase_label
+from aiogram.filters import CommandStart, Command
 
 router = Router()
 

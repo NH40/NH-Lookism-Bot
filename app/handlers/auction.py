@@ -30,6 +30,14 @@ async def _render_auction(
     data = await auction_service.get_display_data(session, user)
 
     if not data["active"]:
+        wait = data.get("wait_seconds", 0)
+        if wait > 0:
+            m, s = divmod(wait, 60)
+            wait_str = f"{m}м {s}с"
+            msg = f"🏛 <b>Аукцион</b>\n\nСледующий аукцион начнётся через: {wait_str}"
+        else:
+            msg = "🏛 <b>Аукцион</b>\n\nСледующий аукцион скоро начнётся!"
+
         builder = InlineKeyboardBuilder()
         builder.row(InlineKeyboardButton(
             text="🔄 Обновить", callback_data="auction"
@@ -39,7 +47,7 @@ async def _render_auction(
         ))
         try:
             await cb.message.edit_text(
-                "🏛 <b>Аукцион</b>\n\nАукцион сейчас не проводится.\nЗаходите позже!",
+                msg,
                 reply_markup=builder.as_markup(),
                 parse_mode="HTML",
             )

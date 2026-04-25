@@ -5,8 +5,17 @@ from sqlalchemy import select
 from app.models.auction import Auction, AuctionLot, AuctionBid
 from app.models.user import User
 
-AUCTION_ROUND_SECONDS = 60   # 1 минута на раунд
-BID_EXTEND_SECONDS = 10      # +10 сек при ставке
+AUCTION_ROUND_SECONDS = 90   # 1.5 минуты на раунд
+BID_EXTEND_SECONDS = 15      # +15 сек при ставке
+
+# Веса тиров — высокие тиры редкие
+TIER_WEIGHTS = {
+    1: 50,   # Бронзовый — очень часто
+    2: 30,   # Серебряный — часто
+    3: 15,   # Золотой — редко
+    4: 4,    # Платиновый — очень редко
+    5: 1,    # Королевский — крайне редко
+}
 
 AUCTION_TIERS = {
     1: {"name": "Бронзовый",   "emoji": "🟫", "rounds": 2, "min_bid": 500,   "reward_type": "coins"},
@@ -16,11 +25,22 @@ AUCTION_TIERS = {
     5: {"name": "Королевский", "emoji": "🟧", "rounds": 4, "min_bid": 50000, "reward_type": "character"},
 }
 
+# Персонажи по тирам — БЕЗ вершины, легенды, абсолюта
 RANK_BY_TIER = {
-    3: ["king", "strong_king"],
-    4: ["gen_zero", "new_legend"],
-    5: ["legend", "peak", "absolute"],
+    3: ["king", "strong_king"],           # Золотой
+    4: ["gen_zero", "new_legend"],        # Платиновый
+    5: ["gen_zero", "new_legend"],        # Королевский — тоже без легенд
 }
+
+# Пауза между аукционами: случайно 10-20 минут
+AUCTION_PAUSE_MIN = 10
+AUCTION_PAUSE_MAX = 20
+
+
+def _get_random_tier() -> int:
+    tiers = list(TIER_WEIGHTS.keys())
+    weights = list(TIER_WEIGHTS.values())
+    return random.choices(tiers, weights=weights, k=1)[0]
 
 
 class AuctionService:
@@ -34,10 +54,33 @@ class AuctionService:
         )
         return result.scalar_one_or_none()
 
-    async def start_new_auction(self, session: AsyncSession) -> Auction:
-        tier = random.randint(1, 5)
-        cfg = AUCTION_TIERS[tier]
+    async def get_next_auction_time(self, session: AsyncSession) -> datetime | None:
+        """Время когда можно начать следующий аукцион."""
+        result = await session.execute(
+            select(Auction)
+            .where(Auction.is_active == False)
+            .order_by(Auction.started_at.desc())
+            .limit(1)
+        )
+        last = result.scalar_one_or_none()
+        if not last:
+            return None
+        # Случайная пауза 10-20 минут после конца последнего аукциона
+        pause = random.randint(AUCTION_PAUSE_MIN, AUCTION_PAUSE_MAX)
+        return last.ends_at + timedelta(minutes=pause)
+
+    async def start_new_auction(self, session: AsyncSession) -> Auction | None:
+        """Запускает новый аукцион если пауза прошла."""
         now = datetime.now(timezone.utc)
+
+        # Проверяем паузу
+        next_time = await self.get_next_auction_time(session)
+        if next_time and now < next_time:
+            return None  # ещё рано
+
+        tier = _get_random_tier()
+        cfg = AUCTION_TIERS[tier]
+
         auction = Auction(
             tier=tier,
             is_active=True,
@@ -64,18 +107,26 @@ class AuctionService:
     async def _generate_reward(self, tier: int) -> str:
         import json
         cfg = AUCTION_TIERS[tier]
+
         if cfg["reward_type"] == "coins":
+            # Тир 1: монеты
             amount = random.randint(1000, 5000) * tier
             return json.dumps({"coins": amount})
+
         elif cfg["reward_type"] == "potion":
+            # Тир 2: зелье
             from app.data.shop import POTIONS
             potion = random.choice(POTIONS)
             return json.dumps({"potion_id": potion.potion_id, "name": potion.name})
+
         else:
+            # Тиры 3-5: персонажи — БЕЗ вершины, легенды, абсолюта
             from app.data.characters import CHARACTERS
-            allowed = RANK_BY_TIER.get(tier, ["member"])
+            allowed = RANK_BY_TIER.get(tier, ["member", "boss", "king"])
             candidates = [c for c in CHARACTERS if c["rank"] in allowed]
-            char = random.choice(candidates) if candidates else random.choice(CHARACTERS)
+            if not candidates:
+                candidates = [c for c in CHARACTERS if c["rank"] in ["king", "strong_king"]]
+            char = random.choice(candidates)
             return json.dumps({
                 "character": char["name"],
                 "rank": char["rank"],
@@ -123,7 +174,7 @@ class AuctionService:
         auction.winner_id = user.id
         auction.final_bid = amount
 
-        # Продлеваем таймер раунда на BID_EXTEND_SECONDS
+        # Продлеваем таймер если мало времени
         remaining = (auction.ends_at - now).total_seconds()
         if remaining < BID_EXTEND_SECONDS:
             auction.ends_at = now + timedelta(seconds=BID_EXTEND_SECONDS)
@@ -141,14 +192,9 @@ class AuctionService:
         }
 
     async def tick(self, session: AsyncSession) -> dict | None:
-        """
-        Вызывается каждую минуту планировщиком.
-        Возвращает событие: round_end или auction_end или None.
-        """
         auction = await self.get_active_auction(session)
         if not auction:
-            await self.start_new_auction(session)
-            return {"event": "started"}
+            return None  # нет аукциона — start_tick сам запустит
 
         now = datetime.now(timezone.utc)
         if now < auction.ends_at:
@@ -180,13 +226,12 @@ class AuctionService:
                     "bid": auction.final_bid,
                     "notifications": winner.notifications_enabled,
                 }
-                # Выдаём награду сразу после раунда
                 if lot:
                     await self._deliver_reward(session, winner, lot)
                     winner.auction_wins += 1
 
         if current_round >= total_rounds:
-            # Аукцион завершён
+            # Финал — завершаем аукцион
             auction.is_active = False
             await session.flush()
             return {
@@ -200,18 +245,12 @@ class AuctionService:
                 "lot": lot,
             }
         else:
-            # Следующий раунд — генерируем новый лот
+            # Следующий раунд
             auction.current_round = current_round + 1
             auction.final_bid = 0
             auction.winner_id = None
             auction.ends_at = now + timedelta(seconds=AUCTION_ROUND_SECONDS)
 
-            # Новый лот для следующего раунда
-            if lot:
-                lot.min_bid = max(
-                    cfg.get("min_bid", 500),
-                    int(auction.final_bid * 1.1) if auction.final_bid else cfg.get("min_bid", 500)
-                )
             new_reward = await self._generate_reward(auction.tier)
             new_lot = AuctionLot(
                 auction_id=auction.id,
@@ -268,7 +307,13 @@ class AuctionService:
     ) -> dict:
         auction = await self.get_active_auction(session)
         if not auction:
-            return {"active": False}
+            # Показываем время до следующего аукциона
+            next_time = await self.get_next_auction_time(session)
+            now = datetime.now(timezone.utc)
+            wait_seconds = 0
+            if next_time and next_time > now:
+                wait_seconds = int((next_time - now).total_seconds())
+            return {"active": False, "wait_seconds": wait_seconds}
 
         import json
         now = datetime.now(timezone.utc)
@@ -315,7 +360,10 @@ class AuctionService:
                     emoji = RANK_EMOJI.get(rank, "❓")
                     rc = RANK_CONFIG_MAP.get(rank)
                     label = rc.label if rc else rank
-                    reward_str = f"{emoji} {data['character']} [{label}] {data['power']:,} мощи"
+                    reward_str = (
+                        f"{emoji} {data['character']} "
+                        f"[{label}] {data['power']:,} мощи"
+                    )
             except Exception:
                 pass
 

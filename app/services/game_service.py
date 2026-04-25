@@ -30,7 +30,6 @@ async def _notify_pvp_attack(
     attacker: User, defender: User,
     win: bool, phase: str
 ) -> None:
-    """Уведомляем защитника об атаке. Вне класса — вызывается как функция."""
     try:
         if not defender.notifications_enabled:
             return
@@ -61,19 +60,11 @@ async def _notify_pvp_attack(
 class GameService:
 
     def _get_max_extra_attacks(self, user: User) -> int:
-        """
-        Сколько ДОПОЛНИТЕЛЬНЫХ атак восстанавливается после КД.
-        0 → 1 атака (обычно)
-        1 → 2 атаки (сет монстра ИЛИ путь монстра)
-        2 → 3 атаки (сет монстра И путь монстра)
-        """
         if not user.double_attack:
             return 0
-        # double_attack=True означает хотя бы один источник (сет монстра)
-        # Если ещё и путь монстра выбран — добавляем ещё одну атаку
         if user.skill_path == "monster":
-            return 2  # 3 атаки итого
-        return 1  # 2 атаки итого
+            return 2
+        return 1
 
     async def _handle_attack_cd(
         self, session: AsyncSession, user: User, cd_key: str, phase: str
@@ -99,7 +90,6 @@ class GameService:
 
         cd = max(10, int(base_cd * (1 - speed_pct / 100)))
         await cooldown_service.set_cooldown(cd_key, cd)
-        # Восстанавливаем запас атак
         user.extra_attack_count = self._get_max_extra_attacks(user)
 
     async def _get_my_districts_in_city(
@@ -117,8 +107,9 @@ class GameService:
     def _get_district_power(self, district_number: int, multiplier: float) -> int:
         return max(10, int(10 * (district_number ** 0.6) * multiplier))
 
-    async def _count_my_king_cities(self, session: AsyncSession, user_id: int) -> int:
-        """Города где у игрока есть хотя бы 1 район."""
+    async def _count_my_king_cities(
+        self, session: AsyncSession, user_id: int
+    ) -> int:
         r = await session.execute(
             select(District.city_id).where(
                 District.owner_id == user_id,
@@ -126,6 +117,26 @@ class GameService:
             ).distinct()
         )
         return len(r.scalars().all())
+
+    async def _get_city_dominant_player(
+        self, session: AsyncSession, city_id: int, exclude_user_id: int
+    ) -> int | None:
+        """Игрок с наибольшим числом районов в городе — потенциальный PvP враг."""
+        from sqlalchemy import desc
+        r = await session.execute(
+            select(District.owner_id, func.count(District.id).label("cnt"))
+            .where(
+                District.city_id == city_id,
+                District.is_captured == True,
+                District.owner_id != None,
+                District.owner_id != exclude_user_id,
+            )
+            .group_by(District.owner_id)
+            .order_by(desc("cnt"))
+            .limit(1)
+        )
+        row = r.first()
+        return row[0] if row else None
 
     # ── ФАЗА БАНДА ──────────────────────────────────────────────────────────
 
@@ -398,11 +409,16 @@ class GameService:
         if not city:
             return {"ok": False, "reason": "Город не найден"}
 
-        if city.owner_id and city.owner_id != user.id:
-            defender = await user_repo.get_by_id(session, city.owner_id)
+        # PvP — ищем доминирующего игрока в городе
+        dominant_id = await self._get_city_dominant_player(
+            session, city_id, user.id
+        )
+        if dominant_id:
+            defender = await user_repo.get_by_id(session, dominant_id)
             if defender and defender.phase == "king":
                 return await self._king_pvp(session, user, defender, city, cd_key)
 
+        # Атака бота — считаем мощь по зданиям или базовую
         from app.models.building import UserBuilding
         buildings_count = await session.scalar(
             select(func.count(UserBuilding.id)).where(
@@ -413,25 +429,31 @@ class GameService:
 
         from app.data.cities import KING_DISTRICT_BASE_POWER
         if buildings_count > 0:
-            bot_power = int(buildings_count * 50 * city.district_power_multiplier * 0.7)
+            bot_power = int(
+                buildings_count * 50 * city.district_power_multiplier * 0.7
+            )
         else:
             bot_power = int(
-                KING_DISTRICT_BASE_POWER * city.total_districts * city.district_power_multiplier
+                KING_DISTRICT_BASE_POWER
+                * city.total_districts
+                * city.district_power_multiplier
             )
+        # Минимальная мощь бота
+        bot_power = max(100, bot_power)
 
         result = await fight_district(session, user, bot_power)
 
         districts_gained = 0
-        my_in_city = await self._get_my_districts_in_city(session, user.id, city_id)
-
         if result["win"]:
             await city_repo.init_city_districts(session, city)
             target = random.randint(2, 8)
+
             for _ in range(target):
                 d_r = await session.execute(
                     select(District).where(
                         District.city_id == city_id,
                         District.is_captured == False,
+                        District.owner_id == None,
                     ).order_by(District.number).limit(1)
                 )
                 d = d_r.scalar_one_or_none()
@@ -442,11 +464,16 @@ class GameService:
                 city.captured_districts += 1
                 districts_gained += 1
 
+            # Устанавливаем owner_id города
+            if districts_gained > 0 and not city.owner_id:
+                city.owner_id = user.id
+
             user.total_wins += 1
             user.influence += ATTACK_WIN_INFLUENCE_BONUS["king"]
-            my_in_city += districts_gained
 
-            # Считаем города по уникальным city_id с нашими районами
+            my_in_city = await self._get_my_districts_in_city(
+                session, user.id, city_id
+            )
             my_cities_count = await self._count_my_king_cities(session, user.id)
             user.king_cities_count = my_cities_count
 
@@ -455,22 +482,42 @@ class GameService:
             if my_cities_count >= 10:
                 return await self._promote_to_fist(session, user)
 
-        await self._handle_attack_cd(session, user, cd_key, "king")
-        await session.flush()
+            await self._handle_attack_cd(session, user, cd_key, "king")
+            await session.flush()
 
-        return {
-            "ok": True,
-            "win": result["win"],
-            "is_crit": result["is_crit"],
-            "user_power": result["user_power"],
-            "bot_power": bot_power,
-            "city": city.name,
-            "cities_count": user.king_cities_count,
-            "districts_gained": districts_gained,
-            "my_in_city": my_in_city,
-            "city_captured": city.captured_districts,
-            "city_total": city.total_districts,
-        }
+            return {
+                "ok": True,
+                "win": True,
+                "is_crit": result["is_crit"],
+                "user_power": result["user_power"],
+                "bot_power": bot_power,
+                "city": city.name,
+                "cities_count": my_cities_count,
+                "districts_gained": districts_gained,
+                "my_in_city": my_in_city,
+                "city_captured": city.captured_districts,
+                "city_total": city.total_districts,
+            }
+        else:
+            my_in_city = await self._get_my_districts_in_city(
+                session, user.id, city_id
+            )
+            await self._handle_attack_cd(session, user, cd_key, "king")
+            await session.flush()
+
+            return {
+                "ok": True,
+                "win": False,
+                "is_crit": result["is_crit"],
+                "user_power": result["user_power"],
+                "bot_power": bot_power,
+                "city": city.name,
+                "cities_count": user.king_cities_count,
+                "districts_gained": 0,
+                "my_in_city": my_in_city,
+                "city_captured": city.captured_districts,
+                "city_total": city.total_districts,
+            }
 
     async def _king_pvp(
         self, session: AsyncSession,
@@ -478,8 +525,25 @@ class GameService:
         city: City, cd_key: str
     ) -> dict:
         result = await fight_player(session, attacker, defender)
+
         if result["win"]:
-            city.owner_id = attacker.id
+            # Забираем все районы защитника в этом городе
+            defender_districts_r = await session.execute(
+                select(District).where(
+                    District.city_id == city.id,
+                    District.owner_id == defender.id,
+                    District.is_captured == True,
+                )
+            )
+            defender_districts = defender_districts_r.scalars().all()
+            taken = 0
+            for d in defender_districts:
+                d.owner_id = attacker.id
+                taken += 1
+
+            if taken > 0:
+                city.owner_id = attacker.id
+
             attacker.total_wins += 1
             attacker.influence += ATTACK_WIN_INFLUENCE_BONUS["king"]
 
@@ -487,27 +551,51 @@ class GameService:
             attacker.king_cities_count = my_cities_count
 
             def_cities = await self._count_my_king_cities(session, defender.id)
+            defender.king_cities_count = def_cities
             if def_cities == 0:
                 await self._destroy_king(session, defender)
 
             await _notify_pvp_attack(attacker, defender, True, "king")
+            await session.flush()
 
             if my_cities_count >= 10:
                 return await self._promote_to_fist(session, attacker)
+
+            my_in_city = await self._get_my_districts_in_city(
+                session, attacker.id, city.id
+            )
+            await self._handle_attack_cd(session, attacker, cd_key, "king")
+            await session.flush()
+
+            return {
+                "ok": True, "win": True,
+                "is_crit": result["is_crit"],
+                "attacker_power": result["attacker_power"],
+                "defender_power": result["defender_power"],
+                "defender_name": defender.full_name,
+                "city": city.name,
+                "districts_taken": taken,
+                "my_in_city": my_in_city,
+                "cities_count": my_cities_count,
+            }
         else:
             await _notify_pvp_attack(attacker, defender, False, "king")
+            await self._handle_attack_cd(session, attacker, cd_key, "king")
+            await session.flush()
 
-        await self._handle_attack_cd(session, attacker, cd_key, "king")
-        await session.flush()
-
-        return {
-            "ok": True, "win": result["win"],
-            "is_crit": result["is_crit"],
-            "attacker_power": result["attacker_power"],
-            "defender_power": result["defender_power"],
-            "defender_name": defender.full_name,
-            "city": city.name,
-        }
+            return {
+                "ok": True, "win": False,
+                "is_crit": result["is_crit"],
+                "attacker_power": result["attacker_power"],
+                "defender_power": result["defender_power"],
+                "defender_name": defender.full_name,
+                "city": city.name,
+                "districts_taken": 0,
+                "my_in_city": await self._get_my_districts_in_city(
+                    session, attacker.id, city.id
+                ),
+                "cities_count": attacker.king_cities_count,
+            }
 
     # ── ФАЗА КУЛАК ──────────────────────────────────────────────────────────
 
@@ -688,7 +776,7 @@ class GameService:
             "new_phase": "king",
             "message": (
                 f"🎉 Вы захватили <b>{city.name}</b> и стали Королём!\n\n"
-                f"Теперь захватите районы в 10 городах чтобы стать Кулаком."
+                f"Захватите районы в 10 городах чтобы стать Кулаком."
             )
         }
 
@@ -730,12 +818,18 @@ class GameService:
     async def _destroy_king(self, session: AsyncSession, user: User) -> dict:
         from app.services.prestige_service import prestige_service
         await prestige_service._reset_progress(session, user)
-        return {"ok": True, "destroyed": True, "message": "💀 Вы потеряли все города!"}
+        return {
+            "ok": True, "destroyed": True,
+            "message": "💀 Вы потеряли все города!"
+        }
 
     async def _destroy_fist(self, session: AsyncSession, user: User) -> dict:
         from app.services.prestige_service import prestige_service
         await prestige_service._reset_progress(session, user)
-        return {"ok": True, "destroyed": True, "message": "💀 Вы потеряли все города кулака!"}
+        return {
+            "ok": True, "destroyed": True,
+            "message": "💀 Вы потеряли все города кулака!"
+        }
 
 
 game_service = GameService()

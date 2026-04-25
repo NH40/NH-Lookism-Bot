@@ -47,10 +47,18 @@ class BusinessService:
     ) -> None:
         from sqlalchemy import update
         from app.models.user import User as UserModel
+        from app.models.referral import Referral
+
         await session.execute(
             update(UserModel)
             .where(UserModel.id == teacher_db_id)
             .values(nh_coins=UserModel.nh_coins + amount)
+        )
+        # Обновляем статистику реферала
+        await session.execute(
+            update(Referral)
+            .where(Referral.teacher_id == teacher_db_id)
+            .values(total_earned=Referral.total_earned + amount)
         )
 
     async def buy_building(

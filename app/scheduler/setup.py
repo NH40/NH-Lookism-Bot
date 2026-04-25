@@ -37,7 +37,7 @@ def setup_scheduler() -> AsyncIOScheduler:
     # Новый аукцион раз в 15 минут (случайно 10-20)
     scheduler.add_job(
         auction_start_tick,
-        trigger=IntervalTrigger(minutes=1),
+        trigger=IntervalTrigger(minutes=15),
         id="auction_start_tick",
         name="auction_start_tick",
     )

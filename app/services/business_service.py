@@ -14,6 +14,7 @@ class BusinessService:
             ).where(
                 UserBuilding.user_id == user.id,
                 UserBuilding.is_active == True,
+                UserBuilding.count > 0,
             )
         )
         base_income = result.scalar() or 0
@@ -54,7 +55,6 @@ class BusinessService:
             .where(UserModel.id == teacher_db_id)
             .values(nh_coins=UserModel.nh_coins + amount)
         )
-        # Обновляем статистику реферала
         await session.execute(
             update(Referral)
             .where(Referral.teacher_id == teacher_db_id)
@@ -78,11 +78,10 @@ class BusinessService:
 
         discount = user.building_discount_percent
         cost = max(2, int(cfg.district_cost * (1 - discount / 100)))
-        # Округляем до чётного
         if cost % 2 != 0:
             cost += 1
 
-        # Считаем свободные районы в городе
+        # Считаем районы в городе
         if city_id:
             from app.models.city import District
             district_count = await session.scalar(
@@ -96,11 +95,13 @@ class BusinessService:
             from app.repositories.city_repo import city_repo
             district_count = await city_repo.get_total_districts(session, user.id)
 
+        # Занятые районы — только активные здания с count > 0
         used_in_city = await session.scalar(
             select(func.sum(UserBuilding.district_cost)).where(
                 UserBuilding.user_id == user.id,
                 UserBuilding.city_id == city_id,
                 UserBuilding.is_active == True,
+                UserBuilding.count > 0,
             )
         ) or 0
 
@@ -111,22 +112,18 @@ class BusinessService:
                 "reason": f"Недостаточно районов (нужно {cost}, свободно {free})"
             }
 
-        # Влияние по пути — только один раз
         if user.business_path == "illegal":
-            # Нелегальный: -3 влияния за каждый район
             loss = cost * 3
             user.influence = max(10, user.influence - loss)
         elif user.business_path == "political":
-            # Политический: +5 влияния за каждый район
             user.influence += cost * 5
-        # legal: влияние не меняется
 
-        # Ищем существующее здание в этом городе
         result = await session.execute(
             select(UserBuilding).where(
                 UserBuilding.user_id == user.id,
                 UserBuilding.building_type == building_id,
                 UserBuilding.city_id == city_id,
+                UserBuilding.is_active == True,
             )
         )
         existing = result.scalar_one_or_none()
@@ -158,6 +155,7 @@ class BusinessService:
             ).where(
                 UserBuilding.user_id == user.id,
                 UserBuilding.is_active == True,
+                UserBuilding.count > 0,
             )
         )
         base = result.scalar() or 0

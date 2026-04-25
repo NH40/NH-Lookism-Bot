@@ -33,7 +33,10 @@ async def _notify_pvp_attack(
     try:
         if not defender.notifications_enabled:
             return
-        from app.main import bot
+        from app.bot_instance import get_bot
+        bot = get_bot()
+        if not bot:
+            return
         phase_names = {"gang": "банды", "king": "королей", "fist": "кулаков"}
         phase_str = phase_names.get(phase, "")
         if win:
@@ -121,7 +124,6 @@ class GameService:
     async def _get_city_dominant_player(
         self, session: AsyncSession, city_id: int, exclude_user_id: int
     ) -> int | None:
-        """Игрок с наибольшим числом районов в городе — потенциальный PvP враг."""
         from sqlalchemy import desc
         r = await session.execute(
             select(District.owner_id, func.count(District.id).label("cnt"))
@@ -316,6 +318,7 @@ class GameService:
 
             return {
                 "ok": True, "win": False,
+                "district_num": district.number,
                 "district_power": district_power,
                 "user_power": result["user_power"],
                 "my_districts": my_districts,
@@ -409,7 +412,6 @@ class GameService:
         if not city:
             return {"ok": False, "reason": "Город не найден"}
 
-        # PvP — ищем доминирующего игрока в городе
         dominant_id = await self._get_city_dominant_player(
             session, city_id, user.id
         )
@@ -418,7 +420,6 @@ class GameService:
             if defender and defender.phase == "king":
                 return await self._king_pvp(session, user, defender, city, cd_key)
 
-        # Атака бота — считаем мощь по зданиям или базовую
         from app.models.building import UserBuilding
         buildings_count = await session.scalar(
             select(func.count(UserBuilding.id)).where(
@@ -438,7 +439,6 @@ class GameService:
                 * city.total_districts
                 * city.district_power_multiplier
             )
-        # Минимальная мощь бота
         bot_power = max(100, bot_power)
 
         result = await fight_district(session, user, bot_power)
@@ -446,7 +446,17 @@ class GameService:
         districts_gained = 0
         if result["win"]:
             await city_repo.init_city_districts(session, city)
-            target = random.randint(2, 8)
+
+            # Считаем реально свободные районы
+            free_count = await session.scalar(
+                select(func.count(District.id)).where(
+                    District.city_id == city_id,
+                    District.is_captured == False,
+                    District.owner_id == None,
+                )
+            ) or 0
+
+            target = min(random.randint(2, 8), free_count)
 
             for _ in range(target):
                 d_r = await session.execute(
@@ -464,7 +474,6 @@ class GameService:
                 city.captured_districts += 1
                 districts_gained += 1
 
-            # Устанавливаем owner_id города
             if districts_gained > 0 and not city.owner_id:
                 city.owner_id = user.id
 
@@ -527,7 +536,6 @@ class GameService:
         result = await fight_player(session, attacker, defender)
 
         if result["win"]:
-            # Забираем все районы защитника в этом городе
             defender_districts_r = await session.execute(
                 select(District).where(
                     District.city_id == city.id,

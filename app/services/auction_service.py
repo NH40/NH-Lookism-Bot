@@ -5,16 +5,16 @@ from sqlalchemy import select
 from app.models.auction import Auction, AuctionLot, AuctionBid
 from app.models.user import User
 
-AUCTION_ROUND_SECONDS = 90   # 1.5 минуты на раунд
-BID_EXTEND_SECONDS = 15      # +15 сек при ставке
+AUCTION_ROUND_SECONDS = 90
+BID_EXTEND_SECONDS = 15
+NEXT_AUCTION_KEY = "next_auction_at"
 
-# Веса тиров — высокие тиры редкие
 TIER_WEIGHTS = {
-    1: 50,   # Бронзовый — очень часто
-    2: 30,   # Серебряный — часто
-    3: 15,   # Золотой — редко
-    4: 4,    # Платиновый — очень редко
-    5: 1,    # Королевский — крайне редко
+    1: 50,
+    2: 30,
+    3: 15,
+    4: 4,
+    5: 1,
 }
 
 AUCTION_TIERS = {
@@ -25,14 +25,12 @@ AUCTION_TIERS = {
     5: {"name": "Королевский", "emoji": "🟧", "rounds": 4, "min_bid": 50000, "reward_type": "character"},
 }
 
-# Персонажи по тирам — БЕЗ вершины, легенды, абсолюта
 RANK_BY_TIER = {
-    3: ["king", "strong_king"],           # Золотой
-    4: ["gen_zero", "new_legend"],        # Платиновый
-    5: ["gen_zero", "new_legend"],        # Королевский — тоже без легенд
+    3: ["king", "strong_king"],
+    4: ["gen_zero", "new_legend"],
+    5: ["gen_zero", "new_legend"],
 }
 
-# Пауза между аукционами: случайно 10-20 минут
 AUCTION_PAUSE_MIN = 10
 AUCTION_PAUSE_MAX = 20
 
@@ -55,31 +53,34 @@ class AuctionService:
         return result.scalar_one_or_none()
 
     async def get_next_auction_time(self, session: AsyncSession) -> datetime | None:
-        """Время когда можно начать следующий аукцион."""
-        result = await session.execute(
-            select(Auction)
-            .where(Auction.is_active == False)
-            .order_by(Auction.started_at.desc())
-            .limit(1)
-        )
-        last = result.scalar_one_or_none()
-        if not last:
+        """
+        Берём TTL из Redis — время устанавливается один раз при завершении
+        аукциона, не пересчитывается каждый раз.
+        """
+        from app.services.cooldown_service import cooldown_service
+        ttl = await cooldown_service.get_ttl(NEXT_AUCTION_KEY)
+        if ttl <= 0:
             return None
-        # Случайная пауза 10-20 минут после конца последнего аукциона
-        pause = random.randint(AUCTION_PAUSE_MIN, AUCTION_PAUSE_MAX)
-        return last.ends_at + timedelta(minutes=pause)
+        return datetime.now(timezone.utc) + timedelta(seconds=ttl)
+
+    async def _set_next_auction_pause(self) -> int:
+        """Устанавливает случайную паузу до следующего аукциона в Redis."""
+        from app.services.cooldown_service import cooldown_service
+        pause = random.randint(AUCTION_PAUSE_MIN, AUCTION_PAUSE_MAX) * 60
+        await cooldown_service.set_cooldown(NEXT_AUCTION_KEY, pause)
+        return pause
 
     async def start_new_auction(self, session: AsyncSession) -> Auction | None:
         """Запускает новый аукцион если пауза прошла."""
-        now = datetime.now(timezone.utc)
+        from app.services.cooldown_service import cooldown_service
 
-        # Проверяем паузу
-        next_time = await self.get_next_auction_time(session)
-        if next_time and now < next_time:
-            return None  # ещё рано
+        # Если КД ещё не истёк — рано
+        if await cooldown_service.is_on_cooldown(NEXT_AUCTION_KEY):
+            return None
 
         tier = _get_random_tier()
         cfg = AUCTION_TIERS[tier]
+        now = datetime.now(timezone.utc)
 
         auction = Auction(
             tier=tier,
@@ -109,17 +110,15 @@ class AuctionService:
         cfg = AUCTION_TIERS[tier]
 
         if cfg["reward_type"] == "tickets":
-            amount = random.randint(1, 3) * tier  # 1-3 тикета
+            amount = random.randint(1, 3) * tier
             return json.dumps({"tickets": amount})
 
         elif cfg["reward_type"] == "potion":
-            # Тир 2: зелье
             from app.data.shop import POTIONS
             potion = random.choice(POTIONS)
             return json.dumps({"potion_id": potion.potion_id, "name": potion.name})
 
         else:
-            # Тиры 3-5: персонажи — БЕЗ вершины, легенды, абсолюта
             from app.data.characters import CHARACTERS
             allowed = RANK_BY_TIER.get(tier, ["member", "boss", "king"])
             candidates = [c for c in CHARACTERS if c["rank"] in allowed]
@@ -173,7 +172,6 @@ class AuctionService:
         auction.winner_id = user.id
         auction.final_bid = amount
 
-        # Продлеваем таймер если мало времени
         remaining = (auction.ends_at - now).total_seconds()
         if remaining < BID_EXTEND_SECONDS:
             auction.ends_at = now + timedelta(seconds=BID_EXTEND_SECONDS)
@@ -193,11 +191,11 @@ class AuctionService:
     async def tick(self, session: AsyncSession) -> dict | None:
         auction = await self.get_active_auction(session)
         if not auction:
-            return None  # нет аукциона — start_tick сам запустит
+            return None
 
         now = datetime.now(timezone.utc)
         if now < auction.ends_at:
-            return None  # раунд ещё идёт
+            return None
 
         cfg = AUCTION_TIERS.get(auction.tier, {})
         total_rounds = cfg.get("rounds", 2)
@@ -230,9 +228,14 @@ class AuctionService:
                     winner.auction_wins += 1
 
         if current_round >= total_rounds:
-            # Финал — завершаем аукцион
+            # Финал — завершаем и устанавливаем паузу
             auction.is_active = False
             await session.flush()
+
+            # Устанавливаем случайную паузу ОДИН РАЗ в Redis
+            pause_sec = await self._set_next_auction_pause()
+            pause_min = pause_sec // 60
+
             return {
                 "event": "auction_end",
                 "tier": auction.tier,
@@ -242,6 +245,7 @@ class AuctionService:
                 "total_rounds": total_rounds,
                 "winner": winner_info,
                 "lot": lot,
+                "next_in_minutes": pause_min,
             }
         else:
             # Следующий раунд
@@ -278,7 +282,6 @@ class AuctionService:
         import json
         data = json.loads(lot.reward_data)
         if lot.reward_type == "tickets":
-            data = json.loads(lot.reward_data)
             user.tickets += data["tickets"]
         elif lot.reward_type == "potion":
             from app.data.shop import POTION_MAP
@@ -307,7 +310,6 @@ class AuctionService:
     ) -> dict:
         auction = await self.get_active_auction(session)
         if not auction:
-            # Показываем время до следующего аукциона
             next_time = await self.get_next_auction_time(session)
             now = datetime.now(timezone.utc)
             wait_seconds = 0

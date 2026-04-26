@@ -11,12 +11,12 @@ class RankConfig:
 
 
 RANKS: list[RankConfig] = [
-    RankConfig("E", "⬜", 50,    0,    100),
-    RankConfig("D", "🟦", 150,   0,    300),
-    RankConfig("C", "🟩", 400,   0,    800),
-    RankConfig("B", "🟨", 900,   0,    1800),
-    RankConfig("A", "🟧", 2000,  0,    4000),
-    RankConfig("S", "🟥", 5000,  0,    10000),
+    RankConfig("E", "⬜", 250,    0,    100),
+    RankConfig("D", "🟦", 500,   0,    300),
+    RankConfig("C", "🟩", 1000,   0,    800),
+    RankConfig("B", "🟨", 5000,   0,    1800),
+    RankConfig("A", "🟧", 10000,  0,    4000),
+    RankConfig("S", "🟥", 15000,  0,    10000),
 ]
 
 RANKS_BY_ID: dict[str, RankConfig] = {r.rank: r for r in RANKS}

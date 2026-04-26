@@ -11,10 +11,10 @@ from app.data.squad import ATTACK_WIN_INFLUENCE_BONUS
 from app.utils.formatters import fmt_num
 
 ATTACK_CD: dict[str, int] = {
-    "gang":    60,
-    "king":    300,
-    "fist":    600,
-    "emperor": 600,
+    "gang":    100,
+    "king":    15000,
+    "fist":    500000,
+    "emperor": 1000000,
 }
 
 FIST_BOT_CONFIGS = [
@@ -24,7 +24,6 @@ FIST_BOT_CONFIGS = [
     {"name": "Пэк", "ratio": 1.10},
     {"name": "Ли",  "ratio": 1.20},
 ]
-
 
 async def _notify_pvp_attack(
     attacker: User, defender: User,
@@ -63,14 +62,42 @@ async def _notify_pvp_attack(
 class GameService:
 
     def _get_max_extra_attacks(self, user: User) -> int:
-        has_set = user.double_attack        # сет монстра выдан
-        has_path = user.skill_path == "monster"  # путь монстра выбран
+        """Синхронная версия — только если нет сессии."""
+        if not user.double_attack:
+            return 0
+        return 1
 
-        if has_set and has_path:
-            return 2  # 3 атаки: базовая + сет + путь
-        elif has_set or has_path:
-            return 1  # 2 атаки: базовая + один источник
-        return 0      # 1 атака (обычно)
+    async def _get_max_extra_attacks_async(
+        self, session: AsyncSession, user: User
+    ) -> int:
+        """
+        Точный подсчёт доп атак через БД.
+        - Навык пути mon_dattack куплен → +1 атака
+        - Сет монстра выдан → +1 атака
+        - Оба источника → +2 атаки (итого 3)
+        """
+        if not user.double_attack:
+            return 0
+
+        from app.models.skill import UserPathSkills
+        path_skill_r = await session.execute(
+            select(UserPathSkills).where(
+                UserPathSkills.user_id == user.id,
+                UserPathSkills.skill_id == "mon_dattack",
+            )
+        )
+        has_path_attack = path_skill_r.scalar_one_or_none() is not None
+
+        from app.repositories.title_repo import title_repo
+        has_monster_set = await title_repo.has_set(session, user.id, "monster")
+
+        count = 0
+        if has_path_attack:
+            count += 1
+        if has_monster_set:
+            count += 1
+
+        return count  # 0, 1 или 2
 
     async def _handle_attack_cd(
         self, session: AsyncSession, user: User, cd_key: str, phase: str
@@ -96,7 +123,9 @@ class GameService:
 
         cd = max(10, int(base_cd * (1 - speed_pct / 100)))
         await cooldown_service.set_cooldown(cd_key, cd)
-        user.extra_attack_count = self._get_max_extra_attacks(user)
+        user.extra_attack_count = await self._get_max_extra_attacks_async(
+            session, user
+        )
 
     async def _get_my_districts_in_city(
         self, session: AsyncSession, user_id: int, city_id: int
@@ -477,6 +506,11 @@ class GameService:
                 city.captured_districts += 1
                 districts_gained += 1
 
+            # Ограничиваем captured_districts
+            city.captured_districts = min(
+                city.captured_districts, city.total_districts
+            )
+
             if districts_gained > 0 and not city.owner_id:
                 city.owner_id = user.id
 
@@ -780,7 +814,9 @@ class GameService:
         user.king_cities_count = 1
         city.owner_id = user.id
         city.is_fully_captured = True
-        user.extra_attack_count = self._get_max_extra_attacks(user)
+        user.extra_attack_count = await self._get_max_extra_attacks_async(
+            session, user
+        )
         await session.flush()
         return {
             "ok": True, "promoted": True,
@@ -795,7 +831,9 @@ class GameService:
         self, session: AsyncSession, user: User
     ) -> dict:
         user.phase = "fist"
-        user.extra_attack_count = self._get_max_extra_attacks(user)
+        user.extra_attack_count = await self._get_max_extra_attacks_async(
+            session, user
+        )
         await session.flush()
         return {
             "ok": True, "promoted": True,

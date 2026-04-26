@@ -63,11 +63,14 @@ async def _notify_pvp_attack(
 class GameService:
 
     def _get_max_extra_attacks(self, user: User) -> int:
-        if not user.double_attack:
-            return 0
-        if user.skill_path == "monster":
-            return 2
-        return 1
+        has_set = user.double_attack        # сет монстра выдан
+        has_path = user.skill_path == "monster"  # путь монстра выбран
+
+        if has_set and has_path:
+            return 2  # 3 атаки: базовая + сет + путь
+        elif has_set or has_path:
+            return 1  # 2 атаки: базовая + один источник
+        return 0      # 1 атака (обычно)
 
     async def _handle_attack_cd(
         self, session: AsyncSession, user: User, cd_key: str, phase: str

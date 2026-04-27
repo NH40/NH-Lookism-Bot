@@ -696,6 +696,7 @@ class GameService:
                 power_ratio=cfg["ratio"],
                 base_power=power,
                 current_power=power,
+                defeat_count=0,  # ← сбрасываем счётчик
                 challenger_id=user.id,
             )
             session.add(bot)
@@ -744,9 +745,12 @@ class GameService:
 
             bot.defeat_count += 1
             bot.cooldown_until = now_dt + timedelta(hours=1)
-            bot.current_power = int(
-                user.combat_power * bot.power_ratio * (1 + 0.2 * bot.defeat_count)
+            
+            new_power = int(
+                user.combat_power * bot.power_ratio * (1 + 0.1 * bot.defeat_count)
             )
+            max_power = int(user.combat_power * bot.power_ratio * 3.0)
+            bot.current_power = min(new_power, max_power)
 
             if user.fist_wins >= 10:
                 return await self._promote_to_emperor(session, user)

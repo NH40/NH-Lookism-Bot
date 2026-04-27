@@ -25,6 +25,10 @@ FIST_BOT_CONFIGS = [
     {"name": "Ли",  "ratio": 1.20},
 ]
 
+# Минимум городов для фазы кулака
+FIST_MIN_CITIES = 10
+
+
 async def _notify_pvp_attack(
     attacker: User, defender: User,
     win: bool, phase: str
@@ -62,7 +66,6 @@ async def _notify_pvp_attack(
 class GameService:
 
     def _get_max_extra_attacks(self, user: User) -> int:
-        """Синхронная версия — только если нет сессии."""
         if not user.double_attack:
             return 0
         return 1
@@ -70,12 +73,6 @@ class GameService:
     async def _get_max_extra_attacks_async(
         self, session: AsyncSession, user: User
     ) -> int:
-        """
-        Точный подсчёт доп атак через БД.
-        - Навык пути mon_dattack куплен → +1 атака
-        - Сет монстра выдан → +1 атака
-        - Оба источника → +2 атаки (итого 3)
-        """
         if not user.double_attack:
             return 0
 
@@ -97,7 +94,7 @@ class GameService:
         if has_monster_set:
             count += 1
 
-        return count  # 0, 1 или 2
+        return count
 
     async def _handle_attack_cd(
         self, session: AsyncSession, user: User, cd_key: str, phase: str
@@ -171,6 +168,33 @@ class GameService:
         )
         row = r.first()
         return row[0] if row else None
+
+    async def _demote_fist_to_king(
+        self, session: AsyncSession, user: User
+    ) -> None:
+        """Понижаем кулака до короля если городов < 10."""
+        user.phase = "king"
+        user.fist_cities_count = 0
+        user.king_cities_count = await self._count_my_king_cities(session, user.id)
+        user.extra_attack_count = await self._get_max_extra_attacks_async(
+            session, user
+        )
+        await session.flush()
+
+        # Уведомляем
+        try:
+            from app.bot_instance import get_bot
+            bot = get_bot()
+            if bot and user.notifications_enabled:
+                await bot.send_message(
+                    user.tg_id,
+                    "⚠️ <b>Вы потеряли слишком много городов!</b>\n\n"
+                    "Вы понижены до фазы Короля.\n"
+                    "Захватите 10 городов снова чтобы вернуть статус Кулака.",
+                    parse_mode="HTML",
+                )
+        except Exception:
+            pass
 
     # ── ФАЗА БАНДА ──────────────────────────────────────────────────────────
 
@@ -295,7 +319,9 @@ class GameService:
         if result["win"]:
             district.owner_id = user.id
             district.is_captured = True
-            city.captured_districts += 1
+            city.captured_districts = min(
+                city.captured_districts + 1, city.total_districts
+            )
             city.district_power_multiplier += random.uniform(0.02, 0.05)
             user.total_wins += 1
             user.influence += ATTACK_WIN_INFLUENCE_BONUS["gang"]
@@ -479,7 +505,6 @@ class GameService:
         if result["win"]:
             await city_repo.init_city_districts(session, city)
 
-            # Считаем реально свободные районы
             free_count = await session.scalar(
                 select(func.count(District.id)).where(
                     District.city_id == city_id,
@@ -506,10 +531,14 @@ class GameService:
                 city.captured_districts += 1
                 districts_gained += 1
 
-            # Ограничиваем captured_districts
-            city.captured_districts = min(
-                city.captured_districts, city.total_districts
-            )
+            # Синхронизируем captured_districts с реальными данными
+            real_captured = await session.scalar(
+                select(func.count(District.id)).where(
+                    District.city_id == city_id,
+                    District.is_captured == True,
+                )
+            ) or 0
+            city.captured_districts = min(real_captured, city.total_districts)
 
             if districts_gained > 0 and not city.owner_id:
                 city.owner_id = user.id
@@ -532,8 +561,7 @@ class GameService:
             await session.flush()
 
             return {
-                "ok": True,
-                "win": True,
+                "ok": True, "win": True,
                 "is_crit": result["is_crit"],
                 "user_power": result["user_power"],
                 "bot_power": bot_power,
@@ -552,8 +580,7 @@ class GameService:
             await session.flush()
 
             return {
-                "ok": True,
-                "win": False,
+                "ok": True, "win": False,
                 "is_crit": result["is_crit"],
                 "user_power": result["user_power"],
                 "bot_power": bot_power,
@@ -573,12 +600,14 @@ class GameService:
         result = await fight_player(session, attacker, defender)
 
         if result["win"]:
+            # Забираем только 2-8 районов, не все
             defender_districts_r = await session.execute(
                 select(District).where(
                     District.city_id == city.id,
                     District.owner_id == defender.id,
                     District.is_captured == True,
-                )
+                ).order_by(District.number.desc())
+                .limit(random.randint(2, 8))
             )
             defender_districts = defender_districts_r.scalars().all()
             taken = 0
@@ -595,6 +624,7 @@ class GameService:
             my_cities_count = await self._count_my_king_cities(session, attacker.id)
             attacker.king_cities_count = my_cities_count
 
+            # Проверяем защитника — если городов стало 0, уничтожаем
             def_cities = await self._count_my_king_cities(session, defender.id)
             defender.king_cities_count = def_cities
             if def_cities == 0:
@@ -707,9 +737,6 @@ class GameService:
 
         if fight["win"]:
             cities_gained = random.randint(2, 4)
-            districts_gained = sum(
-                random.choice([8, 16, 32, 64]) for _ in range(cities_gained)
-            )
             user.fist_cities_count += cities_gained
             user.fist_wins += 1
             user.total_wins += 1
@@ -730,7 +757,6 @@ class GameService:
             return {
                 "ok": True, "win": True,
                 "cities_gained": cities_gained,
-                "districts_gained": districts_gained,
                 "fist_wins": user.fist_wins,
                 "fist_cities": user.fist_cities_count,
                 "is_crit": fight["is_crit"],
@@ -742,8 +768,24 @@ class GameService:
             cities_lost = random.randint(2, 4)
             user.fist_cities_count = max(0, user.fist_cities_count - cities_lost)
 
-            if user.fist_cities_count == 0:
-                return await self._destroy_fist(session, user)
+            if user.fist_cities_count < FIST_MIN_CITIES:
+                # Не уничтожаем — понижаем до короля
+                await self._demote_fist_to_king(session, user)
+                return {
+                    "ok": True, "win": False,
+                    "demoted": True,
+                    "cities_lost": cities_lost,
+                    "fist_cities": user.fist_cities_count,
+                    "user_power": fight["user_power"],
+                    "bot_power": bot.current_power,
+                    "bot_name": bot.name,
+                    "message": (
+                        f"💔 Поражение от {bot.name}!\n\n"
+                        f"Потеряно городов: {cities_lost}\n"
+                        f"Городов осталось: {user.fist_cities_count}\n\n"
+                        f"⚠️ Вы понижены до фазы Короля!"
+                    ),
+                }
 
             await self._handle_attack_cd(session, user, cd_key, "fist")
             await session.flush()
@@ -780,18 +822,32 @@ class GameService:
             attacker.total_wins += 1
             attacker.influence += ATTACK_WIN_INFLUENCE_BONUS["fist"]
 
-            if defender.fist_cities_count == 0:
-                await self._destroy_fist(session, defender)
+            # Защитник — понижаем до короля если городов < 10
+            if defender.fist_cities_count < FIST_MIN_CITIES:
+                await self._demote_fist_to_king(session, defender)
 
             if attacker.fist_wins >= 10:
                 await _notify_pvp_attack(attacker, defender, True, "fist")
                 return await self._promote_to_emperor(session, attacker)
+
         else:
             cities_lost = random.randint(2, 4)
             attacker.fist_cities_count = max(0, attacker.fist_cities_count - cities_lost)
-            if attacker.fist_cities_count == 0:
+
+            # Атакующий — понижаем до короля если городов < 10
+            if attacker.fist_cities_count < FIST_MIN_CITIES:
                 await _notify_pvp_attack(attacker, defender, False, "fist")
-                return await self._destroy_fist(session, attacker)
+                await self._demote_fist_to_king(session, attacker)
+                await self._handle_attack_cd(session, attacker, cd_key, "fist")
+                await session.flush()
+                return {
+                    "ok": True, "win": False,
+                    "demoted": True,
+                    "is_crit": result["is_crit"],
+                    "attacker_power": result["attacker_power"],
+                    "defender_power": result["defender_power"],
+                    "defender_name": defender.full_name,
+                }
 
         await _notify_pvp_attack(attacker, defender, result["win"], "fist")
         await self._handle_attack_cd(session, attacker, cd_key, "fist")
@@ -831,6 +887,7 @@ class GameService:
         self, session: AsyncSession, user: User
     ) -> dict:
         user.phase = "fist"
+        user.fist_cities_count = FIST_MIN_CITIES
         user.extra_attack_count = await self._get_max_extra_attacks_async(
             session, user
         )
@@ -873,11 +930,11 @@ class GameService:
         }
 
     async def _destroy_fist(self, session: AsyncSession, user: User) -> dict:
-        from app.services.prestige_service import prestige_service
-        await prestige_service._reset_progress(session, user)
+        """Устарело — используем _demote_fist_to_king."""
+        await self._demote_fist_to_king(session, user)
         return {
             "ok": True, "destroyed": True,
-            "message": "💀 Вы потеряли все города кулака!"
+            "message": "💀 Вы потеряли слишком много городов и понижены до Короля!"
         }
 
 

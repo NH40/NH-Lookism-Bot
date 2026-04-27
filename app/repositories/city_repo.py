@@ -29,7 +29,6 @@ class CityRepo:
     async def get_next_district(
         self, session: AsyncSession, city_id: int
     ) -> District | None:
-        """Первый незахваченный район города."""
         result = await session.execute(
             select(District).where(
                 District.city_id == city_id,
@@ -47,15 +46,13 @@ class CityRepo:
     ) -> None:
         district.owner_id = user_id
         district.is_captured = True
-        city.captured_districts += 1
-
-        # Увеличиваем множитель силы района
+        city.captured_districts = min(
+            city.captured_districts + 1, city.total_districts
+        )
         city.district_power_multiplier += random.uniform(0.05, 0.10)
-
         if city.captured_districts >= city.total_districts:
             city.is_fully_captured = True
             city.owner_id = user_id
-
         await session.flush()
 
     async def lose_district(
@@ -64,7 +61,6 @@ class CityRepo:
         user_id: int,
         city_id: int,
     ) -> District | None:
-        """Забирает последний захваченный район у пользователя в городе."""
         result = await session.execute(
             select(District).where(
                 District.city_id == city_id,
@@ -99,7 +95,6 @@ class CityRepo:
     async def get_total_districts(
         self, session: AsyncSession, user_id: int
     ) -> int:
-        """Все захваченные районы пользователя (для бизнеса)."""
         return await self.get_user_district_count(session, user_id)
 
     async def get_district_power(
@@ -116,18 +111,38 @@ class CityRepo:
     async def init_city_districts(
         self, session: AsyncSession, city: City
     ) -> None:
-        """Создаёт районы для города если их нет."""
         existing = await session.scalar(
             select(func.count(District.id)).where(
                 District.city_id == city.id
             )
         )
-        if existing:
+        if existing and existing >= city.total_districts:
             return
+        # Если районов меньше чем нужно — добавляем недостающие
+        existing_numbers_r = await session.execute(
+            select(District.number).where(District.city_id == city.id)
+        )
+        existing_numbers = set(existing_numbers_r.scalars().all())
         for i in range(1, city.total_districts + 1):
-            d = District(city_id=city.id, number=i)
-            session.add(d)
+            if i not in existing_numbers:
+                d = District(city_id=city.id, number=i)
+                session.add(d)
         await session.flush()
+
+    async def sync_captured_districts(
+        self, session: AsyncSession, city_id: int
+    ) -> None:
+        """Синхронизирует captured_districts с реальными данными."""
+        real_count = await session.scalar(
+            select(func.count(District.id)).where(
+                District.city_id == city_id,
+                District.is_captured == True,
+            )
+        ) or 0
+        city = await self.get_city(session, city_id)
+        if city:
+            city.captured_districts = min(real_count, city.total_districts)
+            await session.flush()
 
     async def get_king_cities_count(
         self, session: AsyncSession, user_id: int
@@ -158,7 +173,7 @@ class CityRepo:
         result = await session.execute(
             select(City).where(
                 City.sector == sector,
-            ).order_by(City.type_id.desc(), City.id)  # сначала крупные
+            ).order_by(City.type_id.desc(), City.id)
         )
         return result.scalars().all()
 

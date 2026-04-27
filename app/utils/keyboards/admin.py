@@ -4,17 +4,12 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 def admin_main_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="🔍 Найти игрока",  callback_data="admin_find"))
-    # В admin_main_kb добавить:
-    builder.row(InlineKeyboardButton(
-        text="📢 Рассылка всем", callback_data="admin_broadcast"
-    ))
-    builder.row(InlineKeyboardButton(
-        text="👥 Действия со всеми", callback_data="admin_bulk"
-    ))
+    builder.row(InlineKeyboardButton(text="🔍 Найти игрока", callback_data="admin_find"))
+    builder.row(InlineKeyboardButton(text="📢 Рассылка всем", callback_data="admin_broadcast"))
+    builder.row(InlineKeyboardButton(text="👥 Действия со всеми", callback_data="admin_bulk"))
     builder.row(
         InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats"),
-        InlineKeyboardButton(text="💾 Бэкап",      callback_data="admin_backup"),
+        InlineKeyboardButton(text="💾 Бэкап", callback_data="admin_backup"),
     )
     builder.row(InlineKeyboardButton(text="🔧 Патч", callback_data="admin_patch"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
@@ -24,20 +19,24 @@ def admin_main_kb() -> InlineKeyboardMarkup:
 def admin_user_kb(tg_id: int) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
-        InlineKeyboardButton(text="💎 Выдать титул",  callback_data=f"adm_title:{tg_id}"),
-        InlineKeyboardButton(text="❌ Снять титул",   callback_data=f"adm_untitle:{tg_id}"),
+        InlineKeyboardButton(text="💎 Выдать титул", callback_data=f"adm_title:{tg_id}"),
+        InlineKeyboardButton(text="❌ Снять титул", callback_data=f"adm_untitle:{tg_id}"),
     )
     builder.row(
-        InlineKeyboardButton(text="💰 Монеты",        callback_data=f"adm_coins:{tg_id}"),
-        InlineKeyboardButton(text="🎟 Тикеты",        callback_data=f"adm_tickets:{tg_id}"),
+        InlineKeyboardButton(text="💰 Монеты", callback_data=f"adm_coins:{tg_id}"),
+        InlineKeyboardButton(text="🎟 Тикеты", callback_data=f"adm_tickets:{tg_id}"),
     )
     builder.row(
-        InlineKeyboardButton(text="👁 TUI",           callback_data=f"adm_tui:{tg_id}"),
-        InlineKeyboardButton(text="❌ Убрать TUI",    callback_data=f"adm_untui:{tg_id}"),
+        InlineKeyboardButton(text="👁 TUI", callback_data=f"adm_tui:{tg_id}"),
+        InlineKeyboardButton(text="❌ Убрать TUI", callback_data=f"adm_untui:{tg_id}"),
     )
     builder.row(
-        InlineKeyboardButton(text="🔱 Ебать (всё)",  callback_data=f"adm_all:{tg_id}"),
-        InlineKeyboardButton(text="💀 Лох (снять)",  callback_data=f"adm_none:{tg_id}"),
+        InlineKeyboardButton(text="⭐ Пробуждение +1", callback_data=f"adm_prestige:{tg_id}"),
+        InlineKeyboardButton(text="⭐ Пробуждение -1", callback_data=f"adm_unprestige:{tg_id}"),
+    )
+    builder.row(
+        InlineKeyboardButton(text="🔱 Ебать (всё)", callback_data=f"adm_all:{tg_id}"),
+        InlineKeyboardButton(text="💀 Лох (снять)", callback_data=f"adm_none:{tg_id}"),
     )
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="admin_main"))
     return builder.as_markup()

@@ -109,6 +109,19 @@ class AdminService:
                 files.append({"name": f, "path": path, "size_kb": size})
         return files
 
+    async def give_prestige(self, session: AsyncSession, user: User, amount: int = 1) -> None:
+        """Добавляет пробуждения игроку и применяет бонусы."""
+        from app.services.prestige_service import prestige_service
+        for _ in range(amount):
+            user.prestige_level += 1
+            await prestige_service._reapply_achievement_bonuses(session, user)
+        await session.flush()
+
+    async def remove_prestige(self, session: AsyncSession, user: User, amount: int = 1) -> None:
+        """Убирает пробуждения игроку."""
+        user.prestige_level = max(0, user.prestige_level - amount)
+        await session.flush()
+    
     async def restore_backup(self, filename: str) -> dict:
         import os
         from app.config import settings

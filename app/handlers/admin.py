@@ -449,6 +449,89 @@ async def cb_adm_untui(cb: CallbackQuery, session: AsyncSession, user: User):
     await admin_service.remove_tui(session, found)
     await cb.answer(f"✅ TUI снят с {found.full_name}")
 
+@router.callback_query(F.data.startswith("adm_prestige:"))
+async def cb_adm_prestige(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = int(cb.data.split(":")[1])
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await cb.answer("Игрок не найден", show_alert=True)
+        return
+    old = found.prestige_level
+    await admin_service.give_prestige(session, found)
+    await cb.answer(
+        f"✅ Пробуждение {found.full_name}: {old} → {found.prestige_level} ⭐",
+        show_alert=True,
+    )
+    # Уведомляем игрока
+    try:
+        if found.notifications_enabled:
+            await cb.bot.send_message(
+                found.tg_id,
+                f"⭐ <b>Вам добавлено пробуждение!</b>\n\n"
+                f"Уровень пробуждения: {found.prestige_level} ⭐",
+                parse_mode="HTML",
+            )
+    except Exception:
+        pass
+    # Перерисовываем карточку игрока
+    try:
+        from app.repositories.title_repo import title_repo
+        titles_str = await title_repo.get_titles_display(session, found.id)
+        await cb.message.edit_text(
+            f"👤 <b>{found.full_name}</b>\n"
+            f"🆔 tg_id: <code>{found.tg_id}</code>\n"
+            f"🏴 Банда: {found.gang_name or '—'}\n"
+            f"{phase_label(found.phase)}\n"
+            f"⚔️ Мощь: {fmt_power(found.combat_power)}\n"
+            f"💰 Монеты: {fmt_num(found.nh_coins)}\n"
+            f"🎟 Тикеты: {found.tickets}/{found.max_tickets}\n"
+            f"🌟 Пробуждений: {found.prestige_level}\n"
+            f"💎 Титулы:\n{titles_str}",
+            reply_markup=admin_user_kb(found.tg_id),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("adm_unprestige:"))
+async def cb_adm_unprestige(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = int(cb.data.split(":")[1])
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await cb.answer("Игрок не найден", show_alert=True)
+        return
+    if found.prestige_level <= 0:
+        await cb.answer("У игрока нет пробуждений", show_alert=True)
+        return
+    old = found.prestige_level
+    await admin_service.remove_prestige(session, found)
+    await cb.answer(
+        f"✅ Пробуждение {found.full_name}: {old} → {found.prestige_level} ⭐",
+        show_alert=True,
+    )
+    try:
+        from app.repositories.title_repo import title_repo
+        titles_str = await title_repo.get_titles_display(session, found.id)
+        await cb.message.edit_text(
+            f"👤 <b>{found.full_name}</b>\n"
+            f"🆔 tg_id: <code>{found.tg_id}</code>\n"
+            f"🏴 Банда: {found.gang_name or '—'}\n"
+            f"{phase_label(found.phase)}\n"
+            f"⚔️ Мощь: {fmt_power(found.combat_power)}\n"
+            f"💰 Монеты: {fmt_num(found.nh_coins)}\n"
+            f"🎟 Тикеты: {found.tickets}/{found.max_tickets}\n"
+            f"🌟 Пробуждений: {found.prestige_level}\n"
+            f"💎 Титулы:\n{titles_str}",
+            reply_markup=admin_user_kb(found.tg_id),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
 
 @router.callback_query(F.data.startswith("adm_all:"))
 async def cb_adm_all(cb: CallbackQuery, session: AsyncSession, user: User):

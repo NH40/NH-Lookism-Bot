@@ -110,16 +110,30 @@ class AdminService:
         return files
 
     async def give_prestige(self, session: AsyncSession, user: User, amount: int = 1) -> None:
-        """Добавляет пробуждения игроку и применяет бонусы."""
-        from app.services.prestige_service import prestige_service
+        """Добавляет пробуждения игроку с бонусами как при обычном пробуждении."""
+        from app.models.game_version import GameVersion
         for _ in range(amount):
+            if user.prestige_level >= 10:
+                break
             user.prestige_level += 1
-            await prestige_service._reapply_achievement_bonuses(session, user)
+            user.prestige_income_bonus += 5
+            user.prestige_recruit_bonus += 5
+            user.prestige_train_bonus += 5
+            user.prestige_ticket_bonus += 1
+            user.ticket_chance = min(95, user.ticket_chance + 1)
         await session.flush()
 
     async def remove_prestige(self, session: AsyncSession, user: User, amount: int = 1) -> None:
-        """Убирает пробуждения игроку."""
-        user.prestige_level = max(0, user.prestige_level - amount)
+        """Убирает пробуждения с откатом бонусов."""
+        for _ in range(amount):
+            if user.prestige_level <= 0:
+                break
+            user.prestige_level -= 1
+            user.prestige_income_bonus = max(0, user.prestige_income_bonus - 5)
+            user.prestige_recruit_bonus = max(0, user.prestige_recruit_bonus - 5)
+            user.prestige_train_bonus = max(0, user.prestige_train_bonus - 5)
+            user.prestige_ticket_bonus = max(0, user.prestige_ticket_bonus - 1)
+            user.ticket_chance = max(25, user.ticket_chance - 1)
         await session.flush()
     
     async def restore_backup(self, filename: str) -> dict:

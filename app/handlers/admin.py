@@ -470,7 +470,12 @@ async def cb_adm_prestige(cb: CallbackQuery, session: AsyncSession, user: User):
             await cb.bot.send_message(
                 found.tg_id,
                 f"⭐ <b>Вам добавлено пробуждение!</b>\n\n"
-                f"Уровень пробуждения: {found.prestige_level} ⭐",
+                f"Уровень пробуждения: {found.prestige_level}/10 ⭐\n\n"
+                f"Бонусы пробуждения:\n"
+                f"💰 +{found.prestige_income_bonus}% к доходу\n"
+                f"🎟 +{found.prestige_ticket_bonus}% к шансу тикета\n"
+                f"💪 +{found.prestige_recruit_bonus}% к вербовке\n"
+                f"🏋 +{found.prestige_train_bonus}% к тренировке",
                 parse_mode="HTML",
             )
     except Exception:

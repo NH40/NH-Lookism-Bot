@@ -11,10 +11,10 @@ from app.data.squad import ATTACK_WIN_INFLUENCE_BONUS
 from app.utils.formatters import fmt_num
 
 ATTACK_CD: dict[str, int] = {
-    "gang":    100,
-    "king":    15000,
-    "fist":    500000,
-    "emperor": 1000000,
+    "gang":    60,
+    "king":    300,
+    "fist":    600,
+    "emperor": 1000,
 }
 
 FIST_BOT_CONFIGS = [

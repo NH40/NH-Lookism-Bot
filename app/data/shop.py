@@ -22,11 +22,6 @@ class PotionConfig:
 
 
 SHOP_ITEMS: list[ShopItem] = [
-    # Очки пути
-    ShopItem("points_1", "🔷 1 очко пути",  "Одно очко для навыков пути",    20_000, "path_points"),
-    ShopItem("points_3", "🔷 3 очка пути",  "Три очка пути (скидка 10%)",    54_000, "path_points"),
-    ShopItem("points_5", "🔷 5 очков пути", "Пять очков пути (скидка 15%)",  85_000, "path_points"),
-
     # Статисты — цена за 1 шт, количество выбирается отдельно
     ShopItem("recruit_e", "⚪ Статист E", "Боец E-ранга | 1,000 за шт.",    1_000,   "recruit"),
     ShopItem("recruit_d", "🟢 Статист D", "Боец D-ранга | 3,000 за шт.",    3_000,   "recruit"),
@@ -48,12 +43,10 @@ POTION_MAP: dict[str, PotionConfig] = {p.potion_id: p for p in POTIONS}
 SHOP_MAP:   dict[str, ShopItem]     = {i.item_id:   i for i in SHOP_ITEMS}
 
 CATEGORY_LABELS: dict[str, str] = {
-    "path_points": "🔷 Очки пути",
-    "recruit":     "👥 Статисты",
-    "potions":     "🧪 Зелья",
+    "recruit": "👥 Статисты",
+    "potions": "🧪 Зелья",
 }
 
-# Маппинг ранга статиста → ShopItem id
 RECRUIT_RANK_TO_ITEM: dict[str, str] = {
     "E": "recruit_e",
     "D": "recruit_d",

@@ -93,6 +93,50 @@ async def cb_train_with(cb: CallbackQuery, session: AsyncSession, user: User):
     else:
         await cb.answer("Тренер не найден", show_alert=True)
 
+@router.callback_query(F.data.startswith("train_with:"))
+async def cb_train_with(cb: CallbackQuery, session: AsyncSession, user: User):
+    trainer_id = cb.data.split(":")[1]
+
+    if trainer_id == "tom_lee":
+        result = await training_service.train_with_tom(session, user)
+        if not result["ok"]:
+            await cb.answer(result["reason"], show_alert=True)
+            return
+        points = result["points"]
+        await cb.message.edit_text(
+            f"🥋 <b>Тренировка с Томом Ли завершена!</b>\n\n"
+            f"💸 Потрачено: {fmt_num(result['cost'])} NHCoin\n"
+            f"⭐ Получено очков мастерства: <b>+{points}</b>\n"
+            f"📊 Всего очков мастерства: <b>{result['total_points']}</b>\n\n"
+            f"⏳ КД: 2 часа\n\n"
+            f"Прокачай мастерство в <b>Навыки → Мастерство</b>",
+            reply_markup=back_kb("training_menu"),
+            parse_mode="HTML",
+        )
+
+    elif trainer_id == "jeon_gon":
+        result = await training_service.train_with_jeon_gon(session, user)
+        if not result["ok"]:
+            await cb.answer(result["reason"], show_alert=True)
+            return
+        points = result["points"]
+        path_emoji = {"businessman": "💼", "romantic": "💝", "monster": "👹"}.get(
+            user.skill_path, "🛤"
+        )
+        await cb.message.edit_text(
+            f"🧘 <b>Тренировка с Чон Гоном завершена!</b>\n\n"
+            f"💸 Потрачено: {fmt_num(result['cost'])} NHCoin\n"
+            f"🔷 Получено очков пути: <b>+{points}</b>\n"
+            f"📊 Всего очков пути: <b>{result['total_points']}</b>\n"
+            f"{path_emoji} Путь: {user.skill_path}\n\n"
+            f"⏳ КД: 2 часа\n\n"
+            f"Прокачай навыки пути в <b>Навыки → Путь</b>",
+            reply_markup=back_kb("training_menu"),
+            parse_mode="HTML",
+        )
+
+    else:
+        await cb.answer("Тренер не найден", show_alert=True)
 
 @router.callback_query(F.data == "raid_menu")
 async def cb_raid_menu(cb: CallbackQuery, user: User):

@@ -23,12 +23,12 @@ class PotionConfig:
 
 SHOP_ITEMS: list[ShopItem] = [
     # Статисты — цена за 1 шт, количество выбирается отдельно
-    ShopItem("recruit_e", "⚪ Статист E", "Боец E-ранга | 1,000 за шт.",    1_000,   "recruit"),
-    ShopItem("recruit_d", "🟢 Статист D", "Боец D-ранга | 3,000 за шт.",    3_000,   "recruit"),
-    ShopItem("recruit_c", "🔵 Статист C", "Боец C-ранга | 8,000 за шт.",    8_000,   "recruit"),
-    ShopItem("recruit_b", "🟣 Статист B", "Боец B-ранга | 20,000 за шт.",   20_000,  "recruit"),
+    ShopItem("recruit_e", "⚪ Статист E", "Боец E-ранга | 750 за шт.",    750,   "recruit"),
+    ShopItem("recruit_d", "🟢 Статист D", "Боец D-ранга | 2,500 за шт.",    2_500,   "recruit"),
+    ShopItem("recruit_c", "🔵 Статист C", "Боец C-ранга | 5,000 за шт.",    5_000,   "recruit"),
+    ShopItem("recruit_b", "🟣 Статист B", "Боец B-ранга | 25,000 за шт.",   25_000,  "recruit"),
     ShopItem("recruit_a", "🟡 Статист A", "Боец A-ранга | 50,000 за шт.",   50_000,  "recruit"),
-    ShopItem("recruit_s", "🔴 Статист S", "Боец S-ранга | 150,000 за шт.",  150_000, "recruit"),
+    ShopItem("recruit_s", "🔴 Статист S", "Боец S-ранга | 60,000 за шт.",  60_000, "recruit"),
 ]
 
 POTIONS: list[PotionConfig] = [

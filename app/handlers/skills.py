@@ -66,8 +66,8 @@ async def cb_mastery_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     )
     mastery = r.scalar_one_or_none()
 
-    bonus_map  = {0: 0, 1: 5, 2: 10, 3: 20, 4: 30}
-    speed_map  = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
+    bonus_map = {0: 0, 1: 5, 2: 10, 3: 20, 4: 30}
+    speed_map = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
 
     def lvl(attr): return getattr(mastery, attr, 0) if mastery else 0
     def bmap(attr):
@@ -75,61 +75,123 @@ async def cb_mastery_menu(cb: CallbackQuery, session: AsyncSession, user: User):
             else bonus_map.get(lvl(attr), 0)
 
     skills_info = [
-        ("strength",  "⚔️ Сила",         f"+{bmap('strength')}%",  "Повышает общую боевую мощь"),
-        ("speed",     "⚡ Скорость",      f"+{bmap('speed')}%",    "Ускоряет доход, вербовку и тренировки"),
-        ("endurance", "🛡 Выносливость",  f"+{bmap('endurance')}%","Позволяет побеждать более сильных противников"),
-        ("technique", "🏋 Техника",       f"+{bmap('technique')}%","Улучшает эффективность тренировок"),
+        ("strength",  "⚔️ Сила",        "Повышает общую боевую мощь"),
+        ("speed",     "⚡ Скорость",     "Ускоряет доход, вербовку и тренировки"),
+        ("endurance", "🛡 Выносливость", "Позволяет побеждать более сильных противников"),
+        ("technique", "🏋 Техника",      "Улучшает эффективность тренировок"),
     ]
 
-    lines = [f"⚔️ <b>Мастерство</b>\n\n💰 Баланс: {fmt_num(user.nh_coins)} NHCoin\n"]
+    lines = [
+        f"⚔️ <b>Мастерство</b>\n\n"
+        f"⭐ Очков мастерства: <b>{user.mastery_points}</b>\n"
+        f"<i>Очки получаются у тренера Тома Ли</i>\n"
+        f"<i>Стоимость: уровень = кол-во очков (1→2 = 2 очка)</i>\n\n"
+    ]
 
     builder = InlineKeyboardBuilder()
-    for skill_id, label, bonus_str, desc in skills_info:
+    for skill_id, label, desc in skills_info:
         cur = lvl(skill_id)
+        bonus = bmap(skill_id)
         level_name = MASTERY_LEVEL_NAMES.get(cur, str(cur))
-        if cur < 4:
-            next_cost = MASTERY_BY_ID[skill_id].levels[cur + 1].cost
-            next_bonus = MASTERY_BY_ID[skill_id].levels[cur + 1].bonus
-            cost_str = f"💰 {fmt_num(next_cost)}"
+        max_level = 4
+
+        if cur < max_level:
+            next_level = cur + 1
+            cost = next_level  # стоимость = номер следующего уровня
+            can_buy = user.mastery_points >= cost
+            afford = "✅" if can_buy else "❌"
             lines.append(
-                f"{'✅' if cur > 0 else '✅'} {label} — {level_name} ({bonus_str}) → {cost_str}\n"
-                f"<i>{desc}</i>\n"
+                f"{afford} {label} — {level_name} (+{bonus}%)\n"
+                f"  └ {desc}\n"
+                f"  └ Следующий уровень: {cost} ⭐\n"
             )
             builder.button(
-                text=f"{label} [{level_name}] | 💰 {fmt_num(next_cost)}",
+                text=f"{label} [{level_name}→{next_level}] | ⭐ {cost}",
                 callback_data=f"mastery_upgrade:{skill_id}"
             )
         else:
-            lines.append(f"✅ {label} — MAX ({bonus_str})\n<i>{desc}</i>\n")
+            lines.append(
+                f"✅ {label} — MAX (+{bonus}%)\n"
+                f"  └ {desc}\n"
+            )
 
     builder.adjust(1)
-    builder.row(InlineKeyboardButton(
-        text="Нажми на навык чтобы улучшить:", callback_data="noop"
-    ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="skills"))
 
     await cb.message.edit_text(
-        "\n".join(lines) + "\nНажми на навык чтобы улучшить:",
+        "\n".join(lines),
         reply_markup=builder.as_markup(),
         parse_mode="HTML",
     )
 
 
-@router.callback_query(F.data == "noop")
-async def cb_noop(cb: CallbackQuery):
-    await cb.answer()
-
-
 @router.callback_query(F.data.startswith("mastery_upgrade:"))
 async def cb_mastery_upgrade(cb: CallbackQuery, session: AsyncSession, user: User):
     skill_id = cb.data.split(":")[1]
-    result = await skill_service.upgrade_mastery(session, user, skill_id)
-    if result["ok"]:
-        await cb.answer(f"✅ Улучшено! +{result['bonus']}%")
-        await cb_mastery_menu(cb, session, user)
-    else:
-        await cb.answer(result["reason"], show_alert=True)
 
+    cfg = MASTERY_BY_ID.get(skill_id)
+    if not cfg:
+        await cb.answer("Навык не найден", show_alert=True)
+        return
+
+    r = await session.execute(
+        select(UserMastery).where(UserMastery.user_id == user.id)
+    )
+    mastery = r.scalar_one_or_none()
+    if not mastery:
+        mastery = UserMastery(user_id=user.id)
+        session.add(mastery)
+        await session.flush()
+
+    current = getattr(mastery, skill_id, 0)
+    max_level = 4
+
+    if current >= max_level:
+        await cb.answer("Максимальный уровень!", show_alert=True)
+        return
+
+    next_level = current + 1
+    cost = next_level  # стоимость = номер следующего уровня
+
+    if user.mastery_points < cost:
+        await cb.answer(
+            f"Недостаточно очков мастерства (нужно {cost} ⭐, есть {user.mastery_points})",
+            show_alert=True
+        )
+        return
+
+    # Списываем очки
+    user.mastery_points -= cost
+    setattr(mastery, skill_id, next_level)
+
+    # Применяем бонус
+    bonus_map = {0: 0, 1: 5, 2: 10, 3: 20, 4: 30}
+    speed_map = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
+    old_bonus = bonus_map.get(current, 0) if skill_id in ("strength", "technique") \
+        else speed_map.get(current, 0)
+    new_bonus = bonus_map.get(next_level, 0) if skill_id in ("strength", "technique") \
+        else speed_map.get(next_level, 0)
+    delta = new_bonus - old_bonus
+
+    if skill_id == "technique":
+        user.income_bonus_percent += delta
+        user.train_bonus_percent += delta
+    elif skill_id == "strength":
+        from app.repositories.squad_repo import squad_repo
+        await squad_repo.update_user_combat_power(session, user)
+
+    await session.flush()
+
+    level_name = MASTERY_LEVEL_NAMES.get(next_level, str(next_level))
+    await cb.answer(
+        f"✅ {cfg.emoji} {cfg.name} → {level_name} (+{new_bonus}%)",
+        show_alert=True
+    )
+    await cb_mastery_menu(cb, session, user)
+
+@router.callback_query(F.data == "noop")
+async def cb_noop(cb: CallbackQuery):
+    await cb.answer()
 
 @router.callback_query(F.data == "path_choose")
 async def cb_path_choose(cb: CallbackQuery, session: AsyncSession, user: User):

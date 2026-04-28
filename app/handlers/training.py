@@ -47,51 +47,33 @@ async def cb_training_menu(cb: CallbackQuery, session: AsyncSession, user: User)
     mastery_lines = []
     for m in MASTERY:
         current = getattr(mastery, m.skill_id, 0) if mastery else 0
-        max_level = 4
         if m.skill_id in ("strength", "technique"):
             bonus = bonus_map.get(current, 0)
         else:
             bonus = speed_map.get(current, 0)
         mastery_lines.append(
-            f"  {m.emoji} {m.name}: {current}/{max_level} (+{bonus}%)"
+            f"  {m.emoji} {m.name}: {current}/4 (+{bonus}%)"
         )
+
+    path_emoji = {"businessman": "💼", "romantic": "💝", "monster": "👹"}.get(
+        user.skill_path, "—"
+    )
+    path_str = f"{path_emoji} {user.skill_path}" if user.skill_path else "не выбран"
 
     await cb.message.edit_text(
         f"🏋 <b>Тренировка</b>\n\n"
         f"⭐ Очки мастерства: <b>{user.mastery_points}</b>\n"
-        f"<i>Прокачка мастерства → Навыки → Мастерство</i>\n\n"
+        f"🔷 Очки пути: <b>{user.skill_path_points}</b> | Путь: {path_str}\n\n"
         f"<b>Текущее мастерство:</b>\n"
         + "\n".join(mastery_lines)
-        + "\n\n<b>Выбери тренера:</b>",
+        + "\n\n"
+        f"<i>Мастерство → Навыки → Мастерство</i>\n"
+        f"<i>Очки пути → Навыки → Путь</i>\n\n"
+        f"<b>Выбери тренера:</b>",
         reply_markup=builder.as_markup(),
         parse_mode="HTML",
     )
 
-
-@router.callback_query(F.data.startswith("train_with:"))
-async def cb_train_with(cb: CallbackQuery, session: AsyncSession, user: User):
-    trainer_id = cb.data.split(":")[1]
-
-    if trainer_id == "tom_lee":
-        result = await training_service.train_with_tom(session, user)
-
-        if not result["ok"]:
-            await cb.answer(result["reason"], show_alert=True)
-            return
-
-        points = result["points"]
-        await cb.message.edit_text(
-            f"🥋 <b>Тренировка с Томом Ли завершена!</b>\n\n"
-            f"💸 Потрачено: {fmt_num(result['cost'])} NHCoin\n"
-            f"⭐ Получено очков мастерства: <b>+{points}</b>\n"
-            f"📊 Всего очков: <b>{result['total_points']}</b>\n\n"
-            f"⏳ КД: 2 часа\n\n"
-            f"Используй очки в разделе <b>Навыки → Мастерство</b>",
-            reply_markup=back_kb("training_menu"),
-            parse_mode="HTML",
-        )
-    else:
-        await cb.answer("Тренер не найден", show_alert=True)
 
 @router.callback_query(F.data.startswith("train_with:"))
 async def cb_train_with(cb: CallbackQuery, session: AsyncSession, user: User):
@@ -137,6 +119,7 @@ async def cb_train_with(cb: CallbackQuery, session: AsyncSession, user: User):
 
     else:
         await cb.answer("Тренер не найден", show_alert=True)
+
 
 @router.callback_query(F.data == "raid_menu")
 async def cb_raid_menu(cb: CallbackQuery, user: User):

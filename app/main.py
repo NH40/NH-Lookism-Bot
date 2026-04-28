@@ -11,6 +11,7 @@ from app.middlewares.db_session import DbSessionMiddleware
 from app.middlewares.user_loader import UserLoaderMiddleware
 from app.scheduler.setup import setup_scheduler
 from app.handlers import common, attack, business, squad, deck, skills, titles, shop, auction, settings as settings_handler, admin
+from app.handlers import training
 
 logging.basicConfig(
     level=logging.INFO,
@@ -61,6 +62,7 @@ async def main():
     dp.include_router(titles.router)
     dp.include_router(shop.router)
     dp.include_router(auction.router)
+    dp.include_router(training.router)
     dp.include_router(settings_handler.router)
     dp.include_router(admin.router)
 

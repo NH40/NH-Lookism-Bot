@@ -64,6 +64,9 @@ class User(Base):
     prestige_level: Mapped[int] = mapped_column(Integer, default=0)
     prestige_recruit_bonus: Mapped[int] = mapped_column(Integer, default=0)
 
+    # ── Очки мастерства (от Тома Ли) ─────────────────────────────────────
+    mastery_points: Mapped[int] = mapped_column(Integer, default=0)
+
     # ── Навыки — Путь ─────────────────────────────────────────────────────
     skill_path: Mapped[str | None] = mapped_column(String(16))
     skill_path_points: Mapped[int] = mapped_column(Integer, default=0)

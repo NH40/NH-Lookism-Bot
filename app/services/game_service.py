@@ -416,6 +416,13 @@ class GameService:
             def_last = def_last_r.scalar_one_or_none()
             if def_last:
                 def_last.owner_id = attacker.id
+                # ← ДОБАВИТЬ: удаляем здания защитника на потерянном районе
+                from app.repositories.building_repo import building_repo
+                await building_repo.deactivate_buildings_on_district_loss(
+                    session, defender.id, 1
+                )
+                from app.services.business_service import business_service
+                await business_service._recalc_income(session, defender)
 
             def_owned = await self._get_my_districts_in_city(
                 session, defender.id, defender.gang_city_id or 0
@@ -513,25 +520,53 @@ class GameService:
                 )
             ) or 0
 
-            target = min(random.randint(2, 8), free_count)
-
-            for _ in range(target):
-                d_r = await session.execute(
-                    select(District).where(
-                        District.city_id == city_id,
-                        District.is_captured == False,
-                        District.owner_id == None,
-                    ).order_by(District.number).limit(1)
+            if free_count > 0:
+                # Берём свободные районы
+                target = min(random.randint(2, 8), free_count)
+                for _ in range(target):
+                    d_r = await session.execute(
+                        select(District).where(
+                            District.city_id == city_id,
+                            District.is_captured == False,
+                            District.owner_id == None,
+                        ).order_by(District.number).limit(1)
+                    )
+                    d = d_r.scalar_one_or_none()
+                    if not d:
+                        break
+                    d.owner_id = user.id
+                    d.is_captured = True
+                    city.captured_districts += 1
+                    districts_gained += 1
+            else:
+                # Все районы заняты — забираем у доминирующего игрока
+                dominant_id = await self._get_city_dominant_player(
+                    session, city_id, user.id
                 )
-                d = d_r.scalar_one_or_none()
-                if not d:
-                    break
-                d.owner_id = user.id
-                d.is_captured = True
-                city.captured_districts += 1
-                districts_gained += 1
+                if dominant_id:
+                    target = random.randint(1, 3)
+                    stolen_r = await session.execute(
+                        select(District).where(
+                            District.city_id == city_id,
+                            District.owner_id == dominant_id,
+                            District.is_captured == True,
+                        ).order_by(District.number.desc()).limit(target)
+                    )
+                    stolen = stolen_r.scalars().all()
+                    for d in stolen:
+                        d.owner_id = user.id
+                        districts_gained += 1
+                    if stolen:
+                        from app.repositories.building_repo import building_repo
+                        from app.services.business_service import business_service
+                        await building_repo.deactivate_buildings_on_district_loss(
+                            session, dominant_id, len(stolen)
+                        )
+                        dominant_user = await user_repo.get_by_id(session, dominant_id)
+                        if dominant_user:
+                            await business_service._recalc_income(session, dominant_user)
 
-            # Синхронизируем captured_districts с реальными данными
+            # Синхронизируем captured_districts
             real_captured = await session.scalar(
                 select(func.count(District.id)).where(
                     District.city_id == city_id,
@@ -600,7 +635,6 @@ class GameService:
         result = await fight_player(session, attacker, defender)
 
         if result["win"]:
-            # Забираем только 2-8 районов, не все
             defender_districts_r = await session.execute(
                 select(District).where(
                     District.city_id == city.id,
@@ -615,8 +649,14 @@ class GameService:
                 d.owner_id = attacker.id
                 taken += 1
 
+            # ← ДОБАВИТЬ: удаляем здания защитника на потерянных районах
             if taken > 0:
-                city.owner_id = attacker.id
+                from app.repositories.building_repo import building_repo
+                await building_repo.deactivate_buildings_on_district_loss(
+                    session, defender.id, taken
+                )
+                from app.services.business_service import business_service
+                await business_service._recalc_income(session, defender)
 
             attacker.total_wins += 1
             attacker.influence += ATTACK_WIN_INFLUENCE_BONUS["king"]

@@ -29,11 +29,14 @@ class AdminService:
         await session.flush()
 
     async def give_tui(self, session: AsyncSession, user: User) -> None:
+        user.ultra_instinct = True
         user.true_ultra_instinct = True
+        user.max_tickets = 999999
         await session.flush()
 
     async def remove_tui(self, session: AsyncSession, user: User) -> None:
         user.true_ultra_instinct = False
+        user.max_tickets = 3
         await session.flush()
 
     async def give_all_titles(self, session: AsyncSession, user: User, admin_tg_id: int) -> int:

@@ -180,8 +180,6 @@ class TitleService:
             pass
         elif title_id == "ui_title":
             user.ultra_instinct = True
-            user.true_ultra_instinct = True
-            user.max_tickets = 999999  # TUI = бесконечное хранилище
 
     def _apply_set_bonus(self, user: User, set_id: str) -> None:
         if set_id == "strongest_0gen":
@@ -202,9 +200,7 @@ class TitleService:
             user.ticket_cd_reduction += 15
         elif set_id == "ui_set":
             user.ultra_instinct = True
-            user.true_ultra_instinct = True
-            user.max_tickets = 999999
-
+            
     async def _check_set_completion(
         self, session: AsyncSession, user: User, set_id: str
     ) -> None:

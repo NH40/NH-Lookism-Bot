@@ -24,8 +24,7 @@ async def cb_shop(cb: CallbackQuery, session: AsyncSession, user: User):
     try:
         await cb.message.edit_text(
             f"🛒 <b>Магазин</b>\n\n"
-            f"💰 Баланс: {fmt_num(user.nh_coins)} NHCoin\n"
-            f"💎 Очки пути: {user.skill_path_points}\n\n"
+            f"💰 Баланс: {fmt_num(user.nh_coins)} NHCoin\n\n"
             f"Выберите раздел:",
             reply_markup=shop_kb(),
             parse_mode="HTML",
@@ -86,58 +85,8 @@ async def cb_buy_potion(cb: CallbackQuery, session: AsyncSession, user: User):
     await cb_shop_potions(cb, session, user)
 
 
-@router.callback_query(F.data == "shop_points")
-async def cb_shop_points(cb: CallbackQuery, session: AsyncSession, user: User):
-    point_items = [i for i in SHOP_ITEMS if i.category == "path_points"]
-    builder = InlineKeyboardBuilder()
-    for item in point_items:
-        can = "✅" if user.nh_coins >= item.price else "❌"
-        builder.button(
-            text=f"{can} {item.name} | {fmt_num(item.price)}",
-            callback_data=f"buy_points:{item.item_id}"
-        )
-    builder.adjust(1)
-    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="shop"))
-
-    await cb.message.edit_text(
-        f"🔷 <b>Очки пути</b>\n\n"
-        f"💰 Баланс: {fmt_num(user.nh_coins)} NHCoin\n"
-        f"💎 Текущие очки: {user.skill_path_points}\n\n"
-        f"Выберите пакет:",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
-
-
-@router.callback_query(F.data.startswith("buy_points:"))
-async def cb_buy_points(cb: CallbackQuery, session: AsyncSession, user: User):
-    item_id = cb.data.split(":")[1]
-    item = SHOP_MAP.get(item_id)
-    if not item:
-        await cb.answer("Товар не найден", show_alert=True)
-        return
-    if user.nh_coins < item.price:
-        await cb.answer(
-            f"Недостаточно монет (нужно {fmt_num(item.price)})",
-            show_alert=True
-        )
-        return
-
-    points_map = {"points_1": 1, "points_3": 3, "points_5": 5}
-    points = points_map.get(item_id, 1)
-
-    user.nh_coins -= item.price
-    user.coins_spent += item.price
-    user.skill_path_points += points
-    await session.flush()
-
-    await cb.answer(f"✅ Куплено {points} очков пути!")
-    await cb_shop_points(cb, session, user)
-
-
 @router.callback_query(F.data == "shop_recruits")
 async def cb_shop_recruits(cb: CallbackQuery, session: AsyncSession, user: User):
-    """Список рангов статистов для покупки."""
     from app.data.squad import PHASE_RANKS, RANKS_BY_ID
     from app.data.shop import RECRUIT_RANK_TO_ITEM
 
@@ -199,7 +148,6 @@ async def cb_shop_buy_rank(
     await state.update_data(rank=rank, price_per=price)
 
     builder = InlineKeyboardBuilder()
-    # Быстрые кнопки количества
     for qty in [1, 5, 10, 25, 50, 100]:
         total = price * qty
         can = "✅" if user.nh_coins >= total else "❌"

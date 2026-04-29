@@ -168,11 +168,12 @@ async def build_attack_menu(
 
         builder = InlineKeyboardBuilder()
         type_counts: dict[int, int] = {}
+
+        # Сначала показываем города где ЕСТЬ свободные районы для захвата
         for city in cities:
             type_id = city.type_id or 1
             if type_counts.get(type_id, 0) >= 3:
                 continue
-            type_counts[type_id] = type_counts.get(type_id, 0) + 1
 
             my_in_city = await session.scalar(
                 select(func.count(District.id)).where(
@@ -181,6 +182,29 @@ async def build_attack_menu(
                     District.is_captured == True,
                 )
             ) or 0
+
+            # Считаем сколько районов НЕ наших
+            not_mine = await session.scalar(
+                select(func.count(District.id)).where(
+                    District.city_id == city.id,
+                    District.is_captured == True,
+                    District.owner_id != user.id,
+                )
+            ) or 0
+
+            free_count = await session.scalar(
+                select(func.count(District.id)).where(
+                    District.city_id == city.id,
+                    District.is_captured == False,
+                    District.owner_id == None,
+                )
+            ) or 0
+
+            # Если нет ни свободных районов ни чужих — нечего атаковать
+            if free_count == 0 and not_mine == 0:
+                continue
+
+            type_counts[type_id] = type_counts.get(type_id, 0) + 1
 
             dominant_id = await game_service._get_city_dominant_player(
                 session, city.id, user.id
@@ -202,13 +226,7 @@ async def build_attack_menu(
             size_emoji = {
                 1: "🏘", 2: "🏙", 3: "🌆", 4: "🌇", 5: "🌃"
             }.get(type_id, "🏙")
-            free_r = await session.scalar(
-                select(func.count(District.id)).where(
-                    District.city_id == city.id,
-                    District.is_captured == False,
-                    District.owner_id == None,
-                )
-            ) or 0
+
             builder.button(
                 text=(
                     f"{size_emoji} {city.name} {my_str}"
@@ -506,6 +524,30 @@ async def cb_gang_pvp(cb: CallbackQuery, session: AsyncSession, user: User):
 @router.callback_query(F.data.startswith("king_attack:"))
 async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
     city_id = int(cb.data.split(":")[1])
+
+    from sqlalchemy import func as sa_func
+    free_count = await session.scalar(
+        select(sa_func.count(District.id)).where(
+            District.city_id == city_id,
+            District.is_captured == False,
+            District.owner_id == None,
+        )
+    ) or 0
+    not_mine = await session.scalar(
+        select(sa_func.count(District.id)).where(
+            District.city_id == city_id,
+            District.is_captured == True,
+            District.owner_id != user.id,
+        )
+    ) or 0
+
+    if free_count == 0 and not_mine == 0:
+        await cb.answer(
+            "В этом городе нечего атаковать — все районы твои!",
+            show_alert=True
+        )
+        return
+
     result  = await game_service.king_attack(session, user, city_id)
 
     if result.get("promoted"):

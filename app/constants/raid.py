@@ -1,26 +1,29 @@
-# Боссы кланов
 RAID_BOSSES = {
     "yamazaki": {
         "name": "Клан Ямадзаки",
         "emoji": "⛩️",
+        "description": (
+            "Японский клан якудза, в котором течёт невероятная кровь монстров. "
+            "Сразись с Широ Они и Тора Они дабы пробудить древнюю кровь клана."
+        ),
         "bosses": {
             "gun": {
                 "id": "gun",
                 "name": "Ямадзаки Ган",
                 "emoji": "⚔️",
-                "description": "Наносит урон равный боевой мощи УНИКАЛЬНЫХ ПЕРСОНАЖЕЙ",
-                "damage_source": "characters",  # урон от персонажей
+                "description": "Широ Они — дабы победить Гана необходимо собрать невероятную команду из уникальных персонажей.",
+                "damage_source": "characters",
                 "base_hp": 5_000_000_000,
                 "reward_fragments": "ui",
                 "cd_hours": 6,
-                "raid_duration_seconds": 3600,  # 1 час
+                "raid_duration_seconds": 3600,
             },
             "shingen": {
                 "id": "shingen",
                 "name": "Ямадзаки Шинген",
                 "emoji": "🏯",
-                "description": "Наносит урон равный боевой мощи СТАТИСТОВ",
-                "damage_source": "squad",  # урон от статистов
+                "description": "Тора Они — глава клана. Дабы сразиться с ним необходимо собрать армию статистов.",
+                "damage_source": "squad",
                 "base_hp": 3_000_000_000,
                 "reward_fragments": "ui",
                 "cd_hours": 6,
@@ -30,21 +33,19 @@ RAID_BOSSES = {
     }
 }
 
-# УИ крафт — стоимость в фрагментах
 UI_CRAFT_COST = {
-    1: 50,    # 1 уровень УИ
-    2: 150,   # 2 уровень
-    3: 350,   # 3 уровень
-    4: 700,   # 4 уровень (донат даёт сразу)
+    1: 50,
+    2: 150,
+    3: 350,
+    4: 700,
 }
 
-# УИ уровни — что дают
 UI_LEVEL_PERKS = {
-    1: {"name": "УИ I",  "perk": "Авто-вербовка",              "field": "ui_auto_recruit"},
-    2: {"name": "УИ II", "perk": "Авто-тренировка",            "field": "ui_auto_train"},
-    3: {"name": "УИ III","perk": "Авто-тикеты",                "field": "ui_auto_ticket"},
-    4: {"name": "УИ IV", "perk": "Авто-прокрутка персонажей",  "field": "ui_auto_pull"},
+    1: {"name": "УИ I",   "perk": "Авто-вербовка",             "field": "ui_auto_recruit"},
+    2: {"name": "УИ II",  "perk": "Авто-тренировка",           "field": "ui_auto_train"},
+    3: {"name": "УИ III", "perk": "Авто-тикеты",               "field": "ui_auto_ticket"},
+    4: {"name": "УИ IV",  "perk": "Авто-прокрутка персонажей", "field": "ui_auto_pull"},
 }
 
-RAID_ATTACK_CD_SECONDS = 300  # 5 минут между атаками
+RAID_ATTACK_CD_SECONDS = 300
 RAID_ATTACK_CD_KEY = "raid_attack:{raid_id}:{user_id}"

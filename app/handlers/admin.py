@@ -14,6 +14,7 @@ from app.utils.keyboards.admin import admin_main_kb, admin_user_kb, titles_grant
 from app.utils.keyboards.common import back_kb, confirm_kb
 from app.utils.formatters import fmt_num, fmt_power, phase_label
 from app.config import settings
+import html
 
 router = Router()
 
@@ -109,9 +110,9 @@ async def msg_admin_search(
     titles_str = await title_repo.get_titles_display(session, found.id)
 
     await message.answer(
-        f"👤 <b>{found.full_name}</b>\n"
+        f"👤 <b>{html.escape(found.full_name)}</b>\n"
         f"🆔 tg_id: <code>{found.tg_id}</code>\n"
-        f"🏴 Банда: {found.gang_name or '—'}\n"
+        f"🏴 Банда: {html.escape(found.gang_name) if found.gang_name else '—'}\n"
         f"{phase_label(found.phase)}\n"
         f"⚔️ Мощь: {fmt_power(found.combat_power)}\n"
         f"💰 Монеты: {fmt_num(found.nh_coins)}\n"
@@ -136,8 +137,15 @@ async def cb_adm_user(cb: CallbackQuery, session: AsyncSession, user: User):
         return
     try:
         await cb.message.edit_text(
-            f"👤 {found.full_name} | {phase_label(found.phase)}\n"
-            f"⚔️ {fmt_power(found.combat_power)} | 💰 {fmt_num(found.nh_coins)}",
+            f"👤 <b>{html.escape(found.full_name)}</b>\n"
+            f"🆔 tg_id: <code>{found.tg_id}</code>\n"
+            f"🏴 Банда: {html.escape(found.gang_name) if found.gang_name else '—'}\n"
+            f"{phase_label(found.phase)}\n"
+            f"⚔️ Мощь: {fmt_power(found.combat_power)}\n"
+            f"💰 Монеты: {fmt_num(found.nh_coins)}\n"
+            f"🎟 Тикеты: {found.tickets}/{found.max_tickets}\n"
+            f"🌟 Пробуждений: {found.prestige_level}\n"
+            f"💎 Титулы:\n{titles_str}",
             reply_markup=admin_user_kb(tg_id),
             parse_mode="HTML",
         )

@@ -73,7 +73,7 @@ async def fight_player(
     defender_power = await get_effective_power(session, defender)
 
     # Защита = 70% от реальной мощи защитника
-    effective_defense = int(defender_power * 0.7)
+    effective_defense = defender_power
 
     # Великий: влияние не падает ниже 100
     win = attacker_power >= effective_defense

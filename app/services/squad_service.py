@@ -8,23 +8,7 @@ from app.services.cooldown_service import cooldown_service
 from app.services.potion_service import potion_service
 from app.data.squad import RANKS_BY_ID, PHASE_RANKS, STAR_BONUS_PERCENT
 
-
-# ── Конфиги рангов по фазам ─────────────────────────────────────────────────
-
-PHASE_RANK_WEIGHTS: dict[str, dict[str, int]] = {
-    "gang": {
-        "E": 50, "D": 30, "C": 15, "B": 5,
-    },
-    "king": {
-        "C": 40, "B": 30, "A": 20, "S": 10,
-    },
-    "fist": {
-        "B": 35, "A": 35, "S": 30,
-    },
-    "emperor": {
-        "B": 30, "A": 40, "S": 30,
-    },
-}
+from app.constants.squad import PHASE_RANK_WEIGHTS
 
 # Базовый множитель количества статистов от влияния
 def _calc_recruit_count(influence: int, bonus_pct: int) -> int:

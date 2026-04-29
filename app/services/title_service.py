@@ -7,7 +7,6 @@ from app.data.titles import (
     ACHIEVEMENTS, ACHIEVEMENT_MAP,
 )
 
-
 class TitleService:
 
     # ── Донат-титулы ────────────────────────────────────────────────────────

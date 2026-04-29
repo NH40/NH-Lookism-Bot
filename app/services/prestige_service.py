@@ -7,8 +7,14 @@ from app.models.character import UserCharacter
 from app.models.city import District
 from app.models.skill import UserMastery, UserPathSkills
 
-MAX_PRESTIGE = 10
-
+# Убираем MAX_PRESTIGE = 10 и добавляем вверху:
+from app.constants.prestige import (
+    MAX_PRESTIGE,
+    PRESTIGE_INCOME_BONUS_PER_LEVEL,
+    PRESTIGE_RECRUIT_BONUS_PER_LEVEL,
+    PRESTIGE_TRAIN_BONUS_PER_LEVEL,
+    PRESTIGE_TICKET_BONUS_PER_LEVEL,
+)
 
 class PrestigeService:
 
@@ -25,10 +31,10 @@ class PrestigeService:
             return {"ok": False, "reason": reason}
 
         user.prestige_level += 1
-        user.prestige_income_bonus += 5
-        user.prestige_recruit_bonus += 5
-        user.prestige_train_bonus += 5
-        user.prestige_ticket_bonus += 1
+        user.prestige_income_bonus += PRESTIGE_INCOME_BONUS_PER_LEVEL
+        user.prestige_recruit_bonus += PRESTIGE_RECRUIT_BONUS_PER_LEVEL
+        user.prestige_train_bonus += PRESTIGE_TRAIN_BONUS_PER_LEVEL
+        user.prestige_ticket_bonus += PRESTIGE_TICKET_BONUS_PER_LEVEL
         user.ticket_chance = min(95, user.ticket_chance + 1)
 
         await self._reset_progress(session, user)

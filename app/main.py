@@ -12,7 +12,6 @@ from app.middlewares.user_loader import UserLoaderMiddleware
 from app.scheduler.setup import setup_scheduler
 from app.handlers import common, attack, business, raid, squad, deck, skills, titles, shop, auction, settings as settings_handler, admin
 from app.handlers import training
-from aiogram.client.session.aiohttp import AiohttpSession
 
 logging.basicConfig(
     level=logging.INFO,
@@ -21,6 +20,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 bot: Bot = None
+
 
 async def main():
     global bot
@@ -31,11 +31,9 @@ async def main():
     logger.info("Initializing cities...")
     await init_cities()
 
-    # Бот с увеличенным таймаутом
-    session = AiohttpSession(timeout=60)
+    # Бот — стандартная сессия
     bot = Bot(
         token=settings.BOT_TOKEN,
-        session=session,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     set_bot(bot)
@@ -68,11 +66,17 @@ async def main():
 
     logger.info("Starting bot polling...")
     try:
-        await dp.start_polling(
-            bot,
-            allowed_updates=dp.resolve_used_update_types(),
-            timeout=60,
-        )
+        while True:
+            try:
+                await dp.start_polling(
+                    bot,
+                    allowed_updates=dp.resolve_used_update_types(),
+                    timeout=30,
+                )
+                break
+            except Exception as e:
+                logger.warning(f"Polling failed: {e}, retrying in 10 seconds...")
+                await asyncio.sleep(10)
     finally:
         scheduler.shutdown()
         await bot.session.close()
@@ -80,7 +84,6 @@ async def main():
 
 
 async def init_cities():
-    """Инициализирует города в БД если их нет."""
     from app.database import AsyncSessionFactory
     from app.models.city import City
     from app.data.cities import SECTORS, CITY_TYPES, CITY_NAMES_BY_SECTOR

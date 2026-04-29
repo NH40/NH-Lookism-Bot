@@ -46,4 +46,5 @@ UI_LEVEL_PERKS = {
     4: {"name": "УИ IV", "perk": "Авто-прокрутка персонажей",  "field": "ui_auto_pull"},
 }
 
-RAID_CD_KEY = "raid:{boss_id}:{user_id}"
+RAID_ATTACK_CD_SECONDS = 300  # 5 минут между атаками
+RAID_ATTACK_CD_KEY = "raid_attack:{raid_id}:{user_id}"

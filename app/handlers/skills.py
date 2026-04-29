@@ -36,12 +36,13 @@ async def cb_skills(cb: CallbackQuery, session: AsyncSession, user: User):
         select(UserMastery).where(UserMastery.user_id == user.id)
     )
     mastery = r.scalar_one_or_none()
+    
 
     path_emoji = {
         "businessman": "💼", "romantic": "💝", "monster": "👹"
     }.get(user.skill_path, "❓") if user.skill_path else "❓"
 
-    ui_status = "✅ Активен" if (user.ultra_instinct or user.true_ultra_instinct) else "❌"
+    ui_status = "✅ Активен" if (user.ultra_instinct or user.true_ultra_instinct or user.ui_is_donat or user.ui_level > 0) else "❌"
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="⚔️ Мастерство",     callback_data="mastery_menu"))
@@ -286,44 +287,99 @@ async def cb_buy_path_skill(cb: CallbackQuery, session: AsyncSession, user: User
 
 @router.callback_query(F.data == "ui_settings")
 async def cb_ui_settings(cb: CallbackQuery, session: AsyncSession, user: User):
-    if not user.ultra_instinct and not user.true_ultra_instinct:
+    if not user.ultra_instinct and not user.true_ultra_instinct and user.ui_level == 0 and not user.ui_is_donat:
         await cb.message.edit_text(
             "👁 <b>Ультра Инстинкт</b>\n\n"
             "❌ Не активирован\n\n"
-            "Доступен при покупке донат-титула UI",
+            "Получи УИ в разделе <b>Рейды → Крафт</b>\n"
+            "или купи донат-титул UI",
             reply_markup=back_kb("skills"),
             parse_mode="HTML",
         )
         return
 
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(
-        text=f"{'✅' if user.ui_auto_recruit else '❌'} Авто-вербовка",
-        callback_data="toggle_ui_recruit"
-    ))
-    builder.row(InlineKeyboardButton(
-        text=f"{'✅' if user.ui_auto_train else '❌'} Авто-тренировка",
-        callback_data="toggle_ui_train"
-    ))
-    builder.row(InlineKeyboardButton(
-        text=f"{'✅' if user.ui_auto_ticket else '❌'} Авто-тикеты",
-        callback_data="toggle_ui_ticket"
-    ))
-    builder.row(InlineKeyboardButton(
-        text=f"{'✅' if user.ui_auto_pull else '❌'} Авто-прокрутка персонажей",
-        callback_data="toggle_ui_pull"
-    ))
+
+    has_1 = user.ui_level >= 1 or user.ui_is_donat
+    has_2 = user.ui_level >= 2 or user.ui_is_donat
+    has_3 = user.ui_level >= 3 or user.ui_is_donat
+    has_4 = user.ui_level >= 4 or user.ui_is_donat
+
+    if has_1:
+        builder.row(InlineKeyboardButton(
+            text=f"{'✅' if user.ui_auto_recruit else '❌'} Авто-вербовка",
+            callback_data="toggle_ui_recruit"
+        ))
+    else:
+        builder.row(InlineKeyboardButton(
+            text="🔒 Авто-вербовка (УИ I)",
+            callback_data="noop"
+        ))
+
+    if has_2:
+        builder.row(InlineKeyboardButton(
+            text=f"{'✅' if user.ui_auto_train else '❌'} Авто-тренировка",
+            callback_data="toggle_ui_train"
+        ))
+    else:
+        builder.row(InlineKeyboardButton(
+            text="🔒 Авто-тренировка (УИ II)",
+            callback_data="noop"
+        ))
+
+    if has_3:
+        builder.row(InlineKeyboardButton(
+            text=f"{'✅' if user.ui_auto_ticket else '❌'} Авто-тикеты",
+            callback_data="toggle_ui_ticket"
+        ))
+    else:
+        builder.row(InlineKeyboardButton(
+            text="🔒 Авто-тикеты (УИ III)",
+            callback_data="noop"
+        ))
+
+    if has_4:
+        builder.row(InlineKeyboardButton(
+            text=f"{'✅' if user.ui_auto_pull else '❌'} Авто-прокрутка персонажей",
+            callback_data="toggle_ui_pull"
+        ))
+    else:
+        builder.row(InlineKeyboardButton(
+            text="🔒 Авто-прокрутка (УИ IV)",
+            callback_data="noop"
+        ))
+
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="skills"))
 
-    tui_str = " | TUI ✅" if user.true_ultra_instinct else ""
-    await cb.message.edit_text(
-        f"👁 <b>Ультра Инстинкт</b>{tui_str}\n\n"
-        f"✅ Активирован!\n\n"
+    ui_level_str = "Донат (макс)" if user.ui_is_donat else f"Уровень {user.ui_level}/4"
+    tui_str = " | TUI 🔱" if user.true_ultra_instinct else ""
+
+    text = (
+        f"👁 <b>Ультра Инстинкт</b> — {ui_level_str}{tui_str}\n\n"
         f"Настройки автоматизации:\n"
-        f"{'✅' if user.ui_auto_recruit else '❌'} Авто-вербовка\n"
-        f"{'✅' if user.ui_auto_train else '❌'} Авто-тренировка\n"
-        f"{'✅' if user.ui_auto_ticket else '❌'} Авто-тикеты\n"
-        f"{'✅' if user.ui_auto_pull else '❌'} Авто-прокрутка персонажей",
+        f"{'✅' if has_1 else '🔒'} Авто-вербовка" + (f": {'✅' if user.ui_auto_recruit else '❌'}" if has_1 else " (УИ I)") + "\n"
+        + f"{'✅' if has_2 else '🔒'} Авто-тренировка" + (f": {'✅' if user.ui_auto_train else '❌'}" if has_2 else " (УИ II)") + "\n"
+        + f"{'✅' if has_3 else '🔒'} Авто-тикеты" + (f": {'✅' if user.ui_auto_ticket else '❌'}" if has_3 else " (УИ III)") + "\n"
+        + f"{'✅' if has_4 else '🔒'} Авто-прокрутка" + (f": {'✅' if user.ui_auto_pull else '❌'}" if has_4 else " (УИ IV)")
+    )
+
+    await cb.message.edit_text(
+        text,
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML",
+    )
+
+    await cb.message.edit_text(
+        f"👁 <b>Ультра Инстинкт</b> — {ui_level_str}{tui_str}\n\n"
+        f"Настройки автоматизации:\n"
+        f"{'✅' if (user.ui_level >= 1 or user.ui_is_donat) else '🔒'} Авто-вербовка"
+        + (f": {status(user.ui_auto_recruit)}" if user.ui_level >= 1 or user.ui_is_donat else " (УИ I)") + "\n"
+        f"{'✅' if (user.ui_level >= 2 or user.ui_is_donat) else '🔒'} Авто-тренировка"
+        + (f": {status(user.ui_auto_train)}" if user.ui_level >= 2 or user.ui_is_donat else " (УИ II)") + "\n"
+        f"{'✅' if (user.ui_level >= 3 or user.ui_is_donat) else '🔒'} Авто-тикеты"
+        + (f": {status(user.ui_auto_ticket)}" if user.ui_level >= 3 or user.ui_is_donat else " (УИ III)") + "\n"
+        f"{'✅' if (user.ui_level >= 4 or user.ui_is_donat) else '🔒'} Авто-прокрутка"
+        + (f": {status(user.ui_auto_pull)}" if user.ui_level >= 4 or user.ui_is_donat else " (УИ IV)"),
         reply_markup=builder.as_markup(),
         parse_mode="HTML",
     )
@@ -331,6 +387,9 @@ async def cb_ui_settings(cb: CallbackQuery, session: AsyncSession, user: User):
 
 @router.callback_query(F.data == "toggle_ui_recruit")
 async def toggle_ui_recruit(cb: CallbackQuery, session: AsyncSession, user: User):
+    if user.ui_level < 1 and not user.ui_is_donat:
+        await cb.answer("Нужен УИ I уровня!", show_alert=True)
+        return
     user.ui_auto_recruit = not user.ui_auto_recruit
     await session.flush()
     await cb_ui_settings(cb, session, user)
@@ -338,6 +397,9 @@ async def toggle_ui_recruit(cb: CallbackQuery, session: AsyncSession, user: User
 
 @router.callback_query(F.data == "toggle_ui_train")
 async def toggle_ui_train(cb: CallbackQuery, session: AsyncSession, user: User):
+    if user.ui_level < 2 and not user.ui_is_donat:
+        await cb.answer("Нужен УИ II уровня!", show_alert=True)
+        return
     user.ui_auto_train = not user.ui_auto_train
     await session.flush()
     await cb_ui_settings(cb, session, user)
@@ -345,6 +407,9 @@ async def toggle_ui_train(cb: CallbackQuery, session: AsyncSession, user: User):
 
 @router.callback_query(F.data == "toggle_ui_ticket")
 async def toggle_ui_ticket(cb: CallbackQuery, session: AsyncSession, user: User):
+    if user.ui_level < 3 and not user.ui_is_donat:
+        await cb.answer("Нужен УИ III уровня!", show_alert=True)
+        return
     user.ui_auto_ticket = not user.ui_auto_ticket
     await session.flush()
     await cb_ui_settings(cb, session, user)
@@ -352,6 +417,9 @@ async def toggle_ui_ticket(cb: CallbackQuery, session: AsyncSession, user: User)
 
 @router.callback_query(F.data == "toggle_ui_pull")
 async def toggle_ui_pull(cb: CallbackQuery, session: AsyncSession, user: User):
+    if user.ui_level < 4 and not user.ui_is_donat:
+        await cb.answer("Нужен УИ IV уровня!", show_alert=True)
+        return
     user.ui_auto_pull = not user.ui_auto_pull
     await session.flush()
     await cb_ui_settings(cb, session, user)

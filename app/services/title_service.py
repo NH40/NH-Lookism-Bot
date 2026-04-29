@@ -133,6 +133,13 @@ class TitleService:
         user.max_tickets = 3
         user.ticket_chance = 25
         user.skill_path_bonus_multiplier = 1.0
+        # ← сбрасываем донатный УИ при отзыве всех титулов
+        user.ui_is_donat = False
+        user.ui_level = 0
+        user.ui_auto_recruit = False
+        user.ui_auto_train = False
+        user.ui_auto_ticket = False
+        user.ui_auto_pull = False
 
     async def _apply_title_bonus(
         self, session: AsyncSession, user: User, title_id: str

@@ -167,7 +167,6 @@ async def cb_raid_start(cb: CallbackQuery, session: AsyncSession, user: User):
 
 
 # ── Статус рейда ─────────────────────────────────────────────────────────────
-
 @router.callback_query(F.data.startswith("raid_status:"))
 async def cb_raid_status(cb: CallbackQuery, session: AsyncSession, user: User):
     raid_id = int(cb.data.split(":")[1])
@@ -185,26 +184,56 @@ async def cb_raid_status(cb: CallbackQuery, session: AsyncSession, user: User):
     remaining = max(0, int((raid.ends_at - now).total_seconds()))
     boss = raid_service.get_boss(raid.clan_id, raid.boss_id)
 
+    # Проверяем КД атаки
+    attack_cd = await raid_service.get_attack_cd_info(raid_id, user.id)
+
     builder = InlineKeyboardBuilder()
+
     if remaining == 0:
         builder.row(InlineKeyboardButton(
-            text="✅ Получить награду!",
+            text="🎁 Получить награду!",
             callback_data=f"raid_claim:{raid_id}"
         ))
+    else:
+        if attack_cd["on_cd"]:
+            ttl_str = cooldown_service.format_ttl(attack_cd["ttl"])
+            builder.row(InlineKeyboardButton(
+                text=f"⚔️ Атака — ⏳ {ttl_str}",
+                callback_data="noop_raid"
+            ))
+        else:
+            builder.row(InlineKeyboardButton(
+                text="⚔️ Атаковать босса!",
+                callback_data=f"raid_attack:{raid_id}"
+            ))
+
+    builder.row(InlineKeyboardButton(
+        text="🔄 Обновить", callback_data=f"raid_status:{raid_id}"
+    ))
     builder.row(InlineKeyboardButton(
         text="◀️ Назад", callback_data="raid_menu"
     ))
 
+    boss_name = boss["name"] if boss else raid.boss_id
+    boss_hp = boss["base_hp"] if boss else 0
+
+    # Считаем процент урона от HP
+    damage_pct = min(100.0, (raid.damage_dealt / boss_hp * 100)) if boss_hp > 0 else 0
+    hp_bar_filled = int(damage_pct / 10)
+    hp_bar = "🟥" * hp_bar_filled + "⬛" * (10 - hp_bar_filled)
+
     await cb.message.edit_text(
-        f"⚔️ <b>Активный рейд</b>\n\n"
-        f"👹 Босс: {boss['name'] if boss else raid.boss_id}\n"
-        f"💥 Нанесённый урон: <b>{fmt_num(raid.damage_dealt)}</b>\n\n"
-        + (f"⏳ Осталось: {cooldown_service.format_ttl(remaining)}" if remaining > 0
-           else "✅ Рейд завершён! Забери награду."),
+        f"⚔️ <b>Активный рейд — {boss_name}</b>\n\n"
+        f"❤️ HP босса: {fmt_num(boss_hp)}\n"
+        f"💥 Нанесённый урон: <b>{fmt_num(raid.damage_dealt)}</b> ({damage_pct:.1f}%)\n"
+        f"{hp_bar}\n"
+        f"🗡 Атак совершено: <b>{raid.attack_count}</b>\n\n"
+        + (f"⏳ До конца рейда: {cooldown_service.format_ttl(remaining)}"
+           if remaining > 0 else "✅ Рейд завершён! Забери награду.")
+        + ("\n\n⚔️ Атакуй снова чтобы накопить больше урона!" if remaining > 0 and not attack_cd["on_cd"] else ""),
         reply_markup=builder.as_markup(),
         parse_mode="HTML",
     )
-
 
 # ── Получение награды ────────────────────────────────────────────────────────
 
@@ -289,6 +318,39 @@ async def cb_craft_ui(cb: CallbackQuery, session: AsyncSession, user: User):
     await cb.answer(f"✅ {perk['name']} получен! {perk['perk']}", show_alert=True)
     await cb_raid_craft(cb, session, user)
 
+
+@router.callback_query(F.data.startswith("raid_attack:"))
+async def cb_raid_attack(cb: CallbackQuery, session: AsyncSession, user: User):
+    raid_id = int(cb.data.split(":")[1])
+    result = await raid_service.attack_boss(session, user, raid_id)
+
+    if not result["ok"]:
+        await cb.answer(result["reason"], show_alert=True)
+        return
+
+    if result.get("boss_killed"):
+        await cb.answer(
+            f"💀 Босс повержен!\n"
+            f"🔮 Получено фрагментов: +{result['fragments']}",
+            show_alert=True
+        )
+        await cb.message.edit_text(
+            f"🎉 <b>Босс {result['boss_name']} повержен!</b>\n\n"
+            f"💥 Суммарный урон: <b>{fmt_num(result['total_damage'])}</b>\n"
+            f"🗡 Атак совершено: <b>{result['attack_count']}</b>\n\n"
+            f"🔮 Получено фрагментов УИ: <b>+{result['fragments']}</b>\n"
+            f"📊 Всего фрагментов: <b>{result['total_fragments']}</b>\n\n"
+            f"Используй фрагменты в <b>Рейды → Крафт</b>!",
+            reply_markup=back_kb("raid_menu"),
+            parse_mode="HTML",
+        )
+    else:
+        await cb.answer(
+            f"⚔️ +{fmt_num(result['damage'])} урона!\n"
+            f"Всего: {fmt_num(result['total_damage'])}",
+            show_alert=True
+        )
+        await cb_raid_status(cb, session, user)
 
 @router.callback_query(F.data == "noop_raid")
 async def cb_noop_raid(cb: CallbackQuery):

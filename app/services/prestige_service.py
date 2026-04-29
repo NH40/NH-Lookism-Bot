@@ -25,22 +25,7 @@ class PrestigeService:
             return False, f"Достигнут максимальный уровень ({MAX_PRESTIGE})"
         return True, ""
 
-    async def do_prestige(self, session: AsyncSession, user: User) -> dict:
-        ok, reason = self.can_prestige(user)
-        if not ok:
-            return {"ok": False, "reason": reason}
-
-        user.prestige_level += 1
-        user.prestige_income_bonus += PRESTIGE_INCOME_BONUS_PER_LEVEL
-        user.prestige_recruit_bonus += PRESTIGE_RECRUIT_BONUS_PER_LEVEL
-        user.prestige_train_bonus += PRESTIGE_TRAIN_BONUS_PER_LEVEL
-        user.prestige_ticket_bonus += PRESTIGE_TICKET_BONUS_PER_LEVEL
-        user.ticket_chance = min(95, user.ticket_chance + 1)
-
-        await self._reset_progress(session, user)
-        return {"ok": True, "level": user.prestige_level}
-
-    async def _reset_progress(self, session: AsyncSession, user: User) -> None:
+    async def _reset_progress(self, session: AsyncSession, user: User, keep_ui: bool = False) -> None:
         """Сброс прогресса кроме донатов, пробуждений и достижений."""
         user.phase = "gang"
         user.sector = None
@@ -67,13 +52,19 @@ class PrestigeService:
         user.double_attack = False
         user.double_attack_used = False
         user.extra_attack_count = 0
+
+        # ── Очки мастерства и путь — сбрасываются всегда ─────────────────
+        user.mastery_points = 0
         user.skill_path = None
         user.skill_path_points = 0
         user.skill_path_bonus_multiplier = 1.0
 
-        # Сбрасываем игровой УИ (донатный не трогаем)
-        from app.services.raid_service import raid_service as rs
-        rs.reset_game_ui(user)
+        # ── УИ — сбрасывается только если keep_ui=False ──────────────────
+        if not keep_ui:
+            from app.services.raid_service import raid_service as rs
+            rs.reset_game_ui(user)
+            user.ui_fragments = 0
+        # При престиже — УИ и фрагменты сохраняются
 
         await session.execute(
             delete(SquadMember).where(SquadMember.user_id == user.id)
@@ -91,7 +82,7 @@ class PrestigeService:
             delete(UserPathSkills).where(UserPathSkills.user_id == user.id)
         )
 
-        # Сбрасываем мастерство
+        # ── Сбрасываем мастерство ─────────────────────────────────────────
         r = await session.execute(
             select(UserMastery).where(UserMastery.user_id == user.id)
         )
@@ -110,6 +101,22 @@ class PrestigeService:
         await self._reapply_achievement_bonuses(session, user)
 
         await session.flush()
+
+    async def do_prestige(self, session: AsyncSession, user: User) -> dict:
+        ok, reason = self.can_prestige(user)
+        if not ok:
+            return {"ok": False, "reason": reason}
+
+        user.prestige_level += 1
+        user.prestige_income_bonus += PRESTIGE_INCOME_BONUS_PER_LEVEL
+        user.prestige_recruit_bonus += PRESTIGE_RECRUIT_BONUS_PER_LEVEL
+        user.prestige_train_bonus += PRESTIGE_TRAIN_BONUS_PER_LEVEL
+        user.prestige_ticket_bonus += PRESTIGE_TICKET_BONUS_PER_LEVEL
+        user.ticket_chance = min(95, user.ticket_chance + 1)
+
+        # При престиже — УИ и фрагменты сохраняются (keep_ui=True)
+        await self._reset_progress(session, user, keep_ui=True)
+        return {"ok": True, "level": user.prestige_level}
 
     async def _reapply_achievement_bonuses(
         self, session: AsyncSession, user: User

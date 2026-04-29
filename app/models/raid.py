@@ -5,7 +5,6 @@ from app.database import Base
 
 
 class RaidSession(Base):
-    """Активный рейд игрока на босса."""
     __tablename__ = "raid_sessions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -13,6 +12,7 @@ class RaidSession(Base):
     boss_id: Mapped[str] = mapped_column(String(32), nullable=False)
     clan_id: Mapped[str] = mapped_column(String(32), nullable=False)
     damage_dealt: Mapped[int] = mapped_column(BigInteger, default=0)
+    attack_count: Mapped[int] = mapped_column(Integer, default=1)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

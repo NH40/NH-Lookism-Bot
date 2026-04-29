@@ -168,7 +168,23 @@ async def cb_delete_gang_confirm(cb: CallbackQuery, session: AsyncSession, user:
 @router.callback_query(F.data == "delete_gang_do")
 async def cb_delete_gang_do(cb: CallbackQuery, session: AsyncSession, user: User):
     from app.services.prestige_service import prestige_service
-    await prestige_service._reset_progress(session, user)
+    from app.services.raid_service import raid_service as rs
+    
+    # keep_ui=False — удаление банды сбрасывает УИ и фрагменты
+    await prestige_service._reset_progress(session, user, keep_ui=False)
+    
+    # Принудительно сбрасываем УИ если нет доната
+    if not user.ui_is_donat:
+        user.ultra_instinct = False
+        user.true_ultra_instinct = False
+        user.ui_level = 0
+        user.ui_fragments = 0
+        user.ui_auto_recruit = False
+        user.ui_auto_train = False
+        user.ui_auto_ticket = False
+        user.ui_auto_pull = False
+        await session.flush()
+    
     await cb.message.edit_text(
         "💀 <b>Банда удалена.</b>\n\nНачинай сначала!",
         reply_markup=back_kb("main_menu"),

@@ -120,18 +120,6 @@ async def cb_train_with(cb: CallbackQuery, session: AsyncSession, user: User):
     else:
         await cb.answer("Тренер не найден", show_alert=True)
 
-
-@router.callback_query(F.data == "raid_menu")
-async def cb_raid_menu(cb: CallbackQuery, user: User):
-    await cb.message.edit_text(
-        "⚔️ <b>Рейды</b>\n\n"
-        "🔨 Рейды находятся в разработке!\n\n"
-        "Следи за обновлениями.",
-        reply_markup=back_kb("main_menu"),
-        parse_mode="HTML",
-    )
-
-
 @router.callback_query(F.data == "noop_training")
 async def cb_noop_training(cb: CallbackQuery):
     await cb.answer()

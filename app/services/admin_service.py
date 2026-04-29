@@ -60,7 +60,8 @@ class AdminService:
         result = await session.execute(select(User))
         users = result.scalars().all()
         for user in users:
-            await prestige_service._reset_progress(session, user)
+            # keep_ui=False — патч сбрасывает УИ
+            await prestige_service._reset_progress(session, user, keep_ui=False)
         from app.models.game_version import GameVersion
         gv = GameVersion(version=version, patch_notes=f"Патч {version}")
         session.add(gv)

@@ -59,7 +59,7 @@ async def cb_raid_menu(cb: CallbackQuery, session: AsyncSession, user: User):
         f"⚔️ <b>Рейды</b>\n\n"
         f"🔮 Фрагменты УИ: <b>{user.ui_fragments}</b>\n"
         f"👁 УИ: {ui_str}{donat_str}\n\n"
-        f"Выбери клан для атаки:",
+        f"Выбери цель для рейда:",
         reply_markup=builder.as_markup(),
         parse_mode="HTML",
     )
@@ -93,8 +93,16 @@ async def cb_raid_clan(cb: CallbackQuery, session: AsyncSession, user: User):
         text="◀️ Назад", callback_data="raid_menu"
     ))
 
+    # Формируем описание боссов из константы
+    bosses_desc = "\n\n".join(
+        f"{boss['emoji']} <b>{boss['name']}</b>\n{boss['description']}"
+        for boss in clan["bosses"].values()
+    )
+
     await cb.message.edit_text(
         f"{clan['emoji']} <b>{clan['name']}</b>\n\n"
+        f"{clan['description']}\n\n"
+        f"{bosses_desc}\n\n"
         f"Выбери босса для рейда:",
         reply_markup=builder.as_markup(),
         parse_mode="HTML",

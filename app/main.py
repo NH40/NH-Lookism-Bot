@@ -12,6 +12,10 @@ from app.middlewares.user_loader import UserLoaderMiddleware
 from app.scheduler.setup import setup_scheduler
 from app.handlers import common, attack, business, raid, squad, deck, skills, titles, shop, auction, settings as settings_handler, admin
 from app.handlers import training
+from aiohttp import TCPConnector
+from app.middlewares.network_error import NetworkErrorMiddleware
+from app.middlewares.rate_limit import RateLimitMiddleware
+from app.middlewares.network_error import NetworkErrorMiddleware
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,7 +24,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 bot: Bot = None
-
 
 async def main():
     global bot
@@ -31,7 +34,6 @@ async def main():
     logger.info("Initializing cities...")
     await init_cities()
 
-    # Бот — стандартная сессия
     bot = Bot(
         token=settings.BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
@@ -45,6 +47,9 @@ async def main():
     dp.callback_query.middleware(DbSessionMiddleware())
     dp.message.middleware(UserLoaderMiddleware())
     dp.callback_query.middleware(UserLoaderMiddleware())
+    dp.message.middleware(NetworkErrorMiddleware())
+    dp.callback_query.middleware(NetworkErrorMiddleware())
+    dp.callback_query.middleware(RateLimitMiddleware(limit=0.5))
 
     dp.include_router(common.router)
     dp.include_router(attack.router)
@@ -66,17 +71,12 @@ async def main():
 
     logger.info("Starting bot polling...")
     try:
-        while True:
-            try:
-                await dp.start_polling(
-                    bot,
-                    allowed_updates=dp.resolve_used_update_types(),
-                    timeout=30,
-                )
-                break
-            except Exception as e:
-                logger.warning(f"Polling failed: {e}, retrying in 10 seconds...")
-                await asyncio.sleep(10)
+        await dp.start_polling(
+            bot,
+            allowed_updates=dp.resolve_used_update_types(),
+            timeout=30,
+            retry_after=5,          # ждать 5 сек при ошибке
+        )
     finally:
         scheduler.shutdown()
         await bot.session.close()

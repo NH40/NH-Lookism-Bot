@@ -8,6 +8,7 @@ from sqlalchemy import select, func
 from app.models.user import User
 from app.utils.keyboards.common import main_menu_kb, back_kb
 from app.utils.formatters import fmt_num, fmt_power, phase_label
+import html
 
 router = Router()
 
@@ -103,9 +104,12 @@ async def _main_menu_text(session: AsyncSession, user: User) -> str:
 
     buff_section = ("\n" + "\n".join(buff_lines)) if buff_lines else ""
 
+    full_name = html.escape(user.full_name)
+    gang_name = html.escape(user.gang_name) if user.gang_name else None
+
     return (
-        f"👤 {user.full_name}\n"
-        + (f"🏴 Банда: {user.gang_name}\n" if user.gang_name else "")
+        f"👤 {full_name}\n"
+        + (f"🏴 Банда: {gang_name}\n" if gang_name else "")
         + f"{'─' * 20}\n"
         f"{_phase_emoji(user.phase)} Фаза: {phase_label(user.phase)}\n"
         f"💰 NHCoin: {fmt_num(user.nh_coins)}\n"
@@ -136,7 +140,7 @@ async def cmd_start(
 
     if is_new_user:
         await message.answer(
-            f"👋 Добро пожаловать, <b>{user.full_name}</b>!\n\n"
+            f"👋 Добро пожаловать, <b>{html.escape(user.full_name)}</b>!\n\n"
             f"Ты начинаешь путь уличного бойца.\n"
             f"Цель — стать Императором!\n\n"
             f"🏴 Банда → 👑 Король → ✊ Кулак → 🏛 Император",
@@ -192,8 +196,8 @@ async def cb_profile(cb: CallbackQuery, session: AsyncSession, user: User):
 
     text = (
         f"📊 <b>Профиль</b>\n\n"
-        f"👤 {user.full_name}"
-        + (f"\n🏴 Банда: {user.gang_name}" if user.gang_name else "")
+        f"👤 {html.escape(user.full_name)}"
+        + (f"\n🏴 Банда: {html.escape(user.gang_name)}" if user.gang_name else "")
         + f"\n{_phase_emoji(user.phase)} {phase_label(user.phase)}"
         + (f" | 🌐 Сектор {user.sector}" if user.sector else "")
         + f"\n\n━━━ 💰 Финансы ━━━\n"
@@ -234,7 +238,7 @@ async def cmd_top(message: Message, session: AsyncSession, user: User):
         medal = medals.get(i, f"{i + 1}.")
         vvip  = " 👑" if u.ultra_instinct else ""
         lines.append(
-            f"{medal} <b>{u.full_name}</b>{vvip}\n"
+            f"{medal} <b>{html.escape(u.full_name)}</b>{vvip}\n"
             f"   💪 {fmt_num(u.combat_power)} | "
             f"{_phase_emoji(u.phase)} {phase_label(u.phase)}"
         )
@@ -288,7 +292,7 @@ async def _show_players_page(
         is_me    = " ← ты" if p.id == user.id else ""
         vvip     = " 👑" if p.ultra_instinct else ""
         lines.append(
-            f"<b>#{rank_num}</b> {p.full_name}{vvip}{is_me}\n"
+            f"<b>#{rank_num}</b> {html.escape(p.full_name)}{vvip}{is_me}\n"
             f"  {_phase_emoji(p.phase)} {phase_label(p.phase)} | "
             f"💪 {fmt_num(p.combat_power)}"
         )

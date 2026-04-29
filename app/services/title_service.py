@@ -178,7 +178,8 @@ class TitleService:
         elif title_id == "focus":
             pass
         elif title_id == "ui_title":
-            user.ultra_instinct = True
+            from app.services.raid_service import raid_service as rs
+            rs.apply_donat_ui(user)
 
     def _apply_set_bonus(self, user: User, set_id: str) -> None:
         if set_id == "strongest_0gen":

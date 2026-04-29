@@ -71,6 +71,10 @@ class PrestigeService:
         user.skill_path_points = 0
         user.skill_path_bonus_multiplier = 1.0
 
+        # Сбрасываем игровой УИ (донатный не трогаем)
+        from app.services.raid_service import raid_service as rs
+        rs.reset_game_ui(user)
+
         await session.execute(
             delete(SquadMember).where(SquadMember.user_id == user.id)
         )

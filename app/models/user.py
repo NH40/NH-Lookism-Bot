@@ -72,6 +72,13 @@ class User(Base):
     skill_path_points: Mapped[int] = mapped_column(Integer, default=0)
     skill_path_bonus_multiplier: Mapped[float] = mapped_column(Float, default=1.0)
 
+    # ── Рейды ─────────────────────────────────────────────────────────────
+    ui_fragments: Mapped[int] = mapped_column(Integer, default=0)
+
+    # ── Ультра Инстинкт (переработка) ────────────────────────────────────
+    ui_level: Mapped[int] = mapped_column(Integer, default=0)        # 0-4
+    ui_is_donat: Mapped[bool] = mapped_column(Boolean, default=False) # донатный = permanent
+
     # ── Ультра Инстинкт ───────────────────────────────────────────────────
     ultra_instinct: Mapped[bool] = mapped_column(Boolean, default=False)
     true_ultra_instinct: Mapped[bool] = mapped_column(Boolean, default=False)

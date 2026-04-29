@@ -12,6 +12,7 @@ from app.middlewares.user_loader import UserLoaderMiddleware
 from app.scheduler.setup import setup_scheduler
 from app.handlers import common, attack, business, raid, squad, deck, skills, titles, shop, auction, settings as settings_handler, admin
 from app.handlers import training
+from aiogram.client.session.aiohttp import AiohttpSession
 
 logging.basicConfig(
     level=logging.INFO,
@@ -21,38 +22,32 @@ logger = logging.getLogger(__name__)
 
 bot: Bot = None
 
-
 async def main():
     global bot
 
-    # Инициализация БД
     logger.info("Initializing database...")
     await init_db()
 
-    # Инициализация городов
     logger.info("Initializing cities...")
     await init_cities()
 
-    # Бот
+    # Бот с увеличенным таймаутом
+    session = AiohttpSession(timeout=60)
     bot = Bot(
         token=settings.BOT_TOKEN,
+        session=session,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     set_bot(bot)
 
-    # FSM Storage — Redis
     storage = RedisStorage.from_url(settings.redis_url)
-
-    # Диспетчер
     dp = Dispatcher(storage=storage)
 
-    # Middlewares
     dp.message.middleware(DbSessionMiddleware())
     dp.callback_query.middleware(DbSessionMiddleware())
     dp.message.middleware(UserLoaderMiddleware())
     dp.callback_query.middleware(UserLoaderMiddleware())
-    
-    # Роутеры
+
     dp.include_router(common.router)
     dp.include_router(attack.router)
     dp.include_router(business.router)
@@ -67,15 +62,17 @@ async def main():
     dp.include_router(raid.router)
     dp.include_router(admin.router)
 
-    # Планировщик
     scheduler = setup_scheduler()
     scheduler.start()
     logger.info("Scheduler started")
 
-    # Запуск
     logger.info("Starting bot polling...")
     try:
-        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+        await dp.start_polling(
+            bot,
+            allowed_updates=dp.resolve_used_update_types(),
+            timeout=60,
+        )
     finally:
         scheduler.shutdown()
         await bot.session.close()

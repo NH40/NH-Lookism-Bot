@@ -14,6 +14,7 @@ from app.repositories.user_repo import user_repo
 from app.utils.keyboards.common import back_kb, confirm_kb
 from app.utils.formatters import fmt_power, fmt_num, fmt_ttl, phase_label
 from app.models.city import District
+import html
 
 router = Router()
 
@@ -552,7 +553,7 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
 
     if result.get("promoted"):
         await cb.message.edit_text(
-            f"🎉 {result['message']}",
+            f"🎉 {html.escape(result['message'])}",
             reply_markup=back_kb("main_menu"),
             parse_mode="HTML",
         )
@@ -572,7 +573,7 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
             taken = result.get("districts_taken", 0)
             text = (
                 f"✅ <b>Победа в PvP!{crit_str}</b>\n\n"
-                f"Противник: <b>{result['defender_name']}</b>\n"
+                f"Противник: <b>{html.escape(result['defender_name'])}</b>\n"
                 f"Город: <b>{result['city']}</b>\n"
                 f"Забрано районов: +{taken}\n"
                 f"Моих в городе: {result.get('my_in_city', 0)}\n\n"
@@ -583,7 +584,7 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         else:
             text = (
                 f"❌ <b>Поражение в PvP!</b>\n\n"
-                f"Противник: <b>{result['defender_name']}</b>\n"
+                f"Противник: <b>{html.escape(result['defender_name'])}</b>\n"
                 f"Город: <b>{result['city']}</b>\n\n"
                 f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
                 f"⚔️ Его мощь: {fmt_num(result['defender_power'])}"
@@ -592,7 +593,7 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         if result["win"]:
             text = (
                 f"✅ <b>Победа!{crit_str}</b>\n\n"
-                f"Город: <b>{result['city']}</b>\n"
+                f"Город: <b>{html.escape(result['city'])}</b>\n"
                 f"Захвачено районов: <b>+{result.get('districts_gained', 0)}</b>\n"
                 f"Моих районов в городе: {result.get('my_in_city', 0)}\n"
                 f"Всего в городе: "
@@ -604,7 +605,7 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         else:
             text = (
                 f"❌ <b>Поражение!</b>\n\n"
-                f"Город: <b>{result['city']}</b>\n"
+                f"Город: <b>{html.escape(result['city'])}</b>\n"
                 f"Районов в городе: "
                 f"{result.get('city_captured', 0)}/{result.get('city_total', 0)}\n\n"
                 f"💪 Твоя мощь: {fmt_num(result['user_power'])}\n"
@@ -623,7 +624,7 @@ async def cb_fist_bot(cb: CallbackQuery, session: AsyncSession, user: User):
 
     if result.get("promoted"):
         await cb.message.edit_text(
-            f"🎉 {result['message']}",
+            f"🎉 {html.escape(result['message'])}",
             reply_markup=back_kb("main_menu"),
             parse_mode="HTML",
         )
@@ -631,7 +632,7 @@ async def cb_fist_bot(cb: CallbackQuery, session: AsyncSession, user: User):
 
     if result.get("destroyed"):
         await cb.message.edit_text(
-            f"💀 <b>{result['message']}</b>",
+            f"💀 <b>{html.escape(result['message'])}</b>",
             reply_markup=back_kb("main_menu"),
             parse_mode="HTML",
         )
@@ -717,14 +718,14 @@ async def cb_fist_pvp(cb: CallbackQuery, session: AsyncSession, user: User):
     if result["win"]:
         text = (
             f"✅ <b>Победа в PvP!{crit_str}</b>\n\n"
-            f"Противник: {result['defender_name']}\n"
+            f"Противник: {html.escape(result['defender_name'])}\n"
             f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
             f"⚔️ Его мощь: {fmt_num(result['defender_power'])}"
         )
     else:
         text = (
             f"❌ <b>Поражение в PvP!</b>\n\n"
-            f"Противник: {result['defender_name']}\n"
+            f"Противник: {html.escape(result['defender_name'])}\n"
             f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
             f"⚔️ Его мощь: {fmt_num(result['defender_power'])}"
         )

@@ -3,18 +3,22 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.types import InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import CommandStart, Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.models.user import User
 from app.utils.keyboards.common import main_menu_kb, back_kb
 from app.utils.formatters import fmt_num, fmt_power, phase_label
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
 import html
 
 router = Router()
 
 PAGE_SIZE = 10
+
+
+class CommonFSM(StatesGroup):
+    waiting_promo = State()
 
 
 def _phase_emoji(phase: str) -> str:
@@ -36,27 +40,19 @@ async def _main_menu_text(session: AsyncSession, user: User) -> str:
     )
     mastery = r.scalar_one_or_none()
 
-    bonus_map = {0: 0, 1: 5,  2: 10, 3: 20, 4: 30}
-    speed_map = {0: 0, 1: 5,  2: 10, 3: 15, 4: 20}
+    bonus_map = {0: 0, 1: 5, 2: 10, 3: 20, 4: 30}
+    speed_map = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
 
     mastery_lines = []
     if mastery:
         if mastery.strength > 0:
-            mastery_lines.append(
-                f"  💪 Сила {mastery.strength}/4 (+{bonus_map[mastery.strength]}% мощи)"
-            )
+            mastery_lines.append(f"  💪 Сила {mastery.strength}/4 (+{bonus_map[mastery.strength]}% мощи)")
         if mastery.speed > 0:
-            mastery_lines.append(
-                f"  ⚡ Скорость {mastery.speed}/4 (-{speed_map[mastery.speed]}% КД)"
-            )
+            mastery_lines.append(f"  ⚡ Скорость {mastery.speed}/4 (-{speed_map[mastery.speed]}% КД)")
         if mastery.endurance > 0:
-            mastery_lines.append(
-                f"  🛡 Выносливость {mastery.endurance}/4 (+{speed_map[mastery.endurance]}% порог)"
-            )
+            mastery_lines.append(f"  🛡 Выносливость {mastery.endurance}/4 (+{speed_map[mastery.endurance]}% порог)")
         if mastery.technique > 0:
-            mastery_lines.append(
-                f"  🏋 Техника {mastery.technique}/4 (+{bonus_map[mastery.technique]}% трен./доход)"
-            )
+            mastery_lines.append(f"  🏋 Техника {mastery.technique}/4 (+{bonus_map[mastery.technique]}% трен./доход)")
 
     path_emoji = {"businessman": "💼", "romantic": "💝", "monster": "👹"}
     path_name  = {"businessman": "Бизнесмен", "romantic": "Романтик", "monster": "Монстр"}
@@ -69,14 +65,8 @@ async def _main_menu_text(session: AsyncSession, user: User) -> str:
     potions = await potion_service.get_active(session, user.id)
     now = datetime.now(timezone.utc)
     potion_lines = []
-    potion_emoji_map = {
-        "power": "⚔️", "wealth": "💰",
-        "influence": "⚡", "training": "🏋", "luck": "🍀",
-    }
-    potion_name_map = {
-        "power": "Сила", "wealth": "Богатство",
-        "influence": "Влияние", "training": "Тренировка", "luck": "Удача",
-    }
+    potion_emoji_map = {"power": "⚔️", "wealth": "💰", "influence": "⚡", "training": "🏋", "luck": "🍀"}
+    potion_name_map  = {"power": "Сила", "wealth": "Богатство", "influence": "Влияние", "training": "Тренировка", "luck": "Удача"}
     for p in potions:
         remaining = max(0, int((p.expires_at - now).total_seconds()))
         m, s = divmod(remaining, 60)
@@ -86,7 +76,11 @@ async def _main_menu_text(session: AsyncSession, user: User) -> str:
         potion_lines.append(f"  {emoji} {name} +{p.bonus_value}% ({time_str})")
 
     ui_line = ""
-    if user.ultra_instinct or user.true_ultra_instinct:
+    if user.ui_is_donat:
+        ui_line = f"  👁 УИ Донат (макс) активен"
+    elif user.ui_level > 0:
+        ui_line = f"  👁 УИ {user.ui_level} уровень активен"
+    elif user.ultra_instinct or user.true_ultra_instinct:
         tui = " TUI" if user.true_ultra_instinct else ""
         ui_line = f"  🤖 УИ{tui} активен"
 
@@ -105,7 +99,6 @@ async def _main_menu_text(session: AsyncSession, user: User) -> str:
         buff_lines.extend(potion_lines)
 
     buff_section = ("\n" + "\n".join(buff_lines)) if buff_lines else ""
-
     full_name = html.escape(user.full_name)
     gang_name = html.escape(user.gang_name) if user.gang_name else None
 
@@ -125,10 +118,7 @@ async def _main_menu_text(session: AsyncSession, user: User) -> str:
 # ── /start ──────────────────────────────────────────────────────────────────
 
 @router.message(CommandStart())
-async def cmd_start(
-    message: Message, session: AsyncSession,
-    user: User, is_new_user: bool
-):
+async def cmd_start(message: Message, session: AsyncSession, user: User, is_new_user: bool):
     args = message.text.split()
     if is_new_user and len(args) > 1 and args[1].startswith("ref_"):
         try:
@@ -151,11 +141,7 @@ async def cmd_start(
         )
     else:
         text = await _main_menu_text(session, user)
-        await message.answer(
-            text,
-            reply_markup=main_menu_kb(),
-            parse_mode="HTML",
-        )
+        await message.answer(text, reply_markup=main_menu_kb(), parse_mode="HTML")
 
 
 # ── Главное меню ────────────────────────────────────────────────────────────
@@ -164,11 +150,7 @@ async def cmd_start(
 async def cb_main_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     text = await _main_menu_text(session, user)
     try:
-        await cb.message.edit_text(
-            text,
-            reply_markup=main_menu_kb(),
-            parse_mode="HTML",
-        )
+        await cb.message.edit_text(text, reply_markup=main_menu_kb(), parse_mode="HTML")
     except Exception:
         pass
     await cb.answer()
@@ -196,6 +178,15 @@ async def cb_profile(cb: CallbackQuery, session: AsyncSession, user: User):
             f"+{user.prestige_ticket_bonus}% тикет"
         )
 
+    ui_str = ""
+    if user.ui_level > 0 or user.ui_is_donat:
+        ui_level_label = "Донат (макс)" if user.ui_is_donat else f"Уровень {user.ui_level}/4"
+        ui_str = (
+            f"\n\n━━━ 👁 Ультра Инстинкт ━━━\n"
+            f"{ui_level_label}\n"
+            f"🔮 Фрагменты: {user.ui_fragments}"
+        )
+
     text = (
         f"📊 <b>Профиль</b>\n\n"
         f"👤 {html.escape(user.full_name)}"
@@ -205,10 +196,7 @@ async def cb_profile(cb: CallbackQuery, session: AsyncSession, user: User):
         + f"\n\n━━━ 💰 Финансы ━━━\n"
         f"NHCoin: {fmt_num(user.nh_coins)}\n"
         f"Доход: {fmt_num(info['base_income'])}/мин"
-        + (
-            f" → {fmt_num(info['final_income'])}/мин"
-            if info['final_income'] != info['base_income'] else ""
-        )
+        + (f" → {fmt_num(info['final_income'])}/мин" if info['final_income'] != info['base_income'] else "")
         + (f" (+{info['total_bonus_percent']}%)" if info['total_bonus_percent'] else "")
         + f"\n\n━━━ ⚔️ Боевые ━━━\n"
         f"Мощь: {fmt_num(user.combat_power)}\n"
@@ -216,14 +204,11 @@ async def cb_profile(cb: CallbackQuery, session: AsyncSession, user: User):
         f"━━━ 🏙 Территория ━━━\n"
         f"Районов: {districts} | Городов: {user.king_cities_count}"
         + prestige_str
+        + ui_str
         + f"\n\n━━━ 💎 Титулы ━━━\n"
         + titles_str
     )
-    await cb.message.edit_text(
-        text,
-        reply_markup=back_kb("settings"),
-        parse_mode="HTML",
-    )
+    await cb.message.edit_text(text, reply_markup=back_kb("settings"), parse_mode="HTML")
 
 
 # ── /top ─────────────────────────────────────────────────────────────────────
@@ -247,14 +232,8 @@ async def cmd_top(message: Message, session: AsyncSession, user: User):
     lines.append(f"\n📍 Твоё место: #{my_rank}")
 
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(
-        text="👥 Все игроки", callback_data="players_page:0"
-    ))
-    await message.answer(
-        "\n".join(lines),
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
+    builder.row(InlineKeyboardButton(text="👥 Все игроки", callback_data="players_page:0"))
+    await message.answer("\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML")
 
 
 # ── /players ─────────────────────────────────────────────────────────────────
@@ -264,31 +243,21 @@ async def cmd_players(message: Message, session: AsyncSession, user: User):
     await _show_players_page(message, session, user, page=0, edit=False)
 
 
-async def _show_players_page(
-    message, session: AsyncSession, user: User,
-    page: int, edit: bool = True
-) -> None:
+async def _show_players_page(message, session: AsyncSession, user: User, page: int, edit: bool = True) -> None:
     from app.models.user import User as UserModel
 
-    total = await session.scalar(
-        select(func.count(UserModel.id))
-    ) or 0
+    total = await session.scalar(select(func.count(UserModel.id))) or 0
     total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
     page = max(0, min(page, total_pages - 1))
 
     result = await session.execute(
-        select(UserModel)
-        .order_by(UserModel.combat_power.desc())
-        .offset(page * PAGE_SIZE)
-        .limit(PAGE_SIZE)
+        select(UserModel).order_by(UserModel.combat_power.desc())
+        .offset(page * PAGE_SIZE).limit(PAGE_SIZE)
     )
     players = result.scalars().all()
 
     start_rank = page * PAGE_SIZE + 1
-    lines = [
-        f"👥 <b>Все игроки</b> "
-        f"(стр. {page + 1}/{total_pages}, всего {total})\n"
-    ]
+    lines = [f"👥 <b>Все игроки</b> (стр. {page + 1}/{total_pages}, всего {total})\n"]
     for i, p in enumerate(players):
         rank_num = start_rank + i
         is_me    = " ← ты" if p.id == user.id else ""
@@ -300,49 +269,28 @@ async def _show_players_page(
         )
 
     text = "\n".join(lines)
-
-    # Навигация
     nav = []
     if page > 0:
-        nav.append(InlineKeyboardButton(
-            text="◀️", callback_data=f"players_page:{page - 1}"
-        ))
-    nav.append(InlineKeyboardButton(
-        text=f"{page + 1}/{total_pages}",
-        callback_data="noop_players"
-    ))
+        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"players_page:{page - 1}"))
+    nav.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop_players"))
     if page < total_pages - 1:
-        nav.append(InlineKeyboardButton(
-            text="▶️", callback_data=f"players_page:{page + 1}"
-        ))
+        nav.append(InlineKeyboardButton(text="▶️", callback_data=f"players_page:{page + 1}"))
 
     builder = InlineKeyboardBuilder()
     builder.row(*nav)
-    builder.row(InlineKeyboardButton(
-        text="🏆 Топ-10", callback_data="show_top"
-    ))
+    builder.row(InlineKeyboardButton(text="🏆 Топ-10", callback_data="show_top"))
 
     if edit:
         try:
-            await message.edit_text(
-                text,
-                reply_markup=builder.as_markup(),
-                parse_mode="HTML",
-            )
+            await message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
         except Exception:
             pass
     else:
-        await message.answer(
-            text,
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
+        await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
 
 @router.callback_query(F.data.startswith("players_page:"))
-async def cb_players_page(
-    cb: CallbackQuery, session: AsyncSession, user: User
-):
+async def cb_players_page(cb: CallbackQuery, session: AsyncSession, user: User):
     page = int(cb.data.split(":")[1])
     await _show_players_page(cb.message, session, user, page=page, edit=True)
     await cb.answer()
@@ -365,56 +313,39 @@ async def cb_show_top(cb: CallbackQuery, session: AsyncSession, user: User):
         medal = medals.get(i, f"{i + 1}.")
         vvip  = " 👑" if u.ultra_instinct else ""
         lines.append(
-            f"{medal} <b>{u.full_name}</b>{vvip}\n"
+            f"{medal} <b>{html.escape(u.full_name)}</b>{vvip}\n"
             f"   💪 {fmt_num(u.combat_power)} | "
             f"{_phase_emoji(u.phase)} {phase_label(u.phase)}"
         )
     lines.append(f"\n📍 Твоё место: #{my_rank}")
 
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(
-        text="👥 Все игроки", callback_data="players_page:0"
-    ))
+    builder.row(InlineKeyboardButton(text="👥 Все игроки", callback_data="players_page:0"))
     try:
-        await cb.message.edit_text(
-            "\n".join(lines),
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
+        await cb.message.edit_text("\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML")
     except Exception:
         pass
     await cb.answer()
 
-from aiogram.filters import Command
+
+# ── Промокод ─────────────────────────────────────────────────────────────────
 
 @router.message(Command("promo"))
-async def cmd_promo(message: Message, session: AsyncSession, user: User, state: FSMContext):
-    from aiogram.fsm.state import State, StatesGroup
-    await state.set_state("waiting_promo")
+async def cmd_promo(message: Message, state: FSMContext):
+    await state.set_state(CommonFSM.waiting_promo)
     await message.answer(
         "🎁 Введите промокод:",
         reply_markup=back_kb("main_menu"),
     )
 
-@router.message(F.text, flags={"promo": True})
-# Лучше через FSM — добавь в common.py:
-
-class CommonFSM(StatesGroup):
-    waiting_promo = State()
-
-@router.message(Command("promo"))
-async def cmd_promo(message: Message, state: FSMContext):
-    await state.set_state(CommonFSM.waiting_promo)
-    await message.answer("🎁 Введите промокод:")
 
 @router.message(CommonFSM.waiting_promo)
 async def msg_promo(message: Message, session: AsyncSession, user: User, state: FSMContext):
-    from app.services.promo_service import promo_service, REWARD_LABELS
+    from app.services.promo_service import promo_service
     await state.clear()
     code = message.text.strip()
     result = await promo_service.use_promo(session, user, code)
     if result["ok"]:
-        from app.utils.formatters import fmt_num
         await message.answer(
             f"✅ <b>Промокод активирован!</b>\n\n"
             f"{result['label']}: <b>+{fmt_num(result['reward_amount'])}</b>",
@@ -427,6 +358,7 @@ async def msg_promo(message: Message, session: AsyncSession, user: User, state: 
             reply_markup=back_kb("main_menu"),
             parse_mode="HTML",
         )
+
 
 # ── /admin ───────────────────────────────────────────────────────────────────
 

@@ -6,6 +6,7 @@ from sqlalchemy import select, func
 from app.models.user import User
 from app.models.market import MarketListing
 
+
 class MarketService:
 
     def get_item_label(self, item_type: str) -> str:
@@ -50,7 +51,6 @@ class MarketService:
         if price <= 0:
             return {"ok": False, "reason": "Цена должна быть больше 0"}
 
-        # Лимит объявлений
         count = await session.scalar(
             select(func.count(MarketListing.id)).where(
                 MarketListing.seller_id == user.id,
@@ -61,7 +61,9 @@ class MarketService:
         if count >= MAX_LISTINGS_PER_USER:
             return {"ok": False, "reason": f"Максимум {MAX_LISTINGS_PER_USER} активных товаров"}
 
-        # Проверяем и списываем ресурс
+        if meta is None:
+            meta = {}
+
         take_result = await self._take_resource(session, user, item_type, amount, meta)
         if not take_result["ok"]:
             return take_result
@@ -94,8 +96,6 @@ class MarketService:
             return {"ok": False, "reason": "Товар не найден"}
 
         listing.is_cancelled = True
-
-        # Возвращаем ресурс
         meta = json.loads(listing.item_meta) if listing.item_meta else {}
         await self._give_resource(session, user, listing.item_type, listing.item_amount, meta)
         await session.flush()
@@ -120,16 +120,13 @@ class MarketService:
         if buyer.nh_coins < listing.price:
             return {"ok": False, "reason": f"Недостаточно NHCoin (нужно {listing.price:,})"}
 
-        # Списываем монеты у покупателя
         buyer.nh_coins -= listing.price
 
-        # Переводим монеты продавцу
         from app.repositories.user_repo import user_repo
         seller = await user_repo.get_by_id(session, listing.seller_id)
         if seller:
             seller.nh_coins += listing.price
 
-        # Выдаём товар покупателю
         meta = json.loads(listing.item_meta) if listing.item_meta else {}
         await self._give_resource(session, buyer, listing.item_type, listing.item_amount, meta)
 
@@ -147,7 +144,7 @@ class MarketService:
 
     async def _take_resource(
         self, session: AsyncSession, user: User,
-        item_type: str, amount: int, meta: dict | None
+        item_type: str, amount: int, meta: dict
     ) -> dict:
         if item_type == "tickets":
             if user.tickets < amount:
@@ -180,6 +177,8 @@ class MarketService:
             members = result.scalars().all()
             if len(members) < amount:
                 return {"ok": False, "reason": f"Недостаточно статистов (есть {len(members)})"}
+            avg_power = int(sum(m.base_power for m in members) / len(members)) if members else 1000
+            meta["power"] = avg_power
             for m in members:
                 await session.delete(m)
             from app.repositories.squad_repo import squad_repo
@@ -187,19 +186,25 @@ class MarketService:
 
         elif item_type == "character":
             from app.models.character import UserCharacter
-            char_id = meta.get("char_id") if meta else None
+            char_id = meta.get("char_id")
+            rank = meta.get("rank")
             if not char_id:
                 return {"ok": False, "reason": "Не указан персонаж"}
-            result = await session.execute(
-                select(UserCharacter).where(
-                    UserCharacter.user_id == user.id,
-                    UserCharacter.character_id == char_id,
-                )
+            q = select(UserCharacter).where(
+                UserCharacter.user_id == user.id,
+                UserCharacter.character_id == char_id,
             )
-            char = result.scalar_one_or_none()
-            if not char:
-                return {"ok": False, "reason": "Персонаж не найден"}
-            await session.delete(char)
+            if rank:
+                q = q.where(UserCharacter.rank == rank)
+            q = q.limit(amount)
+            result = await session.execute(q)
+            chars = result.scalars().all()
+            if len(chars) < amount:
+                return {"ok": False, "reason": f"Недостаточно персонажей (есть {len(chars)})"}
+            avg_power = int(sum(c.power for c in chars) / len(chars)) if chars else 0
+            meta["power"] = avg_power
+            for c in chars:
+                await session.delete(c)
             from app.repositories.squad_repo import squad_repo
             await squad_repo.update_user_combat_power(session, user)
 
@@ -239,16 +244,15 @@ class MarketService:
             from app.models.character import UserCharacter
             char_id = meta.get("char_id")
             power = meta.get("power", 0)
-            name = meta.get("name", "")
-            rarity = meta.get("rarity", "common")
+            rank = meta.get("rank", "C")
             if char_id:
-                session.add(UserCharacter(
-                    user_id=user.id,
-                    character_id=char_id,
-                    power=power,
-                    name=name,
-                    rarity=rarity,
-                ))
+                for _ in range(amount):
+                    session.add(UserCharacter(
+                        user_id=user.id,
+                        character_id=char_id,
+                        rank=rank,
+                        power=power,
+                    ))
             from app.repositories.squad_repo import squad_repo
             await squad_repo.update_user_combat_power(session, user)
 

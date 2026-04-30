@@ -6,7 +6,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from app.models.user import User
 from app.models.market import MarketListing
 from app.services.market_service import market_service
@@ -33,14 +33,16 @@ async def cb_market_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     builder.row(InlineKeyboardButton(text="🛒 Покупатель", callback_data="market_buyer"))
     builder.row(InlineKeyboardButton(text="💰 Продавец", callback_data="market_seller"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
-
-    await cb.message.edit_text(
-        f"🏪 <b>Биржа</b>\n\n"
-        f"💰 NHCoin: <b>{fmt_num(user.nh_coins)}</b>\n\n"
-        f"Выбери роль:",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
+    try:
+        await cb.message.edit_text(
+            f"🏪 <b>Биржа</b>\n\n"
+            f"💰 NHCoin: <b>{fmt_num(user.nh_coins)}</b>\n\n"
+            f"Выбери роль:",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
 
 
 # ── ПРОДАВЕЦ ─────────────────────────────────────────────────────────────────
@@ -48,44 +50,48 @@ async def cb_market_menu(cb: CallbackQuery, session: AsyncSession, user: User):
 @router.callback_query(F.data == "market_seller")
 async def cb_market_seller(cb: CallbackQuery, session: AsyncSession, user: User):
     listings = await market_service.get_my_listings(session, user.id)
-
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="➕ Создать товар", callback_data="market_create"))
     builder.row(InlineKeyboardButton(text="📦 Мои товары", callback_data="market_my_listings"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_menu"))
-
-    await cb.message.edit_text(
-        f"💰 <b>Продавец</b>\n\n"
-        f"Активных товаров: <b>{len(listings)}/5</b>\n\n"
-        f"Выбери действие:",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
+    try:
+        await cb.message.edit_text(
+            f"💰 <b>Продавец</b>\n\n"
+            f"Активных товаров: <b>{len(listings)}/5</b>\n\n"
+            f"Выбери действие:",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data == "market_my_listings")
 async def cb_market_my_listings(cb: CallbackQuery, session: AsyncSession, user: User):
     listings = await market_service.get_my_listings(session, user.id)
-
     builder = InlineKeyboardBuilder()
     if not listings:
         builder.row(InlineKeyboardButton(text="➕ Создать товар", callback_data="market_create"))
     else:
         for listing in listings:
             label = market_service.get_item_label(listing.item_type)
+            meta = json.loads(listing.item_meta) if listing.item_meta else {}
+            rank_str = f" [{meta.get('rank')}]" if meta.get("rank") else ""
+            char_str = f" {meta.get('char_id')}" if meta.get("char_id") else ""
             builder.row(InlineKeyboardButton(
-                text=f"{label} x{listing.item_amount} — {fmt_num(listing.price)} NHCoin",
+                text=f"{label}{rank_str}{char_str} x{listing.item_amount} — {fmt_num(listing.price)} NHCoin",
                 callback_data=f"market_my_item:{listing.id}"
             ))
-
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_seller"))
-
-    await cb.message.edit_text(
-        f"📦 <b>Мои товары</b>\n\n"
-        + (f"У вас нет активных товаров." if not listings else f"Активных: {len(listings)}/5"),
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
+    try:
+        await cb.message.edit_text(
+            f"📦 <b>Мои товары</b>\n\n"
+            + (f"У вас нет активных товаров." if not listings else f"Активных: {len(listings)}/5"),
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("market_my_item:"))
@@ -114,20 +120,25 @@ async def cb_market_my_item(cb: CallbackQuery, session: AsyncSession, user: User
 
     meta_str = ""
     if meta.get("rank"):
-        meta_str = f"\nРанг: {meta['rank']}"
-    elif meta.get("name"):
-        meta_str = f"\nПерсонаж: {meta['name']}"
+        meta_str += f"\nРанг: <b>{meta['rank']}</b>"
+    if meta.get("char_id"):
+        meta_str += f"\nПерсонаж: <b>{html.escape(str(meta['char_id']))}</b>"
+    if meta.get("power"):
+        meta_str += f"\nМощь: <b>{fmt_num(meta['power'])}</b>"
 
-    await cb.message.edit_text(
-        f"📦 <b>Мой товар #{listing.id}</b>\n\n"
-        f"Тип: {label}\n"
-        f"Количество: {listing.item_amount}"
-        f"{meta_str}\n"
-        f"Цена: <b>{fmt_num(listing.price)} NHCoin</b>\n"
-        f"Статус: {'🟢 Активен' if not listing.is_sold else '✅ Продан'}",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
+    try:
+        await cb.message.edit_text(
+            f"📦 <b>Мой товар #{listing.id}</b>\n\n"
+            f"Тип: {label}\n"
+            f"Количество: <b>{listing.item_amount}</b>"
+            f"{meta_str}\n\n"
+            f"Цена: <b>{fmt_num(listing.price)} NHCoin</b>\n"
+            f"Статус: {'🟢 Активен' if not listing.is_sold else '✅ Продан'}",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("market_cancel:"))
@@ -141,6 +152,28 @@ async def cb_market_cancel(cb: CallbackQuery, session: AsyncSession, user: User)
         await cb.answer(result["reason"], show_alert=True)
 
 
+# ── Отмена создания товара ────────────────────────────────────────────────────
+
+@router.callback_query(F.data == "market_create_cancel")
+async def cb_market_create_cancel(cb: CallbackQuery, state: FSMContext):
+    await state.clear()
+    builder = InlineKeyboardBuilder()
+    for item_type, label in ITEM_TYPES.items():
+        builder.row(InlineKeyboardButton(
+            text=label,
+            callback_data=f"market_create_type:{item_type}"
+        ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_seller"))
+    try:
+        await cb.message.edit_text(
+            f"➕ <b>Создать товар</b>\n\nВыбери тип товара:",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
 # ── Создание товара ───────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "market_create")
@@ -152,13 +185,14 @@ async def cb_market_create(cb: CallbackQuery, session: AsyncSession, user: User)
             callback_data=f"market_create_type:{item_type}"
         ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_seller"))
-
-    await cb.message.edit_text(
-        f"➕ <b>Создать товар</b>\n\n"
-        f"Выбери тип товара:",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
+    try:
+        await cb.message.edit_text(
+            f"➕ <b>Создать товар</b>\n\nВыбери тип товара:",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("market_create_type:"))
@@ -167,57 +201,101 @@ async def cb_market_create_type(
 ):
     item_type = cb.data.split(":")[1]
 
-    # Для статистов — выбор ранга
+    # Статисты — выбор ранга
     if item_type == "squad_member":
         builder = InlineKeyboardBuilder()
         for rank in ["S", "A", "B", "C"]:
+            from app.models.squad_member import SquadMember
+            cnt = await session.scalar(
+                select(func.count(SquadMember.id)).where(
+                    SquadMember.user_id == user.id,
+                    SquadMember.rank == rank,
+                )
+            ) or 0
             builder.row(InlineKeyboardButton(
-                text=f"Ранг {rank}",
+                text=f"Ранг {rank} (есть: {cnt})",
                 callback_data=f"market_create_rank:{rank}"
             ))
         builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_create"))
         await state.update_data(item_type=item_type)
-        await cb.message.edit_text(
-            "👥 Выбери ранг статистов:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
+        try:
+            await cb.message.edit_text(
+                "👥 Выбери ранг статистов:",
+                reply_markup=builder.as_markup(),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
         return
 
-    # Для персонажей — показываем список
+    # Персонажи — выбор ранга
     if item_type == "character":
         from app.models.character import UserCharacter
-        result = await session.execute(
-            select(UserCharacter).where(UserCharacter.user_id == user.id).limit(20)
-        )
-        chars = result.scalars().all()
-        if not chars:
+        from app.data.characters import RANK_EMOJI, RANK_CONFIG_MAP
+
+        rank_order = ["absolute", "peak", "legend", "new_legend", "gen_zero",
+                      "strong_king", "king", "boss", "member"]
+
+        builder = InlineKeyboardBuilder()
+        has_any = False
+        for rank in rank_order:
+            cnt = await session.scalar(
+                select(func.count(UserCharacter.id)).where(
+                    UserCharacter.user_id == user.id,
+                    UserCharacter.rank == rank,
+                )
+            ) or 0
+            if cnt > 0:
+                has_any = True
+                emoji = RANK_EMOJI.get(rank, "⭐")
+                label = RANK_CONFIG_MAP[rank].label if rank in RANK_CONFIG_MAP else rank
+                builder.row(InlineKeyboardButton(
+                    text=f"{emoji} {label} (есть: {cnt})",
+                    callback_data=f"market_char_rank:{rank}"
+                ))
+
+        if not has_any:
             await cb.answer("У вас нет персонажей", show_alert=True)
             return
 
-        builder = InlineKeyboardBuilder()
-        for char in chars:
-            builder.row(InlineKeyboardButton(
-                text=f"⭐ {char.name} | 💪 {fmt_num(char.power)}",
-                callback_data=f"market_create_char:{char.character_id}"
-            ))
         builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_create"))
         await state.update_data(item_type=item_type)
-        await cb.message.edit_text(
-            "⭐ Выбери персонажа для продажи:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
+        try:
+            await cb.message.edit_text(
+                "⭐ Выбери ранг персонажа:",
+                reply_markup=builder.as_markup(),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
         return
+
+    # Остальные типы — показываем баланс
+    balance_str = ""
+    if item_type == "tickets":
+        balance_str = f"У вас: <b>{user.tickets}</b> тикетов"
+    elif item_type == "path_points":
+        balance_str = f"У вас: <b>{user.skill_path_points}</b> очков пути"
+    elif item_type == "mastery_points":
+        balance_str = f"У вас: <b>{user.mastery_points}</b> очков мастерства"
+    elif item_type == "ui_fragments":
+        balance_str = f"У вас: <b>{user.ui_fragments}</b> фрагментов УИ"
 
     await state.update_data(item_type=item_type, meta={})
     await state.set_state(MarketFSM.waiting_amount)
-    await cb.message.edit_text(
-        f"➕ <b>{ITEM_TYPES[item_type]}</b>\n\n"
-        f"Введи количество:",
-        reply_markup=back_kb("market_create"),
-        parse_mode="HTML",
-    )
+
+    cancel_kb = InlineKeyboardBuilder()
+    cancel_kb.row(InlineKeyboardButton(text="◀️ Отмена", callback_data="market_create_cancel"))
+    try:
+        await cb.message.edit_text(
+            f"➕ <b>{ITEM_TYPES[item_type]}</b>\n\n"
+            f"{balance_str}\n\n"
+            f"Введи количество:",
+            reply_markup=cancel_kb.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("market_create_rank:"))
@@ -227,52 +305,133 @@ async def cb_market_create_rank(
     rank = cb.data.split(":")[1]
     from app.models.squad_member import SquadMember
     count = await session.scalar(
-        select(SquadMember).where(
+        select(func.count(SquadMember.id)).where(
             SquadMember.user_id == user.id,
             SquadMember.rank == rank,
         )
     ) or 0
 
-    await state.update_data(item_type="squad_member", meta={"rank": rank})
+    if count == 0:
+        await cb.answer(f"У вас нет статистов ранга {rank}", show_alert=True)
+        return
+
+    await state.update_data(item_type="squad_member", meta={"rank": rank}, max_amount=count)
     await state.set_state(MarketFSM.waiting_amount)
-    await cb.message.edit_text(
-        f"👥 <b>Статисты ранга {rank}</b>\n\n"
-        f"Введи количество для продажи:",
-        reply_markup=back_kb("market_create"),
-        parse_mode="HTML",
-    )
+
+    cancel_kb = InlineKeyboardBuilder()
+    cancel_kb.row(InlineKeyboardButton(text="◀️ Отмена", callback_data="market_create_cancel"))
+    try:
+        await cb.message.edit_text(
+            f"👥 <b>Статисты ранга {rank}</b>\n\n"
+            f"У вас: <b>{count}</b> штук\n\n"
+            f"Введи количество для продажи (макс {count}):",
+            reply_markup=cancel_kb.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
 
 
-@router.callback_query(F.data.startswith("market_create_char:"))
-async def cb_market_create_char(
+@router.callback_query(F.data.startswith("market_char_rank:"))
+async def cb_market_char_rank(
     cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext
 ):
-    char_id = int(cb.data.split(":")[1])
+    rank = cb.data.split(":")[1]
+    from app.models.character import UserCharacter
+    from app.data.characters import RANK_EMOJI
+
+    result = await session.execute(
+        select(UserCharacter).where(
+            UserCharacter.user_id == user.id,
+            UserCharacter.rank == rank,
+        )
+    )
+    chars = result.scalars().all()
+
+    if not chars:
+        await cb.answer("Нет персонажей этого ранга", show_alert=True)
+        return
+
+    # Группируем одинаковых персонажей
+    char_map: dict[str, list] = {}
+    for char in chars:
+        if char.character_id not in char_map:
+            char_map[char.character_id] = []
+        char_map[char.character_id].append(char)
+
+    emoji = RANK_EMOJI.get(rank, "⭐")
+    builder = InlineKeyboardBuilder()
+    for char_id, char_list in char_map.items():
+        count = len(char_list)
+        avg_power = int(sum(c.power for c in char_list) / count)
+        builder.row(InlineKeyboardButton(
+            text=f"{emoji} {char_id} x{count} | 💪 {fmt_num(avg_power)}",
+            callback_data=f"market_char_select:{char_id}:{rank}"
+        ))
+
+    builder.row(InlineKeyboardButton(
+        text="◀️ Назад", callback_data="market_create_type:character"
+    ))
+    await state.update_data(item_type="character")
+    try:
+        await cb.message.edit_text(
+            f"{emoji} <b>Персонажи ранга {rank}</b>\n\nВыбери персонажа:",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("market_char_select:"))
+async def cb_market_char_select(
+    cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext
+):
+    parts = cb.data.split(":")
+    char_id = parts[1]
+    rank = parts[2]
+
     from app.models.character import UserCharacter
     result = await session.execute(
         select(UserCharacter).where(
             UserCharacter.user_id == user.id,
             UserCharacter.character_id == char_id,
+            UserCharacter.rank == rank,
         )
     )
-    char = result.scalar_one_or_none()
-    if not char:
+    chars = result.scalars().all()
+
+    if not chars:
         await cb.answer("Персонаж не найден", show_alert=True)
         return
 
+    count = len(chars)
+    avg_power = int(sum(c.power for c in chars) / count)
+
     await state.update_data(
         item_type="character",
-        meta={"char_id": char_id, "name": char.name, "power": char.power, "rarity": char.rarity},
-        amount=1
+        meta={
+            "char_id": char_id,
+            "rank": rank,
+            "power": avg_power,
+        },
+        max_amount=count,
     )
-    await state.set_state(MarketFSM.waiting_price)
-    await cb.message.edit_text(
-        f"⭐ <b>{html.escape(char.name)}</b>\n"
-        f"💪 Мощь: {fmt_num(char.power)}\n\n"
-        f"Введи цену в NHCoin:",
-        reply_markup=back_kb("market_create"),
-        parse_mode="HTML",
-    )
+    await state.set_state(MarketFSM.waiting_amount)
+
+    cancel_kb = InlineKeyboardBuilder()
+    cancel_kb.row(InlineKeyboardButton(text="◀️ Отмена", callback_data="market_create_cancel"))
+    try:
+        await cb.message.edit_text(
+            f"⭐ <b>{html.escape(char_id)}</b> [{rank}]\n"
+            f"💪 Средняя мощь: {fmt_num(avg_power)}\n"
+            f"У вас: <b>{count}</b> шт.\n\n"
+            f"Введи количество для продажи (макс {count}):",
+            reply_markup=cancel_kb.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
 
 
 @router.message(MarketFSM.waiting_amount)
@@ -285,11 +444,21 @@ async def msg_market_amount(
         return
 
     amount = int(text)
+    data = await state.get_data()
+    max_amount = data.get("max_amount")
+
+    if max_amount and amount > max_amount:
+        await message.answer(f"❌ У вас только {max_amount} шт. Введи меньше или равное:")
+        return
+
     await state.update_data(amount=amount)
     await state.set_state(MarketFSM.waiting_price)
+
+    cancel_kb = InlineKeyboardBuilder()
+    cancel_kb.row(InlineKeyboardButton(text="◀️ Отмена", callback_data="market_create_cancel"))
     await message.answer(
         f"💰 Введи цену в NHCoin:",
-        reply_markup=back_kb("market_create"),
+        reply_markup=cancel_kb.as_markup(),
         parse_mode="HTML",
     )
 
@@ -312,7 +481,6 @@ async def msg_market_price(
     result = await market_service.create_listing(
         session, user, item_type, amount, price, meta
     )
-
     await state.clear()
 
     if result["ok"]:
@@ -343,14 +511,16 @@ async def cb_market_buyer(cb: CallbackQuery, session: AsyncSession, user: User):
             callback_data=f"market_browse:{item_type}:0"
         ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_menu"))
-
-    await cb.message.edit_text(
-        f"🛒 <b>Покупатель</b>\n\n"
-        f"💰 Ваши NHCoin: <b>{fmt_num(user.nh_coins)}</b>\n\n"
-        f"Выбери категорию:",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
+    try:
+        await cb.message.edit_text(
+            f"🛒 <b>Покупатель</b>\n\n"
+            f"💰 Ваши NHCoin: <b>{fmt_num(user.nh_coins)}</b>\n\n"
+            f"Выбери категорию:",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("market_browse:"))
@@ -365,9 +535,7 @@ async def cb_market_browse(cb: CallbackQuery, session: AsyncSession, user: User)
         limit=PAGE_SIZE, offset=page * PAGE_SIZE
     )
     total = await session.scalar(
-        __import__("sqlalchemy", fromlist=["select"]).select(
-            __import__("sqlalchemy", fromlist=["func"]).func.count(MarketListing.id)
-        ).where(
+        select(func.count(MarketListing.id)).where(
             MarketListing.item_type == item_type,
             MarketListing.is_sold == False,
             MarketListing.is_cancelled == False,
@@ -380,40 +548,50 @@ async def cb_market_browse(cb: CallbackQuery, session: AsyncSession, user: User)
 
     if not listings:
         builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_buyer"))
-        await cb.message.edit_text(
-            f"🛒 <b>{label}</b>\n\nТоваров нет.",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
+        try:
+            await cb.message.edit_text(
+                f"🛒 <b>{label}</b>\n\nТоваров нет.",
+                reply_markup=builder.as_markup(),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
         return
 
     for listing in listings:
         from app.repositories.user_repo import user_repo
         seller = await user_repo.get_by_id(session, listing.seller_id)
         seller_name = html.escape(seller.full_name) if seller else "Неизвестно"
+        meta = json.loads(listing.item_meta) if listing.item_meta else {}
+        rank_str = f"[{meta.get('rank')}] " if meta.get("rank") else ""
+        char_str = f"{meta.get('char_id')} " if meta.get("char_id") else ""
         builder.row(InlineKeyboardButton(
-            text=f"x{listing.item_amount} — {fmt_num(listing.price)} NHCoin | {seller_name}",
+            text=f"{rank_str}{char_str}x{listing.item_amount} — {fmt_num(listing.price)} | {seller_name}",
             callback_data=f"market_item:{listing.id}"
         ))
 
-    # Навигация
     nav = []
     if page > 0:
-        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"market_browse:{item_type}:{page-1}"))
+        nav.append(InlineKeyboardButton(
+            text="◀️", callback_data=f"market_browse:{item_type}:{page-1}"
+        ))
     if (page + 1) * PAGE_SIZE < total:
-        nav.append(InlineKeyboardButton(text="▶️", callback_data=f"market_browse:{item_type}:{page+1}"))
+        nav.append(InlineKeyboardButton(
+            text="▶️", callback_data=f"market_browse:{item_type}:{page+1}"
+        ))
     if nav:
         builder.row(*nav)
-
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_buyer"))
 
-    await cb.message.edit_text(
-        f"🛒 <b>{label}</b>\n\n"
-        f"Найдено: {total} товаров\n"
-        f"Страница {page+1}",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
+    try:
+        await cb.message.edit_text(
+            f"🛒 <b>{label}</b>\n\n"
+            f"Найдено: {total} товаров | Стр. {page+1}",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("market_item:"))
@@ -434,18 +612,18 @@ async def cb_market_item(cb: CallbackQuery, session: AsyncSession, user: User):
     from app.repositories.user_repo import user_repo
     seller = await user_repo.get_by_id(session, listing.seller_id)
     seller_name = html.escape(seller.full_name) if seller else "Неизвестно"
-    seller_username = f"@{seller.username}" if seller and seller.username else "—"
+    seller_username = f"@{html.escape(seller.username)}" if seller and seller.username else "—"
 
     label = market_service.get_item_label(listing.item_type)
     meta = json.loads(listing.item_meta) if listing.item_meta else {}
 
     meta_str = ""
     if meta.get("rank"):
-        meta_str = f"\nРанг: <b>{meta['rank']}</b>"
-    elif meta.get("name"):
-        meta_str = f"\nПерсонаж: <b>{html.escape(meta['name'])}</b>"
-        if meta.get("power"):
-            meta_str += f"\nМощь: <b>{fmt_num(meta['power'])}</b>"
+        meta_str += f"\nРанг: <b>{meta['rank']}</b>"
+    if meta.get("char_id"):
+        meta_str += f"\nПерсонаж: <b>{html.escape(str(meta['char_id']))}</b>"
+    if meta.get("power"):
+        meta_str += f"\nМощь: <b>{fmt_num(meta['power'])}</b>"
 
     can_afford = "✅" if user.nh_coins >= listing.price else "❌"
 
@@ -460,17 +638,20 @@ async def cb_market_item(cb: CallbackQuery, session: AsyncSession, user: User):
         callback_data=f"market_browse:{listing.item_type}:0"
     ))
 
-    await cb.message.edit_text(
-        f"📦 <b>Товар #{listing.id}</b>\n\n"
-        f"Тип: {label}\n"
-        f"Количество: <b>{listing.item_amount}</b>"
-        f"{meta_str}\n\n"
-        f"💰 Цена: <b>{fmt_num(listing.price)} NHCoin</b>\n"
-        f"👤 Продавец: {seller_name} ({seller_username})\n\n"
-        f"{can_afford} У вас: {fmt_num(user.nh_coins)} NHCoin",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
+    try:
+        await cb.message.edit_text(
+            f"📦 <b>Товар #{listing.id}</b>\n\n"
+            f"Тип: {label}\n"
+            f"Количество: <b>{listing.item_amount}</b>"
+            f"{meta_str}\n\n"
+            f"💰 Цена: <b>{fmt_num(listing.price)} NHCoin</b>\n"
+            f"👤 Продавец: {seller_name} ({seller_username})\n\n"
+            f"{can_afford} У вас: {fmt_num(user.nh_coins)} NHCoin",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("market_buy:"))
@@ -484,7 +665,8 @@ async def cb_market_buy(cb: CallbackQuery, session: AsyncSession, user: User):
 
     label = market_service.get_item_label(result["item_type"])
     await cb.answer(
-        f"✅ Куплено!\n{label} x{result['amount']}\nЗаплачено: {fmt_num(result['price'])} NHCoin",
+        f"✅ Куплено!\n{label} x{result['amount']}\n"
+        f"Заплачено: {fmt_num(result['price'])} NHCoin",
         show_alert=True
     )
     await cb_market_buyer(cb, session, user)
@@ -496,9 +678,12 @@ async def cb_market_buy(cb: CallbackQuery, session: AsyncSession, user: User):
 async def cb_clans_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
-    await cb.message.edit_text(
-        "🏯 <b>Кланы</b>\n\n"
-        "🔧 В разработке...",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
+    try:
+        await cb.message.edit_text(
+            "🏯 <b>Кланы</b>\n\n"
+            "🔧 В разработке...",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass

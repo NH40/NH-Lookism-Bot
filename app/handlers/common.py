@@ -8,6 +8,8 @@ from sqlalchemy import select, func
 from app.models.user import User
 from app.utils.keyboards.common import main_menu_kb, back_kb
 from app.utils.formatters import fmt_num, fmt_power, phase_label
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 import html
 
 router = Router()

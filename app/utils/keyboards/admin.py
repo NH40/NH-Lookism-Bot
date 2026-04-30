@@ -2,17 +2,15 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 
-def admin_main_kb() -> InlineKeyboardMarkup:
+def admin_main_kb():
     builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats"))
     builder.row(InlineKeyboardButton(text="🔍 Найти игрока", callback_data="admin_find"))
-    builder.row(InlineKeyboardButton(text="📢 Рассылка всем", callback_data="admin_broadcast"))
-    builder.row(InlineKeyboardButton(text="👥 Действия со всеми", callback_data="admin_bulk"))
-    builder.row(
-        InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats"),
-        InlineKeyboardButton(text="💾 Бэкап", callback_data="admin_backup"),
-    )
     builder.row(InlineKeyboardButton(text="🔧 Патч", callback_data="admin_patch"))
-    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
+    builder.row(InlineKeyboardButton(text="🎁 Промокоды", callback_data="admin_promos"))
+    builder.row(InlineKeyboardButton(text="📢 Рассылка", callback_data="admin_broadcast"))
+    builder.row(InlineKeyboardButton(text="👥 Действия со всеми", callback_data="admin_bulk"))
+    builder.row(InlineKeyboardButton(text="💾 Бэкапы", callback_data="admin_backup"))
     return builder.as_markup()
 
 

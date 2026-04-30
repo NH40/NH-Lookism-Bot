@@ -383,6 +383,48 @@ async def cb_show_top(cb: CallbackQuery, session: AsyncSession, user: User):
         pass
     await cb.answer()
 
+from aiogram.filters import Command
+
+@router.message(Command("promo"))
+async def cmd_promo(message: Message, session: AsyncSession, user: User, state: FSMContext):
+    from aiogram.fsm.state import State, StatesGroup
+    await state.set_state("waiting_promo")
+    await message.answer(
+        "🎁 Введите промокод:",
+        reply_markup=back_kb("main_menu"),
+    )
+
+@router.message(F.text, flags={"promo": True})
+# Лучше через FSM — добавь в common.py:
+
+class CommonFSM(StatesGroup):
+    waiting_promo = State()
+
+@router.message(Command("promo"))
+async def cmd_promo(message: Message, state: FSMContext):
+    await state.set_state(CommonFSM.waiting_promo)
+    await message.answer("🎁 Введите промокод:")
+
+@router.message(CommonFSM.waiting_promo)
+async def msg_promo(message: Message, session: AsyncSession, user: User, state: FSMContext):
+    from app.services.promo_service import promo_service, REWARD_LABELS
+    await state.clear()
+    code = message.text.strip()
+    result = await promo_service.use_promo(session, user, code)
+    if result["ok"]:
+        from app.utils.formatters import fmt_num
+        await message.answer(
+            f"✅ <b>Промокод активирован!</b>\n\n"
+            f"{result['label']}: <b>+{fmt_num(result['reward_amount'])}</b>",
+            parse_mode="HTML",
+            reply_markup=back_kb("main_menu"),
+        )
+    else:
+        await message.answer(
+            f"❌ {result['reason']}",
+            reply_markup=back_kb("main_menu"),
+            parse_mode="HTML",
+        )
 
 # ── /admin ───────────────────────────────────────────────────────────────────
 

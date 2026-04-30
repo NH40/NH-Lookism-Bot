@@ -17,7 +17,6 @@ from app.middlewares.network_error import NetworkErrorMiddleware
 from app.middlewares.rate_limit import RateLimitMiddleware
 from app.middlewares.network_error import NetworkErrorMiddleware
 from app.handlers import market
-from app.handlers import king_bots
 
 logging.basicConfig(
     level=logging.INFO,
@@ -55,7 +54,6 @@ async def main():
 
     dp.include_router(common.router)
     dp.include_router(attack.router)
-    dp.include_router(king_bots.router)
     
     dp.include_router(business.router)
     dp.include_router(squad.router)

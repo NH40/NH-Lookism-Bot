@@ -9,6 +9,7 @@ from app.models.skill import UserMastery, UserPathSkills
 from app.models.referral import Referral
 from app.models.auction import Auction, AuctionLot, AuctionBid
 from app.models.game_version import GameVersion
+from app.models.market import MarketListing
 
 __all__ = [
     "User", "City", "District", "FistBot",
@@ -16,5 +17,5 @@ __all__ = [
     "UserAchievement", "UserDonatTitle",
     "ActivePotion", "UserMastery", "UserPathSkills",
     "Referral", "Auction", "AuctionLot", "AuctionBid",
-    "GameVersion",
+    "GameVersion", "MarketListing"
 ]

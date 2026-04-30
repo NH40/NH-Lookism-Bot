@@ -25,6 +25,10 @@ def main_menu_kb() -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="⚔️ Рейд",         callback_data="raid_menu"),
     )
     builder.row(
+        InlineKeyboardButton(text="🏪 Биржа", callback_data="market_menu"),
+        InlineKeyboardButton(text="🏯 Кланы", callback_data="clans_menu"),
+    )
+    builder.row(
         InlineKeyboardButton(text="⚙️ Настройки",    callback_data="settings"),
     )
     return builder.as_markup()

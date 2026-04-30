@@ -16,6 +16,7 @@ from aiohttp import TCPConnector
 from app.middlewares.network_error import NetworkErrorMiddleware
 from app.middlewares.rate_limit import RateLimitMiddleware
 from app.middlewares.network_error import NetworkErrorMiddleware
+from app.handlers import market
 
 logging.basicConfig(
     level=logging.INFO,
@@ -63,6 +64,7 @@ async def main():
     dp.include_router(training.router)
     dp.include_router(settings_handler.router)
     dp.include_router(raid.router)
+    dp.include_router(market.router)
     dp.include_router(admin.router)
 
     scheduler = setup_scheduler()

@@ -57,7 +57,8 @@ async def cb_king_bots_menu(cb: CallbackQuery, session: AsyncSession, user: User
             f"🤖 <b>Боты-короли</b>\n\n"
             f"💪 Твоя мощь: {fmt_num(user.combat_power)}"
             f"{cd_str}\n\n"
-            f"Побеждай ботов чтобы получить NHCoin!\n"
+            f"Побеждай ботов чтобы получить города NHCoin!\n"
+            f"Город выдается только после полной пробеды над ботом!\n"
             f"После победы бот уходит в КД 1 час и усиливается.",
             reply_markup=builder.as_markup(),
             parse_mode="HTML",
@@ -191,9 +192,11 @@ async def cb_king_bot_attack(cb: CallbackQuery, session: AsyncSession, user: Use
                     f"💥 Твоя мощь: {fmt_num(result['user_power'])}\n"
                     f"🤖 Мощь бота: {fmt_num(result['bot_power'])}\n\n"
                     f"💰 Получено: <b>+{fmt_num(result['coins_reward'])} NHCoin</b>\n"
-                    f"⚡ +500 влияния\n\n"
+                    f"⚡ +500 влияния\n"
+                    f"🏙 Городов с районами: <b>{result['cities_count']}/10</b>\n\n"
+                    f"{'─' * 20}\n"
                     f"⏳ Бот уходит в КД на 1 час\n"
-                    f"📈 Новая мощь бота: {fmt_num(int(result['bot_power'] * 1.5))}",
+                    f"📈 Новая мощь бота: {fmt_num(int(result['bot_power']))}",
                     reply_markup=builder.as_markup(),
                     parse_mode="HTML",
                 )
@@ -202,7 +205,8 @@ async def cb_king_bot_attack(cb: CallbackQuery, session: AsyncSession, user: Use
         else:
             await cb.answer(
                 f"✅ +{result['gained']} районов!\n"
-                f"{result['captured']}/{result['total']} захвачено",
+                f"{result['captured']}/{result['total']} захвачено"
+                + (f"\n⚡ Доп. атак: {result['extra_attacks_left']}" if result.get('extra_attacks_left', 0) > 0 else ""),
                 show_alert=True
             )
             await cb_king_bot_info(cb, session, user)

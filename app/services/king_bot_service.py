@@ -6,23 +6,20 @@ from app.models.user import User
 from app.models.king_bot import KingBot
 from app.constants.king_bots import KING_BOT_NAMES, KING_BOT_SLOTS, KING_BOT_POWER_GROWTH
 from app.services.cooldown_service import cooldown_service
+from app.services.game.base import GameBase
 
 
-class KingBotService:
+class KingBotService(GameBase):
 
     async def get_or_create_bots(
         self, session: AsyncSession, user: User
     ) -> list[KingBot]:
         result = await session.execute(
-            select(KingBot).where(
-                KingBot.user_id == user.id
-            ).order_by(KingBot.slot)
+            select(KingBot).where(KingBot.user_id == user.id).order_by(KingBot.slot)
         )
         bots = result.scalars().all()
 
-        # Создаём недостающих ботов
         existing_slots = {b.slot for b in bots}
-        new_bots = []
         for cfg in KING_BOT_SLOTS:
             if cfg["slot"] not in existing_slots:
                 bot = KingBot(
@@ -34,18 +31,13 @@ class KingBotService:
                     districts_captured=0,
                 )
                 session.add(bot)
-                new_bots.append(bot)
 
-        if new_bots:
-            await session.flush()
-            result = await session.execute(
-                select(KingBot).where(
-                    KingBot.user_id == user.id
-                ).order_by(KingBot.slot)
-            )
-            bots = result.scalars().all()
+        await session.flush()
 
-        return list(bots)
+        result = await session.execute(
+            select(KingBot).where(KingBot.user_id == user.id).order_by(KingBot.slot)
+        )
+        return result.scalars().all()
 
     async def attack_bot(
         self, session: AsyncSession, user: User, bot_id: int
@@ -62,8 +54,8 @@ class KingBotService:
 
         now = datetime.now(timezone.utc)
 
-        # Проверяем КД
-        if bot.cooldown_until and bot.cooldown_until > now:
+        # КД бота (1 час после победы)
+        if bot.is_defeated and bot.cooldown_until and bot.cooldown_until > now:
             remaining = int((bot.cooldown_until - now).total_seconds())
             return {
                 "ok": False,
@@ -71,14 +63,13 @@ class KingBotService:
                 "cd": remaining,
             }
 
-        # Сбрасываем флаг победы если КД прошёл
+        # Сбрасываем флаг после КД
         if bot.is_defeated and (not bot.cooldown_until or bot.cooldown_until <= now):
             bot.is_defeated = False
             bot.districts_captured = 0
 
-        # Проверяем КД атаки игрока
-        from app.services.cooldown_service import cooldown_service
-        cd_key = f"king_bot_attack:{user.id}"
+        # ── Общий КД атаки (тот же что у городов) ──────────────────────────
+        cd_key = cooldown_service.attack_key(user.id)
         if await cooldown_service.is_on_cooldown(cd_key):
             ttl = await cooldown_service.get_ttl(cd_key)
             return {
@@ -92,8 +83,6 @@ class KingBotService:
         win = user_power >= bot.power
 
         if win:
-            # Захватываем районы
-            cfg = KING_BOT_SLOTS[bot.slot - 1]
             districts_per_attack = random.randint(2, 6)
             remaining_districts = bot.districts_total - bot.districts_captured
             gained = min(districts_per_attack, remaining_districts)
@@ -101,21 +90,30 @@ class KingBotService:
 
             fully_captured = bot.districts_captured >= bot.districts_total
 
+            coins_reward = 0
             if fully_captured:
-                # Бот побеждён — ставим КД и усиливаем
+                old_power = bot.power
                 bot.is_defeated = True
                 bot.cooldown_until = now + timedelta(hours=1)
                 bot.power = int(bot.power * KING_BOT_POWER_GROWTH)
                 bot.districts_captured = 0
 
+                # ── Выдаём реальный город с районами ──────────────────────
+                await self._give_king_city(session, user, bot)
+
                 user.total_wins += 1
                 user.influence += 500
-                user.nh_coins += bot.power // 10
+                coins_reward = old_power // 10
+                user.nh_coins += coins_reward
 
-            # КД атаки игрока
-            from app.repositories.city_repo import city_repo as cr
-            attack_cd = self._get_attack_cd(user)
-            await cooldown_service.set_cooldown(cd_key, attack_cd)
+                # Пересчитываем реальное кол-во городов
+                user.king_cities_count = await self._count_my_king_cities(session, user.id)
+
+                if user.king_cities_count >= 10:
+                    return await self._promote_to_fist(session, user)
+
+            # ── Используем общий _handle_attack_cd — он обрабатывает extra_attack ──
+            await self._handle_attack_cd(session, user, cd_key, "king")
             await session.flush()
 
             return {
@@ -128,12 +126,13 @@ class KingBotService:
                 "bot_name": bot.name,
                 "user_power": user_power,
                 "bot_power": bot.power,
-                "coins_reward": bot.power // 10 if fully_captured else 0,
+                "coins_reward": coins_reward,
+                "cities_count": user.king_cities_count,
+                "extra_attacks_left": user.extra_attack_count,
             }
         else:
-            # КД атаки игрока
-            attack_cd = self._get_attack_cd(user)
-            await cooldown_service.set_cooldown(cd_key, attack_cd)
+            # При поражении тоже используем общий КД
+            await self._handle_attack_cd(session, user, cd_key, "king")
             await session.flush()
 
             return {
@@ -145,19 +144,80 @@ class KingBotService:
                 "bot_name": bot.name,
                 "user_power": user_power,
                 "bot_power": bot.power,
+                "extra_attacks_left": user.extra_attack_count,
             }
+    
+    async def _give_king_city(
+        self, session: AsyncSession, user: User, bot: KingBot
+    ) -> None:
+        """Создаём реальный город с районами для игрока."""
+        from app.models.city import City, District
+        from app.repositories.city_repo import city_repo
 
-    def _get_attack_cd(self, user: User) -> int:
-        """КД атаки на бота (в секундах) — такой же как обычная атака."""
-        return 3600  # 1 час
+        # Ищем свободный город в секторе игрока
+        sector = user.sector or "Н"
+        cities = await city_repo.get_available_king_cities(session, sector)
 
-    def format_bot_status(self, bot: KingBot) -> str:
+        target_city = None
+        for city in cities:
+            # Берём город где у игрока ещё нет районов
+            from sqlalchemy import select, func
+            my_in_city = await session.scalar(
+                select(func.count(District.id)).where(
+                    District.owner_id == user.id,
+                    District.city_id == city.id,
+                    District.is_captured == True,
+                )
+            ) or 0
+            if my_in_city == 0:
+                target_city = city
+                break
+
+        if not target_city:
+            # Берём первый попавшийся город
+            if cities:
+                target_city = cities[0]
+            else:
+                return
+
+        # Инициализируем районы города
+        await city_repo.init_city_districts(session, target_city)
+
+        # Захватываем районы бота (districts_total)
+        districts_to_capture = bot.districts_total
+        captured = 0
+
+        from sqlalchemy import select
+        from app.models.city import District
+
+        districts_r = await session.execute(
+            select(District).where(
+                District.city_id == target_city.id,
+                District.is_captured == False,
+                District.owner_id == None,
+            ).order_by(District.number).limit(districts_to_capture)
+        )
+        districts = districts_r.scalars().all()
+
+        for d in districts:
+            d.owner_id = user.id
+            d.is_captured = True
+            target_city.captured_districts += 1
+            captured += 1
+
+        if captured > 0 and not target_city.owner_id:
+            target_city.owner_id = user.id
+
+        await session.flush()
+
+    def format_bot_status(self, bot: KingBot, user_power: int = 0) -> str:
         now = datetime.now(timezone.utc)
         if bot.is_defeated and bot.cooldown_until and bot.cooldown_until > now:
             remaining = int((bot.cooldown_until - now).total_seconds())
             return f"⏳ КД: {cooldown_service.format_ttl(remaining)}"
         pct = int(bot.districts_captured / bot.districts_total * 100) if bot.districts_total > 0 else 0
-        return f"{bot.districts_captured}/{bot.districts_total} районов ({pct}%)"
+        can = "✅" if user_power >= bot.power else "❌"
+        return f"{can} {bot.districts_captured}/{bot.districts_total}р ({pct}%)"
 
 
 king_bot_service = KingBotService()

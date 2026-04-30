@@ -1,7 +1,7 @@
 from typing import Callable, Any, Awaitable
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
-from aiogram.exceptions import TelegramNetworkError
+from aiogram.exceptions import TelegramNetworkError, TelegramBadRequest
 import logging
 
 logger = logging.getLogger(__name__)
@@ -17,5 +17,10 @@ class NetworkErrorMiddleware(BaseMiddleware):
         try:
             return await handler(event, data)
         except TelegramNetworkError as e:
-            logger.warning(f"Network error during update handling: {e}")
+            logger.warning(f"Network error: {e}")
             return None
+        except TelegramBadRequest as e:
+            if "query is too old" in str(e) or "query ID is invalid" in str(e):
+                logger.debug(f"Old query ignored: {e}")
+                return None
+            raise

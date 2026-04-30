@@ -363,27 +363,14 @@ async def cb_ui_settings(cb: CallbackQuery, session: AsyncSession, user: User):
         + f"{'✅' if has_4 else '🔒'} Авто-прокрутка" + (f": {'✅' if user.ui_auto_pull else '❌'}" if has_4 else " (УИ IV)")
     )
 
-    await cb.message.edit_text(
-        text,
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
-
-    await cb.message.edit_text(
-        f"👁 <b>Ультра Инстинкт</b> — {ui_level_str}{tui_str}\n\n"
-        f"Настройки автоматизации:\n"
-        f"{'✅' if (user.ui_level >= 1 or user.ui_is_donat) else '🔒'} Авто-вербовка"
-        + (f": {status(user.ui_auto_recruit)}" if user.ui_level >= 1 or user.ui_is_donat else " (УИ I)") + "\n"
-        f"{'✅' if (user.ui_level >= 2 or user.ui_is_donat) else '🔒'} Авто-тренировка"
-        + (f": {status(user.ui_auto_train)}" if user.ui_level >= 2 or user.ui_is_donat else " (УИ II)") + "\n"
-        f"{'✅' if (user.ui_level >= 3 or user.ui_is_donat) else '🔒'} Авто-тикеты"
-        + (f": {status(user.ui_auto_ticket)}" if user.ui_level >= 3 or user.ui_is_donat else " (УИ III)") + "\n"
-        f"{'✅' if (user.ui_level >= 4 or user.ui_is_donat) else '🔒'} Авто-прокрутка"
-        + (f": {status(user.ui_auto_pull)}" if user.ui_level >= 4 or user.ui_is_donat else " (УИ IV)"),
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
-
+    try:
+        await cb.message.edit_text(
+            text,
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
 
 @router.callback_query(F.data == "toggle_ui_recruit")
 async def toggle_ui_recruit(cb: CallbackQuery, session: AsyncSession, user: User):

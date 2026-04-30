@@ -235,8 +235,12 @@ async def build_attack_menu(
                 ),
                 callback_data=f"king_attack:{city.id}"
             )
-
+        
         builder.adjust(1)
+        builder.row(InlineKeyboardButton(
+            text="🤖 Боты-короли",
+            callback_data="king_bots_menu"
+        ))
         builder.row(InlineKeyboardButton(
             text="◀️ Главное меню", callback_data="main_menu"
         ))

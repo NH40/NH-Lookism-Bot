@@ -10,6 +10,7 @@ from app.models.referral import Referral
 from app.models.auction import Auction, AuctionLot, AuctionBid
 from app.models.game_version import GameVersion
 from app.models.market import MarketListing
+from app.models.king_bot import KingBot
 
 __all__ = [
     "User", "City", "District", "FistBot",
@@ -17,5 +18,5 @@ __all__ = [
     "UserAchievement", "UserDonatTitle",
     "ActivePotion", "UserMastery", "UserPathSkills",
     "Referral", "Auction", "AuctionLot", "AuctionBid",
-    "GameVersion", "MarketListing"
+    "GameVersion", "MarketListing", "KingBot"
 ]

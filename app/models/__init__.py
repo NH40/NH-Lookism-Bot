@@ -12,6 +12,7 @@ from app.models.game_version import GameVersion
 from app.models.market import MarketListing
 from app.models.king_bot import KingBot
 from app.models.promo import PromoCode, PromoUse
+from app.models.daily_quest import DailyQuest
 
 __all__ = [
     "User", "City", "District", "FistBot",
@@ -19,5 +20,5 @@ __all__ = [
     "UserAchievement", "UserDonatTitle",
     "ActivePotion", "UserMastery", "UserPathSkills",
     "Referral", "Auction", "AuctionLot", "AuctionBid",
-    "GameVersion", "MarketListing", "KingBot", "PromoCode", "PromoUse",
+    "GameVersion", "MarketListing", "KingBot", "PromoCode", "PromoUse", "DailyQuest"
 ]

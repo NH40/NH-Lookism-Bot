@@ -66,6 +66,10 @@ async def cb_squad(cb: CallbackQuery, session: AsyncSession, user: User):
 async def cb_do_recruit(cb: CallbackQuery, session: AsyncSession, user: User):
     result = await squad_service.recruit(session, user)
     if not result["ok"]:
+        # Прогресс заданий
+        from app.services.quest_service import quest_service
+        await quest_service.add_progress(session, user, "recruit", amount=result["count"])
+
         await cb.answer(result["reason"], show_alert=True)
         return
 
@@ -100,6 +104,10 @@ async def cb_do_recruit(cb: CallbackQuery, session: AsyncSession, user: User):
 async def cb_do_train(cb: CallbackQuery, session: AsyncSession, user: User):
     result = await squad_service.train(session, user)
     if not result["ok"]:
+        # Прогресс заданий
+        from app.services.quest_service import quest_service
+        await quest_service.add_progress(session, user, "train")
+
         await cb.answer(result["reason"], show_alert=True)
         return
 

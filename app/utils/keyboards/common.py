@@ -29,6 +29,9 @@ def main_menu_kb() -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="🏯 Кланы", callback_data="clans_menu"),
     )
     builder.row(
+        InlineKeyboardButton(text="📋 Задания", callback_data="daily_quests"),
+    )
+    builder.row(
         InlineKeyboardButton(text="⚙️ Настройки",    callback_data="settings"),
     )
     return builder.as_markup()

@@ -2,6 +2,7 @@ from aiogram import Router, F
 from aiogram.types import CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton
+from app.services import quest_service
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime, timezone, timedelta
@@ -175,7 +176,9 @@ async def cb_king_bot_attack(cb: CallbackQuery, session: AsyncSession, user: Use
         await cb.answer(result["reason"], show_alert=True)
         return
 
+    await quest_service.add_progress(session, user, "attacks")
     if result["win"]:
+        await quest_service.add_progress(session, user, "wins")
         if result["fully_captured"]:
             builder = InlineKeyboardBuilder()
             builder.row(InlineKeyboardButton(

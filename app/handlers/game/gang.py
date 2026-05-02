@@ -10,6 +10,7 @@ from app.services.cooldown_service import cooldown_service
 from app.repositories.city_repo import city_repo
 from app.utils.keyboards.common import back_kb
 from app.utils.formatters import fmt_num, fmt_ttl
+from app.services.quest_service import quest_service
 
 router = Router()
 
@@ -166,7 +167,9 @@ async def cb_do_attack(cb: CallbackQuery, session: AsyncSession, user: User):
     builder.row(InlineKeyboardButton(text="⚔️ Атаковать снова", callback_data="attack"))
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
 
+    await quest_service.add_progress(session, user, "attacks")
     if result["win"]:
+        await quest_service.add_progress(session, user, "wins")
         crit_str = " ⚡<b>КРИТ!</b>" if result.get("is_crit") else ""
         text = (
             f"✅ <b>Победа!{crit_str}</b>\n\n"

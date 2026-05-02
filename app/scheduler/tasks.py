@@ -14,9 +14,12 @@ async def income_tick():
         async with session.begin():
             from app.repositories.user_repo import user_repo
             users = await user_repo.get_all_with_income(session)
+            from app.services.quest_service import quest_service
             for user in users:
                 try:
-                    await business_service.tick_income(session, user)
+                    earned = await business_service.tick_income(session, user)
+                    if earned and earned > 0:
+                        await quest_service.add_progress(session, user, "income", amount=earned)
                 except Exception as e:
                     logger.error(f"income_tick error for {user.id}: {e}")
 

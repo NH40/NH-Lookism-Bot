@@ -41,19 +41,19 @@ CLAN_SHOP_ITEMS: list[ClanShopItem] = [
     ClanShopItem("tickets_10_all", "🎟 10 тикетов всем","Выдать 10 тикетов всем",25_000_000, "tickets", "tickets", 10),
 
     # ── Зелья ─────────────────────────────────────────────────────────────────
-    ClanShopItem("potion_combat_all",    "⚔️ Зелье силы всем",       "Боевая мощь +30% на 30 мин всем",     1_000_000, "potions", "potion", "potion_combat"),
-    ClanShopItem("potion_income_all",    "💰 Зелье богатства всем",  "Доход +50% на 60 мин всем",           800_000,   "potions", "potion", "potion_income"),
-    ClanShopItem("potion_influence_all", "⚡ Зелье влияния всем",    "Влияние +40% на 45 мин всем",         700_000,   "potions", "potion", "potion_influence"),
-    ClanShopItem("potion_training_all",  "🏋 Зелье тренировки всем", "Охват тренировки +25% на 60 мин всем",600_000,  "potions", "potion", "potion_training"),
-    ClanShopItem("potion_luck_all",      "🍀 Зелье удачи всем",      "Шанс тикета +20% на 30 мин всем",     500_000,   "potions", "potion", "potion_luck"),
+    ClanShopItem("potion_combat_all",    "⚔️ Зелье силы всем",       "Боевая мощь +30% на 30 мин всем",     125_000, "potions", "potion", "potion_combat"),
+    ClanShopItem("potion_income_all",    "💰 Зелье богатства всем",  "Доход +50% на 60 мин всем",           500_000,   "potions", "potion", "potion_income"),
+    ClanShopItem("potion_influence_all", "⚡ Зелье влияния всем",    "Влияние +40% на 45 мин всем",         90_000,   "potions", "potion", "potion_influence"),
+    ClanShopItem("potion_training_all",  "🏋 Зелье тренировки всем", "Охват тренировки +25% на 60 мин всем",65_000,  "potions", "potion", "potion_training"),
+    ClanShopItem("potion_luck_all",      "🍀 Зелье удачи всем",      "Шанс тикета +20% на 30 мин всем",     60_000,   "potions", "potion", "potion_luck"),
 
     # ── Статисты ──────────────────────────────────────────────────────────────
-    ClanShopItem("squad_s_all",   "🟥 100×S всем",   "100 статистов S всем",   1_000_000,  "squad", "squad", {"rank": "S",   "amount": 100}),
-    ClanShopItem("squad_ss_all",  "💠 50×SS всем",   "50 статистов SS всем",   2_500_000,  "squad", "squad", {"rank": "SS",  "amount": 50}),
-    ClanShopItem("squad_sss_all", "🔷 30×SSS всем",  "30 статистов SSS всем",  3_000_000, "squad", "squad", {"rank": "SSS", "amount": 30}),
-    ClanShopItem("squad_sr_all",  "🌟 20×SR всем",   "20 статистов SR всем",   4_000_000, "squad", "squad", {"rank": "SR",  "amount": 20}),
-    ClanShopItem("squad_ssr_all", "✨ 10×SSR всем",  "10 статистов SSR всем", 5_000_000, "squad", "squad", {"rank": "SSR", "amount": 10}),
-    ClanShopItem("squad_ur_all",  "💎 5×UR всем",    "5 статистов UR всем",   8_000_000, "squad", "squad", {"rank": "UR",  "amount": 5}),
+    ClanShopItem("squad_s_all",   "🟥 100×S всем",   "100 статистов S всем",   900_000,  "squad", "squad", {"rank": "S",   "amount": 100}),
+    ClanShopItem("squad_ss_all",  "💠 100×SS всем",   "100 статистов SS всем",   1_000_000,  "squad", "squad", {"rank": "SS",  "amount": 100}),
+    ClanShopItem("squad_sss_all", "🔷 100×SSS всем",  "100 статистов SSS всем",  1_500_000, "squad", "squad", {"rank": "SSS", "amount": 100}),
+    ClanShopItem("squad_sr_all",  "🌟 100×SR всем",   "100 статистов SR всем",   2_200_000, "squad", "squad", {"rank": "SR",  "amount": 100}),
+    ClanShopItem("squad_ssr_all", "✨ 100×SSR всем",  "100 статистов SSR всем", 2_500_000, "squad", "squad", {"rank": "SSR", "amount": 100}),
+    ClanShopItem("squad_ur_all",  "💎 100×UR всем",    "100 статистов UR всем",   3_000_000, "squad", "squad", {"rank": "UR",  "amount": 100}),
 
     # ── Персонажи ─────────────────────────────────────────────────────────────
     ClanShopItem("char_member_all",    "⬜ Персонаж member всем",    "Случайный member всем",    2_000_000,   "character", "character", "member"),
@@ -64,9 +64,9 @@ CLAN_SHOP_ITEMS: list[ClanShopItem] = [
     ClanShopItem("char_newlegend_all", "🟥 Персонаж new_legend всем","Случайный new_legend всем",60_000_000,  "character", "character", "new_legend"),
 
     # ── Аукцион ───────────────────────────────────────────────────────────────
-    ClanShopItem("auction_common",    "🏛 Аукцион (обычный)",    "Аукцион обычного тира",    1_000_000,  "auction", "auction", "common"),
-    ClanShopItem("auction_rare",      "🏛 Аукцион (редкий)",     "Аукцион редкого тира",     3_000_000,  "auction", "auction", "rare"),
-    ClanShopItem("auction_epic",      "🏛 Аукцион (эпический)",  "Аукцион эпического тира",  8_000_000,  "auction", "auction", "epic"),
+    ClanShopItem("auction_common",    "🏛 Аукцион (обычный)",    "Аукцион обычного тира",    1_500_000,  "auction", "auction", "common"),
+    ClanShopItem("auction_rare",      "🏛 Аукцион (редкий)",     "Аукцион редкого тира",     7_500_000,  "auction", "auction", "rare"),
+    ClanShopItem("auction_epic",      "🏛 Аукцион (эпический)",  "Аукцион эпического тира",  20_000_000,  "auction", "auction", "epic"),
 ]
 
 CLAN_SHOP_MAP: dict[str, ClanShopItem] = {i.item_id: i for i in CLAN_SHOP_ITEMS}
@@ -102,14 +102,14 @@ CLAN_AUCTION_REWARDS = {
 
 CLAN_UPGRADES: list[ClanUpgrade] = [
     # ── Места ─────────────────────────────────────────────────────────────────
-    ClanUpgrade("slot_1",  "👤 +1 место",   "+1 слот для участника",   500_000,    "upgrades", "slots", 1,  25),
-    ClanUpgrade("slot_3",  "👥 +3 места",   "+3 слота для участников", 1_200_000,  "upgrades", "slots", 3,  25),
-    ClanUpgrade("slot_5",  "👥 +5 мест",    "+5 слотов для участников",1_800_000,  "upgrades", "slots", 5,  25),
-    ClanUpgrade("slot_10", "👥 +10 мест",   "+10 слотов",              3_000_000,  "upgrades", "slots", 10, 25),
+    ClanUpgrade("slot_1",  "👤 +1 место",   "+1 слот для участника",   2_500_000,    "upgrades", "slots", 1,  25),
+    ClanUpgrade("slot_3",  "👥 +3 места",   "+3 слота для участников", 5_000_000,  "upgrades", "slots", 3,  25),
+    ClanUpgrade("slot_5",  "👥 +5 мест",    "+5 слотов для участников",10_000_000,  "upgrades", "slots", 5,  25),
+    ClanUpgrade("slot_10", "👥 +10 мест",   "+10 слотов",              15_000_000,  "upgrades", "slots", 10, 25),
 
     # ── Множители (по 1 разу) ─────────────────────────────────────────────────
-    ClanUpgrade("mult_income",  "💰 Доход +5%",      "+5% к доходу всем участникам",       2_000_000, "upgrades", "income",  5, 1),
-    ClanUpgrade("mult_ticket",  "🎟 Тикет +5%",      "+5% к шансу тикета всем участникам", 2_000_000, "upgrades", "ticket",  5, 1),
+    ClanUpgrade("mult_income",  "💰 Доход +5%",      "+5% к доходу всем участникам",       4_000_000, "upgrades", "income",  5, 1),
+    ClanUpgrade("mult_ticket",  "🎟 Тикет +5%",      "+5% к шансу тикета всем участникам", 8_000_000, "upgrades", "ticket",  5, 1),
     ClanUpgrade("mult_train",   "🏋 Тренировка +5%", "+5% к тренировкам всем участникам",  2_000_000, "upgrades", "train",   5, 1),
 ]
 

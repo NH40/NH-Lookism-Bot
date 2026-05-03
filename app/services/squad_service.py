@@ -191,8 +191,8 @@ class SquadService:
 
         # Охват тренировки (% от кандидатов)
         train_bonus = await potion_service.get_effective_train_bonus(session, user)
-        coverage_pct = min(100, 10 + train_bonus)
-        count_to_train = max(1, int(len(candidates) * coverage_pct / 100))
+        clan_train = getattr(user, 'clan_train_bonus', 0)
+        coverage_pct = min(100, 10 + train_bonus + clan_train)
 
         # Случайный выбор
         to_train = random.sample(candidates, min(count_to_train, len(candidates)))

@@ -30,7 +30,7 @@ class DeckService:
 
         # Шанс тикета
         chance = await potion_service.get_effective_ticket_chance(session, user)
-        chance = min(95, chance + user.prestige_ticket_bonus)
+        chance = min(95, chance + user.prestige_ticket_bonus + getattr(user, 'clan_ticket_bonus', 0))
         roll = random.randint(1, 100)
         got = roll <= chance
 

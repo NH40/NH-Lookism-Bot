@@ -120,10 +120,20 @@ class AdminService:
             if extra > 0:
                 user.tickets = min(user.tickets + extra, user.max_tickets)
 
+        # ── Пересчёт боевой мощи кланов ──────────────────────────────────────────
+        from app.models.clan import Clan, ClanMember
+        from app.services.clan_service import clan_service
+
+        all_clans_r = await session.execute(select(Clan))
+        all_clans = all_clans_r.scalars().all()
+        for clan in all_clans:
+            await clan_service.recalc_power(session, clan)
+
         # ── Версия ────────────────────────────────────────────────────────────────
         from app.models.game_version import GameVersion
         gv = GameVersion(version=version, patch_notes=f"Патч {version}")
         session.add(gv)
+
         await session.flush()
 
         return len(users)

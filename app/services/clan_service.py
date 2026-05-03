@@ -26,11 +26,11 @@ class ClanService:
         return result.scalars().all()
 
     async def recalc_power(self, session: AsyncSession, clan: Clan) -> None:
-        from app.models.user import User
         members = await self.get_clan_members(session, clan.id)
         user_ids = [m.user_id for m in members]
         if not user_ids:
             clan.combat_power = 0
+            await session.flush()
             return
         total = await session.scalar(
             select(func.sum(User.combat_power)).where(User.id.in_(user_ids))

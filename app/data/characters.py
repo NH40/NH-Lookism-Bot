@@ -20,7 +20,7 @@ CHARACTER_RANKS: list[CharacterRankConfig] = [
     CharacterRankConfig("new_legend",  "Новая легенда",        30000,   50000,   2.1),
     CharacterRankConfig("legend",      "Легенда",              50000,   900000,  0.3),
     CharacterRankConfig("peak",        "Вершина",              1000000, 2000000, 0.15),
-    CharacterRankConfig("absolute",    "Абсолют",              5000000, 5000000, 0.02),
+    CharacterRankConfig("absolute",    "Абсолют",              5000000, 5000000, 0.01),
 ]
 
 RANK_CONFIG_MAP: dict[str, CharacterRankConfig] = {
@@ -161,7 +161,9 @@ CHARACTERS: list[dict] = [
     {"name": "Табаско (Unlucky)", "rank": "absolute", "power":  120000001, "desc": "Тот кому больше всех невезло на баги."},
     {"name": "Malosolny Ogurchik (Emperor)", "rank": "absolute", "power": 130000000, "desc": "Огурчик ставший первым императором в истории бота."},
     {"name": "Quan’de Manchesten (100M)", "rank": "absolute", "power": 200000000, "desc": "Топ 1 игрок по боевой мощи набравший 100 миллионов очков забравший топ 1 дважды подряд, и главное ПЕРВЫЙ ДОНАТЕР"},
-    {"name": "Менеджер (Fair)", "rank": "absolute", "power": -10000000, "desc": "Большой босс решил что ты и так слишком хорошо живешь, покупайте донаты >:)"} 
+    {"name": "Менеджер (Fair)", "rank": "absolute", "power": -10000000, "desc": "Большой босс решил что ты и так слишком хорошо живешь, покупайте донаты >:)"},
+    {"name": "Никита (Despair)", "rank": "absolute", "power": 250000000, "desc": "Когда приходит он всех ждет абсолютное отчайние, первый игрок набравший миллиард боевой мощи, сектор в котором он появляться полностью прекращает свое развитие. Абсолютная мощь - Никита."},
+    {"name": "Архенгел (VVIP)", "rank": "absolute", "power": 250000000, "desc": "Пришел увидел победил, первый VVIP игрок собравший все тиутлы и получивший титул VVIP"} 
 ]
 
 # Суммарный вес для гачи

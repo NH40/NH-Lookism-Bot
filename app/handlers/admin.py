@@ -632,9 +632,28 @@ async def cb_admin_patch_confirm(cb: CallbackQuery, session: AsyncSession, user:
     if not is_admin(user.tg_id):
         return
     version = cb.data.split(":", 1)[1]
+
+    # Получаем топ ДО сброса для уведомлений
+    from sqlalchemy import select
+    from app.models.user import User as UserModel
+    from app.models.clan import Clan, ClanMember
+
+    top_r = await session.execute(
+        select(UserModel).order_by(UserModel.combat_power.desc()).limit(10)
+    )
+    top_players = top_r.scalars().all()
+    top_rewards = {0: 10, 1: 9, 2: 8, 3: 7, 4: 6, 5: 5, 6: 4, 7: 4, 8: 3, 9: 3}
+
+    top_clans_r = await session.execute(
+        select(Clan).order_by(Clan.combat_power.desc()).limit(5)
+    )
+    top_clans = top_clans_r.scalars().all()
+    clan_rewards = {0: 8, 1: 6, 2: 5, 3: 4, 4: 3}
+
     count = await admin_service.patch_reset_progress(session, version)
     bot = cb.bot
-    from app.models.user import User as UserModel
+
+    # Рассылка всем
     users_r = await session.execute(
         select(UserModel).where(UserModel.notifications_enabled == True)
     )
@@ -650,9 +669,51 @@ async def cb_admin_patch_confirm(cb: CallbackQuery, session: AsyncSession, user:
             )
         except Exception:
             pass
+
+    # Уведомляем топ-10 игроков
+    for i, u in enumerate(top_players):
+        tickets = top_rewards.get(i, 3)
+        try:
+            await bot.send_message(
+                u.tg_id,
+                f"🏆 <b>Награда за топ-{i+1} перед патчем!</b>\n\n"
+                f"Вы заняли <b>#{i+1} место</b> по боевой мощи.\n"
+                f"🎟 Получено: <b>+{tickets} тикетов</b>",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+    # Уведомляем топ-5 кланов
+    for i, clan in enumerate(top_clans):
+        tickets = clan_rewards.get(i, 3)
+        members_r = await session.execute(
+            select(ClanMember).where(ClanMember.clan_id == clan.id)
+        )
+        for member in members_r.scalars().all():
+            member_user = await session.scalar(
+                select(UserModel).where(UserModel.id == member.user_id)
+            )
+            if not member_user:
+                continue
+            try:
+                await bot.send_message(
+                    member_user.tg_id,
+                    f"🏯 <b>Награда клану {html.escape(clan.name)} за топ-{i+1}!</b>\n\n"
+                    f"Ваш клан занял <b>#{i+1} место</b> по боевой мощи.\n"
+                    f"🎟 Получено: <b>+{tickets} тикетов</b>\n"
+                    f"🏦 Казна клана обнулена.",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+
     try:
         await cb.message.edit_text(
-            f"✅ <b>Патч {version} применён!</b>\n\nСброшено: {count} игроков",
+            f"✅ <b>Патч {version} применён!</b>\n\n"
+            f"Сброшено: {count} игроков\n"
+            f"🏆 Топ-10 игроков получили тикеты\n"
+            f"🏯 Топ-5 кланов получили тикеты, казны обнулены",
             reply_markup=back_kb("admin_main"),
             parse_mode="HTML",
         )

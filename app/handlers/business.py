@@ -60,6 +60,8 @@ async def _show_business_main(
         bonuses.append(f"  📈 Бонус: +{info['total_bonus_percent']}%")
     if info['potion_bonus']:
         bonuses.append(f"  🧪 Зелье: +{info['potion_bonus']}%")
+    if info.get('clan_income_bonus'):
+        bonuses.append(f"  🏯 Клан: +{info['clan_income_bonus']}%")
     if info['district_multiplier'] != 1.0:
         bonuses.append(f"  ×{info['district_multiplier']:.1f} мультипликатор")
     bonus_str = ("\n" + "\n".join(bonuses)) if bonuses else ""
@@ -85,7 +87,6 @@ async def _show_business_main(
         )
     except Exception:
         pass
-
 
 @router.callback_query(F.data == "business")
 async def cb_business(cb: CallbackQuery, session: AsyncSession, user: User):

@@ -254,7 +254,7 @@ async def cb_clan_request(cb: CallbackQuery, session: AsyncSession, user: User):
     from app.bot_instance import get_bot
     bot = get_bot()
     owner = await session.scalar(select(User).where(User.id == clan.owner_id))
-    if bot and owner and owner.notifications_enabled:
+    if bot and owner:
         builder = InlineKeyboardBuilder()
         builder.row(InlineKeyboardButton(
             text="✅ Принять", callback_data=f"clan_accept_req:{result['request_id']}"
@@ -284,13 +284,67 @@ async def cb_clan_request(cb: CallbackQuery, session: AsyncSession, user: User):
 async def cb_clan_invite(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
     clan = await clan_service.get_user_clan(session, user.id)
     if not clan or clan.owner_id != user.id:
-        await cb.answer("Только владелец может приглашать", show_alert=True)
+        await cb.answer("Только владелец может управлять приглашениями", show_alert=True)
         return
 
+    # Входящие заявки
+    pending_requests = await session.execute(
+        select(ClanInvite).where(
+            ClanInvite.clan_id == clan.id,
+            ClanInvite.invite_type == "request",
+            ClanInvite.is_pending == True,
+        )
+    )
+    requests = pending_requests.scalars().all()
+
+    builder = InlineKeyboardBuilder()
+
+    # Секция заявок
+    if requests:
+        builder.row(InlineKeyboardButton(
+            text=f"📋 Заявки на вступление ({len(requests)})",
+            callback_data="noop_clan"
+        ))
+        for req in requests:
+            requester = await session.scalar(
+                select(User).where(User.id == req.from_user_id)
+            )
+            if requester:
+                builder.row(InlineKeyboardButton(
+                    text=f"✅ {html.escape(requester.full_name)} | 💪{fmt_num(requester.combat_power)}",
+                    callback_data=f"clan_accept_req:{req.id}"
+                ))
+                builder.row(InlineKeyboardButton(
+                    text=f"❌ Отклонить {html.escape(requester.full_name)}",
+                    callback_data=f"clan_decline_req:{req.id}"
+                ))
+
+    builder.row(InlineKeyboardButton(
+        text="📨 Пригласить по @username",
+        callback_data="clan_invite_input"
+    ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clans_menu"))
+
+    members = await clan_service.get_clan_members(session, clan.id)
+    requests_str = f"\n📋 Входящих заявок: <b>{len(requests)}</b>" if requests else ""
+
+    try:
+        await cb.message.edit_text(
+            f"📨 <b>Управление участниками</b>\n\n"
+            f"👥 В клане: {len(members)}/{clan.max_members}"
+            f"{requests_str}",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data == "clan_invite_input")
+async def cb_clan_invite_input(cb: CallbackQuery, state: FSMContext):
     await state.set_state(ClanFSM.waiting_invite_username)
-    await state.update_data(clan_id=clan.id)
     cancel_kb = InlineKeyboardBuilder()
-    cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="clans_menu"))
+    cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="clan_invite"))
     try:
         await cb.message.edit_text(
             "📨 Введите @username игрока которого хотите пригласить:",
@@ -298,7 +352,6 @@ async def cb_clan_invite(cb: CallbackQuery, session: AsyncSession, user: User, s
         )
     except Exception:
         pass
-
 
 @router.message(ClanFSM.waiting_invite_username)
 async def msg_invite_username(message: Message, session: AsyncSession, user: User, state: FSMContext):

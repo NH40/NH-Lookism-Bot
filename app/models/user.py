@@ -98,6 +98,11 @@ class User(Base):
     teacher_power_bonus: Mapped[int] = mapped_column(Integer, default=0)
     teacher_income_share: Mapped[int] = mapped_column(Integer, default=3)
 
+    # ── КЛАНЫ ────────────────────────────────────────────────────
+    clan_income_bonus: Mapped[int] = mapped_column(Integer, default=0)
+    clan_ticket_bonus: Mapped[int] = mapped_column(Integer, default=0)
+    clan_train_bonus: Mapped[int] = mapped_column(Integer, default=0)
+
     # ── Настройки ─────────────────────────────────────────────────────────
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(

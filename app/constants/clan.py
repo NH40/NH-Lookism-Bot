@@ -11,6 +11,16 @@ class ClanShopItem:
     item_type: str
     value: object
 
+@dataclass(frozen=True)
+class ClanUpgrade:
+    upgrade_id: str
+    name: str
+    desc: str
+    price: int
+    category: str
+    upgrade_type: str
+    value: int
+    max_total: int  # максимум суммарно на клан
 
 # ── Категории ──────────────────────────────────────────────────────────────────
 CLAN_SHOP_CATEGORIES = {
@@ -19,6 +29,7 @@ CLAN_SHOP_CATEGORIES = {
     "squad":     "👥 Статисты",
     "character": "🎴 Персонажи",
     "auction":   "🏛 Аукцион",
+    "upgrades":  "⚙️ Улучшения клана",
 }
 
 CLAN_SHOP_ITEMS: list[ClanShopItem] = [
@@ -88,3 +99,18 @@ CLAN_AUCTION_REWARDS = {
         {"type": "character", "rank": "new_legend",  "label": "🟥 Персонаж New Legend"},
     ],
 }
+
+CLAN_UPGRADES: list[ClanUpgrade] = [
+    # ── Места ─────────────────────────────────────────────────────────────────
+    ClanUpgrade("slot_1",  "👤 +1 место",   "+1 слот для участника",   500_000,    "upgrades", "slots", 1,  25),
+    ClanUpgrade("slot_3",  "👥 +3 места",   "+3 слота для участников", 1_200_000,  "upgrades", "slots", 3,  25),
+    ClanUpgrade("slot_5",  "👥 +5 мест",    "+5 слотов для участников",1_800_000,  "upgrades", "slots", 5,  25),
+    ClanUpgrade("slot_10", "👥 +10 мест",   "+10 слотов",              3_000_000,  "upgrades", "slots", 10, 25),
+
+    # ── Множители (по 1 разу) ─────────────────────────────────────────────────
+    ClanUpgrade("mult_income",  "💰 Доход +5%",      "+5% к доходу всем участникам",       2_000_000, "upgrades", "income",  5, 1),
+    ClanUpgrade("mult_ticket",  "🎟 Тикет +5%",      "+5% к шансу тикета всем участникам", 2_000_000, "upgrades", "ticket",  5, 1),
+    ClanUpgrade("mult_train",   "🏋 Тренировка +5%", "+5% к тренировкам всем участникам",  2_000_000, "upgrades", "train",   5, 1),
+]
+
+CLAN_UPGRADES_MAP: dict[str, ClanUpgrade] = {u.upgrade_id: u for u in CLAN_UPGRADES}

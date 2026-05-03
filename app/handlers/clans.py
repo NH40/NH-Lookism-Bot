@@ -569,10 +569,56 @@ async def cb_clan_shop_cat(cb: CallbackQuery, session: AsyncSession, user: User)
         await cb.answer("Вы не в клане", show_alert=True)
         return
 
-    items = [i for i in CLAN_SHOP_ITEMS if i.category == cat_id]
     cat_name = CLAN_SHOP_CATEGORIES.get(cat_id, cat_id)
-
     builder = InlineKeyboardBuilder()
+
+    if cat_id == "upgrades":
+        from app.constants.clan import CLAN_UPGRADES, CLAN_UPGRADES_MAP
+        for upgrade in CLAN_UPGRADES:
+            can = "✅" if clan.treasury >= upgrade.price else "❌"
+            # Проверяем куплено ли уже
+            already = False
+            if upgrade.upgrade_type == "income" and clan.bonus_income_pct >= upgrade.max_total * upgrade.value:
+                already = True
+            elif upgrade.upgrade_type == "ticket" and clan.bonus_ticket_pct >= upgrade.max_total * upgrade.value:
+                already = True
+            elif upgrade.upgrade_type == "train" and clan.bonus_train_pct >= upgrade.max_total * upgrade.value:
+                already = True
+            elif upgrade.upgrade_type == "slots" and clan.bonus_max_members >= upgrade.max_total:
+                already = True
+
+            icon = "🔒" if already else can
+            builder.row(InlineKeyboardButton(
+                text=f"{icon} {upgrade.name} — {fmt_num(upgrade.price)}",
+                callback_data=f"clan_upgrade:{upgrade.upgrade_id}" if not already else "noop_clan"
+            ))
+
+        # Текущие улучшения
+        slots_str = f"+{clan.bonus_max_members}" if clan.bonus_max_members > 0 else "нет"
+        bonuses = []
+        if clan.bonus_income_pct: bonuses.append(f"💰 Доход +{clan.bonus_income_pct}%")
+        if clan.bonus_ticket_pct: bonuses.append(f"🎟 Тикет +{clan.bonus_ticket_pct}%")
+        if clan.bonus_train_pct:  bonuses.append(f"🏋 Трен. +{clan.bonus_train_pct}%")
+        bonuses_str = "\n".join(bonuses) if bonuses else "нет"
+
+        builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clan_shop"))
+        try:
+            await cb.message.edit_text(
+                f"⚙️ <b>Улучшения клана</b>\n\n"
+                f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin\n"
+                f"👥 Слоты: {clan.max_members} (доп: {slots_str}, макс +25)\n\n"
+                f"Активные бонусы:\n{bonuses_str}\n\n"
+                f"Улучшения применяются ко всем участникам:",
+                reply_markup=builder.as_markup(),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+        return
+
+    # Обычные категории
+    from app.constants.clan import CLAN_SHOP_ITEMS
+    items = [i for i in CLAN_SHOP_ITEMS if i.category == cat_id]
     for item in items:
         can = "✅" if clan.treasury >= item.price else "❌"
         builder.row(InlineKeyboardButton(
@@ -591,6 +637,25 @@ async def cb_clan_shop_cat(cb: CallbackQuery, session: AsyncSession, user: User)
         )
     except Exception:
         pass
+
+
+@router.callback_query(F.data.startswith("clan_upgrade:"))
+async def cb_clan_upgrade(cb: CallbackQuery, session: AsyncSession, user: User):
+    upgrade_id = cb.data.split(":")[1]
+    clan = await clan_service.get_user_clan(session, user.id)
+    if not clan:
+        await cb.answer("Вы не в клане", show_alert=True)
+        return
+
+    result = await clan_service.buy_upgrade(session, clan, user, upgrade_id)
+    if not result["ok"]:
+        await cb.answer(result["reason"], show_alert=True)
+        return
+
+    upgrade = result["upgrade"]
+    await cb.answer(f"✅ {upgrade.name} куплено!", show_alert=True)
+    cb.data = "clan_shop_cat:upgrades"
+    await cb_clan_shop_cat(cb, session, user)
 
 
 @router.callback_query(F.data.startswith("clan_buy:"))

@@ -18,7 +18,11 @@ class BusinessService:
             )
         )
         base_income = result.scalar() or 0
-        total_bonus = user.income_bonus_percent + user.prestige_income_bonus
+        total_bonus = (
+            user.income_bonus_percent
+            + user.prestige_income_bonus
+            + user.clan_income_bonus  
+        )
         effective_income = int(
             base_income * (1 + total_bonus / 100) * user.district_multiplier
         )

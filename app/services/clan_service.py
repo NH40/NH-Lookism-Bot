@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.models.user import User
 from app.models.clan import Clan, ClanMember, ClanInvite, ClanWar, ClanAuction
-from app.constants.clan import CLAN_SHOP_MAP, CLAN_AUCTION_REWARDS
+from app.constants.clan import CLAN_SHOP_MAP, CLAN_AUCTION_REWARDS, CLAN_UPGRADES_MAP
 
 class ClanService:
 
@@ -190,7 +190,9 @@ class ClanService:
         invite.is_pending = False
         member = ClanMember(clan_id=clan.id, user_id=user.id)
         session.add(member)
+
         await self.recalc_power(session, clan)
+        await self._add_clan_bonuses_to_user(session, clan, user)
         await session.flush()
 
         return {"ok": True, "clan": clan}
@@ -244,6 +246,7 @@ class ClanService:
                 return {"ok": True, "clan_deleted": True}
 
         await session.delete(member)
+        await self._remove_clan_bonuses_from_user(session, user)
         await self.recalc_power(session, clan)
         await session.flush()
         return {"ok": True, "clan_deleted": False}
@@ -266,6 +269,9 @@ class ClanService:
             return {"ok": False, "reason": "Игрок не в клане"}
 
         await session.delete(member)
+        kicked_user = await session.scalar(select(User).where(User.id == target_user_id))
+        if kicked_user:
+            await self._remove_clan_bonuses_from_user(session, kicked_user)
         await self.recalc_power(session, clan)
         await session.flush()
         return {"ok": True}
@@ -631,5 +637,70 @@ class ClanService:
         await session.flush()
         return {"ok": True}
 
+    async def buy_upgrade(
+        self, session: AsyncSession, clan: Clan, user: User, upgrade_id: str
+    ) -> dict:
+        upgrade = CLAN_UPGRADES_MAP.get(upgrade_id)
+        if not upgrade:
+            return {"ok": False, "reason": "Улучшение не найдено"}
+        if clan.treasury < upgrade.price:
+            return {"ok": False, "reason": f"Недостаточно в казне (нужно {upgrade.price:,})"}
+
+        # Проверяем лимиты
+        if upgrade.upgrade_type == "slots":
+            current = clan.bonus_max_members
+            if current + upgrade.value > upgrade.max_total:
+                remaining = upgrade.max_total - current
+                return {"ok": False, "reason": f"Можно добавить максимум ещё {remaining} мест (лимит 25)"}
+            clan.bonus_max_members += upgrade.value
+            clan.max_members = 5 + clan.bonus_max_members
+
+        elif upgrade.upgrade_type == "income":
+            if clan.bonus_income_pct >= upgrade.max_total * upgrade.value:
+                return {"ok": False, "reason": "Уже куплено"}
+            clan.bonus_income_pct += upgrade.value
+
+        elif upgrade.upgrade_type == "ticket":
+            if clan.bonus_ticket_pct >= upgrade.max_total * upgrade.value:
+                return {"ok": False, "reason": "Уже куплено"}
+            clan.bonus_ticket_pct += upgrade.value
+
+        elif upgrade.upgrade_type == "train":
+            if clan.bonus_train_pct >= upgrade.max_total * upgrade.value:
+                return {"ok": False, "reason": "Уже куплено"}
+            clan.bonus_train_pct += upgrade.value
+
+        clan.treasury -= upgrade.price
+
+        # Применяем бонусы всем участникам
+        await self._apply_clan_bonuses(session, clan)
+        await session.flush()
+        return {"ok": True, "upgrade": upgrade}
+
+    async def _apply_clan_bonuses(self, session: AsyncSession, clan: Clan) -> None:
+        """Применяет бонусы клана всем участникам."""
+        members = await self.get_clan_members(session, clan.id)
+        user_ids = [m.user_id for m in members]
+        from app.models.user import User as UserModel
+        users = (await session.execute(
+            select(UserModel).where(UserModel.id.in_(user_ids))
+        )).scalars().all()
+
+        for u in users:
+            u.clan_income_bonus = clan.bonus_income_pct
+            u.clan_ticket_bonus = clan.bonus_ticket_pct
+            u.clan_train_bonus = clan.bonus_train_pct
+
+    async def _remove_clan_bonuses_from_user(self, session: AsyncSession, user: User) -> None:
+        """Убирает клановые бонусы с игрока при выходе."""
+        user.clan_income_bonus = 0
+        user.clan_ticket_bonus = 0
+        user.clan_train_bonus = 0
+
+    async def _add_clan_bonuses_to_user(self, session: AsyncSession, clan: Clan, user: User) -> None:
+        """Добавляет клановые бонусы игроку при вступлении."""
+        user.clan_income_bonus = clan.bonus_income_pct
+        user.clan_ticket_bonus = clan.bonus_ticket_pct
+        user.clan_train_bonus = clan.bonus_train_pct
 
 clan_service = ClanService()

@@ -13,6 +13,11 @@ class Clan(Base):
     combat_power: Mapped[int] = mapped_column(BigInteger, default=0)
     treasury: Mapped[int] = mapped_column(BigInteger, default=0)
     max_members: Mapped[int] = mapped_column(Integer, default=5)
+    # Улучшения
+    bonus_max_members: Mapped[int] = mapped_column(Integer, default=0)
+    bonus_income_pct: Mapped[int] = mapped_column(Integer, default=0)
+    bonus_ticket_pct: Mapped[int] = mapped_column(Integer, default=0)
+    bonus_train_pct: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

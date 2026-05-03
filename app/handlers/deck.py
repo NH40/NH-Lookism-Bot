@@ -21,6 +21,10 @@ async def cb_deck(cb: CallbackQuery, session: AsyncSession, user: User):
     total_char_power = await character_repo.get_total_power(session, user.id)
     cd_str = f"⏳ {fmt_ttl(cd)}" if cd > 0 else "✅ Готов"
 
+    from app.services.potion_service import potion_service
+    effective_chance = await potion_service.get_effective_ticket_chance(session, user)
+    effective_chance = min(95, effective_chance + user.prestige_ticket_bonus + getattr(user, 'clan_ticket_bonus', 0))
+
     builder = InlineKeyboardBuilder()
 
     # Тикет
@@ -69,7 +73,7 @@ async def cb_deck(cb: CallbackQuery, session: AsyncSession, user: User):
     await cb.message.edit_text(
         f"🃏 <b>Колода</b>\n\n"
         f"🎟 Тикеты: {user.tickets}/{user.max_tickets}\n"
-        f"🍀 Шанс тикета: {user.ticket_chance}%\n"
+        f"🍀 Шанс тикета: {effective_chance}%\n"  # ← было user.ticket_chance
         f"⏱ КД тикета: {cd_str}\n"
         f"💪 Мощь персонажей: {fmt_num(total_char_power)}",
         reply_markup=builder.as_markup(),
@@ -123,17 +127,16 @@ async def cb_deck_rates(cb: CallbackQuery, session: AsyncSession, user: User):
             f"  {char_names}\n"
         )
 
-    # Также показываем текущий шанс тикета игрока
-    from app.services.potion_service import potion_service
-    effective_chance = await potion_service.get_effective_ticket_chance(
-        session, user
-    )
-    effective_chance = min(95, effective_chance + user.prestige_ticket_bonus)
+    effective_chance = await potion_service.get_effective_ticket_chance(session, user)
+    effective_chance = min(95, effective_chance + user.prestige_ticket_bonus + getattr(user, 'clan_ticket_bonus', 0))
 
     lines.append(f"{'─'*22}")
     lines.append(f"🍀 Твой шанс тикета: {effective_chance}%")
     if user.prestige_ticket_bonus > 0:
         lines.append(f"  ✨ +{user.prestige_ticket_bonus}% от пробуждений")
+    if getattr(user, 'clan_ticket_bonus', 0) > 0:
+        lines.append(f"  🏯 +{user.clan_ticket_bonus}% от клана")
+
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(

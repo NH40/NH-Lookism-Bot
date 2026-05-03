@@ -72,8 +72,29 @@ class SquadRepo:
 
         # Ограничиваем разумным максимумом (BIGINT safe)
         total = min(total, 9_000_000_000_000)
-
         user.combat_power = total
+
+        try:
+            from app.models.clan import ClanMember, Clan
+            clan_member = await session.scalar(
+                select(ClanMember).where(ClanMember.user_id == user.id)
+            )
+            if clan_member:
+                clan = await session.scalar(
+                    select(Clan).where(Clan.id == clan_member.clan_id)
+                )
+                if clan:
+                    members_r = await session.execute(
+                        select(ClanMember).where(ClanMember.clan_id == clan.id)
+                    )
+                    user_ids = [m.user_id for m in members_r.scalars().all()]
+                    total_power = await session.scalar(
+                        select(func.sum(User.combat_power)).where(User.id.in_(user_ids))
+                    )
+                    clan.combat_power = total_power or 0
+        except Exception:
+            pass
+
         await session.flush()
         return total
 

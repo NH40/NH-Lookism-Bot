@@ -58,31 +58,25 @@ class AdminService:
     async def patch_reset_progress(self, session: AsyncSession, version: str) -> int:
         from app.services.prestige_service import prestige_service
         from app.models.clan import Clan, ClanMember
-        from sqlalchemy import update
+        from app.services.clan_service import clan_service
 
         result = await session.execute(select(User))
         users = result.scalars().all()
 
-        # ── Топ-10 игроков по боевой мощи ────────────────────────────────────────
+        # ── Топ-10 и топ-5 кланов ПЕРЕД сбросом ─────────────────────────────────
         top_players = sorted(users, key=lambda u: u.combat_power, reverse=True)[:10]
-        top_rewards = {
-            0: 10, 1: 9, 2: 8, 3: 7, 4: 6,
-            5: 5,  6: 4, 7: 4, 8: 3, 9: 3,
-        }
-        top_player_ids = {u.id for u in top_players}
+        top_rewards = {0: 10, 1: 9, 2: 8, 3: 7, 4: 6, 5: 5, 6: 4, 7: 4, 8: 3, 9: 3}
 
-        for i, u in enumerate(top_players):
-            tickets = top_rewards.get(i, 3)
-            u.tickets = min(u.tickets + tickets, u.max_tickets)
-
-        # ── Топ-5 кланов ─────────────────────────────────────────────────────────
         top_clans_r = await session.execute(
             select(Clan).order_by(Clan.combat_power.desc()).limit(5)
         )
         top_clans = top_clans_r.scalars().all()
-
         clan_rewards = {0: 8, 1: 6, 2: 5, 3: 4, 4: 3}
-        clan_member_ids: dict[int, int] = {}  # user_id -> tickets
+
+        # Собираем bonus_tickets ДО сброса
+        bonus_tickets: dict[int, int] = {}
+        for i, u in enumerate(top_players):
+            bonus_tickets[u.id] = top_rewards.get(i, 3)
 
         for i, clan in enumerate(top_clans):
             tickets = clan_rewards.get(i, 3)
@@ -90,40 +84,24 @@ class AdminService:
                 select(ClanMember).where(ClanMember.clan_id == clan.id)
             )
             for member in members_r.scalars().all():
-                # Берём максимальное если игрок и в топе клана и в топ-10 игроков
-                existing = clan_member_ids.get(member.user_id, 0)
-                clan_member_ids[member.user_id] = max(existing, tickets)
-
-            # Обнуляем казну клана
+                existing = bonus_tickets.get(member.user_id, 0)
+                bonus_tickets[member.user_id] = max(existing, tickets)
+            # Обнуляем казну
             clan.treasury = 0
 
-        # Выдаём тикеты участникам кланов
-        for user_id, tickets in clan_member_ids.items():
-            u = next((x for x in users if x.id == user_id), None)
-            if u:
-                u.tickets = min(u.tickets + tickets, u.max_tickets)
-
-        # ── Сброс прогресса всех игроков ─────────────────────────────────────────
-        # Сначала запоминаем кому сколько тикетов выдать ПОСЛЕ сброса
-        bonus_tickets: dict[int, int] = {}
-        for i, u in enumerate(top_players):
-            bonus_tickets[u.id] = bonus_tickets.get(u.id, 0) + top_rewards.get(i, 3)
-        for user_id, tickets in clan_member_ids.items():
-            bonus_tickets[user_id] = max(bonus_tickets.get(user_id, 0), tickets)
-
+        # ── Сброс прогресса ───────────────────────────────────────────────────────
         for user in users:
             await prestige_service._reset_progress(session, user, keep_ui=False)
 
-        # Применяем бонусные тикеты после сброса (сброс обнуляет тикеты)
+        # ── Применяем бонусные тикеты ПОСЛЕ сброса ───────────────────────────────
         for user in users:
             extra = bonus_tickets.get(user.id, 0)
             if extra > 0:
                 user.tickets = min(user.tickets + extra, user.max_tickets)
 
-        # ── Пересчёт боевой мощи кланов ──────────────────────────────────────────
-        from app.models.clan import Clan, ClanMember
-        from app.services.clan_service import clan_service
-
+        # ── Пересчёт боевой мощи кланов ПОСЛЕ сброса ─────────────────────────────
+        # После сброса у всех игроков combat_power = 0 (нет статистов)
+        # Поэтому мощь клана тоже = 0, это корректно
         all_clans_r = await session.execute(select(Clan))
         all_clans = all_clans_r.scalars().all()
         for clan in all_clans:
@@ -133,7 +111,6 @@ class AdminService:
         from app.models.game_version import GameVersion
         gv = GameVersion(version=version, patch_notes=f"Патч {version}")
         session.add(gv)
-
         await session.flush()
 
         return len(users)

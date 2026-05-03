@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.user import User
 from app.models.clan import Clan, ClanMember, ClanInvite, ClanAuction
-from app.services.clan_service import clan_service, CLAN_SHOP_ITEMS
+from app.services.clan_service import clan_service
 from app.utils.formatters import fmt_num
 from datetime import datetime, timezone
 from app.constants.clan import CLAN_SHOP_ITEMS, CLAN_SHOP_MAP, CLAN_SHOP_CATEGORIES

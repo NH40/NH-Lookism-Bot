@@ -5,19 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.models.user import User
 from app.models.clan import Clan, ClanMember, ClanInvite, ClanWar, ClanAuction
-
-
-CLAN_SHOP_ITEMS = [
-    {"id": "tickets_all",    "name": "🎟 Тикеты всем",          "desc": "Выдать 3 тикета всем участникам",       "price": 500_000,    "type": "tickets",    "value": 3},
-    {"id": "potion_all",     "name": "🧪 Зелье силы всем",      "desc": "Зелье силы +30% на 30 мин всем",        "price": 1_000_000,  "type": "potion",     "value": "potion_combat"},
-    {"id": "squad_s_all",    "name": "🟥 Статисты S всем",      "desc": "Выдать 100 статистов S всем",           "price": 3_000_000,  "type": "squad",      "value": {"rank": "S", "amount": 100}},
-    {"id": "squad_ss_all",   "name": "💠 Статисты SS всем",     "desc": "Выдать 50 статистов SS всем",           "price": 8_000_000,  "type": "squad",      "value": {"rank": "SS", "amount": 50}},
-    {"id": "char_random",    "name": "🎴 Персонаж всем",        "desc": "Случайный персонаж до легенды всем",    "price": 5_000_000,  "type": "character",  "value": "random"},
-    {"id": "auction_clan",   "name": "🏛 Клановый аукцион",     "desc": "Запустить аукцион только для клана",    "price": 2_000_000,  "type": "auction",    "value": None},
-]
-
-CLAN_SHOP_MAP = {i["id"]: i for i in CLAN_SHOP_ITEMS}
-
+from app.constants.clan import CLAN_SHOP_MAP, CLAN_AUCTION_REWARDS
 
 class ClanService:
 
@@ -335,31 +323,28 @@ class ClanService:
         item = CLAN_SHOP_MAP.get(item_id)
         if not item:
             return {"ok": False, "reason": "Товар не найден"}
-        if clan.treasury < item["price"]:
-            return {"ok": False, "reason": f"Недостаточно в казне (нужно {item['price']:,})"}
+        if clan.treasury < item.price:
+            return {"ok": False, "reason": f"Недостаточно в казне (нужно {item.price:,})"}
 
-        clan.treasury -= item["price"]
+        clan.treasury -= item.price
         members = await self.get_clan_members(session, clan.id)
         user_ids = [m.user_id for m in members]
-
         from app.models.user import User as UserModel
         users = (await session.execute(
             select(UserModel).where(UserModel.id.in_(user_ids))
         )).scalars().all()
 
-        item_type = item["type"]
-
-        if item_type == "tickets":
+        if item.item_type == "tickets":
             for u in users:
-                u.tickets = min(u.tickets + item["value"], u.max_tickets)
+                u.tickets = min(u.tickets + item.value, u.max_tickets)
 
-        elif item_type == "potion":
+        elif item.item_type == "potion":
             from app.services.potion_service import potion_service
             for u in users:
-                await potion_service.activate(session, u, item["value"])
+                await potion_service.activate(session, u, item.value)
 
-        elif item_type == "squad":
-            val = item["value"]
+        elif item.item_type == "squad":
+            val = item.value
             from app.models.squad_member import SquadMember
             from app.data.squad import RANKS_BY_ID
             rank_cfg = RANKS_BY_ID.get(val["rank"])
@@ -375,11 +360,12 @@ class ClanService:
                 await squad_repo.update_user_combat_power(session, u)
             await self.recalc_power(session, clan)
 
-        elif item_type == "character":
-            from app.data.characters import CHARACTERS, RANK_CONFIG_MAP
-            # Ранги до легенды
-            allowed_ranks = ["member", "boss", "king", "strong_king", "gen_zero", "new_legend"]
-            pool = [c for c in CHARACTERS if c["rank"] in allowed_ranks]
+        elif item.item_type == "character":
+            from app.data.characters import CHARACTERS
+            rank_filter = item.value
+            pool = [c for c in CHARACTERS if c["rank"] == rank_filter]
+            if not pool:
+                pool = [c for c in CHARACTERS if c["rank"] == "member"]
             from app.models.character import UserCharacter
             for u in users:
                 char = random.choice(pool)
@@ -390,16 +376,15 @@ class ClanService:
                     power=char["power"],
                 ))
 
-        elif item_type == "auction":
-            # Запускаем клановый аукцион
-            tiers = ["common", "rare", "epic", "legendary"]
-            tier = random.choice(tiers)
-            reward_data = self._gen_auction_reward(tier)
+        elif item.item_type == "auction":
+            tier = item.value
+            rewards = CLAN_AUCTION_REWARDS.get(tier, CLAN_AUCTION_REWARDS["common"])
+            reward = random.choice(rewards)
             ends_at = datetime.now(timezone.utc) + timedelta(minutes=30)
             auction = ClanAuction(
                 clan_id=clan.id,
                 reward_type=tier,
-                reward_data=json.dumps(reward_data),
+                reward_data=json.dumps(reward),
                 ends_at=ends_at,
             )
             session.add(auction)
@@ -407,14 +392,69 @@ class ClanService:
         await session.flush()
         return {"ok": True, "item": item}
 
-    def _gen_auction_reward(self, tier: str) -> dict:
-        rewards = {
-            "common":    {"type": "coins",     "amount": 1_000_000},
-            "rare":      {"type": "tickets",   "amount": 5},
-            "epic":      {"type": "fragments", "amount": 100},
-            "legendary": {"type": "character", "rank": "legend"},
-        }
-        return rewards.get(tier, {"type": "coins", "amount": 500_000})
+    async def give_auction_reward(
+        self, session: AsyncSession, auction: ClanAuction
+    ) -> None:
+        """Выдаём награду победителю аукциона."""
+        if not auction.leader_id:
+            return
+
+        winner = await session.scalar(
+            select(User).where(User.id == auction.leader_id)
+        )
+        if not winner:
+            return
+
+        try:
+            reward = json.loads(auction.reward_data) if auction.reward_data else {}
+        except Exception:
+            return
+
+        rtype = reward.get("type")
+
+        if rtype == "coins":
+            winner.nh_coins += reward.get("amount", 0)
+
+        elif rtype == "tickets":
+            winner.tickets = min(
+                winner.tickets + reward.get("amount", 0), winner.max_tickets
+            )
+
+        elif rtype == "potion":
+            from app.services.potion_service import potion_service
+            await potion_service.activate(session, winner, reward.get("potion_id"))
+
+        elif rtype == "squad":
+            from app.models.squad_member import SquadMember
+            from app.data.squad import RANKS_BY_ID
+            rank = reward.get("rank", "S")
+            amount = reward.get("amount", 1)
+            rank_cfg = RANKS_BY_ID.get(rank)
+            for _ in range(amount):
+                session.add(SquadMember(
+                    user_id=winner.id,
+                    rank=rank,
+                    base_power=rank_cfg.base_power if rank_cfg else 1000,
+                ))
+            from app.repositories.squad_repo import squad_repo
+            await squad_repo.update_user_combat_power(session, winner)
+
+        elif rtype == "character":
+            from app.data.characters import CHARACTERS
+            rank_filter = reward.get("rank", "king")
+            pool = [c for c in CHARACTERS if c["rank"] == rank_filter]
+            if pool:
+                char = random.choice(pool)
+                from app.models.character import UserCharacter
+                session.add(UserCharacter(
+                    user_id=winner.id,
+                    character_id=char["name"],
+                    rank=char["rank"],
+                    power=char["power"],
+                ))
+
+        auction.is_finished = True
+        await session.flush()
 
     async def get_active_auction(
         self, session: AsyncSession, clan_id: int

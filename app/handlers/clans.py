@@ -368,7 +368,7 @@ async def msg_invite_username(message: Message, session: AsyncSession, user: Use
     to_user = result["to_user"]
     from app.bot_instance import get_bot
     bot = get_bot()
-    if bot and to_user.notifications_enabled:
+    if bot:
         builder = InlineKeyboardBuilder()
         invite_id = result["invite_id"]
         builder.row(InlineKeyboardButton(

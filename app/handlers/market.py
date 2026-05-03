@@ -670,20 +670,3 @@ async def cb_market_buy(cb: CallbackQuery, session: AsyncSession, user: User):
         show_alert=True
     )
     await cb_market_buyer(cb, session, user)
-
-
-# ── Кланы (заглушка) ──────────────────────────────────────────────────────────
-
-@router.callback_query(F.data == "clans_menu")
-async def cb_clans_menu(cb: CallbackQuery, session: AsyncSession, user: User):
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
-    try:
-        await cb.message.edit_text(
-            "🏯 <b>Кланы</b>\n\n"
-            "🔧 В разработке...",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass

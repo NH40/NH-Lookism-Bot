@@ -156,6 +156,11 @@ async def cb_shop_buy_rank(
             callback_data=f"shop_buy_qty:{rank}:{qty}"
         )
     builder.adjust(2)
+    # ── Кнопка своего числа ──
+    builder.row(InlineKeyboardButton(
+        text="✏️ Ввести своё количество",
+        callback_data=f"shop_input_qty:{rank}"
+    ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="shop_recruits"))
 
     await cb.message.edit_text(
@@ -168,6 +173,41 @@ async def cb_shop_buy_rank(
         parse_mode="HTML",
     )
 
+@router.callback_query(F.data.startswith("shop_input_qty:"))
+async def cb_shop_input_qty(
+    cb: CallbackQuery, session: AsyncSession,
+    user: User, state: FSMContext
+):
+    rank = cb.data.split(":")[1]
+    from app.data.shop import RECRUIT_RANK_TO_ITEM
+    item_id = RECRUIT_RANK_TO_ITEM.get(rank)
+    item = SHOP_MAP.get(item_id)
+    if not item:
+        await cb.answer("Товар не найден", show_alert=True)
+        return
+
+    discount = user.recruit_discount_percent
+    price = max(1, int(item.price * (1 - discount / 100)))
+
+    await state.set_state(ShopFSM.waiting_recruit_count)
+    await state.update_data(rank=rank, price_per=price)
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text="❌ Отмена", callback_data=f"shop_buy_rank:{rank}"
+    ))
+
+    try:
+        await cb.message.edit_text(
+            f"✏️ <b>Введите количество статистов [{rank}]</b>\n\n"
+            f"Цена: {fmt_num(price)}/шт\n"
+            f"Баланс: {fmt_num(user.nh_coins)}\n\n"
+            f"Введите число от 1 до 10000:",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
 
 @router.callback_query(F.data.startswith("shop_buy_qty:"))
 async def cb_shop_buy_qty(
@@ -201,22 +241,22 @@ async def msg_recruit_count(
 
     try:
         count = int(message.text.strip())
-        if count < 1 or count > 500:
+        if count < 1 or count > 1000000:
             raise ValueError
     except ValueError:
-        await message.answer("Введите число от 1 до 500")
+        await message.answer("❌ Введите число от 1 до 1000000")
         return
 
     result = await _do_buy_recruits(session, user, rank, count)
     if result["ok"]:
         await message.answer(
-            f"✅ Куплено {result['count']} бойцов [{rank}]!\n"
+            f"✅ Куплено <b>{result['count']}</b> бойцов [{rank}]!\n"
             f"Потрачено: {fmt_num(result['total_cost'])} NHCoin",
             reply_markup=back_kb("shop_recruits"),
+            parse_mode="HTML",
         )
     else:
         await message.answer(result["reason"], reply_markup=back_kb("shop_recruits"))
-
 
 async def _do_buy_recruits(
     session: AsyncSession, user: User, rank: str, count: int

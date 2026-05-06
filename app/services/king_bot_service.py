@@ -98,19 +98,40 @@ class KingBotService(GameBase):
                 bot.power = int(bot.power * KING_BOT_POWER_GROWTH)
                 bot.districts_captured = 0
 
-                # ── Выдаём реальный город с районами ──────────────────────
+                # 1. Сначала даём город и районы
                 await self._give_king_city(session, user, bot)
+                await session.flush()  # ← районы записаны в БД
 
                 user.total_wins += 1
                 user.influence += 500
                 coins_reward = old_power // 10
                 user.nh_coins += coins_reward
 
-                # Пересчитываем реальное кол-во городов
+                # 2. Теперь считаем — районы уже есть
                 user.king_cities_count = await self._count_my_king_cities(session, user.id)
 
+                # 3. КД
+                await self._handle_attack_cd(session, user, cd_key, "king")
+                await session.flush()
+
+                # 4. Проверяем повышение
                 if user.king_cities_count >= 10:
                     return await self._promote_to_fist(session, user)
+
+                return {
+                    "ok": True,
+                    "win": True,
+                    "gained": gained,
+                    "captured": bot.districts_captured,
+                    "total": bot.districts_total,
+                    "fully_captured": True,
+                    "bot_name": bot.name,
+                    "user_power": user_power,
+                    "bot_power": bot.power,
+                    "coins_reward": coins_reward,
+                    "cities_count": user.king_cities_count,
+                    "extra_attacks_left": user.extra_attack_count,
+                }
 
             # ── Используем общий _handle_attack_cd — он обрабатывает extra_attack ──
             await self._handle_attack_cd(session, user, cd_key, "king")

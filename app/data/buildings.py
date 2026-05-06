@@ -15,20 +15,21 @@ BUILDINGS: list[BuildingConfig] = [
     # Легальные
     BuildingConfig("gym",        "Спортзал",        "🏋",  "legal",     25,  2),
     BuildingConfig("cafe",       "Кафе",            "☕",  "legal",     25,  2),
-    BuildingConfig("shop",       "Магазин",         "🏪",  "legal",     40,  4),
-    BuildingConfig("hotel",      "Отель",           "🏨",  "legal",     80,  8),
-    BuildingConfig("mall",       "Торговый центр",  "🏬",  "legal",    150, 16),
+    BuildingConfig("shop",       "Магазин",         "🏪",  "legal",     60,  4),
+    BuildingConfig("hotel",      "Отель",           "🏨",  "legal",     140,  8),
+    BuildingConfig("mall",       "Торговый центр",  "🏬",  "legal",    300, 16),
+
     # Нелегальные
-    BuildingConfig("warehouse",  "Склад",           "📦",  "illegal",   20,  2),
-    BuildingConfig("lab",        "Лаборатория",     "🧪",  "illegal",   45,  4),
-    BuildingConfig("casino",     "Казино",          "🎰",  "illegal",   90,  8),
-    BuildingConfig("factory",    "Завод",           "🏭",  "illegal",  170, 12),
-    BuildingConfig("syndicate",  "Синдикат",        "🕶",  "illegal",  300, 16),
+    BuildingConfig("warehouse",  "Склад",           "📦",  "illegal",   30,  2),
+    BuildingConfig("lab",        "Лаборатория",     "🧪",  "illegal",   70,  4),
+    BuildingConfig("casino",     "Казино",          "🎰",  "illegal",   150,  8),
+    BuildingConfig("factory",    "Завод",           "🏭",  "illegal",  250, 12),
+    BuildingConfig("syndicate",  "Синдикат",        "🕶",  "illegal",  350, 16),
     # Политические
-    BuildingConfig("office",     "Офис",            "🏢",  "political", 18,  2),
-    BuildingConfig("media",      "СМИ",             "📡",  "political", 35,  4),
-    BuildingConfig("bank",       "Банк",            "🏦",  "political", 70,  8),
-    BuildingConfig("ministry",   "Министерство",    "🏛",  "political", 130, 12),
+    BuildingConfig("office",     "Офис",            "🏢",  "political", 20,  2),
+    BuildingConfig("media",      "СМИ",             "📡",  "political", 50,  4),
+    BuildingConfig("bank",       "Банк",            "🏦",  "political", 100,  8),
+    BuildingConfig("ministry",   "Министерство",    "🏛",  "political", 170, 12),
     BuildingConfig("parliament", "Парламент",       "⚖️",  "political", 250, 16),
 ]
 

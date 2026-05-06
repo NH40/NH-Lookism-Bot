@@ -48,12 +48,20 @@ CLAN_SHOP_ITEMS: list[ClanShopItem] = [
     ClanShopItem("potion_luck_all",      "🍀 Зелье удачи всем",      "Шанс тикета +20% на 30 мин всем",     60_000,   "potions", "potion", "potion_luck"),
 
     # ── Статисты ──────────────────────────────────────────────────────────────
-    ClanShopItem("squad_s_all",   "🟥 100×S всем",   "100 статистов S всем",   900_000,  "squad", "squad", {"rank": "S",   "amount": 100}),
-    ClanShopItem("squad_ss_all",  "💠 100×SS всем",   "100 статистов SS всем",   1_000_000,  "squad", "squad", {"rank": "SS",  "amount": 100}),
+    # ── Статисты ──────────────────────────────────────────────────────────────
+    ClanShopItem("squad_s_all",   "🟥 100×S всем",    "100 статистов S всем",    900_000,   "squad", "squad", {"rank": "S",   "amount": 100}),
+    ClanShopItem("squad_ss_all",  "💠 100×SS всем",   "100 статистов SS всем",   1_000_000, "squad", "squad", {"rank": "SS",  "amount": 100}),
     ClanShopItem("squad_sss_all", "🔷 100×SSS всем",  "100 статистов SSS всем",  1_500_000, "squad", "squad", {"rank": "SSS", "amount": 100}),
     ClanShopItem("squad_sr_all",  "🌟 100×SR всем",   "100 статистов SR всем",   2_200_000, "squad", "squad", {"rank": "SR",  "amount": 100}),
-    ClanShopItem("squad_ssr_all", "✨ 100×SSR всем",  "100 статистов SSR всем", 2_500_000, "squad", "squad", {"rank": "SSR", "amount": 100}),
-    ClanShopItem("squad_ur_all",  "💎 100×UR всем",    "100 статистов UR всем",   3_000_000, "squad", "squad", {"rank": "UR",  "amount": 100}),
+    ClanShopItem("squad_ssr_all", "✨ 100×SSR всем",  "100 статистов SSR всем",  2_500_000, "squad", "squad", {"rank": "SSR", "amount": 100}),
+    ClanShopItem("squad_ur_all",  "💎 100×UR всем",   "100 статистов UR всем",   3_000_000, "squad", "squad", {"rank": "UR",  "amount": 100}),
+    ClanShopItem("squad_lr_all",  "👑 100×LR всем",   "100 статистов LR всем",   5_000_000, "squad", "squad", {"rank": "LR",  "amount": 100}),
+    ClanShopItem("squad_mp_all",  "🔱 50×MP всем",    "50 статистов MP всем",    8_000_000, "squad", "squad", {"rank": "MP",  "amount": 50}),
+    ClanShopItem("squad_x_all",   "⚡ 25×X всем",     "25 статистов X всем",    12_000_000, "squad", "squad", {"rank": "X",   "amount": 25}),
+    ClanShopItem("squad_xx_all",  "🌀 25×XX всем",    "25 статистов XX всем",   18_000_000, "squad", "squad", {"rank": "XX",  "amount": 25}),
+    ClanShopItem("squad_xxx_all", "🔥 10×XXX всем",   "10 статистов XXX всем",  25_000_000, "squad", "squad", {"rank": "XXX", "amount": 10}),
+    ClanShopItem("squad_dx_all",  "💀 5×DX всем",     "5 статистов DX всем",    35_000_000, "squad", "squad", {"rank": "DX",  "amount": 5}),
+    ClanShopItem("squad_err_all", "❌ 1×ERROR всем",  "1 ERROR всем",            50_000_000, "squad", "squad", {"rank": "ERROR","amount": 1}),
 
     # ── Персонажи ─────────────────────────────────────────────────────────────
     ClanShopItem("char_member_all",    "⬜ Персонаж member всем",    "Случайный member всем",    2_000_000,   "character", "character", "member"),

@@ -16,10 +16,14 @@ router = Router()
 
 
 RANK_EMOJI = {
-    "E": "⚪", "D": "🟢", "C": "🔵",
-    "B": "🟣", "A": "🟡", "S": "🔴",
+    "F":  "⬛", "E":  "⬜", "D":  "🟦", "C":  "🟩",
+    "B":  "🟨", "A":  "🟧", "S":  "🟥", "SS": "💠",
+    "SSS":"🔷", "SR": "🌟", "SSR":"✨",  "UR": "💎",
+    "LR": "👑", "MP": "🔱", "X":  "⚡",  "XX": "🌀",
+    "XXX":"🔥", "DX": "💀", "ERROR":"❌",
 }
 
+RANK_ORDER = ["ERROR", "DX", "XXX", "XX", "X", "MP", "LR", "UR", "SSR", "SR", "SSS", "SS", "S", "A", "B", "C", "D", "E", "F"]
 
 def _phase_ranks_str(phase: str) -> str:
     weights = PHASE_RANK_WEIGHTS.get(phase, {})
@@ -73,7 +77,7 @@ async def cb_do_recruit(cb: CallbackQuery, session: AsyncSession, user: User):
     from app.services.quest_service import quest_service
     await quest_service.add_progress(session, user, "recruit", amount=result["count"])
 
-    rank_order = ["S", "A", "B", "C", "D", "E"]
+    rank_order = RANK_ORDER
     rank_lines = []
     for rank in rank_order:
         cnt = result["rank_counts"].get(rank, 0)
@@ -148,7 +152,7 @@ async def cb_squad_list(cb: CallbackQuery, session: AsyncSession, user: User):
         )
         return
 
-    rank_order = ["S", "A", "B", "C", "D", "E"]
+    rank_order = RANK_ORDER
     lines = ["🗒 <b>Состав армии</b>\n"]
 
     for rank in rank_order:

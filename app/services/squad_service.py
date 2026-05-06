@@ -260,7 +260,7 @@ class SquadService:
             return "Отряд пуст"
 
         from collections import Counter
-        rank_order = ["S", "A", "B", "C", "D", "E"]
+        rank_order = ["ERROR","DX","XXX","XX","X","MP","LR","UR","SSR","SR","SSS","SS","S","A","B","C","D","E","F"]
 
         lines = []
         total = len(members)

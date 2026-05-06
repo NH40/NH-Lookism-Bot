@@ -4,15 +4,16 @@ from sqlalchemy import select, delete
 from app.models.potion import ActivePotion
 from app.models.user import User
 
-CLAN_POTION_CONFIG = {
+
+class PotionService:
+    
+    CLAN_POTION_CONFIG = {
         "potion_combat":    {"potion_type": "power",    "bonus_value": 30, "duration_minutes": 30},
         "potion_income":    {"potion_type": "income",   "bonus_value": 50, "duration_minutes": 60},
         "potion_influence": {"potion_type": "influence","bonus_value": 40, "duration_minutes": 45},
         "potion_training":  {"potion_type": "training", "bonus_value": 25, "duration_minutes": 60},
         "potion_luck":      {"potion_type": "luck",     "bonus_value": 20, "duration_minutes": 30},
     }
-
-class PotionService:
 
     async def get_active(self, session: AsyncSession, user_id: int) -> list[ActivePotion]:
         now = datetime.now(timezone.utc)

@@ -76,5 +76,5 @@ RECRUIT_RANK_TO_ITEM: dict[str, str] = {
     "X":     "recruit_x",
     "XX":    "recruit_xx",
     "XXX":   "recruit_xxx",
-    "DX":    "recruit_dx",
+    "DX":    "recruit_dx"
 }

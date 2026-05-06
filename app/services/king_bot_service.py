@@ -193,6 +193,9 @@ class KingBotService(GameBase):
 
         target_city = None
         for city in all_cities:
+            # Город должен вмещать нужное количество районов
+            if city.total_districts < districts_to_give:
+                continue
             my_in_city = await session.scalar(
                 select(func.count(District.id)).where(
                     District.owner_id == user.id,
@@ -204,8 +207,22 @@ class KingBotService(GameBase):
                 target_city = city
                 break
 
+        # Если не нашли с нужным размером — берём ближайший по размеру
+        if not target_city:
+            for city in sorted(all_cities, key=lambda c: abs(c.total_districts - districts_to_give)):
+                my_in_city = await session.scalar(
+                    select(func.count(District.id)).where(
+                        District.owner_id == user.id,
+                        District.city_id == city.id,
+                        District.is_captured == True,
+                    )
+                ) or 0
+                if my_in_city == 0:
+                    target_city = city
+                    break
+
         if not target_city and all_cities:
-            target_city = all_cities[0]
+            target_city = max(all_cities, key=lambda c: c.total_districts)
         if not target_city:
             return
 

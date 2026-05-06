@@ -4,6 +4,8 @@ from app.services.business_service import business_service
 from app.services.deck_service import deck_service
 from app.services.squad_service import squad_service
 from app.services.auction_service import auction_service, AUCTION_TIERS
+from app.utils.formatters import fmt_num
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -20,7 +22,6 @@ async def income_tick():
                     earned = await business_service.tick_income(session, user)
                     if earned and earned > 0:
                         await quest_service.add_progress(session, user, "income", amount=int(earned))
-                        await quest_service.add_progress(session, user, "income", amount=earned)
                 except Exception as e:
                     logger.error(f"income_tick error for {user.id}: {e}")
 

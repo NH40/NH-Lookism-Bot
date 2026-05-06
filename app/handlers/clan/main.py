@@ -60,6 +60,7 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
     builder = InlineKeyboardBuilder()
     if is_owner:
         builder.row(InlineKeyboardButton(text="📨 Пригласить", callback_data="clan_invite"))
+    builder.row(InlineKeyboardButton(text="👥 Участники", callback_data="clan_members"))
     builder.row(InlineKeyboardButton(text="🏦 Казна", callback_data="clan_treasury"))
     builder.row(InlineKeyboardButton(text="🔄 Обмен", callback_data="clan_exchange"))
     builder.row(InlineKeyboardButton(text="🛒 Магазин клана", callback_data="clan_shop"))
@@ -115,6 +116,39 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
     except Exception:
         pass
 
+# Участники клана
+
+@router.callback_query(F.data == "clan_members")
+async def cb_clan_members(cb: CallbackQuery, session: AsyncSession, user: User):
+    clan = await clan_service.get_user_clan(session, user.id)
+    if not clan:
+        await cb.answer("Вы не в клане", show_alert=True)
+        return
+
+    members = await clan_service.get_clan_members(session, clan.id)
+    lines = [f"👥 <b>Участники клана {html.escape(clan.name)}</b>\n"]
+    for m in members:
+        target = await session.scalar(select(User).where(User.id == m.user_id))
+        if not target:
+            continue
+        crown = "👑 " if clan.owner_id == target.id else ""
+        username_str = f" @{target.username}" if target.username else ""
+        lines.append(
+            f"{crown}<b>{html.escape(target.full_name)}</b>{username_str}\n"
+            f"  💪 {fmt_num(target.combat_power)}"
+        )
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clans_menu"))
+
+    try:
+        await cb.message.edit_text(
+            "\n".join(lines),
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
 
 # ── Создание ──────────────────────────────────────────────────────────────────
 
@@ -149,8 +183,11 @@ async def msg_clan_name(message: Message, session: AsyncSession, user: User, sta
 # ── Поиск ─────────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("clan_search:"))
-async def cb_clan_search(cb: CallbackQuery, session: AsyncSession, user: User):
-    page = int(cb.data.split(":")[1])
+async def cb_clan_search(cb: CallbackQuery, session: AsyncSession, user: User, page: int = None):
+    # Если page не передан явно (обычный callback), берём из cb.data
+    if page is None:
+        page = int(cb.data.split(":")[1])
+
     PAGE = 8
     clans = await clan_service.get_top_clans(session, limit=50)
     total = len(clans)

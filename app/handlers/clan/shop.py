@@ -37,42 +37,6 @@ async def cb_clan_shop(cb: CallbackQuery, session: AsyncSession, user: User):
         pass
 
 
-@router.callback_query(F.data.startswith("clan_shop_cat:"))
-async def cb_clan_shop_cat(cb: CallbackQuery, session: AsyncSession, user: User):
-    cat_id = cb.data.split(":")[1]
-    clan = await clan_service.get_user_clan(session, user.id)
-    if not clan:
-        await cb.answer("Вы не в клане", show_alert=True)
-        return
-
-    if cat_id == "upgrades":
-        await _show_upgrades(cb, clan)
-        return
-
-    cat_name = CLAN_SHOP_CATEGORIES.get(cat_id, cat_id)
-    items = [i for i in CLAN_SHOP_ITEMS if i.category == cat_id]
-
-    builder = InlineKeyboardBuilder()
-    for item in items:
-        can = "✅" if clan.treasury >= item.price else "❌"
-        builder.row(InlineKeyboardButton(
-            text=f"{can} {item.name} — {fmt_num(item.price)}",
-            callback_data=f"clan_buy:{item.item_id}"
-        ))
-    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clan_shop"))
-
-    try:
-        await cb.message.edit_text(
-            f"🛒 <b>{cat_name}</b>\n\n"
-            f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin\n\n"
-            f"Покупки применяются ко всем участникам клана:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
-
-
 async def _show_upgrades(cb: CallbackQuery, clan: Clan):
     builder = InlineKeyboardBuilder()
     for upgrade in CLAN_UPGRADES:
@@ -116,6 +80,45 @@ async def _show_upgrades(cb: CallbackQuery, clan: Clan):
         pass
 
 
+async def _show_category(cb: CallbackQuery, clan: Clan, cat_id: str):
+    if cat_id == "upgrades":
+        await _show_upgrades(cb, clan)
+        return
+
+    cat_name = CLAN_SHOP_CATEGORIES.get(cat_id, cat_id)
+    items = [i for i in CLAN_SHOP_ITEMS if i.category == cat_id]
+
+    builder = InlineKeyboardBuilder()
+    for item in items:
+        can = "✅" if clan.treasury >= item.price else "❌"
+        builder.row(InlineKeyboardButton(
+            text=f"{can} {item.name} — {fmt_num(item.price)}",
+            callback_data=f"clan_buy:{item.item_id}"
+        ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clan_shop"))
+
+    try:
+        await cb.message.edit_text(
+            f"🛒 <b>{cat_name}</b>\n\n"
+            f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin\n\n"
+            f"Покупки применяются ко всем участникам клана:",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("clan_shop_cat:"))
+async def cb_clan_shop_cat(cb: CallbackQuery, session: AsyncSession, user: User):
+    cat_id = cb.data.split(":")[1]
+    clan = await clan_service.get_user_clan(session, user.id)
+    if not clan:
+        await cb.answer("Вы не в клане", show_alert=True)
+        return
+    await _show_category(cb, clan, cat_id)
+
+
 @router.callback_query(F.data.startswith("clan_buy:"))
 async def cb_clan_buy(cb: CallbackQuery, session: AsyncSession, user: User):
     item_id = cb.data.split(":")[1]
@@ -135,10 +138,8 @@ async def cb_clan_buy(cb: CallbackQuery, session: AsyncSession, user: User):
         return
 
     await cb.answer(f"✅ {item.name} куплено для всего клана!", show_alert=True)
-
-    # Возвращаемся в категорию
-    cb.data = f"clan_shop_cat:{item.category}"
-    await cb_clan_shop_cat(cb, session, user)
+    await session.refresh(clan)
+    await _show_category(cb, clan, item.category)
 
 
 @router.callback_query(F.data.startswith("clan_upgrade:"))
@@ -156,4 +157,5 @@ async def cb_clan_upgrade(cb: CallbackQuery, session: AsyncSession, user: User):
 
     upgrade = result["upgrade"]
     await cb.answer(f"✅ {upgrade.name} куплено!", show_alert=True)
+    await session.refresh(clan)
     await _show_upgrades(cb, clan)

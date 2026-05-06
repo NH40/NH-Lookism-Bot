@@ -224,13 +224,14 @@ async def cb_clan_decline_req(cb: CallbackQuery, session: AsyncSession, user: Us
         pass
 
 
+# Единственный обработчик отмены заявки, без дублирования clan_search:
 @router.callback_query(F.data == "clan_cancel_request")
 async def cb_clan_cancel_request(cb: CallbackQuery, session: AsyncSession, user: User):
     result = await clan_service.cancel_request(session, user)
     if result["ok"]:
         await cb.answer("✅ Заявка отменена. Теперь можно подать в другой клан.", show_alert=True)
         from app.handlers.clan.main import cb_clan_search
-        cb.data = "clan_search:0"
-        await cb_clan_search(cb, session, user)
+        # Передаём page=0, не трогая объект cb (frozen)
+        await cb_clan_search(cb, session, user, page=0)
     else:
         await cb.answer(result["reason"], show_alert=True)

@@ -1,0 +1,101 @@
+import json
+from datetime import datetime, timezone
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from app.models.user import User
+from app.models.clan import Clan, ClanAuction
+from app.services.clan.base import ClanBaseService
+
+
+class ClanAuctionService(ClanBaseService):
+
+    async def get_active_auction(self, session: AsyncSession, clan_id: int) -> ClanAuction | None:
+        return await session.scalar(
+            select(ClanAuction).where(ClanAuction.clan_id == clan_id, ClanAuction.is_finished == False)
+        )
+
+    async def bid_auction(self, session: AsyncSession, auction: ClanAuction, user: User, amount: int) -> dict:
+        now = datetime.now(timezone.utc)
+        if now >= auction.ends_at:
+            return {"ok": False, "reason": "Аукцион завершён"}
+        if amount <= auction.current_bid:
+            return {"ok": False, "reason": f"Ставка должна быть больше {auction.current_bid:,}"}
+        if user.nh_coins < amount:
+            return {"ok": False, "reason": "Недостаточно NHCoin"}
+        if auction.leader_id and auction.leader_id != user.id:
+            prev = await session.scalar(select(User).where(User.id == auction.leader_id))
+            if prev:
+                prev.nh_coins += auction.current_bid
+        user.nh_coins -= amount
+        auction.current_bid = amount
+        auction.leader_id = user.id
+        await session.flush()
+        return {"ok": True}
+
+    async def finish_expired_auctions(self, session: AsyncSession) -> None:
+        now = datetime.now(timezone.utc)
+        result = await session.execute(
+            select(ClanAuction).where(ClanAuction.is_finished == False, ClanAuction.ends_at <= now)
+        )
+        for auction in result.scalars().all():
+            await self.give_auction_reward(session, auction)
+
+    async def give_auction_reward(self, session: AsyncSession, auction: ClanAuction) -> None:
+        if not auction.leader_id:
+            auction.is_finished = True
+            await session.flush()
+            return
+        winner = await session.scalar(select(User).where(User.id == auction.leader_id))
+        if not winner:
+            auction.is_finished = True
+            await session.flush()
+            return
+        try:
+            reward = json.loads(auction.reward_data) if auction.reward_data else {}
+        except Exception:
+            reward = {}
+
+        rtype = reward.get("type")
+        if rtype == "coins":
+            winner.nh_coins += reward.get("amount", 0)
+        elif rtype == "tickets":
+            winner.tickets += reward.get("amount", 0)
+        elif rtype == "potion":
+            from app.services.potion_service import potion_service
+            await potion_service.activate(session, winner, reward.get("potion_id"))
+        elif rtype == "squad":
+            from app.models.squad_member import SquadMember
+            from app.data.squad import RANKS_BY_ID
+            rank = reward.get("rank", "S")
+            amount = reward.get("amount", 1)
+            rank_cfg = RANKS_BY_ID.get(rank)
+            for _ in range(amount):
+                session.add(SquadMember(user_id=winner.id, rank=rank, base_power=rank_cfg.base_power if rank_cfg else 1000))
+            from app.repositories.squad_repo import squad_repo
+            await squad_repo.update_user_combat_power(session, winner)
+        elif rtype == "character":
+            from app.data.characters import CHARACTERS
+            pool = [c for c in CHARACTERS if c["rank"] == reward.get("rank", "king")]
+            if pool:
+                import random
+                char = random.choice(pool)
+                from app.models.character import UserCharacter
+                session.add(UserCharacter(user_id=winner.id, character_id=char["name"], rank=char["rank"], power=char["power"]))
+
+        auction.is_finished = True
+
+        # Уведомляем победителя
+        try:
+            from app.bot_instance import get_bot
+            bot = get_bot()
+            if bot:
+                label = reward.get("label", "Приз")
+                await bot.send_message(
+                    winner.tg_id,
+                    f"🏆 <b>Вы победили в клановом аукционе!</b>\n\n🎁 {label}",
+                    parse_mode="HTML",
+                )
+        except Exception:
+            pass
+
+        await session.flush()

@@ -202,6 +202,52 @@ async def _notify_round_end(result: dict):
     except Exception as e:
         logger.error(f"notify_round_end error: {e}")
 
+async def clan_war_tick():
+    """Завершает просроченные войны кланов и выдаёт награды."""
+    try:
+        async with AsyncSessionFactory() as session:
+            async with session.begin():
+                from app.services.clan import clan_service
+                from app.bot_instance import get_bot
+                finished = await clan_service.finish_expired_wars(session)
+                bot = get_bot()
+                for outcome in finished:
+                    if not outcome.get("ok"):
+                        continue
+                    winner = outcome["winner"]
+                    loser = outcome["loser"]
+                    war_type = "вооружения" if outcome["war_type"] == "power" else "богатств"
+                    # Уведомляем участников обоих кланов
+                    from sqlalchemy import select
+                    from app.models.clan import ClanMember
+                    from app.models.user import User
+                    for clan, reward, is_winner in [
+                        (winner, outcome["winner_reward"], True),
+                        (loser, outcome["loser_reward"], False),
+                    ]:
+                        members_r = await session.execute(select(ClanMember).where(ClanMember.clan_id == clan.id))
+                        for m in members_r.scalars().all():
+                            u = await session.scalar(select(User).where(User.id == m.user_id))
+                            if not u or not bot:
+                                continue
+                            result_str = "🏆 Победа!" if is_winner else "❌ Поражение"
+                            try:
+                                await bot.send_message(
+                                    u.tg_id,
+                                    f"⚔️ <b>Война {war_type} завершена!</b>\n\n"
+                                    f"{result_str}\n"
+                                    f"💰 В казну: +{fmt_num(reward)} NHCoin",
+                                    parse_mode="HTML",
+                                )
+                            except Exception:
+                                pass
+
+        async with AsyncSessionFactory() as session:
+            async with session.begin():
+                from app.services.clan import clan_service
+                await clan_service.finish_expired_auctions(session)
+    except Exception as e:
+        logger.error(f"clan_war_tick error: {e}", exc_info=True)
 
 async def _notify_auction_end(result: dict):
     try:

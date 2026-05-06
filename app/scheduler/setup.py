@@ -11,6 +11,7 @@ def setup_scheduler() -> AsyncIOScheduler:
         ultra_instinct_tick,
         auction_round_tick,
         auction_start_tick,
+        clan_war_tick
     )
 
     scheduler = AsyncIOScheduler()
@@ -41,6 +42,9 @@ def setup_scheduler() -> AsyncIOScheduler:
         id="auction_start_tick",
         name="auction_start_tick",
     )
+
+
+    scheduler.add_job(clan_war_tick, "interval", minutes=5, id="clan_war_tick") 
 
     logger.info("Scheduler configured with 4 jobs")
     return scheduler

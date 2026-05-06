@@ -1,0 +1,65 @@
+import html
+from aiogram import Router, F
+from aiogram.types import CallbackQuery, Message
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import InlineKeyboardButton
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.models.user import User
+from app.services.clan import clan_service
+from app.utils.formatters import fmt_num
+
+router = Router()
+
+
+class TreasuryFSM(StatesGroup):
+    waiting_amount = State()
+
+
+@router.callback_query(F.data == "clan_treasury")
+async def cb_clan_treasury(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
+    clan = await clan_service.get_user_clan(session, user.id)
+    if not clan:
+        await cb.answer("Вы не в клане", show_alert=True)
+        return
+
+    await state.set_state(TreasuryFSM.waiting_amount)
+    cancel_kb = InlineKeyboardBuilder()
+    cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="clans_menu"))
+
+    try:
+        await cb.message.edit_text(
+            f"🏦 <b>Казна клана {html.escape(clan.name)}</b>\n\n"
+            f"В казне: {fmt_num(clan.treasury)} NHCoin\n"
+            f"У вас: {fmt_num(user.nh_coins)} NHCoin\n\n"
+            f"Введите сумму для пополнения:",
+            reply_markup=cancel_kb.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+@router.message(TreasuryFSM.waiting_amount)
+async def msg_treasury_amount(message: Message, session: AsyncSession, user: User, state: FSMContext):
+    await state.clear()
+    clan = await clan_service.get_user_clan(session, user.id)
+    if not clan:
+        return
+
+    try:
+        amount = int(message.text.strip())
+    except ValueError:
+        await message.answer("❌ Введите число")
+        return
+
+    result = await clan_service.deposit_treasury(session, clan, user, amount)
+    if result["ok"]:
+        await message.answer(
+            f"✅ Вы пополнили казну на <b>{fmt_num(amount)} NHCoin</b>!\n"
+            f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin",
+            parse_mode="HTML",
+        )
+    else:
+        await message.answer(f"❌ {result['reason']}")

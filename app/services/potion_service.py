@@ -4,6 +4,13 @@ from sqlalchemy import select, delete
 from app.models.potion import ActivePotion
 from app.models.user import User
 
+CLAN_POTION_CONFIG = {
+        "potion_combat":    {"potion_type": "power",    "bonus_value": 30, "duration_minutes": 30},
+        "potion_income":    {"potion_type": "income",   "bonus_value": 50, "duration_minutes": 60},
+        "potion_influence": {"potion_type": "influence","bonus_value": 40, "duration_minutes": 45},
+        "potion_training":  {"potion_type": "training", "bonus_value": 25, "duration_minutes": 60},
+        "potion_luck":      {"potion_type": "luck",     "bonus_value": 20, "duration_minutes": 30},
+    }
 
 class PotionService:
 
@@ -51,6 +58,26 @@ class PotionService:
                 ActivePotion.expires_at <= now,
             )
         )
+    
+    async def activate(
+        self, session: AsyncSession, user: User, potion_id: str
+    ) -> None:
+        """Активирует клановое зелье по его item.value из магазина."""
+        cfg = self.CLAN_POTION_CONFIG.get(potion_id)
+        if not cfg:
+            return
+        await self.apply_potion(
+            session,
+            user_id=user.id,
+            potion_type=cfg["potion_type"],
+            bonus_value=cfg["bonus_value"],
+            duration_minutes=cfg["duration_minutes"],
+        )
+
+    async def get_power_bonus(self, session: AsyncSession, user_id: int) -> int:
+        """Бонус к боевой мощи от активных зелий (%)."""
+        potions = await self.get_active(session, user_id)
+        return sum(p.bonus_value for p in potions if p.potion_type == "power")
 
     # ── Геттеры эффективных значений ────────────────────────────────────────
 

@@ -19,6 +19,7 @@ async def income_tick():
                 try:
                     earned = await business_service.tick_income(session, user)
                     if earned and earned > 0:
+                        await quest_service.add_progress(session, user, "income", amount=int(earned))
                         await quest_service.add_progress(session, user, "income", amount=earned)
                 except Exception as e:
                     logger.error(f"income_tick error for {user.id}: {e}")

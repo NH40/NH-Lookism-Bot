@@ -151,7 +151,7 @@ class QuestService:
         quest.is_claimed = True
         user.nh_coins += cfg.reward_coins
         if cfg.reward_tickets > 0:
-            user.tickets = min(user.tickets + cfg.reward_tickets, user.max_tickets)
+            user.tickets = cfg.reward_tickets
 
         await session.flush()
 

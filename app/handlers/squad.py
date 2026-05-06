@@ -66,22 +66,21 @@ async def cb_squad(cb: CallbackQuery, session: AsyncSession, user: User):
 async def cb_do_recruit(cb: CallbackQuery, session: AsyncSession, user: User):
     result = await squad_service.recruit(session, user)
     if not result["ok"]:
-        # Прогресс заданий
-        from app.services.quest_service import quest_service
-        await quest_service.add_progress(session, user, "recruit", amount=result["count"])
-
         await cb.answer(result["reason"], show_alert=True)
         return
+
+    # Прогресс заданий — ПОСЛЕ успешной вербовки
+    from app.services.quest_service import quest_service
+    await quest_service.add_progress(session, user, "recruit", amount=result["count"])
 
     rank_order = ["S", "A", "B", "C", "D", "E"]
     rank_lines = []
     for rank in rank_order:
         cnt = result["rank_counts"].get(rank, 0)
         if cnt:
-            emoji = RANK_EMOJI.get(rank, "")
             rank_cfg = RANKS_BY_ID.get(rank)
             rank_lines.append(
-                f"  {emoji} Ранг {rank} — {cnt} бойцов "
+                f"  Ранг {rank} — {cnt} бойцов "
                 f"({rank_cfg.base_power:,} силы каждый)"
             )
 
@@ -98,7 +97,6 @@ async def cb_do_recruit(cb: CallbackQuery, session: AsyncSession, user: User):
         reply_markup=builder.as_markup(),
         parse_mode="HTML",
     )
-
 
 @router.callback_query(F.data == "do_train")
 async def cb_do_train(cb: CallbackQuery, session: AsyncSession, user: User):

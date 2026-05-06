@@ -93,14 +93,16 @@ class KingBotService(GameBase):
             coins_reward = 0
             if fully_captured:
                 old_power = bot.power
+                districts_to_give = bot.districts_total  # ← сохраняем ДО любых изменений
+
                 bot.is_defeated = True
                 bot.cooldown_until = now + timedelta(hours=1)
                 bot.power = int(bot.power * KING_BOT_POWER_GROWTH)
                 bot.districts_captured = 0
 
-                # 1. Сначала даём город и районы
-                await self._give_king_city(session, user, bot)
-                await session.flush()  # ← районы записаны в БД
+                # Передаём districts_to_give явно
+                await self._give_king_city(session, user, bot, districts_to_give)
+                await session.flush()
 
                 user.total_wins += 1
                 user.influence += 500
@@ -169,14 +171,17 @@ class KingBotService(GameBase):
             }
     
     async def _give_king_city(
-        self, session: AsyncSession, user: User, bot: KingBot
+        self, session: AsyncSession, user: User, bot: KingBot,
+        districts_to_give: int = None  # ← добавляем параметр
     ) -> None:
         from app.models.city import City, District
         from app.repositories.city_repo import city_repo
         from sqlalchemy import select, func
 
+        if districts_to_give is None:
+            districts_to_give = bot.districts_total
+
         sector = user.sector or "Н"
-        districts_to_give = bot.districts_total  # сколько районов даём
 
         result = await session.execute(
             select(City).where(
@@ -204,20 +209,17 @@ class KingBotService(GameBase):
         if not target_city:
             return
 
-        # Инициализируем и флашим чтобы районы появились
         await city_repo.init_city_districts(session, target_city)
         await session.flush()
 
-        # Берём свободные районы (не захваченные никем)
         free_r = await session.execute(
             select(District).where(
                 District.city_id == target_city.id,
                 District.is_captured == False,
             ).order_by(District.number).limit(districts_to_give)
         )
-        free_districts = free_r.scalars().all()
+        free_districts = list(free_r.scalars().all())
 
-        # Если свободных не хватает — добираем любые не наши
         if len(free_districts) < districts_to_give:
             need_more = districts_to_give - len(free_districts)
             free_ids = {d.id for d in free_districts}
@@ -228,15 +230,12 @@ class KingBotService(GameBase):
                     District.id.not_in(free_ids),
                 ).order_by(District.number).limit(need_more)
             )
-            free_districts = list(free_districts) + list(extra_r.scalars().all())
+            free_districts += list(extra_r.scalars().all())
 
-        captured = 0
         for d in free_districts:
             d.owner_id = user.id
             d.is_captured = True
-            captured += 1
 
-        # Синхронизируем счётчик города
         real_captured = await session.scalar(
             select(func.count(District.id)).where(
                 District.city_id == target_city.id,

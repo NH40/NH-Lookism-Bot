@@ -85,7 +85,7 @@ class PromoService:
 
     def _apply_reward(self, user: User, reward_type: str, amount: int) -> None:
         if reward_type == "tickets":
-            user.tickets = min(user.tickets + amount, user.max_tickets)
+            user.tickets = amount  
         elif reward_type == "coins":
             user.nh_coins += amount
         elif reward_type == "ui_fragments":

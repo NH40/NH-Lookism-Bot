@@ -11,6 +11,7 @@ from app.utils.keyboards.deck import deck_kb
 from app.utils.keyboards.common import back_kb
 from app.utils.formatters import fmt_power, fmt_num, fmt_ttl
 from app.data.characters import RANK_CONFIG_MAP, RANK_EMOJI, CHARACTERS
+from app.services.potion_service import potion_service
 
 router = Router()
 

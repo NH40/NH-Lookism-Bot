@@ -130,7 +130,6 @@ async def cb_choose_city(cb: CallbackQuery, session: AsyncSession, user: User):
     result = await game_service.choose_gang_city(session, user, city_id)
     if result["ok"]:
         await cb.answer(f"✅ {result['city']} выбран!")
-        # Обновляем объект user из БД
         await session.refresh(user)
         from app.handlers.attack import build_attack_menu
         text, kb = await build_attack_menu(session, user)

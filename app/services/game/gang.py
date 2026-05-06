@@ -26,17 +26,15 @@ class GameGangService(GameBase):
         await session.flush()
         return {"ok": True, "sector": sector}
 
-    async def choose_gang_city(
-        self, session: AsyncSession, user: User, city_id: int
-    ) -> dict:
+    async def choose_gang_city(self, session, user, city_id):
         if user.gang_city_id:
-            return {"ok": False, "reason": "Город уже выбран — завоюйте его до конца!"}
+            return {"ok": False, "reason": "Город уже выбран"}
         city = await city_repo.get_city(session, city_id)
-        if not city or city.sector != user.sector or city.phase != "gang":
+        if not city:
             return {"ok": False, "reason": "Город не найден"}
         await city_repo.init_city_districts(session, city)
         user.gang_city_id = city_id
-        await session.flush()
+        await session.flush()  # ← обязательно
         return {"ok": True, "city": city.name}
 
     async def gang_get_situation(

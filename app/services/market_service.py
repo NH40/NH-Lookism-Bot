@@ -216,7 +216,7 @@ class MarketService:
         item_type: str, amount: int, meta: dict
     ) -> None:
         if item_type == "tickets":
-            user.tickets = min(user.tickets + amount, user.max_tickets)
+            user.tickets += amount
 
         elif item_type == "path_points":
             user.skill_path_points += amount

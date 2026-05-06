@@ -2,6 +2,8 @@ import random
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.services.cooldown_service import cooldown_service
+from app.models.skill import UserMastery
+from sqlalchemy import select
 
 from app.constants.training import (
     TOM_LEE_COST, TOM_LEE_CD_SECONDS, TOM_LEE_POINTS_MIN, TOM_LEE_POINTS_MAX,
@@ -46,7 +48,13 @@ class TrainingService:
         points = random.randint(TOM_LEE_POINTS_MIN, TOM_LEE_POINTS_MAX)
         user.mastery_points += points
 
-        await cooldown_service.set_cooldown(cd_key, TOM_LEE_CD_SECONDS)
+        # КД с учётом скорости мастерства
+        mastery_r = await session.execute(select(UserMastery).where(UserMastery.user_id == user.id))
+        mastery = mastery_r.scalar_one_or_none()
+        speed_pct = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(mastery.speed if mastery else 0, 0)
+        cd = cooldown_service.apply_speed_reduction(TOM_LEE_CD_SECONDS, speed_pct)
+        await cooldown_service.set_cooldown(cd_key, cd)
+
         await session.flush()
 
         return {
@@ -86,7 +94,12 @@ class TrainingService:
         points = random.randint(JEON_GON_POINTS_MIN, JEON_GON_POINTS_MAX)
         user.skill_path_points += points
 
-        await cooldown_service.set_cooldown(cd_key, JEON_GON_CD_SECONDS)
+        mastery_r = await session.execute(select(UserMastery).where(UserMastery.user_id == user.id))
+        mastery = mastery_r.scalar_one_or_none()
+        speed_pct = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(mastery.speed if mastery else 0, 0)
+        cd = cooldown_service.apply_speed_reduction(JEON_GON_CD_SECONDS, speed_pct)
+        await cooldown_service.set_cooldown(cd_key, cd)
+
         await session.flush()
 
         return {

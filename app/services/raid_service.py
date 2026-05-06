@@ -108,8 +108,10 @@ class RaidService:
         await session.flush()
 
         # Ставим КД на первую атаку
+        speed_pct = await self._get_speed_pct(session, user.id)
+        attack_cd = cooldown_service.apply_speed_reduction(RAID_ATTACK_CD_SECONDS, speed_pct)
         attack_cd_key = self.attack_cd_key(raid.id, user.id)
-        await cooldown_service.set_cooldown(attack_cd_key, RAID_ATTACK_CD_SECONDS)
+        await cooldown_service.set_cooldown(attack_cd_key, attack_cd)
 
         return {
             "ok": True,
@@ -159,7 +161,9 @@ class RaidService:
         raid.damage_dealt += power
         raid.attack_count += 1
 
-        await cooldown_service.set_cooldown(attack_cd_key, RAID_ATTACK_CD_SECONDS)
+        speed_pct = await self._get_speed_pct(session, user.id)
+        attack_cd = cooldown_service.apply_speed_reduction(RAID_ATTACK_CD_SECONDS, speed_pct)
+        await cooldown_service.set_cooldown(attack_cd_key, attack_cd)
 
         # ── Проверяем убит ли босс ──────────────────────────────────────
         boss_killed = raid.damage_dealt >= boss["base_hp"]
@@ -230,9 +234,11 @@ class RaidService:
         raid.fragments_earned = fragments
         user.ui_fragments += fragments
 
-        # КД на босса
+        # КД на босса с учётом скорости
+        speed_pct = await self._get_speed_pct(session, user.id)
+        boss_cd = cooldown_service.apply_speed_reduction(boss["cd_hours"] * 3600, speed_pct)
         cd_key = self.boss_cd_key(raid.boss_id, user.id)
-        await cooldown_service.set_cooldown(cd_key, boss["cd_hours"] * 3600)
+        await cooldown_service.set_cooldown(cd_key, boss_cd)
 
         await session.flush()
 
@@ -304,6 +310,17 @@ class RaidService:
             "fragments_left": user.ui_fragments,
         }
 
+    async def _get_speed_pct(self, session: AsyncSession, user_id: int) -> int:
+        """Получает % сокращения КД от мастерства скорости."""
+        from sqlalchemy import select
+        from app.models.skill import UserMastery
+        speed_levels = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
+        r = await session.execute(
+            select(UserMastery).where(UserMastery.user_id == user_id)
+        )
+        mastery = r.scalar_one_or_none()
+        return speed_levels.get(mastery.speed if mastery else 0, 0)
+    
     def _apply_ui_level(self, user: User, level: int) -> None:
         user.ultra_instinct = level >= 1
         user.ui_auto_recruit = level >= 1

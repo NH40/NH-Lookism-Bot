@@ -227,7 +227,9 @@ class SquadService:
         from app.repositories.title_repo import title_repo
         has_focus = await title_repo.has_title(session, user.id, "focus")
         extra = 20 if has_focus else 0
-        train_cd_seconds = cooldown_service.apply_speed_reduction(5 * 60, speed_pct, extra)
+        # clan_train_bonus тоже влияет на КД тренировки
+        clan_speed = getattr(user, 'clan_train_bonus', 0) // 2  # 5% бонус = 2.5% к КД
+        train_cd_seconds = cooldown_service.apply_speed_reduction(5 * 60, speed_pct, extra + clan_speed)
 
         if is_second:
             await cooldown_service.set_cooldown(

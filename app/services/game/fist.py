@@ -57,6 +57,7 @@ class GameFistService(GameBase):
             ttl = await cooldown_service.get_ttl(cd_key)
             return {"ok": False, "reason": f"КД: {cooldown_service.format_ttl(ttl)}", "cd": ttl}
         fight = await fight_district(session, user, bot.current_power)
+
         if fight["win"]:
             cities_gained = random.randint(2, 4)
             user.fist_cities_count += cities_gained
@@ -67,6 +68,11 @@ class GameFistService(GameBase):
             bot.cooldown_until = now_dt + timedelta(hours=1)
             new_power = int(user.combat_power * bot.power_ratio * (1 + 0.1 * bot.defeat_count))
             bot.current_power = min(new_power, int(user.combat_power * bot.power_ratio * 3.0))
+
+            # Даём реальные районы в городах
+            await self._give_fist_cities(session, user, cities_gained)
+            await session.flush()
+
             if user.fist_wins >= 10:
                 return await self._promote_to_emperor(session, user)
             await self._handle_attack_cd(session, user, cd_key, "fist")

@@ -174,15 +174,21 @@ class KingBotService(GameBase):
         """Создаём реальный город с районами для игрока."""
         from app.models.city import City, District
         from app.repositories.city_repo import city_repo
+        from sqlalchemy import select, func
 
-        # Ищем свободный город в секторе игрока
         sector = user.sector or "Н"
-        cities = await city_repo.get_available_king_cities(session, sector)
+
+        # Ищем king-город где у игрока нет районов
+        result = await session.execute(
+            select(City).where(
+                City.sector == sector,
+                City.phase == "king",
+            ).order_by(City.id)
+        )
+        all_cities = result.scalars().all()
 
         target_city = None
-        for city in cities:
-            # Берём город где у игрока ещё нет районов
-            from sqlalchemy import select, func
+        for city in all_cities:
             my_in_city = await session.scalar(
                 select(func.count(District.id)).where(
                     District.owner_id == user.id,
@@ -194,39 +200,43 @@ class KingBotService(GameBase):
                 target_city = city
                 break
 
+        if not target_city and all_cities:
+            target_city = all_cities[0]
+
         if not target_city:
-            # Берём первый попавшийся город
-            if cities:
-                target_city = cities[0]
-            else:
-                return
+            return
 
-        # Инициализируем районы города
+        # Инициализируем районы если их нет
         await city_repo.init_city_districts(session, target_city)
+        await session.flush()  # ← районы созданы
 
-        # Захватываем районы бота (districts_total)
-        districts_to_capture = bot.districts_total
-        captured = 0
-
-        from sqlalchemy import select
-        from app.models.city import District
-
+        # Захватываем районы (количество = bot.districts_total)
+        districts_to_give = bot.districts_total
         districts_r = await session.execute(
             select(District).where(
                 District.city_id == target_city.id,
                 District.is_captured == False,
                 District.owner_id == None,
-            ).order_by(District.number).limit(districts_to_capture)
+            ).order_by(District.number).limit(districts_to_give)
         )
         districts = districts_r.scalars().all()
 
+        captured = 0
         for d in districts:
             d.owner_id = user.id
             d.is_captured = True
-            target_city.captured_districts += 1
             captured += 1
 
-        if captured > 0 and not target_city.owner_id:
+        # Обновляем captured_districts города
+        real_captured = await session.scalar(
+            select(func.count(District.id)).where(
+                District.city_id == target_city.id,
+                District.is_captured == True,
+            )
+        ) or 0
+        target_city.captured_districts = min(real_captured + captured, target_city.total_districts)
+
+        if not target_city.owner_id and captured > 0:
             target_city.owner_id = user.id
 
         await session.flush()

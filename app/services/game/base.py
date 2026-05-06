@@ -185,3 +185,62 @@ class GameBase:
         from app.services.prestige_service import prestige_service
         await prestige_service._reset_progress(session, user)
         return {"ok": True, "destroyed": True, "message": "💀 Вы потеряли все города!"}
+    
+    async def _give_fist_cities(
+        self, session: AsyncSession, user: User, count: int
+    ) -> None:
+        """Выдаёт реальные районы в fist городах при победе кулака."""
+        from app.models.city import City, District
+        from app.repositories.city_repo import city_repo
+        from sqlalchemy import select, func
+
+        sector = user.sector or "Н"
+
+        result = await session.execute(
+            select(City).where(
+                City.sector == sector,
+                City.phase == "fist",
+            ).order_by(City.id)
+        )
+        all_cities = result.scalars().all()
+
+        given = 0
+        for city in all_cities:
+            if given >= count:
+                break
+
+            my_in_city = await session.scalar(
+                select(func.count(District.id)).where(
+                    District.owner_id == user.id,
+                    District.city_id == city.id,
+                    District.is_captured == True,
+                )
+            ) or 0
+
+            if my_in_city > 0:
+                continue
+
+            await city_repo.init_city_districts(session, city)
+            await session.flush()
+
+            # Берём минимальное количество районов для "присутствия"
+            districts_r = await session.execute(
+                select(District).where(
+                    District.city_id == city.id,
+                    District.is_captured == False,
+                    District.owner_id == None,
+                ).order_by(District.number).limit(4)
+            )
+            districts = districts_r.scalars().all()
+
+            for d in districts:
+                d.owner_id = user.id
+                d.is_captured = True
+                city.captured_districts += 1
+
+            if not city.owner_id:
+                city.owner_id = user.id
+
+            given += 1
+
+        await session.flush()

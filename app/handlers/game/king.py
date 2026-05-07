@@ -96,20 +96,30 @@ async def build_king_menu(session, user):
         ))
 
     builder.adjust(1)
-    builder.row(InlineKeyboardButton(text="🤖 Боты-короли", callback_data="king_bots_menu"))
+    cities_count = len(my_city_ids)
+    if cities_count >= 9:
+        builder.row(InlineKeyboardButton(
+            text=f"⚠️ {cities_count}/10 — последний город не через ботов!",
+            callback_data="king_bots_menu"
+        ))
+    else:
+        builder.row(InlineKeyboardButton(text="🤖 Боты-короли", callback_data="king_bots_menu"))
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
 
     extra_str = f"\n⚡ Доп. атак: {user.extra_attack_count}" if user.extra_attack_count > 0 else ""
     cd_str = f"\n⏳ КД: {fmt_ttl(cd)}" if cd > 0 else ""
 
+    nine_hint = "\n\n⚠️ <b>Последний город захвати через список городов выше — не через ботов!</b>" if cities_count >= 9 else ""
+
     text = (
         f"⚔️ <b>Атака — Фаза Короля</b>\n\n"
         f"{'─' * 20}\n"
-        f"🏙 Городов с районами: <b>{len(my_city_ids)}/10</b>\n"
+        f"🏙 Городов с районами: <b>{cities_count}/10</b>\n"
         f"💪 Твоя мощь: <b>{fmt_num(user.combat_power)}</b>"
         + extra_str + cd_str +
         f"\n{'─' * 20}\n\n"
         f"Выбери город для атаки:"
+        + nine_hint
     )
     return text, builder.as_markup()
 

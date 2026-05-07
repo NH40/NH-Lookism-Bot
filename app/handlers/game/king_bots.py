@@ -15,10 +15,37 @@ from app.utils.formatters import fmt_num
 router = Router()
 
 
+async def _get_king_cities_count(session: AsyncSession, user_id: int) -> int:
+    from sqlalchemy import func
+    from app.models.city import District
+    return await session.scalar(
+        select(func.count(func.distinct(District.city_id))).where(
+            District.owner_id == user_id,
+            District.is_captured == True,
+        )
+    ) or 0
+
+
 @router.callback_query(F.data == "king_bots_menu")
 async def cb_king_bots_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     if user.phase != "king":
         await cb.answer("Доступно только на этапе Короля!", show_alert=True)
+        return
+
+    cities_count = await _get_king_cities_count(session, user.id)
+    if cities_count >= 9:
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(text="⚔️ Атаковать города", callback_data="attack"))
+        try:
+            await cb.message.edit_text(
+                f"🏙 <b>Уже завоёвано {cities_count}/10 городов!</b>\n\n"
+                f"Последний город нужно захватить через обычную атаку городов — не через ботов.\n\n"
+                f"Иди завоёвывай последний город!",
+                reply_markup=builder.as_markup(),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
         return
 
     bots = await king_bot_service.get_or_create_bots(session, user)
@@ -169,6 +196,14 @@ async def cb_king_bot_info(cb: CallbackQuery, session: AsyncSession, user: User)
 
 @router.callback_query(F.data.startswith("king_bot_attack:"))
 async def cb_king_bot_attack(cb: CallbackQuery, session: AsyncSession, user: User):
+    cities_count = await _get_king_cities_count(session, user.id)
+    if cities_count >= 9:
+        await cb.answer(
+            f"У тебя уже {cities_count}/10 городов! Последний захвати через обычную атаку городов.",
+            show_alert=True,
+        )
+        return
+
     bot_id = int(cb.data.split(":")[1])
     result = await king_bot_service.attack_bot(session, user, bot_id)
 

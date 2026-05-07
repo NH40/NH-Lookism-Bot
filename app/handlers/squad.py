@@ -106,12 +106,12 @@ async def cb_do_recruit(cb: CallbackQuery, session: AsyncSession, user: User):
 async def cb_do_train(cb: CallbackQuery, session: AsyncSession, user: User):
     result = await squad_service.train(session, user)
     if not result["ok"]:
-        # Прогресс заданий
-        from app.services.quest_service import quest_service
-        await quest_service.add_progress(session, user, "train")
-
         await cb.answer(result["reason"], show_alert=True)
         return
+
+    # Прогресс заданий — ПОСЛЕ успешной тренировки
+    from app.services.quest_service import quest_service
+    await quest_service.add_progress(session, user, "train")
 
     second_str = " (2-я тренировка)" if result.get("is_second") else ""
 

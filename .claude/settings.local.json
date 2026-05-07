@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"c:\\\\project\\\\NH-Lookism-Bot\" -Force)",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(dir -s)",
+      "Bash(grep -E \"\\\\.\\(toml|cfg|ini|sh|bash\\)$\")"
+    ]
+  }
+}

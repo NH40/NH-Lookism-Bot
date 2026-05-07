@@ -63,7 +63,7 @@ DAILY_QUESTS: list[QuestConfig] = [
         name="Мастер на все руки",
         description="Выполнить все остальные задания дня",
         emoji="🌟",
-        target=4,  # кол-во остальных заданий
+        target=5,  # кол-во остальных заданий
         reward_coins=300_000,
         reward_tickets=2,
     ),

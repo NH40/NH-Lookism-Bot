@@ -288,6 +288,11 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer(result.get("reason", "Ошибка"), show_alert=True)
         return
 
+    from app.services.quest_service import quest_service
+    await quest_service.add_progress(session, user, "attacks")
+    if result["win"]:
+        await quest_service.add_progress(session, user, "wins")
+
     crit_str = " ⚡КРИТ!" if result.get("is_crit") else ""
     is_pvp = result.get("defender_name") is not None
 

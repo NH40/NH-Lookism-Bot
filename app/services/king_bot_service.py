@@ -170,18 +170,13 @@ class KingBotService(GameBase):
                 "extra_attacks_left": user.extra_attack_count,
             }
     
-    async def _give_king_city(
-        self, session: AsyncSession, user: User, bot: KingBot,
-        districts_to_give: int = None  # ← добавляем параметр
-    ) -> None:
+    async def _find_or_create_king_city(
+        self, session: AsyncSession, user: User,
+        districts_to_give: int, sector: str,
+    ):
+        """Возвращает город где у игрока 0 районов. Создаёт новый если таких нет."""
         from app.models.city import City, District
-        from app.repositories.city_repo import city_repo
         from sqlalchemy import select, func
-
-        if districts_to_give is None:
-            districts_to_give = bot.districts_total
-
-        sector = user.sector or "Н"
 
         result = await session.execute(
             select(City).where(
@@ -191,9 +186,8 @@ class KingBotService(GameBase):
         )
         all_cities = result.scalars().all()
 
-        target_city = None
+        # 1. Ищем город подходящего размера где игрока ещё нет
         for city in all_cities:
-            # Город должен вмещать нужное количество районов
             if city.total_districts < districts_to_give:
                 continue
             my_in_city = await session.scalar(
@@ -204,31 +198,80 @@ class KingBotService(GameBase):
                 )
             ) or 0
             if my_in_city == 0:
-                target_city = city
+                return city
+
+        # 2. Любой город (любого размера) где игрока ещё нет
+        for city in sorted(all_cities, key=lambda c: abs(c.total_districts - districts_to_give)):
+            my_in_city = await session.scalar(
+                select(func.count(District.id)).where(
+                    District.owner_id == user.id,
+                    District.city_id == city.id,
+                    District.is_captured == True,
+                )
+            ) or 0
+            if my_in_city == 0:
+                return city
+
+        # 3. Свободного города нет — создаём новый
+        return await self._create_king_city(session, districts_to_give, sector, all_cities)
+
+    async def _create_king_city(
+        self, session: AsyncSession,
+        districts_to_give: int, sector: str, existing_cities: list,
+    ):
+        from app.models.city import City
+        from app.data.cities import CITY_NAMES_BY_SECTOR, CITY_TYPE_DISTRICTS
+
+        # Выбираем type_id — ближайший сверху по кол-ву районов
+        type_id = max(CITY_TYPE_DISTRICTS.keys())
+        for tid, total in sorted(CITY_TYPE_DISTRICTS.items()):
+            if total >= districts_to_give:
+                type_id = tid
                 break
+        total_districts = CITY_TYPE_DISTRICTS[type_id]
 
-        # Если не нашли с нужным размером — берём ближайший по размеру
-        if not target_city:
-            for city in sorted(all_cities, key=lambda c: abs(c.total_districts - districts_to_give)):
-                my_in_city = await session.scalar(
-                    select(func.count(District.id)).where(
-                        District.owner_id == user.id,
-                        District.city_id == city.id,
-                        District.is_captured == True,
-                    )
-                ) or 0
-                if my_in_city == 0:
-                    target_city = city
-                    break
+        used_names = {c.name for c in existing_cities}
+        all_names = CITY_NAMES_BY_SECTOR.get(sector, [])
+        available = [n for n in all_names if n not in used_names]
+        name = random.choice(available) if available else f"Новый квартал {sector}-{len(existing_cities) + 1}"
 
-        if not target_city and all_cities:
-            target_city = max(all_cities, key=lambda c: c.total_districts)
+        new_city = City(
+            sector=sector,
+            phase="king",
+            type_id=type_id,
+            name=name,
+            total_districts=total_districts,
+            captured_districts=0,
+            is_fully_captured=False,
+            district_power_multiplier=1.0,
+        )
+        session.add(new_city)
+        await session.flush()
+        return new_city
+
+    async def _give_king_city(
+        self, session: AsyncSession, user: User, bot: KingBot,
+        districts_to_give: int = None,
+    ) -> None:
+        from app.models.city import City, District
+        from app.repositories.city_repo import city_repo
+        from sqlalchemy import select, func
+
+        if districts_to_give is None:
+            districts_to_give = bot.districts_total
+
+        sector = user.sector or "Н"
+
+        target_city = await self._find_or_create_king_city(
+            session, user, districts_to_give, sector
+        )
         if not target_city:
             return
 
         await city_repo.init_city_districts(session, target_city)
         await session.flush()
 
+        # Берём свободные районы
         free_r = await session.execute(
             select(District).where(
                 District.city_id == target_city.id,
@@ -237,6 +280,7 @@ class KingBotService(GameBase):
         )
         free_districts = list(free_r.scalars().all())
 
+        # Если свободных не хватает — добираем из чужих
         if len(free_districts) < districts_to_give:
             need_more = districts_to_give - len(free_districts)
             free_ids = {d.id for d in free_districts}

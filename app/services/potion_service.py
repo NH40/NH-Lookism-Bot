@@ -106,6 +106,14 @@ class PotionService:
         potions = await self.get_active(session, user_id)
         return sum(p.bonus_value for p in potions if p.potion_type == "income")
 
+    _TYPE_LABEL = {
+        "power":     "⚔️ Зелье силы",
+        "income":    "💰 Зелье богатства",
+        "influence": "⚡ Зелье влияния",
+        "training":  "🏋 Зелье тренировки",
+        "luck":      "🍀 Зелье удачи",
+    }
+
     async def get_active_summary(self, session: AsyncSession, user_id: int) -> str:
         """Текстовое описание активных зелий для UI."""
         now = datetime.now(timezone.utc)
@@ -117,7 +125,8 @@ class PotionService:
             remaining = int((p.expires_at - now).total_seconds())
             m, s = divmod(remaining, 60)
             time_str = f"{m}м {s}с" if m else f"{s}с"
-            lines.append(f"  🧪 +{p.bonus_value}% ({time_str})")
+            label = self._TYPE_LABEL.get(p.potion_type, "🧪 Зелье")
+            lines.append(f"  {label}: +{p.bonus_value}% ({time_str})")
         return "\n".join(lines)
 
 

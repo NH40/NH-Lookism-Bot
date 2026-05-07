@@ -43,7 +43,7 @@ SHOP_ITEMS: list[ShopItem] = [
 ]
 
 POTIONS: list[PotionConfig] = [
-    PotionConfig("potion_combat",    "⚔️ Зелье силы",       "Боевая мощь +30% на 30 минут",      "combat_power", 30, 30, 25_000),
+    PotionConfig("potion_combat",    "⚔️ Зелье силы",       "Боевая мощь +30% на 30 минут",      "power", 30, 30, 25_000),
     PotionConfig("potion_income",    "💰 Зелье богатства",  "Доход +50% на 60 минут",             "income",       50, 60, 20_000),
     PotionConfig("potion_influence", "⚡ Зелье влияния",    "Влияние +40% на 45 минут",           "influence",    40, 45, 18_000),
     PotionConfig("potion_training",  "🏋 Зелье тренировки", "Охват тренировки +25% на 60 минут",  "training",     25, 60, 15_000),

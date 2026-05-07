@@ -163,9 +163,10 @@ class BusinessService:
         potion_bonus = await potion_service.get_income_bonus(session, user.id)
         clan_bonus = getattr(user, 'clan_income_bonus', 0)
 
+        effective_final = int(user.income_per_minute * (1 + potion_bonus / 100))
         return {
             "base_income": base,
-            "final_income": user.income_per_minute,
+            "final_income": effective_final,
             "total_bonus_percent": user.income_bonus_percent + user.prestige_income_bonus,
             "prestige_bonus": user.prestige_income_bonus,
             "potion_bonus": potion_bonus,

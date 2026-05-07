@@ -124,8 +124,12 @@ class GameFistService(GameBase):
         if result["win"]:
             cities_gained = random.randint(2, 4)
             cities_lost = random.randint(2, 4)
+            # Забираем реальные районы у защитника + уничтожаем здания
+            actual_lost = await self._take_fist_cities_from(session, defender, cities_lost)
+            defender.fist_cities_count = max(0, defender.fist_cities_count - actual_lost)
+            # Даём реальные районы атакующему
+            await self._give_fist_cities(session, attacker, cities_gained)
             attacker.fist_cities_count += cities_gained
-            defender.fist_cities_count = max(0, defender.fist_cities_count - cities_lost)
             attacker.fist_wins += 1
             attacker.total_wins += 1
             attacker.influence += ATTACK_WIN_INFLUENCE_BONUS["fist"]
@@ -136,7 +140,9 @@ class GameFistService(GameBase):
                 return await self._promote_to_emperor(session, attacker)
         else:
             cities_lost = random.randint(2, 4)
-            attacker.fist_cities_count = max(0, attacker.fist_cities_count - cities_lost)
+            # Забираем реальные районы у атакующего + уничтожаем здания
+            actual_lost = await self._take_fist_cities_from(session, attacker, cities_lost)
+            attacker.fist_cities_count = max(0, attacker.fist_cities_count - actual_lost)
             if attacker.fist_cities_count < FIST_MIN_CITIES:
                 await notify_pvp_attack(attacker, defender, False, "fist")
                 await self._demote_fist_to_king(session, attacker)

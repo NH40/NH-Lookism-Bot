@@ -158,6 +158,11 @@ class GameBase:
         user.phase = "fist"
         user.fist_cities_count = FIST_MIN_CITIES
         user.extra_attack_count = await self._get_max_extra_attacks_async(session, user)
+        # Удаляем старых ботов — при следующем вызове get_fist_bots создадутся
+        # новые с актуальной боевой мощью игрока
+        from sqlalchemy import delete as sql_delete
+        from app.models.city import FistBot
+        await session.execute(sql_delete(FistBot).where(FistBot.challenger_id == user.id))
         await session.flush()
         return {
             "ok": True, "promoted": True, "new_phase": "fist",
@@ -178,12 +183,12 @@ class GameBase:
 
     async def _destroy_gang(self, session: AsyncSession, user: User) -> dict:
         from app.services.prestige_service import prestige_service
-        await prestige_service._reset_progress(session, user)
+        await prestige_service._reset_progress(session, user, keep_ui=True, keep_progress=True)
         return {"ok": True, "destroyed": True, "message": "💀 Ваша банда уничтожена! Начинайте сначала."}
 
     async def _destroy_king(self, session: AsyncSession, user: User) -> dict:
         from app.services.prestige_service import prestige_service
-        await prestige_service._reset_progress(session, user)
+        await prestige_service._reset_progress(session, user, keep_ui=True, keep_progress=True)
         return {"ok": True, "destroyed": True, "message": "💀 Вы потеряли все города!"}
     
     async def _give_fist_cities(
@@ -223,13 +228,13 @@ class GameBase:
             await city_repo.init_city_districts(session, city)
             await session.flush()
 
-            # Берём минимальное количество районов для "присутствия"
+            # Выдаём случайное количество районов (2–6)
             districts_r = await session.execute(
                 select(District).where(
                     District.city_id == city.id,
                     District.is_captured == False,
                     District.owner_id == None,
-                ).order_by(District.number).limit(4)
+                ).order_by(District.number).limit(random.randint(2, 6))
             )
             districts = districts_r.scalars().all()
 
@@ -244,3 +249,70 @@ class GameBase:
             given += 1
 
         await session.flush()
+
+    async def _take_fist_cities_from(
+        self, session: AsyncSession, user: User, count: int
+    ) -> int:
+        """Забирает fist-районы у игрока (при проигрыше или потере в PvP).
+
+        Освобождает до `count` городов с их районами, уничтожает здания
+        пропорционально потерянным районам. Возвращает реальное число
+        забранных городов.
+        """
+        from app.models.city import City, District
+        from sqlalchemy import select, func, desc
+        from app.repositories.building_repo import building_repo
+        from app.services.business_service import business_service
+
+        cities_r = await session.execute(
+            select(District.city_id, func.count(District.id).label("cnt"))
+            .join(City, City.id == District.city_id)
+            .where(
+                District.owner_id == user.id,
+                District.is_captured == True,
+                City.phase == "fist",
+            )
+            .group_by(District.city_id)
+            .order_by(desc("cnt"))
+        )
+        city_groups = cities_r.all()
+
+        taken_cities = 0
+        total_districts_lost = 0
+
+        for row in city_groups:
+            if taken_cities >= count:
+                break
+            city_id = row[0]
+
+            districts_r = await session.execute(
+                select(District).where(
+                    District.owner_id == user.id,
+                    District.city_id == city_id,
+                    District.is_captured == True,
+                )
+            )
+            districts = districts_r.scalars().all()
+            for d in districts:
+                d.owner_id = None
+                d.is_captured = False
+                total_districts_lost += 1
+
+            city_r = await session.execute(select(City).where(City.id == city_id))
+            city = city_r.scalar_one_or_none()
+            if city:
+                city.captured_districts = max(0, city.captured_districts - len(districts))
+                if city.owner_id == user.id:
+                    city.owner_id = None
+                city.is_fully_captured = False
+
+            taken_cities += 1
+
+        if total_districts_lost > 0:
+            await building_repo.deactivate_buildings_on_district_loss(
+                session, user.id, total_districts_lost
+            )
+            await business_service._recalc_income(session, user)
+
+        await session.flush()
+        return taken_cities

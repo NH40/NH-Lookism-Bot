@@ -25,8 +25,19 @@ class PrestigeService:
             return False, f"Достигнут максимальный уровень ({MAX_PRESTIGE})"
         return True, ""
 
-    async def _reset_progress(self, session: AsyncSession, user: User, keep_ui: bool = False) -> None:
-        """Сброс прогресса кроме донатов, пробуждений и достижений."""
+    async def _reset_progress(
+        self,
+        session: AsyncSession,
+        user: User,
+        keep_ui: bool = False,
+        keep_progress: bool = False,
+    ) -> None:
+        """Сброс прогресса кроме донатов, пробуждений и достижений.
+
+        keep_progress=True — при уничтожении банды: сохраняет ui_fragments,
+        ui_level, mastery_points, UserMastery-статы, skill_path_points.
+        keep_ui=True      — при престиже: сохраняет ui_fragments и ui_level.
+        """
         user.phase = "gang"
         user.sector = None
         user.gang_city_id = None
@@ -53,18 +64,20 @@ class PrestigeService:
         user.double_attack_used = False
         user.extra_attack_count = 0
 
-        # ── Очки мастерства и путь — сбрасываются всегда ─────────────────
-        user.mastery_points = 0
+        # ── Путь сбрасывается всегда (выбранный путь / мультипликатор) ───
         user.skill_path = None
-        user.skill_path_points = 0
         user.skill_path_bonus_multiplier = 1.0
 
-        # ── УИ — сбрасывается только если keep_ui=False ──────────────────
-        if not keep_ui:
+        # ── Очки мастерства и пути — только при полном сбросе ────────────
+        if not keep_progress:
+            user.mastery_points = 0
+            user.skill_path_points = 0
+
+        # ── УИ — сохраняется при престиже или при уничтожении банды ──────
+        if not keep_ui and not keep_progress:
             from app.services.raid_service import raid_service as rs
             rs.reset_game_ui(user)
             user.ui_fragments = 0
-        # При престиже — УИ и фрагменты сохраняются
 
         await session.execute(
             delete(SquadMember).where(SquadMember.user_id == user.id)
@@ -82,23 +95,24 @@ class PrestigeService:
             delete(UserPathSkills).where(UserPathSkills.user_id == user.id)
         )
 
-        # ── Сбрасываем мастерство ─────────────────────────────────────────
-        r = await session.execute(
-            select(UserMastery).where(UserMastery.user_id == user.id)
-        )
-        mastery = r.scalar_one_or_none()
-        if mastery:
-            mastery.strength = 0
-            mastery.speed = 0
-            mastery.endurance = 0
-            mastery.technique = 0
+        # ── Мастерство — только при полном сбросе ────────────────────────
+        if not keep_progress:
+            r = await session.execute(
+                select(UserMastery).where(UserMastery.user_id == user.id)
+            )
+            mastery = r.scalar_one_or_none()
+            if mastery:
+                mastery.strength = 0
+                mastery.speed = 0
+                mastery.endurance = 0
+                mastery.technique = 0
 
         # Переприменяем донат-бонусы
         from app.services.title_service import title_service
         await title_service.reapply_all_titles(session, user)
 
         # Восстанавливаем бонусы достижений (перманентные)
-        await self._reapply_achievement_bonuses(session, user)
+        await self._reapply_achievement_bonuses(session, user, keep_progress)
 
         await session.flush()
 
@@ -119,7 +133,7 @@ class PrestigeService:
         return {"ok": True, "level": user.prestige_level}
 
     async def _reapply_achievement_bonuses(
-        self, session: AsyncSession, user: User
+        self, session: AsyncSession, user: User, keep_progress: bool = False
     ) -> None:
         """Восстанавливает % бонусы от достижений после вайпа."""
         from app.models.title import UserAchievement
@@ -152,7 +166,7 @@ class PrestigeService:
 
             # Восстанавливаем только % бонусы и очки пути
             # Монеты НЕ возвращаем — они уже были выданы при получении
-            if key == "path_points":
+            if key == "path_points" and not keep_progress:
                 user.skill_path_points += val
             elif key in pct_map:
                 user.income_bonus_percent += pct_map[key]

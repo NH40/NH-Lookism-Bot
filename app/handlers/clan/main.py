@@ -90,12 +90,19 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
     builder.row(InlineKeyboardButton(text="🚪 Покинуть клан", callback_data="clan_leave"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
 
-    # Бонусы клана
-    bonus_lines = []
-    if clan.bonus_income_pct: bonus_lines.append(f"💰 Доход +{clan.bonus_income_pct}%")
-    if clan.bonus_ticket_pct: bonus_lines.append(f"🎟 Тикет +{clan.bonus_ticket_pct}%")
-    if clan.bonus_train_pct:  bonus_lines.append(f"🏋 Трен. +{clan.bonus_train_pct}%")
-    bonus_str = "  " + " | ".join(bonus_lines) if bonus_lines else ""
+    # Улучшения клана (из казны)
+    upgrade_lines = []
+    if clan.bonus_income_pct: upgrade_lines.append(f"💰 +{clan.bonus_income_pct}%")
+    if clan.bonus_ticket_pct: upgrade_lines.append(f"🎟 +{clan.bonus_ticket_pct}%")
+    if clan.bonus_train_pct:  upgrade_lines.append(f"🏋 +{clan.bonus_train_pct}%")
+    upgrade_str = "\n⚙️ Улучшения: " + " | ".join(upgrade_lines) if upgrade_lines else ""
+
+    # Донат-бонусы
+    donat_lines = []
+    if clan.donat_income_pct: donat_lines.append(f"💰 +{clan.donat_income_pct}%")
+    if clan.donat_ticket_pct: donat_lines.append(f"🎟 +{clan.donat_ticket_pct}%")
+    if clan.donat_train_pct:  donat_lines.append(f"🏋 +{clan.donat_train_pct}%")
+    donat_str = "\n💎 Донат: " + " | ".join(donat_lines) if donat_lines else ""
 
     war_str = "\n⚔️ Идёт война!" if active_war else ""
 
@@ -107,7 +114,8 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
             f"👥 Участников: {len(members)}/{clan.max_members}\n"
             f"💪 Боевая мощь: {fmt_num(clan.combat_power)}\n"
             f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin"
-            f"{bonus_str}"
+            f"{upgrade_str}"
+            f"{donat_str}"
             f"{war_str}\n\n"
             f"Выбери действие:",
             reply_markup=builder.as_markup(),

@@ -243,22 +243,21 @@ class AuctionService:
                 "next_in_minutes": pause_min,
             }
         else:
-            # Следующий раунд — сбрасываем только если лот уже доставлен (или победителя не было)
-            if not lot or lot.is_delivered:
-                auction.current_round = current_round + 1
-                auction.final_bid = 0
-                auction.winner_id = None
-                auction.ends_at = now + timedelta(seconds=AUCTION_ROUND_SECONDS)
+            # Следующий раунд — всегда переходим (даже если никто не ставил)
+            auction.current_round = current_round + 1
+            auction.final_bid = 0
+            auction.winner_id = None
+            auction.ends_at = now + timedelta(seconds=AUCTION_ROUND_SECONDS)
 
-                new_reward = await self._generate_reward(auction.tier)
-                new_lot = AuctionLot(
-                    auction_id=auction.id,
-                    reward_type=cfg["reward_type"],
-                    reward_data=new_reward,
-                    min_bid=cfg.get("min_bid", 500),
-                )
-                session.add(new_lot)
-                await session.flush()
+            new_reward = await self._generate_reward(auction.tier)
+            new_lot = AuctionLot(
+                auction_id=auction.id,
+                reward_type=cfg["reward_type"],
+                reward_data=new_reward,
+                min_bid=cfg.get("min_bid", 500),
+            )
+            session.add(new_lot)
+            await session.flush()
 
             return {
                 "event": "round_end",

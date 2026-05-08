@@ -52,10 +52,12 @@ class ClanShopService(ClanBaseService):
                 session.add(UserCharacter(user_id=u.id, character_id=char["name"], rank=char["rank"], power=char["power"]))
 
         elif item.item_type == "auction":
-            from app.services.clan.auction import ClanAuctionService as CAS
             from datetime import datetime, timezone, timedelta
             from app.models.clan import ClanAuction
             import json
+            existing = await self.get_active_auction(session, clan.id)
+            if existing:
+                return {"ok": False, "reason": "В клане уже идёт аукцион"}
             rewards = CLAN_AUCTION_REWARDS.get(item.value, CLAN_AUCTION_REWARDS["common"])
             reward = random.choice(rewards)
             auction = ClanAuction(

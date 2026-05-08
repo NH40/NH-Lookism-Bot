@@ -187,6 +187,15 @@ async def cb_clan_buy(cb: CallbackQuery, session: AsyncSession, user: User):
 
     await cb.answer(f"✅ {item.name} куплено для всего клана!", show_alert=True)
     await session.refresh(clan)
+
+    if item.item_type == "auction":
+        active = await clan_service.get_active_auction(session, clan.id)
+        if active:
+            cb.data = f"clan_auction:{active.id}"
+            from app.handlers.clan.auction import cb_clan_auction
+            await cb_clan_auction(cb, session, user)
+            return
+
     await _show_category(cb, clan, item.category)
 
 

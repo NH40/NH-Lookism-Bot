@@ -35,13 +35,17 @@ async def cb_clan_auction_info(cb: CallbackQuery, session: AsyncSession, user: U
         return
 
     builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="🛒 Купить аукцион в магазине", callback_data="clan_shop_cat:auction"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clans_menu"))
     try:
         await cb.message.edit_text(
             "🏛 <b>Клановый аукцион</b>\n\n"
-            "Аукцион запускается через магазин клана.\n"
-            "Только участники клана могут делать ставки.\n\n"
-            "Сейчас активного аукциона нет.",
+            "Сейчас активного аукциона нет.\n\n"
+            "Запустить аукцион можно через магазин клана:\n"
+            "• Обычный — 1.5M NHCoin (приз 1-2M+ и др.)\n"
+            "• Редкий — 7.5M NHCoin (приз 5-10M+ и др.)\n"
+            "• Эпический — 20M NHCoin (приз 30M+ и др.)\n\n"
+            "Только участники клана могут делать ставки.",
             reply_markup=builder.as_markup(),
             parse_mode="HTML",
         )

@@ -18,7 +18,7 @@ import html
 router = Router()
 
 
-async def build_king_menu(session, user):
+async def build_king_menu(session, user, page: int = 0):
     cd_key = cooldown_service.attack_key(user.id)
     cd = await cooldown_service.get_ttl(cd_key)
 
@@ -32,9 +32,11 @@ async def build_king_menu(session, user):
     )
     my_city_ids = set(my_city_ids_r.scalars().all())
 
-    builder = InlineKeyboardBuilder()
-    type_counts: dict[int, int] = {}
+    from app.data.cities import KING_DISTRICT_BASE_POWER
 
+    # Сначала собираем все подходящие города с данными
+    eligible = []
+    type_counts: dict[int, int] = {}
     for city in cities:
         type_id = city.type_id or 1
         if type_counts.get(type_id, 0) >= 3:
@@ -76,27 +78,37 @@ async def build_king_menu(session, user):
             can = "✅" if user.combat_power >= def_power else "❌"
             def_str = f"👤 {can} {fmt_num(def_power)}"
         else:
-            from app.data.cities import KING_DISTRICT_BASE_POWER
             bot_power = int(KING_DISTRICT_BASE_POWER * city.total_districts * city.district_power_multiplier)
             can = "✅" if user.combat_power >= bot_power else "❌"
             def_str = f"🤖 {can} {fmt_num(bot_power)}"
 
         my_str = f"[моих:{my_in_city}] " if my_in_city > 0 else ""
         size_emoji = {1: "🏘", 2: "🏙", 3: "🌆", 4: "🌇", 5: "🌃"}.get(type_id, "🏙")
+        eligible.append((city, size_emoji, my_str, def_str))
 
-        # Прогресс бар города
-        total = city.total_districts
-        captured = city.captured_districts
-        pct = int(captured / total * 100) if total > 0 else 0
-        bar_filled = int(pct / 10)
-        bar = "🟩" * bar_filled + "⬛" * (10 - bar_filled)
+    # Пагинация
+    per_page = 10
+    total = len(eligible)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = max(0, min(page, total_pages - 1))
+    page_items = eligible[page * per_page:(page + 1) * per_page]
 
+    builder = InlineKeyboardBuilder()
+    for city, size_emoji, my_str, def_str in page_items:
         builder.row(InlineKeyboardButton(
             text=f"{size_emoji} {city.name} {my_str}| {def_str}",
             callback_data=f"king_city_info:{city.id}"
         ))
 
-    builder.adjust(1)
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"king_page:{page - 1}"))
+    nav.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop"))
+    if page < total_pages - 1:
+        nav.append(InlineKeyboardButton(text="▶️", callback_data=f"king_page:{page + 1}"))
+    if nav:
+        builder.row(*nav)
+
     cities_count = len(my_city_ids)
     if cities_count >= 9:
         builder.row(InlineKeyboardButton(
@@ -110,7 +122,6 @@ async def build_king_menu(session, user):
 
     extra_str = f"\n⚡ Доп. атак: {user.extra_attack_count}" if user.extra_attack_count > 0 else ""
     cd_str = f"\n⏳ КД: {fmt_ttl(cd)}" if cd > 0 else ""
-
     nine_hint = "\n\n⚠️ <b>Последний город захвати через список городов выше — не через ботов!</b>" if cities_count >= 9 else ""
 
     text = (
@@ -124,6 +135,17 @@ async def build_king_menu(session, user):
         + nine_hint
     )
     return text, builder.as_markup()
+
+
+@router.callback_query(F.data.startswith("king_page:"))
+async def cb_king_page(cb: CallbackQuery, session: AsyncSession, user: User):
+    page = int(cb.data.split(":")[1])
+    text, kb = await build_king_menu(session, user, page=page)
+    try:
+        await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    except Exception:
+        pass
+    await cb.answer()
 
 
 @router.callback_query(F.data.startswith("king_city_info:"))

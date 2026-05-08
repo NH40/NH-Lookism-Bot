@@ -16,7 +16,7 @@ from app.utils.truce import truce_button_label
 router = Router()
 
 
-async def build_gang_menu(session, user):
+async def build_gang_menu(session, user, page: int = 0):
     cd_key = cooldown_service.attack_key(user.id)
     cd = await cooldown_service.get_ttl(cd_key)
 
@@ -34,20 +34,35 @@ async def build_gang_menu(session, user):
         )
 
     if not user.gang_city_id:
+        per_page = 10
         cities = await city_repo.get_available_gang_cities(session, user.sector)
+        total = len(cities)
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        page = max(0, min(page, total_pages - 1))
+        slice_ = cities[page * per_page:(page + 1) * per_page]
+
         builder = InlineKeyboardBuilder()
         type_names = {1: "4р", 2: "8р", 3: "16р", 4: "32р", 5: "64р"}
-        for city in cities[:30]:
+        for city in slice_:
             builder.button(
                 text=f"🏙 {city.name} [{type_names.get(city.type_id, '?')}]",
                 callback_data=f"choose_city:{city.id}"
             )
         builder.adjust(1)
+
+        nav = []
+        if page > 0:
+            nav.append(InlineKeyboardButton(text="◀️", callback_data=f"city_page:{page - 1}"))
+        nav.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop"))
+        if page < total_pages - 1:
+            nav.append(InlineKeyboardButton(text="▶️", callback_data=f"city_page:{page + 1}"))
+        builder.row(*nav)
         builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
         return (
             f"⚔️ <b>Выбор города — Сектор {user.sector}</b>\n\n"
             f"Выбери город. После выбора нельзя сменить\n"
-            f"пока не завоюешь все районы!",
+            f"пока не завоюешь все районы!\n\n"
+            f"🏙 Доступно городов: {total}",
             builder.as_markup()
         )
 
@@ -106,6 +121,22 @@ async def build_gang_menu(session, user):
     builder.row(InlineKeyboardButton(text=truce_button_label(user), callback_data="truce_menu"))
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
     return text, builder.as_markup()
+
+
+@router.callback_query(F.data == "noop")
+async def cb_noop(cb: CallbackQuery):
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("city_page:"))
+async def cb_city_page(cb: CallbackQuery, session: AsyncSession, user: User):
+    page = int(cb.data.split(":")[1])
+    text, kb = await build_gang_menu(session, user, page=page)
+    try:
+        await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    except Exception:
+        pass
+    await cb.answer()
 
 
 @router.callback_query(F.data.startswith("choose_sector:"))

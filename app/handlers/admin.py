@@ -1255,6 +1255,46 @@ async def cb_adm_clan_donat_apply(cb: CallbackQuery, session: AsyncSession, user
     await session.refresh(clan)
     await _show_clan_donat_panel(cb.message, clan)
 
+    # Уведомляем всех участников клана
+    from app.bot_instance import get_bot
+    from app.models.clan import ClanMember
+    from app.models.user import User as UserModel
+    bot = get_bot()
+    if bot:
+        bonus_parts = []
+        if pkg.income_pct: bonus_parts.append(f"💰 Доход +{pkg.income_pct}%")
+        if pkg.ticket_pct: bonus_parts.append(f"🎟 Шанс тикета +{pkg.ticket_pct}%")
+        if pkg.train_pct:  bonus_parts.append(f"🏋 Тренировка +{pkg.train_pct}%")
+        bonus_str = "\n".join(bonus_parts)
+
+        total_parts = []
+        if clan.donat_income_pct: total_parts.append(f"💰 Доход +{clan.donat_income_pct}%")
+        if clan.donat_ticket_pct: total_parts.append(f"🎟 Тикет +{clan.donat_ticket_pct}%")
+        if clan.donat_train_pct:  total_parts.append(f"🏋 Трен. +{clan.donat_train_pct}%")
+        total_str = " | ".join(total_parts)
+
+        import html as _html
+        text = (
+            f"💎 <b>Клан получил донат!</b>\n\n"
+            f"🏯 {_html.escape(clan.name)}\n"
+            f"📦 Пакет: <b>{pkg.name}</b>\n\n"
+            f"{bonus_str}\n\n"
+            f"📊 Итого донат-бонусов клана:\n{total_str}"
+        )
+
+        members_r = await session.execute(
+            sa_select(ClanMember).where(ClanMember.clan_id == clan.id)
+        )
+        user_ids = [m.user_id for m in members_r.scalars().all()]
+        users_r = await session.execute(
+            sa_select(UserModel).where(UserModel.id.in_(user_ids))
+        )
+        for u in users_r.scalars().all():
+            try:
+                await bot.send_message(u.tg_id, text, parse_mode="HTML")
+            except Exception:
+                pass
+
 
 @router.callback_query(F.data.startswith("adm_clan_donat_reset:"))
 async def cb_adm_clan_donat_reset(cb: CallbackQuery, session: AsyncSession, user: User):

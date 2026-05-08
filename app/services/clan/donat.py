@@ -31,6 +31,12 @@ class ClanDonatService:
             u.clan_donat_train_bonus  = clan.donat_train_pct
 
         await session.flush()
+
+        # Пересчитываем income_per_minute для всех участников
+        from app.services.business_service import business_service
+        for u in users:
+            await business_service._recalc_income(session, u)
+
         return {"ok": True, "package": pkg}
 
     async def reset_clan_donat(self, session: AsyncSession, clan: Clan) -> dict:
@@ -51,4 +57,10 @@ class ClanDonatService:
             u.clan_donat_train_bonus  = 0
 
         await session.flush()
+
+        # Пересчитываем income_per_minute после сброса
+        from app.services.business_service import business_service
+        for u in users:
+            await business_service._recalc_income(session, u)
+
         return {"ok": True}

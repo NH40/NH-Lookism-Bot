@@ -178,6 +178,7 @@ class BusinessService:
             "clan_income_bonus": clan_upgrade_bonus,
             "clan_donat_income_bonus": clan_donat_bonus,
             "district_multiplier": user.district_multiplier,
+            "skills_bonus": user.income_bonus_percent,
         }
 
 

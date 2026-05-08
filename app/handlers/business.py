@@ -56,6 +56,8 @@ async def _show_business_main(
     ))
 
     bonuses = []
+    if info.get('skills_bonus'):
+        bonuses.append(f"  📊 Навыки/Титул: +{info['skills_bonus']}%")
     if info['prestige_bonus']:
         bonuses.append(f"  🌟 Пробуждение: +{info['prestige_bonus']}%")
     if info['potion_bonus']:

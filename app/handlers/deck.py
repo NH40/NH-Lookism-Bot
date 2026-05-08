@@ -48,8 +48,8 @@ async def cb_deck(cb: CallbackQuery, session: AsyncSession, user: User):
                 callback_data="pull_one"
             ),
             InlineKeyboardButton(
-                text=f"🎰 ×{user.tickets} все",
-                callback_data="pull_all"
+                text=f"🎰 ×10",
+                callback_data="pull_10"
             )
         )
     else:
@@ -269,14 +269,14 @@ async def cb_pull_one(cb: CallbackQuery, session: AsyncSession, user: User):
         pass
 
 
-@router.callback_query(F.data == "pull_all")
-async def cb_pull_all(cb: CallbackQuery, session: AsyncSession, user: User):
+@router.callback_query(F.data == "pull_10")
+async def cb_pull_10(cb: CallbackQuery, session: AsyncSession, user: User):
     if user.tickets <= 0:
         await cb.answer("Нет тикетов", show_alert=True)
         return
 
-    count = user.tickets
-    results = await deck_service.pull_all(session, user)
+    count = min(10, user.tickets)
+    results = await deck_service.pull_n(session, user, count)
     if not results:
         await cb.answer("Нет тикетов", show_alert=True)
         return

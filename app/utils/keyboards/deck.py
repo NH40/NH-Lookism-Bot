@@ -14,7 +14,7 @@ def deck_kb(
     if tickets > 0:
         builder.row(
             InlineKeyboardButton(text="🎰 Прокрутить (1)", callback_data="pull_one"),
-            InlineKeyboardButton(text="🎰 Все",            callback_data="pull_all"),
+            InlineKeyboardButton(text="🎰 ×10",             callback_data="pull_10"),
         )
     builder.row(InlineKeyboardButton(text="📚 Коллекция", callback_data="collection"))
     builder.row(InlineKeyboardButton(text="◀️ Назад",     callback_data="main_menu"))

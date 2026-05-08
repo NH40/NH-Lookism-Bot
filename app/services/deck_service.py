@@ -93,6 +93,18 @@ class DeckService:
             results.append(result)
         return results
 
+    async def pull_n(self, session: AsyncSession, user: User, n: int) -> list[dict]:
+        """Прокрутить до n тикетов."""
+        results = []
+        for _ in range(n):
+            if user.tickets <= 0:
+                break
+            result = await self.pull(session, user)
+            if not result["ok"]:
+                break
+            results.append(result)
+        return results
+
     async def get_collection_summary(
         self, session: AsyncSession, user_id: int
     ) -> str:

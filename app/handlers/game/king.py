@@ -34,13 +34,10 @@ async def build_king_menu(session, user, page: int = 0):
 
     from app.data.cities import KING_DISTRICT_BASE_POWER
 
-    # Сначала собираем все подходящие города с данными
+    # Собираем все подходящие города с данными
     eligible = []
-    type_counts: dict[int, int] = {}
     for city in cities:
         type_id = city.type_id or 1
-        if type_counts.get(type_id, 0) >= 3:
-            continue
 
         my_in_city = await session.scalar(
             select(func.count(District.id)).where(
@@ -68,8 +65,6 @@ async def build_king_menu(session, user, page: int = 0):
 
         if free_count == 0 and not_mine == 0:
             continue
-
-        type_counts[type_id] = type_counts.get(type_id, 0) + 1
 
         dominant_id = await game_service._get_city_dominant_player(session, city.id, user.id)
         if dominant_id:

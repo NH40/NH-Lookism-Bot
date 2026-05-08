@@ -198,6 +198,7 @@ async def cb_profile(cb: CallbackQuery, session: AsyncSession, user: User):
         f"Доход: {fmt_num(info['base_income'])}/мин"
         + (f" → {fmt_num(info['final_income'])}/мин" if info['final_income'] != info['base_income'] else "")
         + (f" (+{info['total_bonus_percent']}%)" if info['total_bonus_percent'] else "")
+        + (f"\n  💎 Клан-донат: +{info['clan_donat_income_bonus']}% к доходу" if info.get('clan_donat_income_bonus') else "")
         + f"\n\n━━━ ⚔️ Боевые ━━━\n"
         f"Мощь: {fmt_num(user.combat_power)}\n"
         f"Влияние: {fmt_num(user.influence)}\n\n"

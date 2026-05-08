@@ -50,13 +50,17 @@ async def build_gang_menu(session, user, page: int = 0):
             )
         builder.adjust(1)
 
-        nav = []
+        nav1, nav2 = [], []
+        if page >= 5:
+            nav1.append(InlineKeyboardButton(text="⏮ -5", callback_data=f"city_page:{page - 5}"))
         if page > 0:
-            nav.append(InlineKeyboardButton(text="◀️", callback_data=f"city_page:{page - 1}"))
-        nav.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop"))
+            nav1.append(InlineKeyboardButton(text="◀️", callback_data=f"city_page:{page - 1}"))
+        nav1.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop"))
         if page < total_pages - 1:
-            nav.append(InlineKeyboardButton(text="▶️", callback_data=f"city_page:{page + 1}"))
-        builder.row(*nav)
+            nav1.append(InlineKeyboardButton(text="▶️", callback_data=f"city_page:{page + 1}"))
+        if page + 5 < total_pages:
+            nav1.append(InlineKeyboardButton(text="+5 ⏭", callback_data=f"city_page:{page + 5}"))
+        builder.row(*nav1)
         builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
         return (
             f"⚔️ <b>Выбор города — Сектор {user.sector}</b>\n\n"

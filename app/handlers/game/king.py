@@ -101,11 +101,15 @@ async def build_king_menu(session, user, page: int = 0):
         ))
 
     nav = []
+    if page >= 5:
+        nav.append(InlineKeyboardButton(text="⏮ -5", callback_data=f"king_page:{page - 5}"))
     if page > 0:
         nav.append(InlineKeyboardButton(text="◀️", callback_data=f"king_page:{page - 1}"))
     nav.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop"))
     if page < total_pages - 1:
         nav.append(InlineKeyboardButton(text="▶️", callback_data=f"king_page:{page + 1}"))
+    if page + 5 < total_pages:
+        nav.append(InlineKeyboardButton(text="+5 ⏭", callback_data=f"king_page:{page + 5}"))
     if nav:
         builder.row(*nav)
 

@@ -191,6 +191,8 @@ async def cb_king_city_info(cb: CallbackQuery, session: AsyncSession, user: User
         )
     ) or 0
 
+    city.captured_districts = min(my_in_city + not_mine, city.total_districts)
+
     if free_count == 0 and not_mine == 0:
         await cb.answer("Все районы твои — нечего атаковать!", show_alert=True)
         return

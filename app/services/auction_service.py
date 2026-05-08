@@ -136,14 +136,17 @@ class AuctionService:
         if user.nh_coins < amount:
             return {"ok": False, "reason": "Недостаточно NHCoin"}
 
-        # Возврат денег предыдущему лидеру
-        if auction.winner_id and auction.winner_id != user.id:
-            prev_r = await session.execute(
-                select(User).where(User.id == auction.winner_id)
-            )
-            prev = prev_r.scalar_one_or_none()
-            if prev:
-                prev.nh_coins += auction.final_bid
+        # Возврат денег предыдущему лидеру (в том числе если тот же игрок повторно ставит)
+        if auction.winner_id and auction.final_bid > 0:
+            if auction.winner_id == user.id:
+                user.nh_coins += auction.final_bid
+            else:
+                prev_r = await session.execute(
+                    select(User).where(User.id == auction.winner_id)
+                )
+                prev = prev_r.scalar_one_or_none()
+                if prev:
+                    prev.nh_coins += auction.final_bid
 
         user.nh_coins -= amount
         auction.winner_id = user.id
@@ -186,8 +189,9 @@ class AuctionService:
         )
         lot = lot_r.scalar_one_or_none()
 
+        # Идемпотентная выдача: если лот уже вручён — пропускаем
         winner_info = None
-        if auction.winner_id:
+        if auction.winner_id and lot and not lot.is_delivered:
             winner_r = await session.execute(
                 select(User).where(User.id == auction.winner_id)
             )
@@ -200,9 +204,23 @@ class AuctionService:
                     "bid": auction.final_bid,
                     "notifications": winner.notifications_enabled,
                 }
-                if lot:
-                    await self._deliver_reward(session, winner, lot)
-                    winner.auction_wins += 1
+                await self._deliver_reward(session, winner, lot)
+                lot.is_delivered = True
+                winner.auction_wins += 1
+        elif auction.winner_id and lot and lot.is_delivered:
+            # Уже выдан — просто собираем winner_info для уведомления
+            winner_r = await session.execute(
+                select(User).where(User.id == auction.winner_id)
+            )
+            winner = winner_r.scalar_one_or_none()
+            if winner:
+                winner_info = {
+                    "id": winner.id,
+                    "tg_id": winner.tg_id,
+                    "name": winner.full_name,
+                    "bid": auction.final_bid,
+                    "notifications": winner.notifications_enabled,
+                }
 
         if current_round >= total_rounds:
             # Финал — завершаем и устанавливаем паузу
@@ -225,21 +243,22 @@ class AuctionService:
                 "next_in_minutes": pause_min,
             }
         else:
-            # Следующий раунд
-            auction.current_round = current_round + 1
-            auction.final_bid = 0
-            auction.winner_id = None
-            auction.ends_at = now + timedelta(seconds=AUCTION_ROUND_SECONDS)
+            # Следующий раунд — сбрасываем только если лот уже доставлен (или победителя не было)
+            if not lot or lot.is_delivered:
+                auction.current_round = current_round + 1
+                auction.final_bid = 0
+                auction.winner_id = None
+                auction.ends_at = now + timedelta(seconds=AUCTION_ROUND_SECONDS)
 
-            new_reward = await self._generate_reward(auction.tier)
-            new_lot = AuctionLot(
-                auction_id=auction.id,
-                reward_type=cfg["reward_type"],
-                reward_data=new_reward,
-                min_bid=cfg.get("min_bid", 500),
-            )
-            session.add(new_lot)
-            await session.flush()
+                new_reward = await self._generate_reward(auction.tier)
+                new_lot = AuctionLot(
+                    auction_id=auction.id,
+                    reward_type=cfg["reward_type"],
+                    reward_data=new_reward,
+                    min_bid=cfg.get("min_bid", 500),
+                )
+                session.add(new_lot)
+                await session.flush()
 
             return {
                 "event": "round_end",

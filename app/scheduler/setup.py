@@ -29,19 +29,23 @@ def setup_scheduler() -> AsyncIOScheduler:
         id="ultra_instinct_tick",
         name="ultra_instinct_tick",
     )
-    # Аукцион тикает каждые 30 секунд
+    # Аукцион тикает каждые 10 секунд — быстрая выдача наград
     scheduler.add_job(
         auction_round_tick,
-        trigger=IntervalTrigger(seconds=30),
+        trigger=IntervalTrigger(seconds=10),
         id="auction_round_tick",
         name="auction_round_tick",
+        max_instances=1,
+        misfire_grace_time=5,
     )
-    # Новый аукцион раз в 15 минут (случайно 10-20)
+    # Новый аукцион: проверяем каждые 2 мин — пауза 10-20 мин истечёт вовремя
     scheduler.add_job(
         auction_start_tick,
-        trigger=IntervalTrigger(minutes=15),
+        trigger=IntervalTrigger(minutes=2),
         id="auction_start_tick",
         name="auction_start_tick",
+        max_instances=1,
+        misfire_grace_time=30,
     )
 
 

@@ -27,8 +27,9 @@ class AuctionLot(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     auction_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     reward_type: Mapped[str] = mapped_column(String(32), nullable=False)
-    reward_data: Mapped[str] = mapped_column(String(1024), nullable=False)  # ← расширено
+    reward_data: Mapped[str] = mapped_column(String(1024), nullable=False)
     min_bid: Mapped[int] = mapped_column(Integer, default=100)
+    is_delivered: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class AuctionBid(Base):

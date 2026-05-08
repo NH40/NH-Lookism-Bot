@@ -143,13 +143,22 @@ class ClanBaseService:
             u.clan_income_bonus = clan.bonus_income_pct
             u.clan_ticket_bonus = clan.bonus_ticket_pct
             u.clan_train_bonus = clan.bonus_train_pct
+            u.clan_donat_income_bonus = clan.donat_income_pct
+            u.clan_donat_ticket_bonus = clan.donat_ticket_pct
+            u.clan_donat_train_bonus = clan.donat_train_pct
 
     async def _remove_clan_bonuses_from_user(self, session: AsyncSession, user: User) -> None:
         user.clan_income_bonus = 0
         user.clan_ticket_bonus = 0
         user.clan_train_bonus = 0
+        user.clan_donat_income_bonus = 0
+        user.clan_donat_ticket_bonus = 0
+        user.clan_donat_train_bonus = 0
 
     async def _add_clan_bonuses_to_user(self, session: AsyncSession, clan: Clan, user: User) -> None:
         user.clan_income_bonus = clan.bonus_income_pct
         user.clan_ticket_bonus = clan.bonus_ticket_pct
         user.clan_train_bonus = clan.bonus_train_pct
+        user.clan_donat_income_bonus = clan.donat_income_pct
+        user.clan_donat_ticket_bonus = clan.donat_ticket_pct
+        user.clan_donat_train_bonus = clan.donat_train_pct

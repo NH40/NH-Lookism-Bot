@@ -2,6 +2,28 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class ClanDonatPackage:
+    package_id: str
+    name: str
+    desc: str
+    price_rub: int
+    income_pct: int
+    ticket_pct: int
+    train_pct: int
+
+
+CLAN_DONAT_PACKAGES: list[ClanDonatPackage] = [
+    ClanDonatPackage("donat_income",  "💰 Богатство клана", "+20% к доходу всем участникам",               500,  20, 0,  0 ),
+    ClanDonatPackage("donat_ticket",  "🍀 Удача клана",     "+10% к шансу тикета всем участникам",          400,  0,  10, 0 ),
+    ClanDonatPackage("donat_train",   "🏋 Школа клана",     "+20% к охвату тренировки всем участникам",     350,  0,  0,  20),
+    ClanDonatPackage("donat_war",     "⚔️ Клан Войн",       "+20% к доходу + +20% к тренировкам всем",      900,  20, 0,  20),
+    ClanDonatPackage("donat_premium", "👑 Премиум клан",    "+30% к доходу + +10% к тикетам + +25% к трен.",1500, 30, 10, 25),
+]
+
+CLAN_DONAT_PACKAGES_MAP: dict[str, ClanDonatPackage] = {p.package_id: p for p in CLAN_DONAT_PACKAGES}
+
+
+@dataclass(frozen=True)
 class ClanShopItem:
     item_id: str
     name: str
@@ -30,6 +52,7 @@ CLAN_SHOP_CATEGORIES = {
     "character": "🎴 Персонажи",
     "auction":   "🏛 Аукцион",
     "upgrades":  "⚙️ Улучшения клана",
+    "donate":    "💎 Донат",
 }
 
 CLAN_SHOP_ITEMS: list[ClanShopItem] = [

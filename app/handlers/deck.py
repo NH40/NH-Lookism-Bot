@@ -24,7 +24,7 @@ async def cb_deck(cb: CallbackQuery, session: AsyncSession, user: User):
 
     from app.services.potion_service import potion_service
     effective_chance = await potion_service.get_effective_ticket_chance(session, user)
-    effective_chance = min(95, effective_chance + user.prestige_ticket_bonus + getattr(user, 'clan_ticket_bonus', 0))
+    effective_chance = min(95, effective_chance + user.prestige_ticket_bonus + getattr(user, 'clan_ticket_bonus', 0) + getattr(user, 'clan_donat_ticket_bonus', 0))
 
     builder = InlineKeyboardBuilder()
 
@@ -129,7 +129,7 @@ async def cb_deck_rates(cb: CallbackQuery, session: AsyncSession, user: User):
         )
 
     effective_chance = await potion_service.get_effective_ticket_chance(session, user)
-    effective_chance = min(95, effective_chance + user.prestige_ticket_bonus + getattr(user, 'clan_ticket_bonus', 0))
+    effective_chance = min(95, effective_chance + user.prestige_ticket_bonus + getattr(user, 'clan_ticket_bonus', 0) + getattr(user, 'clan_donat_ticket_bonus', 0))
 
     lines.append(f"{'─'*22}")
     lines.append(f"🍀 Твой шанс тикета: {effective_chance}%")
@@ -137,6 +137,8 @@ async def cb_deck_rates(cb: CallbackQuery, session: AsyncSession, user: User):
         lines.append(f"  ✨ +{user.prestige_ticket_bonus}% от пробуждений")
     if getattr(user, 'clan_ticket_bonus', 0) > 0:
         lines.append(f"  🏯 +{user.clan_ticket_bonus}% от клана")
+    if getattr(user, 'clan_donat_ticket_bonus', 0) > 0:
+        lines.append(f"  💎 +{user.clan_donat_ticket_bonus}% клан-донат")
 
 
     builder = InlineKeyboardBuilder()

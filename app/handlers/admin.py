@@ -34,6 +34,7 @@ class AdminFSM(StatesGroup):
     waiting_bulk_coins = State()
     waiting_bulk_tickets = State()
     waiting_promo_create = State()
+    waiting_clan_donat_search = State()
 
 
 # ── Главное меню ────────────────────────────────────────────────────────────
@@ -1126,6 +1127,151 @@ async def msg_bulk_tickets(
         f"✅ Выдано {count} тикетов {len(users)} игрокам!",
         reply_markup=back_kb("admin_main"),
     )
+
+
+# ── Клан-донат ──────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data == "admin_clan_donat")
+async def cb_admin_clan_donat(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
+    if not is_admin(user.tg_id):
+        return
+    await state.set_state(AdminFSM.waiting_clan_donat_search)
+    try:
+        await cb.message.edit_text(
+            "🏯 <b>Клан-донат</b>\n\nВведите название клана:",
+            reply_markup=back_kb("admin_main"),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+@router.message(AdminFSM.waiting_clan_donat_search)
+async def msg_clan_donat_search(
+    message: Message, session: AsyncSession, user: User, state: FSMContext
+):
+    if not is_admin(user.tg_id):
+        return
+    await state.clear()
+    from sqlalchemy import select as sa_select
+    from app.models.clan import Clan
+    name = message.text.strip()
+    clan = await session.scalar(sa_select(Clan).where(Clan.name == name))
+    if not clan:
+        result = await session.execute(
+            sa_select(Clan).where(Clan.name.ilike(f"%{name}%")).limit(10)
+        )
+        clans = result.scalars().all()
+        if not clans:
+            await message.answer("❌ Клан не найден", reply_markup=back_kb("admin_main"))
+            return
+        if len(clans) == 1:
+            clan = clans[0]
+        else:
+            builder = InlineKeyboardBuilder()
+            for c in clans:
+                builder.row(InlineKeyboardButton(
+                    text=c.name,
+                    callback_data=f"adm_clan_donat_view:{c.id}"
+                ))
+            builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="admin_main"))
+            await message.answer(
+                "🔍 Найдено несколько кланов:",
+                reply_markup=builder.as_markup(),
+            )
+            return
+    await _show_clan_donat_panel(message, clan)
+
+
+async def _show_clan_donat_panel(message, clan):
+    from app.constants.clan import CLAN_DONAT_PACKAGES
+    active = []
+    if clan.donat_income_pct: active.append(f"💰 Доход +{clan.donat_income_pct}%")
+    if clan.donat_ticket_pct: active.append(f"🍀 Тикет +{clan.donat_ticket_pct}%")
+    if clan.donat_train_pct:  active.append(f"🏋 Тренировка +{clan.donat_train_pct}%")
+    active_str = "\n".join(active) if active else "нет"
+
+    builder = InlineKeyboardBuilder()
+    for pkg in CLAN_DONAT_PACKAGES:
+        bonuses = []
+        if pkg.income_pct:  bonuses.append(f"+{pkg.income_pct}% дох")
+        if pkg.ticket_pct:  bonuses.append(f"+{pkg.ticket_pct}% тик")
+        if pkg.train_pct:   bonuses.append(f"+{pkg.train_pct}% трен")
+        builder.row(InlineKeyboardButton(
+            text=f"{pkg.name} ({', '.join(bonuses)}) — {pkg.price_rub}₽",
+            callback_data=f"adm_clan_donat_apply:{clan.id}:{pkg.package_id}"
+        ))
+    builder.row(InlineKeyboardButton(
+        text="🗑 Сбросить донат-бонусы",
+        callback_data=f"adm_clan_donat_reset:{clan.id}"
+    ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="admin_main"))
+
+    text = (
+        f"🏯 <b>Клан: {html.escape(clan.name)}</b>\n"
+        f"👥 Участников: до {clan.max_members + clan.bonus_max_members}\n\n"
+        f"<b>Текущий донат:</b>\n{active_str}\n\n"
+        f"Выберите пакет для выдачи (значения накапливаются):"
+    )
+    try:
+        await message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    except Exception:
+        await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+
+
+@router.callback_query(F.data.startswith("adm_clan_donat_view:"))
+async def cb_adm_clan_donat_view(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not is_admin(user.tg_id):
+        return
+    clan_id = int(cb.data.split(":")[1])
+    from sqlalchemy import select as sa_select
+    from app.models.clan import Clan
+    clan = await session.scalar(sa_select(Clan).where(Clan.id == clan_id))
+    if not clan:
+        await cb.answer("Клан не найден", show_alert=True)
+        return
+    await _show_clan_donat_panel(cb.message, clan)
+
+
+@router.callback_query(F.data.startswith("adm_clan_donat_apply:"))
+async def cb_adm_clan_donat_apply(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not is_admin(user.tg_id):
+        return
+    parts = cb.data.split(":")
+    clan_id, package_id = int(parts[1]), parts[2]
+    from sqlalchemy import select as sa_select
+    from app.models.clan import Clan
+    from app.services.clan import clan_service
+    clan = await session.scalar(sa_select(Clan).where(Clan.id == clan_id))
+    if not clan:
+        await cb.answer("Клан не найден", show_alert=True)
+        return
+    result = await clan_service.apply_clan_donat(session, clan, package_id)
+    if not result["ok"]:
+        await cb.answer(result["reason"], show_alert=True)
+        return
+    pkg = result["package"]
+    await cb.answer(f"✅ {pkg.name} выдан клану {clan.name}!")
+    await session.refresh(clan)
+    await _show_clan_donat_panel(cb.message, clan)
+
+
+@router.callback_query(F.data.startswith("adm_clan_donat_reset:"))
+async def cb_adm_clan_donat_reset(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not is_admin(user.tg_id):
+        return
+    clan_id = int(cb.data.split(":")[1])
+    from sqlalchemy import select as sa_select
+    from app.models.clan import Clan
+    from app.services.clan import clan_service
+    clan = await session.scalar(sa_select(Clan).where(Clan.id == clan_id))
+    if not clan:
+        await cb.answer("Клан не найден", show_alert=True)
+        return
+    await clan_service.reset_clan_donat(session, clan)
+    await cb.answer("✅ Донат-бонусы клана сброшены!")
+    await session.refresh(clan)
+    await _show_clan_donat_panel(cb.message, clan)
 
 
 # ── Утилиты ─────────────────────────────────────────────────────────────────

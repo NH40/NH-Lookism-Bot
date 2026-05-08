@@ -7,7 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.models.clan import Clan
 from app.services.clan import clan_service
-from app.constants.clan import CLAN_SHOP_ITEMS, CLAN_SHOP_MAP, CLAN_SHOP_CATEGORIES, CLAN_UPGRADES
+from app.constants.clan import (
+    CLAN_SHOP_ITEMS, CLAN_SHOP_MAP, CLAN_SHOP_CATEGORIES, CLAN_UPGRADES,
+    CLAN_DONAT_PACKAGES,
+)
 from app.utils.formatters import fmt_num
 
 router = Router()
@@ -63,6 +66,11 @@ async def _show_upgrades(cb: CallbackQuery, clan: Clan):
     if clan.bonus_ticket_pct: bonuses.append(f"🎟 Тикет +{clan.bonus_ticket_pct}%")
     if clan.bonus_train_pct:  bonuses.append(f"🏋 Трен. +{clan.bonus_train_pct}%")
     bonuses_str = "\n".join(bonuses) if bonuses else "нет"
+    donat_bonuses = []
+    if clan.donat_income_pct: donat_bonuses.append(f"💰 Доход +{clan.donat_income_pct}%")
+    if clan.donat_ticket_pct: donat_bonuses.append(f"🍀 Тикет +{clan.donat_ticket_pct}%")
+    if clan.donat_train_pct:  donat_bonuses.append(f"🏋 Трен. +{clan.donat_train_pct}%")
+    donat_str = "\n".join(donat_bonuses) if donat_bonuses else "нет"
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clan_shop"))
 
@@ -71,8 +79,45 @@ async def _show_upgrades(cb: CallbackQuery, clan: Clan):
             f"⚙️ <b>Улучшения клана</b>\n\n"
             f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin\n"
             f"👥 Слоты: {clan.max_members} (доп: {slots_str}, макс +25)\n\n"
-            f"Активные бонусы:\n{bonuses_str}\n\n"
+            f"Активные бонусы (улучшения):\n{bonuses_str}\n\n"
+            f"💎 Донат-бонусы:\n{donat_str}\n\n"
             f"Улучшения применяются ко всем участникам:",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+async def _show_donate(cb: CallbackQuery, clan: Clan):
+    lines = [
+        "💎 <b>Донат для клана</b>\n",
+        "Клан-донат — это постоянные бонусы для всего клана, "
+        "выдаваемые менеджером за реальные деньги.\n",
+        "<b>Доступные пакеты:</b>",
+    ]
+    for pkg in CLAN_DONAT_PACKAGES:
+        bonuses = []
+        if pkg.income_pct:  bonuses.append(f"+{pkg.income_pct}% к доходу")
+        if pkg.ticket_pct:  bonuses.append(f"+{pkg.ticket_pct}% к тикетам")
+        if pkg.train_pct:   bonuses.append(f"+{pkg.train_pct}% к тренировке")
+        lines.append(f"\n{pkg.name} — <b>{pkg.price_rub}₽</b>")
+        lines.append(f"  {', '.join(bonuses)}")
+
+    active = []
+    if clan.donat_income_pct: active.append(f"💰 Доход +{clan.donat_income_pct}%")
+    if clan.donat_ticket_pct: active.append(f"🍀 Тикет +{clan.donat_ticket_pct}%")
+    if clan.donat_train_pct:  active.append(f"🏋 Тренировка +{clan.donat_train_pct}%")
+    active_str = "\n".join(active) if active else "нет"
+
+    lines.append(f"\n<b>Активный донат клана:</b>\n{active_str}")
+    lines.append("\n✍️ Для оформления напишите менеджеру")
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clan_shop"))
+    try:
+        await cb.message.edit_text(
+            "\n".join(lines),
             reply_markup=builder.as_markup(),
             parse_mode="HTML",
         )
@@ -83,6 +128,9 @@ async def _show_upgrades(cb: CallbackQuery, clan: Clan):
 async def _show_category(cb: CallbackQuery, clan: Clan, cat_id: str):
     if cat_id == "upgrades":
         await _show_upgrades(cb, clan)
+        return
+    if cat_id == "donate":
+        await _show_donate(cb, clan)
         return
 
     cat_name = CLAN_SHOP_CATEGORIES.get(cat_id, cat_id)

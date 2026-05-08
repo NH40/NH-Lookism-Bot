@@ -10,6 +10,7 @@ def admin_main_kb():
     builder.row(InlineKeyboardButton(text="🎁 Промокоды", callback_data="admin_promos"))
     builder.row(InlineKeyboardButton(text="📢 Рассылка", callback_data="admin_broadcast"))
     builder.row(InlineKeyboardButton(text="👥 Действия со всеми", callback_data="admin_bulk"))
+    builder.row(InlineKeyboardButton(text="🏯 Клан-донат", callback_data="admin_clan_donat"))
     builder.row(InlineKeyboardButton(text="💾 Бэкапы", callback_data="admin_backup"))
     return builder.as_markup()
 

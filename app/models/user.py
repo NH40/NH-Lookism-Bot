@@ -106,6 +106,9 @@ class User(Base):
     clan_income_bonus: Mapped[int] = mapped_column(Integer, default=0)
     clan_ticket_bonus: Mapped[int] = mapped_column(Integer, default=0)
     clan_train_bonus: Mapped[int] = mapped_column(Integer, default=0)
+    clan_donat_income_bonus: Mapped[int] = mapped_column(Integer, default=0)
+    clan_donat_ticket_bonus: Mapped[int] = mapped_column(Integer, default=0)
+    clan_donat_train_bonus: Mapped[int] = mapped_column(Integer, default=0)
 
     # ── Настройки ─────────────────────────────────────────────────────────
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True)

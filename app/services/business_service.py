@@ -18,7 +18,7 @@ class BusinessService:
             )
         )
         base_income = result.scalar() or 0
-        clan_bonus = getattr(user, 'clan_income_bonus', 0)
+        clan_bonus = getattr(user, 'clan_income_bonus', 0) + getattr(user, 'clan_donat_income_bonus', 0)
         total_bonus = user.income_bonus_percent + user.prestige_income_bonus + clan_bonus
         effective_income = int(
             base_income * (1 + total_bonus / 100) * user.district_multiplier
@@ -161,7 +161,7 @@ class BusinessService:
         )
         base = result.scalar() or 0
         potion_bonus = await potion_service.get_income_bonus(session, user.id)
-        clan_bonus = getattr(user, 'clan_income_bonus', 0)
+        clan_bonus = getattr(user, 'clan_income_bonus', 0) + getattr(user, 'clan_donat_income_bonus', 0)
 
         effective_final = int(user.income_per_minute * (1 + potion_bonus / 100))
         return {

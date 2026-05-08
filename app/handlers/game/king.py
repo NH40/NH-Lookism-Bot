@@ -228,7 +228,7 @@ async def cb_king_city_info(cb: CallbackQuery, session: AsyncSession, user: User
 
     # Прогресс бар
     total = city.total_districts
-    captured = city.captured_districts
+    captured = my_in_city + not_mine
     pct = int(captured / total * 100) if total > 0 else 0
     bar_filled = int(pct / 10)
     progress_bar = "🟩" * bar_filled + "⬛" * (10 - bar_filled)

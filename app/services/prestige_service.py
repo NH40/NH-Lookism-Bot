@@ -4,7 +4,8 @@ from app.models.user import User
 from app.models.squad_member import SquadMember
 from app.models.building import UserBuilding
 from app.models.character import UserCharacter
-from app.models.city import District
+from app.models.city import District, FistBot
+from app.models.king_bot import KingBot
 from app.models.skill import UserMastery, UserPathSkills
 
 # Убираем MAX_PRESTIGE = 10 и добавляем вверху:
@@ -93,6 +94,12 @@ class PrestigeService:
         )
         await session.execute(
             delete(UserPathSkills).where(UserPathSkills.user_id == user.id)
+        )
+        await session.execute(
+            delete(KingBot).where(KingBot.user_id == user.id)
+        )
+        await session.execute(
+            delete(FistBot).where(FistBot.challenger_id == user.id)
         )
 
         # ── Мастерство — только при полном сбросе ────────────────────────

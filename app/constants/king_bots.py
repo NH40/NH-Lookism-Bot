@@ -7,14 +7,17 @@ KING_BOT_NAMES = [
     "Союз Северного Ветра",
 ]
 
-# Прогрессия мощи ботов по слотам (1-5)
+# Прогрессия ботов по слотам — мощь задаётся как множитель от боевой мощи игрока
 KING_BOT_SLOTS = [
-    {"slot": 1, "power": 50_000,    "districts": 8,  "cd_hours": 1},
-    {"slot": 2, "power": 150_000,   "districts": 16, "cd_hours": 1},
-    {"slot": 3, "power": 400_000,   "districts": 16, "cd_hours": 1},
-    {"slot": 4, "power": 800_000,   "districts": 32, "cd_hours": 1},
-    {"slot": 5, "power": 1_500_000, "districts": 32, "cd_hours": 1},
+    {"slot": 1, "power_ratio": 0.50, "districts": 8,  "cd_hours": 1},
+    {"slot": 2, "power_ratio": 0.70, "districts": 16, "cd_hours": 1},
+    {"slot": 3, "power_ratio": 0.90, "districts": 16, "cd_hours": 1},
+    {"slot": 4, "power_ratio": 1.10, "districts": 32, "cd_hours": 1},
+    {"slot": 5, "power_ratio": 1.30, "districts": 32, "cd_hours": 1},
 ]
 
-# Рост мощи после победы (множитель)
+# Минимальная мощь бота (если мощь игрока ещё мала)
+KING_BOT_MIN_POWER = 500
+
+# Рост мощи после полного захвата (множитель)
 KING_BOT_POWER_GROWTH = 1.5

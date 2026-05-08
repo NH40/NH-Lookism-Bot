@@ -10,6 +10,7 @@ from app.repositories.user_repo import user_repo
 from app.data.squad import ATTACK_WIN_INFLUENCE_BONUS
 from app.services.game.base import GameBase, FIST_MIN_CITIES
 from app.services.game.utils import notify_pvp_attack
+from app.utils.truce import is_truce_active
 
 
 class GameKingService(GameBase):
@@ -19,6 +20,8 @@ class GameKingService(GameBase):
     ) -> dict:
         if user.phase != "king":
             return {"ok": False, "reason": "Только для фазы Короля"}
+        if is_truce_active(user):
+            return {"ok": False, "reason": "Во время перемирия нельзя атаковать"}
 
         cd_key = cooldown_service.attack_key(user.id)
         if await cooldown_service.is_on_cooldown(cd_key):
@@ -183,6 +186,8 @@ class GameKingService(GameBase):
         attacker: User, defender: User,
         city: City, cd_key: str
     ) -> dict:
+        if is_truce_active(defender):
+            return {"ok": False, "reason": f"{defender.full_name} находится под перемирием"}
         result = await fight_player(session, attacker, defender)
         if result["win"]:
             defender_districts_r = await session.execute(

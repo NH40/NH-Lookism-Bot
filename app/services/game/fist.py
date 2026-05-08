@@ -9,6 +9,7 @@ from app.repositories.user_repo import user_repo
 from app.data.squad import ATTACK_WIN_INFLUENCE_BONUS
 from app.services.game.base import GameBase, FIST_MIN_CITIES, FIST_BOT_CONFIGS
 from app.services.game.utils import notify_pvp_attack
+from app.utils.truce import is_truce_active
 
 
 class GameFistService(GameBase):
@@ -52,6 +53,8 @@ class GameFistService(GameBase):
         if bot.cooldown_until and bot.cooldown_until > now_dt:
             remaining = int((bot.cooldown_until - now_dt).total_seconds())
             return {"ok": False, "reason": f"Бот восстанавливается: {cooldown_service.format_ttl(remaining)}"}
+        if is_truce_active(user):
+            return {"ok": False, "reason": "Во время перемирия нельзя атаковать"}
         cd_key = cooldown_service.attack_key(user.id)
         if await cooldown_service.is_on_cooldown(cd_key):
             ttl = await cooldown_service.get_ttl(cd_key)
@@ -113,9 +116,13 @@ class GameFistService(GameBase):
     async def fist_pvp_attack(
         self, session: AsyncSession, attacker: User, defender_id: int
     ) -> dict:
+        if is_truce_active(attacker):
+            return {"ok": False, "reason": "Во время перемирия нельзя атаковать"}
         defender = await user_repo.get_by_id(session, defender_id)
         if not defender or defender.phase != "fist":
             return {"ok": False, "reason": "Противник не найден"}
+        if is_truce_active(defender):
+            return {"ok": False, "reason": f"{defender.full_name} находится под перемирием"}
         cd_key = cooldown_service.attack_key(attacker.id)
         if await cooldown_service.is_on_cooldown(cd_key):
             ttl = await cooldown_service.get_ttl(cd_key)

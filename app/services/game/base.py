@@ -122,6 +122,10 @@ class GameBase:
         user.fist_cities_count = 0
         user.king_cities_count = await self._count_my_king_cities(session, user.id)
         user.extra_attack_count = await self._get_max_extra_attacks_async(session, user)
+        # Пересоздаём ботов-королей по текущей мощи игрока
+        from sqlalchemy import delete as sql_delete
+        from app.models.king_bot import KingBot
+        await session.execute(sql_delete(KingBot).where(KingBot.user_id == user.id))
         await session.flush()
         try:
             from app.bot_instance import get_bot
@@ -145,6 +149,10 @@ class GameBase:
         city.owner_id = user.id
         city.is_fully_captured = True
         user.extra_attack_count = await self._get_max_extra_attacks_async(session, user)
+        # Удаляем старых ботов-королей, чтобы пересоздать по текущей мощи игрока
+        from sqlalchemy import delete as sql_delete
+        from app.models.king_bot import KingBot
+        await session.execute(sql_delete(KingBot).where(KingBot.user_id == user.id))
         await session.flush()
         return {
             "ok": True, "promoted": True, "new_phase": "king",

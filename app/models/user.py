@@ -60,6 +60,10 @@ class User(Base):
     double_attack_used: Mapped[bool] = mapped_column(Boolean, default=False)
     extra_attack_count: Mapped[int] = mapped_column(Integer, default=0)
 
+    # ── Перемирие ─────────────────────────────────────────────────────────
+    truce_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    truce_cd_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # ── Пробуждение (Престиж) ─────────────────────────────────────────────
     prestige_level: Mapped[int] = mapped_column(Integer, default=0)
     prestige_recruit_bonus: Mapped[int] = mapped_column(Integer, default=0)

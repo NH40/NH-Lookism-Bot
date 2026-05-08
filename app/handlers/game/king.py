@@ -12,6 +12,7 @@ from app.repositories.city_repo import city_repo
 from app.repositories.user_repo import user_repo
 from app.utils.keyboards.common import back_kb
 from app.utils.formatters import fmt_num, fmt_ttl
+from app.utils.truce import truce_button_label
 import html
 
 router = Router()
@@ -104,6 +105,7 @@ async def build_king_menu(session, user):
         ))
     else:
         builder.row(InlineKeyboardButton(text="🤖 Боты-короли", callback_data="king_bots_menu"))
+    builder.row(InlineKeyboardButton(text=truce_button_label(user), callback_data="truce_menu"))
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
 
     extra_str = f"\n⚡ Доп. атак: {user.extra_attack_count}" if user.extra_attack_count > 0 else ""

@@ -11,6 +11,7 @@ from app.repositories.city_repo import city_repo
 from app.utils.keyboards.common import back_kb
 from app.utils.formatters import fmt_num, fmt_ttl
 from app.services.quest_service import quest_service
+from app.utils.truce import truce_button_label
 
 router = Router()
 
@@ -102,6 +103,7 @@ async def build_gang_menu(session, user):
         builder.row(InlineKeyboardButton(
             text=f"🥊 PvP ({len(rivals)} соперника)", callback_data="pvp_attack"
         ))
+    builder.row(InlineKeyboardButton(text=truce_button_label(user), callback_data="truce_menu"))
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
     return text, builder.as_markup()
 

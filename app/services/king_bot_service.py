@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.user import User
 from app.models.king_bot import KingBot
-from app.constants.king_bots import KING_BOT_NAMES, KING_BOT_SLOTS, KING_BOT_POWER_GROWTH
+from app.constants.king_bots import KING_BOT_NAMES, KING_BOT_SLOTS, KING_BOT_POWER_GROWTH, KING_BOT_MIN_POWER
 from app.services.cooldown_service import cooldown_service
 from app.services.game.base import GameBase
 
@@ -22,11 +22,15 @@ class KingBotService(GameBase):
         existing_slots = {b.slot for b in bots}
         for cfg in KING_BOT_SLOTS:
             if cfg["slot"] not in existing_slots:
+                power = max(
+                    KING_BOT_MIN_POWER,
+                    int(user.combat_power * cfg["power_ratio"]),
+                )
                 bot = KingBot(
                     user_id=user.id,
                     slot=cfg["slot"],
                     name=KING_BOT_NAMES[cfg["slot"] - 1],
-                    power=cfg["power"],
+                    power=power,
                     districts_total=cfg["districts"],
                     districts_captured=0,
                 )

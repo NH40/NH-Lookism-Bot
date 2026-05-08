@@ -10,6 +10,7 @@ from app.services.cooldown_service import cooldown_service
 from app.repositories.user_repo import user_repo
 from app.utils.keyboards.common import back_kb
 from app.utils.formatters import fmt_num, fmt_ttl
+from app.utils.truce import truce_button_label
 import html
 
 router = Router()
@@ -54,6 +55,7 @@ async def build_fist_menu(session, user):
             text=f"🥊 PvP Кулаки ({len(fist_rivals)})",
             callback_data="fist_pvp_list"
         )
+    builder.row(InlineKeyboardButton(text=truce_button_label(user), callback_data="truce_menu"))
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
     return text, builder.as_markup()
 

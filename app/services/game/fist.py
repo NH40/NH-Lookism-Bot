@@ -92,6 +92,8 @@ class GameFistService(GameBase):
             user.fist_cities_count = max(0, user.fist_cities_count - cities_lost)
             if user.fist_cities_count < FIST_MIN_CITIES:
                 await self._demote_fist_to_king(session, user)
+                await self._handle_attack_cd(session, user, cd_key, "fist")
+                await session.flush()
                 return {
                     "ok": True, "win": False, "demoted": True,
                     "cities_lost": cities_lost, "fist_cities": user.fist_cities_count,

@@ -28,15 +28,22 @@ ACHIEVEMENTS: list[Achievement] = [
         "Набери 100,000 боевой мощи", "combat_power", 100_000,
         "+10,000 NHCoin + +5% к доходу", "coins_and_income", 10_000,
         parent_id="power_50k"),
+    Achievement("power_500k", "Полмиллиона — серьёзный разговор",
+        "Набери 500,000 боевой мощи", "combat_power", 500_000,
+        "+25,000 NHCoin + +5% к доходу", "coins_and_income", 25_000,
+        parent_id="power_100k"),
     Achievement("power_1m", "Ну ты мощный",
         "Набери 1,000,000 боевой мощи", "combat_power", 1_000_000,
         "+50,000 NHCoin + +10% к доходу", "coins_and_income_10", 50_000,
-        parent_id="power_100k"),
+        parent_id="power_500k"),
 
     # ─── Фазы ───
     Achievement("first_king", "Король лужи — тоже король",
         "Стань Королём", "phase_reached", 1,
         "+7,000 NHCoin + +5% к доходу", "coins_and_income", 7_000),
+    Achievement("king_5_cities", "Половина пути",
+        "Захвати 5 городов в фазе Короля", "king_cities_count", 5,
+        "+5,000 NHCoin", "coins", 5_000, parent_id="first_king"),
     Achievement("first_fist", "Кулак — это не должность, а диагноз",
         "Стань Кулаком", "phase_reached", 2,
         "+1,500 NHCoin", "coins", 1_500),
@@ -47,6 +54,15 @@ ACHIEVEMENTS: list[Achievement] = [
     Achievement("emperor", "Император NH",
         "Стань Императором", "phase_reached", 3,
         "+3 очка пути", "path_points", 3),
+
+    # ─── Престиж ───
+    Achievement("prestige_1", "Первое пробуждение",
+        "Достигни первого уровня пробуждения", "prestige_level", 1,
+        "+3 очка пути", "path_points", 3),
+    Achievement("prestige_3", "Трижды рождённый",
+        "Достигни третьего уровня пробуждения", "prestige_level", 3,
+        "+30,000 NHCoin + +5% к доходу", "coins_and_income", 30_000,
+        parent_id="prestige_1"),
 
     # ─── Топ ───
     Achievement("top_10", "Осталось выбить девятого",
@@ -69,6 +85,10 @@ ACHIEVEMENTS: list[Achievement] = [
         "Потрать 1,000,000 NHCoin", "coins_spent", 1_000_000,
         "+15,000 NHCoin + +5% к доходу", "coins_and_income", 15_000,
         parent_id="spend_100k"),
+    Achievement("spend_5m", "Щедрый спонсор",
+        "Потрать 5,000,000 NHCoin", "coins_spent", 5_000_000,
+        "+50,000 NHCoin + +7% к доходу", "coins_and_income_7", 50_000,
+        parent_id="spend_1m"),
 
     # ─── Бои ───
     Achievement("wins_10", "Вроде неплох, но лох",
@@ -78,6 +98,14 @@ ACHIEVEMENTS: list[Achievement] = [
         "Выиграй 100 боёв", "total_wins", 100,
         "+5,000 NHCoin + +3% к доходу", "coins_and_income_3", 5_000,
         parent_id="wins_10"),
+    Achievement("wins_500", "Легенда ринга",
+        "Выиграй 500 боёв", "total_wins", 500,
+        "+20,000 NHCoin + +3% к доходу", "coins_and_income_3", 20_000,
+        parent_id="wins_100"),
+    Achievement("wins_1000", "Непобедимый",
+        "Выиграй 1,000 боёв", "total_wins", 1000,
+        "+75,000 NHCoin + +7% к доходу", "coins_and_income_7", 75_000,
+        parent_id="wins_500"),
 
     # ─── Аукцион ───
     Achievement("auction_win_1", "Денег куры не клюют",
@@ -88,12 +116,23 @@ ACHIEVEMENTS: list[Achievement] = [
         "+30,000 NHCoin + +5% к доходу", "coins_and_income", 30_000,
         parent_id="auction_win_1"),
 
+    # ─── Особые ───
+    Achievement("future_masterpiece", "Будущий шедевр",
+        "Накопи 100 очков мастерства (от Тома Ли)", "mastery_points", 100,
+        "+5,000 NHCoin + +3% к доходу + случайный персонаж", "quest_reward", 5_000),
+    Achievement("shadow_syndicate", "Синдикат теней",
+        "Получи 3 уникальных персонажа", "unique_chars", 3,
+        "+20,000 NHCoin + +7% к доходу", "coins_and_income_7", 20_000,
+        parent_id="future_masterpiece"),
+
     # ─── Коллекция ───
+    # Порог: все несекретные достижения кроме самих all_achievements и absolute = 26
     Achievement("all_achievements", "Коллекционер",
-        "Собери все достижения (кроме секретных)", "achievements_count", 20,
+        "Собери все несекретные достижения", "achievements_count", 26,
         "+75,000 NHCoin + +7% к доходу", "coins_and_income_7", 75_000),
+    # Порог: all_achievements + 2 секретных + все остальные = 29
     Achievement("absolute", "Абсолют",
-        "Собери все достижения включая секретные", "achievements_count_all", 25,
+        "Собери абсолютно все достижения", "achievements_count_all", 29,
         "+200,000 NHCoin + +15% к доходу", "coins_and_income_15", 200_000,
         parent_id="all_achievements"),
 
@@ -105,15 +144,6 @@ ACHIEVEMENTS: list[Achievement] = [
         "Открой настройки 500 раз", "settings_opened", 500,
         "+5,000 NHCoin + +2% к доходу", "coins_and_income_2", 5_000,
         secret=True, parent_id="settings_100"),
-
-    # ─── Квесты ───
-    Achievement("future_masterpiece", "Будущий шедевр",
-        "Выполни 3 из 5 заданий квеста", "quest_masterpiece", 3,
-        "+5,000 NHCoin + +3% к доходу + случайный персонаж", "quest_reward", 5_000),
-    Achievement("shadow_syndicate", "Синдикат теней",
-        "Получи 3 уникальных персонажа", "unique_chars", 3,
-        "+20,000 NHCoin + +7% к доходу", "coins_and_income_7", 20_000,
-        parent_id="future_masterpiece"),
 ]
 
 ACHIEVEMENT_MAP: dict[str, Achievement] = {a.achievement_id: a for a in ACHIEVEMENTS}

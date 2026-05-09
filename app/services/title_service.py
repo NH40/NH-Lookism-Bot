@@ -280,6 +280,37 @@ class TitleService:
                 )
             )
             return (count or 0) >= val
+        elif key == "king_cities_count":
+            return user.king_cities_count >= val
+        elif key == "prestige_level":
+            return user.prestige_level >= val
+        elif key == "mastery_points":
+            return user.mastery_points >= val
+        elif key == "achievements_count":
+            from sqlalchemy import func
+            from app.models.title import UserAchievement
+            exclude = {"all_achievements", "absolute"}
+            eligible = [a.achievement_id for a in ACHIEVEMENTS if not a.secret and a.achievement_id not in exclude]
+            count = await session.scalar(
+                select(func.count(UserAchievement.id)).where(
+                    UserAchievement.user_id == user.id,
+                    UserAchievement.claimed == True,
+                    UserAchievement.achievement_id.in_(eligible),
+                )
+            )
+            return (count or 0) >= val
+        elif key == "achievements_count_all":
+            from sqlalchemy import func
+            from app.models.title import UserAchievement
+            eligible = [a.achievement_id for a in ACHIEVEMENTS if a.achievement_id != "absolute"]
+            count = await session.scalar(
+                select(func.count(UserAchievement.id)).where(
+                    UserAchievement.user_id == user.id,
+                    UserAchievement.claimed == True,
+                    UserAchievement.achievement_id.in_(eligible),
+                )
+            )
+            return (count or 0) >= val
         return False
 
     async def _grant_achievement_new(

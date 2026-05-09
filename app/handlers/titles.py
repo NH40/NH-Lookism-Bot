@@ -46,31 +46,33 @@ async def cb_achievements_menu(cb: CallbackQuery, session: AsyncSession, user: U
     claimed = set(result.scalars().all())
 
     categories = [
-        ("⚔️ Боевая мощь",  ["power_10k", "power_50k", "power_100k", "power_1m"]),
-        ("📍 Фазы",          ["first_king", "first_fist", "fist_10_cities", "emperor"]),
+        ("⚔️ Боевая мощь",  ["power_10k", "power_50k", "power_100k", "power_500k", "power_1m"]),
+        ("📍 Фазы",          ["first_king", "king_5_cities", "first_fist", "fist_10_cities", "emperor"]),
+        ("🌟 Престиж",       ["prestige_1", "prestige_3"]),
         ("🏆 Топ",           ["top_10", "top_5", "top_1"]),
-        ("💸 Траты",         ["spend_100k", "spend_1m"]),
-        ("⚔️ Победы",        ["wins_10", "wins_100"]),
+        ("💸 Траты",         ["spend_100k", "spend_1m", "spend_5m"]),
+        ("⚔️ Победы",        ["wins_10", "wins_100", "wins_500", "wins_1000"]),
         ("🏛 Аукцион",       ["auction_win_1", "auction_win_5"]),
+        ("🎯 Особые",        ["future_masterpiece", "shadow_syndicate"]),
         ("📦 Коллекция",     ["all_achievements", "absolute"]),
-        ("🔐 Секретные",     ["settings_100", "settings_500", "future_masterpiece", "shadow_syndicate"]),
+        ("🔐 Секретные",     ["settings_100", "settings_500"]),
     ]
 
     lines = []
     for cat_name, ids in categories:
-        lines.append(f"\n{cat_name}")
+        lines.append(f"\n<b>{cat_name}</b>\n")
         for aid in ids:
             ach = ACHIEVEMENT_MAP.get(aid)
             if not ach:
                 continue
             if ach.secret and aid not in claimed:
-                lines.append("  ❓ ???")
+                lines.append("  ❓ ???\n")
                 continue
             status = "✅" if aid in claimed else "⬜"
             lines.append(
                 f"  {status} {ach.name}\n"
                 f"    └ {ach.description}\n"
-                f"    └ 🎁 {ach.bonus_description}"
+                f"    └ 🎁 {ach.bonus_description}\n"
             )
 
     from aiogram.utils.keyboard import InlineKeyboardBuilder

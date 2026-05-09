@@ -164,6 +164,7 @@ class PrestigeService:
             "coins_and_income_7":  7,
             "coins_and_income_10": 10,
             "coins_and_income_15": 15,
+            "quest_reward":        3,
         }
 
         for ach_record in achievements:

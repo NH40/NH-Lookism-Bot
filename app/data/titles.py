@@ -178,7 +178,7 @@ DONAT_SETS: list[DonatSet] = [
     DonatSet("flow", "Поток",
         "Уменьшение всех КД ещё на 15%", 500),
     DonatSet("ui_set", "UI",
-        "Авто-вербовка, авто-тренировка, авто-тикеты, авто-прокрутка, +3 макс тикета", 1000),
+        "Авто-вербовка, авто-тренировка, авто-тикеты, авто-прокрутка, авто-зелья, +3 макс тикета", 1500),
 ]
 
 DONAT_SET_MAP: dict[str, DonatSet] = {s.set_id: s for s in DONAT_SETS}
@@ -207,6 +207,7 @@ DONAT_TITLES: list[DonatTitle] = [
     DonatTitle("focus",           "Фокус",                   "flow",         "КД вербовки/тренировки -20%", "-20% КД",            200, "🧘"),
     # UI
     DonatTitle("ui_title",        "UI",                      "ui_set",       "Полная автоматизация + +3 тикета","Авто + +3 тикета",1000, "🤖"),
+    DonatTitle("ui_potion",       "Алхимик УИ",              "ui_set",       "Авто-покупка всех зелий по КД",  "Авто-зелья",       500,  "🧪"),
 ]
 
 DONAT_TITLE_MAP: dict[str, DonatTitle] = {t.title_id: t for t in DONAT_TITLES}

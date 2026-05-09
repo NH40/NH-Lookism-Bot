@@ -100,8 +100,15 @@ class UserRepo:
         self, session: AsyncSession
     ) -> list[User]:
         """Игроки с УИ (для ultra_instinct_tick)."""
+        from sqlalchemy import or_
         result = await session.execute(
-            select(User).where(User.ultra_instinct == True)
+            select(User).where(
+                or_(
+                    User.ultra_instinct == True,
+                    User.ui_is_donat == True,
+                    User.donat_ui_potion == True,
+                )
+            )
         )
         return result.scalars().all()
 

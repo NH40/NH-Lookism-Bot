@@ -179,12 +179,14 @@ async def cb_profile(cb: CallbackQuery, session: AsyncSession, user: User):
         )
 
     ui_str = ""
-    if user.ui_level > 0 or user.ui_is_donat:
+    if user.ui_level > 0 or user.ui_is_donat or user.ui_fragments > 0 or user.alchemy_fragments > 0:
         ui_level_label = "Донат (макс)" if user.ui_is_donat else f"Уровень {user.ui_level}/4"
+        alchemy_label = " ✅" if user.donat_ui_potion else ""
         ui_str = (
             f"\n\n━━━ 👁 Ультра Инстинкт ━━━\n"
             f"{ui_level_label}\n"
-            f"🔮 Фрагменты: {user.ui_fragments}"
+            f"🔮 Фрагменты УИ: {user.ui_fragments}\n"
+            f"🧪 Фрагменты алхимии: {user.alchemy_fragments}{alchemy_label}"
         )
 
     text = (

@@ -78,6 +78,7 @@ class User(Base):
 
     # ── Рейды ─────────────────────────────────────────────────────────────
     ui_fragments: Mapped[int] = mapped_column(Integer, default=0)
+    alchemy_fragments: Mapped[int] = mapped_column(Integer, default=0)
 
     # ── Ультра Инстинкт (переработка) ────────────────────────────────────
     ui_level: Mapped[int] = mapped_column(Integer, default=0)        # 0-4
@@ -90,6 +91,8 @@ class User(Base):
     ui_auto_train: Mapped[bool] = mapped_column(Boolean, default=True)
     ui_auto_ticket: Mapped[bool] = mapped_column(Boolean, default=True)
     ui_auto_pull: Mapped[bool] = mapped_column(Boolean, default=False)
+    donat_ui_potion: Mapped[bool] = mapped_column(Boolean, default=False)  # владение донатом
+    ui_auto_potion: Mapped[bool] = mapped_column(Boolean, default=False)   # пользовательский тоггл
 
     # ── Статистика ────────────────────────────────────────────────────────
     total_wins: Mapped[int] = mapped_column(Integer, default=0)

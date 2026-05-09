@@ -140,6 +140,8 @@ class TitleService:
         user.ui_auto_train = False
         user.ui_auto_ticket = False
         user.ui_auto_pull = False
+        user.donat_ui_potion = False
+        user.ui_auto_potion = False
 
     async def _apply_title_bonus(
         self, session: AsyncSession, user: User, title_id: str
@@ -187,6 +189,14 @@ class TitleService:
         elif title_id == "ui_title":
             from app.services.raid_service import raid_service as rs
             rs.apply_donat_ui(user)
+            if user.donat_ui_potion and user.ui_auto_potion:
+                from app.services.potion_service import potion_service
+                await potion_service.buy_missing(session, user)
+        elif title_id == "ui_potion":
+            user.donat_ui_potion = True
+            if user.ui_auto_potion:
+                from app.services.potion_service import potion_service
+                await potion_service.buy_missing(session, user)
 
     def _apply_set_bonus(self, user: User, set_id: str) -> None:
         if set_id == "strongest_0gen":

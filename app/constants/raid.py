@@ -30,8 +30,35 @@ RAID_BOSSES = {
                 "raid_duration_seconds": 3600,
             },
         }
-    }
+    },
+    "zero_gen": {
+        "name": "Нулевое поколение",
+        "emoji": "🌑",
+        "description": (
+            "Легенды, их эпоху называли эпохой войн, те кто защитили Корею от Ямадзаки. "
+            "Боевая мощь каждого участника делится на 2 — таков барьер нулевого поколения."
+        ),
+        "bosses": {
+            "jinnen": {
+                "id": "jinnen",
+                "name": "Джинен",
+                "emoji": "🌑",
+                "description": (
+                    "Один из сильнейших бойцов нулевого поколения. Зеркальный король"
+                    "Атаковать его может любой, но твоя боевая мощь делится на 2."
+                ),
+                "damage_source": "combat_power",
+                "base_hp": 2_000_000_000,
+                "reward_fragments": "alchemy",
+                "cd_hours": 6,
+                "raid_duration_seconds": 3600,
+            },
+        }
+    },
 }
+
+ALCHEMY_CRAFT_COST = 80
+ALCHEMY_MAX_FRAGMENTS_PER_RAID = 25
 
 UI_CRAFT_COST = {
     1: 50,

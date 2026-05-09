@@ -41,6 +41,8 @@ async def ultra_instinct_tick():
                         await _ui_recruit(session, user)
                     if user.ui_auto_train:
                         await squad_service.train(session, user)
+                    if user.ui_auto_potion:
+                        await _ui_auto_potion(session, user)
                 except Exception as e:
                     logger.error(f"ui_tick error for {user.id}: {e}")
 
@@ -51,6 +53,11 @@ async def _ui_recruit(session: AsyncSession, user):
     if await cooldown_service.is_on_cooldown(cd_key):
         return
     await squad_service.recruit(session, user)
+
+
+async def _ui_auto_potion(session: AsyncSession, user):
+    from app.services.potion_service import potion_service
+    await potion_service.buy_missing(session, user)
 
 
 async def auction_round_tick():

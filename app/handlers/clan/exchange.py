@@ -22,13 +22,14 @@ class ExchangeFSM(StatesGroup):
 
 
 RESOURCES = [
-    ("coins",          "💰 NHCoin"),
-    ("tickets",        "🎟 Тикеты"),
-    ("mastery_points", "⭐ Очки мастерства"),
-    ("ui_fragments",   "🔮 Фрагменты УИ"),
-    ("path_points",    "🔷 Очки пути"),
-    ("squad",          "👥 Статисты"),
-    ("character",      "🎴 Персонаж"),
+    ("coins",              "💰 NHCoin"),
+    ("tickets",            "🎟 Тикеты"),
+    ("mastery_points",     "⭐ Очки мастерства"),
+    ("ui_fragments",       "🔮 Фрагменты УИ"),
+    ("alchemy_fragments",  "🧪 Фрагменты алхимии"),
+    ("path_points",        "🔷 Очки пути"),
+    ("squad",              "👥 Статисты"),
+    ("character",          "🎴 Персонаж"),
 ]
 
 

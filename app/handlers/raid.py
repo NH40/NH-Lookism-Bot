@@ -7,7 +7,10 @@ from datetime import datetime, timezone
 from app.models.user import User
 from app.services.raid_service import raid_service
 from app.services.cooldown_service import cooldown_service
-from app.constants.raid import RAID_BOSSES, UI_CRAFT_COST, UI_LEVEL_PERKS
+from app.constants.raid import (
+    RAID_BOSSES, UI_CRAFT_COST, UI_LEVEL_PERKS,
+    ALCHEMY_CRAFT_COST,
+)
 from app.utils.keyboards.common import back_kb
 from app.utils.formatters import fmt_num
 
@@ -54,10 +57,12 @@ async def cb_raid_menu(cb: CallbackQuery, session: AsyncSession, user: User):
 
     ui_str = f"УИ {user.ui_level} уровень" if user.ui_level > 0 else "нет УИ"
     donat_str = " (донат 🔱)" if user.ui_is_donat else ""
+    alchemy_str = " ✅" if user.donat_ui_potion else f" ({user.alchemy_fragments}/{ALCHEMY_CRAFT_COST})"
 
     await cb.message.edit_text(
         f"⚔️ <b>Рейды</b>\n\n"
         f"🔮 Фрагменты УИ: <b>{user.ui_fragments}</b>\n"
+        f"🧪 Фрагменты алхимии: <b>{user.alchemy_fragments}</b>{alchemy_str}\n"
         f"👁 УИ: {ui_str}{donat_str}\n\n"
         f"Выбери цель для рейда:",
         reply_markup=builder.as_markup(),
@@ -122,7 +127,18 @@ async def cb_raid_boss(cb: CallbackQuery, session: AsyncSession, user: User):
 
     # Считаем мощь игрока для этого босса
     power = await raid_service.get_user_power_for_boss(session, user, boss["damage_source"])
-    source_name = "статистов" if boss["damage_source"] == "squad" else "уникальных персонажей"
+    if boss["damage_source"] == "squad":
+        source_name = "статистов"
+    elif boss["damage_source"] == "combat_power":
+        source_name = "боевой мощи (÷2)"
+    else:
+        source_name = "уникальных персонажей"
+
+    reward_line = (
+        "🧪 Награда: фрагменты алхимии (макс 25)"
+        if boss.get("reward_fragments") == "alchemy"
+        else "🔮 Награда: фрагменты УИ"
+    )
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
@@ -140,7 +156,7 @@ async def cb_raid_boss(cb: CallbackQuery, session: AsyncSession, user: User):
         f"🎯 HP босса: {fmt_num(boss['base_hp'])}\n"
         f"⏱ Длительность рейда: 1 час\n"
         f"⏳ КД после рейда: {boss['cd_hours']} часов\n"
-        f"🔮 Награда: фрагменты УИ\n\n"
+        f"{reward_line}\n\n"
         f"После начала рейда у тебя есть 1 час\n"
         f"чтобы нанести максимум урона!",
         reply_markup=builder.as_markup(),
@@ -254,12 +270,16 @@ async def cb_raid_claim(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer(result["reason"], show_alert=True)
         return
 
+    is_alchemy = result.get("reward_type") == "alchemy"
+    frag_emoji = "🧪" if is_alchemy else "🔮"
+    frag_name = "фрагментов алхимии" if is_alchemy else "фрагментов УИ"
+
     await cb.message.edit_text(
         f"🎉 <b>Рейд завершён!</b>\n\n"
         f"👹 Босс: {result['boss_name']}\n"
         f"💥 Нанесённый урон: <b>{fmt_num(result['damage'])}</b>\n\n"
-        f"🔮 Получено фрагментов УИ: <b>+{result['fragments']}</b>\n"
-        f"📊 Всего фрагментов: <b>{result['total_fragments']}</b>\n\n"
+        f"{frag_emoji} Получено {frag_name}: <b>+{result['fragments']}</b>\n"
+        f"📊 Всего: <b>{result['total_fragments']}</b>\n\n"
         f"Используй фрагменты в <b>Рейды → Крафт</b>!",
         reply_markup=back_kb("raid_menu"),
         parse_mode="HTML",
@@ -272,6 +292,7 @@ async def cb_raid_claim(cb: CallbackQuery, session: AsyncSession, user: User):
 async def cb_raid_craft(cb: CallbackQuery, session: AsyncSession, user: User):
     builder = InlineKeyboardBuilder()
 
+    # ── Секция УИ ────────────────────────────────────────────────────────────
     if user.ui_is_donat:
         builder.row(InlineKeyboardButton(
             text="🔱 УИ (Донат) — Максимальный уровень",
@@ -288,23 +309,42 @@ async def cb_raid_craft(cb: CallbackQuery, session: AsyncSession, user: User):
             else:
                 can = "✅" if user.ui_fragments >= cost else "❌"
                 builder.row(InlineKeyboardButton(
-                    text=f"{can} {perk['name']} — {cost} фрагментов",
+                    text=f"{can} {perk['name']} — {cost} фр. УИ",
                     callback_data=f"craft_ui:{level}"
                 ))
+
+    # ── Секция УИ Алхимии ────────────────────────────────────────────────────
+    if user.donat_ui_potion:
+        builder.row(InlineKeyboardButton(
+            text="✅ УИ Алхимии — Авто-зелья",
+            callback_data="noop_raid"
+        ))
+    else:
+        can_alchemy = "✅" if user.alchemy_fragments >= ALCHEMY_CRAFT_COST else "❌"
+        builder.row(InlineKeyboardButton(
+            text=f"{can_alchemy} УИ Алхимии — {ALCHEMY_CRAFT_COST} фр. алхимии",
+            callback_data="craft_alchemy_ui"
+        ))
 
     builder.row(InlineKeyboardButton(
         text="◀️ Назад", callback_data="raid_menu"
     ))
 
     ui_str = f"УИ {user.ui_level} уровень" if user.ui_level > 0 else "нет"
-    lines = [f"🔮 <b>Крафт УИ</b>\n\n"
-             f"Фрагментов: <b>{user.ui_fragments}</b>\n"
-             f"Текущий УИ: <b>{ui_str}</b>\n\n"
-             f"<b>Уровни УИ:</b>\n"]
+    alchemy_ui_str = "✅ Получен" if user.donat_ui_potion else f"❌ Нужно {ALCHEMY_CRAFT_COST} фр."
+    lines = [
+        f"🔮 <b>Крафт</b>\n\n"
+        f"Фрагменты УИ: <b>{user.ui_fragments}</b>\n"
+        f"Фрагменты алхимии: <b>{user.alchemy_fragments}</b>\n"
+        f"Текущий УИ: <b>{ui_str}</b>\n\n"
+        f"<b>Уровни УИ:</b>\n"
+    ]
     for lvl, perk in UI_LEVEL_PERKS.items():
         cost = UI_CRAFT_COST[lvl]
         status = "✅" if user.ui_level >= lvl else f"{cost} фр."
         lines.append(f"  {perk['name']}: {perk['perk']} [{status}]")
+    lines.append(f"\n<b>УИ Алхимии:</b>")
+    lines.append(f"  🧪 Авто-покупка всех зелий по КД [{alchemy_ui_str}]")
 
     await cb.message.edit_text(
         "\n".join(lines),
@@ -327,6 +367,21 @@ async def cb_craft_ui(cb: CallbackQuery, session: AsyncSession, user: User):
     await cb_raid_craft(cb, session, user)
 
 
+@router.callback_query(F.data == "craft_alchemy_ui")
+async def cb_craft_alchemy_ui(cb: CallbackQuery, session: AsyncSession, user: User):
+    result = await raid_service.craft_alchemy_ui(session, user)
+
+    if not result["ok"]:
+        await cb.answer(result["reason"], show_alert=True)
+        return
+
+    await cb.answer(
+        "✅ УИ Алхимии получен!\n🧪 Авто-зелья активированы!",
+        show_alert=True
+    )
+    await cb_raid_craft(cb, session, user)
+
+
 @router.callback_query(F.data.startswith("raid_attack:"))
 async def cb_raid_attack(cb: CallbackQuery, session: AsyncSession, user: User):
     raid_id = int(cb.data.split(":")[1])
@@ -337,17 +392,20 @@ async def cb_raid_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         return
 
     if result.get("boss_killed"):
+        is_alchemy = result.get("reward_type") == "alchemy"
+        frag_emoji = "🧪" if is_alchemy else "🔮"
+        frag_name = "фрагментов алхимии" if is_alchemy else "фрагментов УИ"
         await cb.answer(
             f"💀 Босс повержен!\n"
-            f"🔮 Получено фрагментов: +{result['fragments']}",
+            f"{frag_emoji} Получено: +{result['fragments']}",
             show_alert=True
         )
         await cb.message.edit_text(
             f"🎉 <b>Босс {result['boss_name']} повержен!</b>\n\n"
             f"💥 Суммарный урон: <b>{fmt_num(result['total_damage'])}</b>\n"
             f"🗡 Атак совершено: <b>{result['attack_count']}</b>\n\n"
-            f"🔮 Получено фрагментов УИ: <b>+{result['fragments']}</b>\n"
-            f"📊 Всего фрагментов: <b>{result['total_fragments']}</b>\n\n"
+            f"{frag_emoji} Получено {frag_name}: <b>+{result['fragments']}</b>\n"
+            f"📊 Всего: <b>{result['total_fragments']}</b>\n\n"
             f"Используй фрагменты в <b>Рейды → Крафт</b>!",
             reply_markup=back_kb("raid_menu"),
             parse_mode="HTML",

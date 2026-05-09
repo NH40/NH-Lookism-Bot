@@ -10,6 +10,7 @@ from app.services.cooldown_service import cooldown_service
 from app.constants.raid import (
     RAID_BOSSES, UI_CRAFT_COST, UI_LEVEL_PERKS,
     RAID_ATTACK_CD_SECONDS, RAID_ATTACK_CD_KEY,
+    ALCHEMY_CRAFT_COST, ALCHEMY_MAX_FRAGMENTS_PER_RAID,
 )
 
 
@@ -59,6 +60,8 @@ class RaidService:
                 )
             )
             return result or 0
+        elif damage_source == "combat_power":
+            return user.combat_power // 2
         return 0
 
     async def start_raid(
@@ -88,7 +91,12 @@ class RaidService:
 
         power = await self.get_user_power_for_boss(session, user, boss["damage_source"])
         if power == 0:
-            source_name = "статистов" if boss["damage_source"] == "squad" else "персонажей"
+            if boss["damage_source"] == "squad":
+                source_name = "статистов"
+            elif boss["damage_source"] == "combat_power":
+                source_name = "боевой мощи"
+            else:
+                source_name = "персонажей"
             return {"ok": False, "reason": f"Нет {source_name} для атаки!"}
 
         now = datetime.now(timezone.utc)
@@ -168,10 +176,16 @@ class RaidService:
         # ── Проверяем убит ли босс ──────────────────────────────────────
         boss_killed = raid.damage_dealt >= boss["base_hp"]
         if boss_killed:
-            fragments = self._calc_fragments(raid.damage_dealt, boss["base_hp"])
+            reward_type = boss.get("reward_fragments", "ui")
+            fragments = self._calc_fragments(raid.damage_dealt, boss["base_hp"], reward_type)
             raid.is_finished = True
             raid.fragments_earned = fragments
-            user.ui_fragments += fragments
+            if reward_type == "alchemy":
+                user.alchemy_fragments += fragments
+                total_fragments = user.alchemy_fragments
+            else:
+                user.ui_fragments += fragments
+                total_fragments = user.ui_fragments
 
             cd_key = self.boss_cd_key(raid.boss_id, user.id)
             await cooldown_service.set_cooldown(cd_key, boss["cd_hours"] * 3600)
@@ -184,7 +198,8 @@ class RaidService:
                 "total_damage": raid.damage_dealt,
                 "attack_count": raid.attack_count,
                 "fragments": fragments,
-                "total_fragments": user.ui_fragments,
+                "total_fragments": total_fragments,
+                "reward_type": reward_type,
                 "boss_name": boss["name"],
                 "remaining": 0,
             }
@@ -229,10 +244,16 @@ class RaidService:
                 "remaining": remaining,
             }
 
-        fragments = self._calc_fragments(raid.damage_dealt, boss["base_hp"])
+        reward_type = boss.get("reward_fragments", "ui")
+        fragments = self._calc_fragments(raid.damage_dealt, boss["base_hp"], reward_type)
         raid.is_finished = True
         raid.fragments_earned = fragments
-        user.ui_fragments += fragments
+        if reward_type == "alchemy":
+            user.alchemy_fragments += fragments
+            total_fragments = user.alchemy_fragments
+        else:
+            user.ui_fragments += fragments
+            total_fragments = user.ui_fragments
 
         # КД на босса с учётом скорости
         speed_pct = await self._get_speed_pct(session, user.id)
@@ -245,7 +266,8 @@ class RaidService:
         return {
             "ok": True,
             "fragments": fragments,
-            "total_fragments": user.ui_fragments,
+            "total_fragments": total_fragments,
+            "reward_type": reward_type,
             "damage": raid.damage_dealt,
             "attack_count": raid.attack_count,
             "boss_name": boss["name"],
@@ -262,8 +284,17 @@ class RaidService:
         )
         return result.scalar_one_or_none()
 
-    def _calc_fragments(self, damage: int, boss_hp: int) -> int:
+    def _calc_fragments(self, damage: int, boss_hp: int, reward_type: str = "ui") -> int:
         ratio = min(1.0, damage / boss_hp)
+        if reward_type == "alchemy":
+            if ratio >= 0.5:
+                return random.randint(20, ALCHEMY_MAX_FRAGMENTS_PER_RAID)
+            elif ratio >= 0.2:
+                return random.randint(12, 19)
+            elif ratio >= 0.05:
+                return random.randint(5, 11)
+            else:
+                return random.randint(1, 4)
         if ratio >= 0.5:
             return random.randint(15, 25)
         elif ratio >= 0.2:
@@ -303,12 +334,37 @@ class RaidService:
         self._apply_ui_level(user, target_level)
         await session.flush()
 
+        if user.donat_ui_potion and user.ui_auto_potion:
+            from app.services.potion_service import potion_service
+            await potion_service.buy_missing(session, user)
+
         return {
             "ok": True,
             "new_level": target_level,
             "cost": cost,
             "fragments_left": user.ui_fragments,
         }
+
+    async def craft_alchemy_ui(
+        self, session: AsyncSession, user: User
+    ) -> dict:
+        if user.donat_ui_potion:
+            return {"ok": False, "reason": "УИ Алхимии уже получен!"}
+        if user.alchemy_fragments < ALCHEMY_CRAFT_COST:
+            return {
+                "ok": False,
+                "reason": (
+                    f"Недостаточно фрагментов алхимии "
+                    f"(нужно {ALCHEMY_CRAFT_COST}, есть {user.alchemy_fragments})"
+                ),
+            }
+        user.alchemy_fragments -= ALCHEMY_CRAFT_COST
+        user.donat_ui_potion = True
+        user.ui_auto_potion = True
+        from app.services.potion_service import potion_service
+        await potion_service.buy_missing(session, user)
+        await session.flush()
+        return {"ok": True, "fragments_left": user.alchemy_fragments}
 
     async def _get_speed_pct(self, session: AsyncSession, user_id: int) -> int:
         """Получает % сокращения КД от мастерства скорости."""

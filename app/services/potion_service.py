@@ -114,6 +114,23 @@ class PotionService:
         "luck":      "🍀 Зелье удачи",
     }
 
+    async def buy_missing(self, session: AsyncSession, user: "User") -> None:
+        """Покупает все зелья, которые не активны, если хватает монет."""
+        from app.data.shop import POTIONS
+        active = await self.get_active(session, user.id)
+        active_types = {p.potion_type for p in active}
+        for cfg in POTIONS:
+            if cfg.effect_key in active_types:
+                continue
+            if user.nh_coins < cfg.price:
+                continue
+            user.nh_coins -= cfg.price
+            user.coins_spent += cfg.price
+            await self.apply_potion(
+                session, user.id,
+                cfg.effect_key, cfg.effect_value, cfg.duration_minutes,
+            )
+
     async def get_active_summary(self, session: AsyncSession, user_id: int) -> str:
         """Текстовое описание активных зелий для UI."""
         now = datetime.now(timezone.utc)

@@ -4,11 +4,12 @@ from app.models.user import User
 from app.models.promo import PromoCode, PromoUse
 
 REWARD_LABELS = {
-    "tickets":        "🎟 Тикеты",
-    "coins":          "💰 NHCoin",
-    "ui_fragments":   "🔮 Фрагменты УИ",
-    "path_points":    "🔷 Очки пути",
-    "mastery_points": "⭐ Очки мастерства",
+    "tickets":            "🎟 Тикеты",
+    "coins":              "💰 NHCoin",
+    "ui_fragments":       "🔮 Фрагменты УИ",
+    "alchemy_fragments":  "🧪 Фрагменты алхимии",
+    "path_points":        "🔷 Очки пути",
+    "mastery_points":     "⭐ Очки мастерства",
 }
 
 
@@ -90,6 +91,8 @@ class PromoService:
             user.nh_coins += amount
         elif reward_type == "ui_fragments":
             user.ui_fragments += amount
+        elif reward_type == "alchemy_fragments":
+            user.alchemy_fragments += amount
         elif reward_type == "path_points":
             user.skill_path_points += amount
         elif reward_type == "mastery_points":

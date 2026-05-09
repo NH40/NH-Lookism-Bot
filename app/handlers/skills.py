@@ -349,10 +349,25 @@ async def cb_ui_settings(cb: CallbackQuery, session: AsyncSession, user: User):
             callback_data="noop"
         ))
 
+    if user.donat_ui_potion:
+        builder.row(InlineKeyboardButton(
+            text=f"{'✅' if user.ui_auto_potion else '❌'} Авто-зелья",
+            callback_data="toggle_ui_potion"
+        ))
+    else:
+        builder.row(InlineKeyboardButton(
+            text="🔒 Авто-зелья (Алхимик УИ)",
+            callback_data="noop"
+        ))
+
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="skills"))
 
     ui_level_str = "Донат (макс)" if user.ui_is_donat else f"Уровень {user.ui_level}/4"
     tui_str = " | TUI 🔱" if user.true_ultra_instinct else ""
+
+    potion_line = (
+        f"{'✅' if user.ui_auto_potion else '❌'}" if user.donat_ui_potion else "🔒 (Алхимик УИ)"
+    )
 
     text = (
         f"👁 <b>Ультра Инстинкт</b> — {ui_level_str}{tui_str}\n\n"
@@ -360,7 +375,8 @@ async def cb_ui_settings(cb: CallbackQuery, session: AsyncSession, user: User):
         f"{'✅' if has_1 else '🔒'} Авто-вербовка" + (f": {'✅' if user.ui_auto_recruit else '❌'}" if has_1 else " (УИ I)") + "\n"
         + f"{'✅' if has_2 else '🔒'} Авто-тренировка" + (f": {'✅' if user.ui_auto_train else '❌'}" if has_2 else " (УИ II)") + "\n"
         + f"{'✅' if has_3 else '🔒'} Авто-тикеты" + (f": {'✅' if user.ui_auto_ticket else '❌'}" if has_3 else " (УИ III)") + "\n"
-        + f"{'✅' if has_4 else '🔒'} Авто-прокрутка" + (f": {'✅' if user.ui_auto_pull else '❌'}" if has_4 else " (УИ IV)")
+        + f"{'✅' if has_4 else '🔒'} Авто-прокрутка" + (f": {'✅' if user.ui_auto_pull else '❌'}" if has_4 else " (УИ IV)") + "\n"
+        + f"🧪 Авто-зелья: {potion_line}"
     )
 
     try:
@@ -409,4 +425,17 @@ async def toggle_ui_pull(cb: CallbackQuery, session: AsyncSession, user: User):
         return
     user.ui_auto_pull = not user.ui_auto_pull
     await session.flush()
+    await cb_ui_settings(cb, session, user)
+
+
+@router.callback_query(F.data == "toggle_ui_potion")
+async def toggle_ui_potion(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not user.donat_ui_potion:
+        await cb.answer("Нужен донат-титул «Алхимик УИ»!", show_alert=True)
+        return
+    user.ui_auto_potion = not user.ui_auto_potion
+    await session.flush()
+    if user.ui_auto_potion:
+        from app.services.potion_service import potion_service
+        await potion_service.buy_missing(session, user)
     await cb_ui_settings(cb, session, user)

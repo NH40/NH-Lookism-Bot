@@ -110,7 +110,7 @@ class KingBotService(GameBase):
 
                 user.total_wins += 1
                 user.influence += 500
-                coins_reward = old_power // 10
+                coins_reward = min(old_power // 10, 4_000_000)
                 user.nh_coins += coins_reward
 
                 # 2. Теперь считаем — районы уже есть

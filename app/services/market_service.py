@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timezone
 from app.constants.market import ITEM_TYPES, MAX_LISTINGS_PER_USER
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update
 from app.models.user import User
 from app.models.market import MarketListing
 
@@ -79,6 +79,20 @@ class MarketService:
         await session.flush()
 
         return {"ok": True, "listing_id": listing.id}
+
+    async def cancel_all_user_listings(
+        self, session: AsyncSession, user_id: int
+    ) -> None:
+        """Отменяет все активные лоты пользователя без возврата ресурсов."""
+        await session.execute(
+            update(MarketListing)
+            .where(
+                MarketListing.seller_id == user_id,
+                MarketListing.is_sold == False,
+                MarketListing.is_cancelled == False,
+            )
+            .values(is_cancelled=True)
+        )
 
     async def cancel_listing(
         self, session: AsyncSession, user: User, listing_id: int

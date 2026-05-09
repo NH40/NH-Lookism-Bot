@@ -80,6 +80,9 @@ class PrestigeService:
             rs.reset_game_ui(user)
             user.ui_fragments = 0
 
+        from app.services.market_service import market_service
+        await market_service.cancel_all_user_listings(session, user.id)
+
         await session.execute(
             delete(SquadMember).where(SquadMember.user_id == user.id)
         )

@@ -143,6 +143,10 @@ class GameGangService(GameBase):
                 lost.is_captured = False
                 city.captured_districts = max(0, city.captured_districts - 1)
                 await session.flush()
+                from app.repositories.building_repo import building_repo
+                from app.services.business_service import business_service
+                await building_repo.deactivate_buildings_on_district_loss(session, user.id, 1)
+                await business_service._recalc_income(session, user)
             my_districts = await self._get_my_districts_in_city(session, user.id, user.gang_city_id)
             if my_districts == 0:
                 return await self._destroy_gang(session, user)

@@ -223,7 +223,7 @@ async def _show_city_buildings(
     used_districts = await building_repo.get_used_districts_in_city(
         session, user.id, city_id
     )
-    free_districts = districts_in_city - used_districts
+    free_districts = max(0, districts_in_city - used_districts)
 
     lines = [
         f"🏙 <b>{city_name}</b>\n",
@@ -326,7 +326,7 @@ async def cb_biz_build(
     buildings = BUILDINGS_BY_PATH.get(user.business_path, [])
     used = await building_repo.get_used_districts(session, user.id)
     total = await city_repo.get_total_districts(session, user.id)
-    free = total - used
+    free = max(0, total - used)
 
     builder = InlineKeyboardBuilder()
     for b in buildings:
@@ -378,7 +378,7 @@ async def cb_biz_build_city(
     used_in_city = await building_repo.get_used_districts_in_city(
         session, user.id, city_id
     )
-    free = districts_in_city - used_in_city
+    free = max(0, districts_in_city - used_in_city)
 
     builder = InlineKeyboardBuilder()
     for b in buildings:

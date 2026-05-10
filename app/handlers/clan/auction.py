@@ -62,7 +62,13 @@ async def cb_clan_auction(cb: CallbackQuery, session: AsyncSession, user: User, 
         return
 
     now = datetime.now(timezone.utc)
-    remaining = max(0, int((auction.ends_at - now).total_seconds()))
+    try:
+        ends_at = auction.ends_at
+        if ends_at.tzinfo is None:
+            ends_at = ends_at.replace(tzinfo=timezone.utc)
+        remaining = max(0, int((ends_at - now).total_seconds()))
+    except Exception:
+        remaining = 0
     h, m = divmod(remaining // 60, 60)
 
     try:

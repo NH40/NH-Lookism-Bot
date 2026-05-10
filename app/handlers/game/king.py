@@ -24,10 +24,14 @@ async def build_king_menu(session, user, page: int = 0):
 
     cities = await city_repo.get_available_king_cities(session, user.sector or "Н")
 
+    from app.models.city import City
     my_city_ids_r = await session.execute(
-        select(District.city_id).where(
+        select(District.city_id)
+        .join(City, City.id == District.city_id)
+        .where(
             District.owner_id == user.id,
             District.is_captured == True,
+            City.phase != "fist",
         ).distinct()
     )
     my_city_ids = set(my_city_ids_r.scalars().all())

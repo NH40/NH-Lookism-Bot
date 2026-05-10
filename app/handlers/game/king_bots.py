@@ -17,11 +17,14 @@ router = Router()
 
 async def _get_king_cities_count(session: AsyncSession, user_id: int) -> int:
     from sqlalchemy import func
-    from app.models.city import District
+    from app.models.city import City, District
     return await session.scalar(
-        select(func.count(func.distinct(District.city_id))).where(
+        select(func.count(func.distinct(District.city_id)))
+        .join(City, City.id == District.city_id)
+        .where(
             District.owner_id == user_id,
             District.is_captured == True,
+            City.phase != "fist",
         )
     ) or 0
 

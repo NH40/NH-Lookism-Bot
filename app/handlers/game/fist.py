@@ -89,6 +89,19 @@ async def cb_fist_bot(cb: CallbackQuery, session: AsyncSession, user: User):
         await quest_service.add_progress(session, user, "wins")
 
     crit_str = " ⚡КРИТ!" if result.get("is_crit") else ""
+    if result.get("demoted"):
+        king_count = result.get("king_cities_count", 0)
+        need_more = max(0, 10 - king_count)
+        text = (
+            f"❌ <b>Поражение от {result['bot_name']}!</b>\n\n"
+            f"Потеряно городов: {result['cities_lost']}\n\n"
+            f"⚠️ <b>Вы понижены до фазы Короля!</b>\n"
+            f"{'─' * 20}\n"
+            f"🏙 Городов (Король): <b>{king_count}/10</b>\n"
+            f"Ещё нужно захватить: <b>{need_more}</b>"
+        )
+        await cb.message.edit_text(text, reply_markup=back_kb("main_menu"), parse_mode="HTML")
+        return
     if result["win"]:
         text = (
             f"✅ <b>Победа над {result['bot_name']}!{crit_str}</b>\n\n"
@@ -154,6 +167,19 @@ async def cb_fist_pvp(cb: CallbackQuery, session: AsyncSession, user: User):
         await quest_service.add_progress(session, user, "wins")
 
     crit_str = " ⚡КРИТ!" if result.get("is_crit") else ""
+    if result.get("demoted"):
+        king_count = result.get("king_cities_count", 0)
+        need_more = max(0, 10 - king_count)
+        text = (
+            f"❌ <b>Поражение в PvP!</b>\n\n"
+            f"Противник: {html.escape(result['defender_name'])}\n\n"
+            f"⚠️ <b>Вы понижены до фазы Короля!</b>\n"
+            f"{'─' * 20}\n"
+            f"🏙 Городов (Король): <b>{king_count}/10</b>\n"
+            f"Ещё нужно захватить: <b>{need_more}</b>"
+        )
+        await cb.message.edit_text(text, reply_markup=back_kb("main_menu"), parse_mode="HTML")
+        return
     if result["win"]:
         text = (
             f"✅ <b>Победа в PvP!{crit_str}</b>\n\n"

@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, Float, Integer, String
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
@@ -36,8 +36,8 @@ class FistBot(Base):
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     # power_ratio: multiplier relative to challenger's power when bot is created
     power_ratio: Mapped[float] = mapped_column(Float, default=1.0)
-    base_power: Mapped[int] = mapped_column(Integer, default=0)
-    current_power: Mapped[int] = mapped_column(Integer, default=0)
+    base_power: Mapped[int] = mapped_column(BigInteger, default=0)
+    current_power: Mapped[int] = mapped_column(BigInteger, default=0)
     defeat_count: Mapped[int] = mapped_column(Integer, default=0)
     cooldown_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Linked to a specific user challenge session

@@ -97,14 +97,9 @@ class GameFistService(GameBase):
                 return {
                     "ok": True, "win": False, "demoted": True,
                     "cities_lost": cities_lost, "fist_cities": user.fist_cities_count,
+                    "king_cities_count": user.king_cities_count,
                     "user_power": fight["user_power"], "bot_power": bot.current_power,
                     "bot_name": bot.name,
-                    "message": (
-                        f"💔 Поражение от {bot.name}!\n\n"
-                        f"Потеряно городов: {cities_lost}\n"
-                        f"Городов осталось: {user.fist_cities_count}\n\n"
-                        f"⚠️ Вы понижены до фазы Короля!"
-                    ),
                 }
             await self._handle_attack_cd(session, user, cd_key, "fist")
             await session.flush()
@@ -159,6 +154,7 @@ class GameFistService(GameBase):
                 await session.flush()
                 return {
                     "ok": True, "win": False, "demoted": True,
+                    "king_cities_count": attacker.king_cities_count,
                     "is_crit": result["is_crit"],
                     "attacker_power": result["attacker_power"],
                     "defender_power": result["defender_power"],

@@ -2,7 +2,7 @@ import random
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.models.user import User
-from app.models.city import District
+from app.models.city import City, District
 from app.services.cooldown_service import cooldown_service
 
 ATTACK_CD: dict[str, int] = {
@@ -44,9 +44,12 @@ class GameBase:
         self, session: AsyncSession, user_id: int
     ) -> int:
         r = await session.execute(
-            select(District.city_id).where(
+            select(District.city_id)
+            .join(City, City.id == District.city_id)
+            .where(
                 District.owner_id == user_id,
                 District.is_captured == True,
+                City.phase != "fist",
             ).distinct()
         )
         return len(r.scalars().all())

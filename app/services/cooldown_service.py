@@ -64,6 +64,17 @@ class CooldownService:
     def double_train_key(user_id: int) -> str:
         return f"cd:dtrain:{user_id}"
 
+    @staticmethod
+    def pull_lock_key(user_id: int) -> str:
+        return f"lock:pull:{user_id}"
+
+    async def acquire_lock(self, key: str, ttl: int = 5) -> bool:
+        """Returns True if lock acquired, False if already locked."""
+        result = await self.redis.setnx(key, "1")
+        if result:
+            await self.redis.expire(key, ttl)
+        return bool(result)
+
     def format_ttl(self, seconds: int) -> str:
         if seconds <= 0:
             return "готово"

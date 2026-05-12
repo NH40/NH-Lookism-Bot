@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 router = Router()
 
 
-class AuctionFSM(StatesGroup):
+class ClanAuctionFSM(StatesGroup):
     waiting_bid = State()
 
 
@@ -117,7 +117,7 @@ async def cb_clan_bid(cb: CallbackQuery, session: AsyncSession, user: User, stat
         await cb.answer("Аукцион не найден", show_alert=True)
         return
 
-    await state.set_state(AuctionFSM.waiting_bid)
+    await state.set_state(ClanAuctionFSM.waiting_bid)
     await state.update_data(auction_id=auction_id)
 
     cancel_kb = InlineKeyboardBuilder()
@@ -137,7 +137,7 @@ async def cb_clan_bid(cb: CallbackQuery, session: AsyncSession, user: User, stat
         pass
 
 
-@router.message(AuctionFSM.waiting_bid)
+@router.message(ClanAuctionFSM.waiting_bid)
 async def msg_clan_bid(message: Message, session: AsyncSession, user: User, state: FSMContext):
     data = await state.get_data()
     await state.clear()

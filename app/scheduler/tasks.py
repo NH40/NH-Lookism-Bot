@@ -250,12 +250,19 @@ async def clan_war_tick():
                             except Exception:
                                 pass
 
+    except Exception as e:
+        logger.error(f"clan_war_tick error: {e}", exc_info=True)
+
+
+async def clan_auction_tick():
+    """Каждую минуту — завершает истёкшие клановые аукционы и выдаёт награды."""
+    try:
         async with AsyncSessionFactory() as session:
             async with session.begin():
                 from app.services.clan import clan_service
                 await clan_service.finish_expired_auctions(session)
     except Exception as e:
-        logger.error(f"clan_war_tick error: {e}", exc_info=True)
+        logger.error(f"clan_auction_tick error: {e}", exc_info=True)
 
 async def _notify_auction_end(result: dict):
     try:

@@ -238,7 +238,14 @@ async def cb_try_ticket(cb: CallbackQuery, session: AsyncSession, user: User):
 
 @router.callback_query(F.data == "pull_one")
 async def cb_pull_one(cb: CallbackQuery, session: AsyncSession, user: User):
-    result = await deck_service.pull(session, user)
+    lock_key = cooldown_service.pull_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("Подожди...", show_alert=False)
+        return
+    try:
+        result = await deck_service.pull(session, user)
+    finally:
+        await cooldown_service.clear_cooldown(lock_key)
     if not result["ok"]:
         await cb.answer(result["reason"], show_alert=True)
         return
@@ -277,8 +284,16 @@ async def cb_pull_10(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer("Нет тикетов", show_alert=True)
         return
 
-    count = min(10, user.tickets)
-    results = await deck_service.pull_n(session, user, count)
+    lock_key = cooldown_service.pull_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
+        await cb.answer("Подожди...", show_alert=False)
+        return
+
+    try:
+        count = min(10, user.tickets)
+        results = await deck_service.pull_n(session, user, count)
+    finally:
+        await cooldown_service.clear_cooldown(lock_key)
     if not results:
         await cb.answer("Нет тикетов", show_alert=True)
         return

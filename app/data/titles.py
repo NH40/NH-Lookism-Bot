@@ -188,6 +188,7 @@ DONAT_TITLES: list[DonatTitle] = [
     DonatTitle("fist_power",      "Кулак",        "strongest_0gen", "Боевая мощь +20%",                    "+20% боевая мощь",              350, "👊"),
     DonatTitle("romantic_recruit","Романтик",     "strongest_0gen", "Количество вербовки +100%",            "+100% вербовка",                350, "💖"),
     DonatTitle("great_influence", "Великий",      "strongest_0gen", "Влияние не падает ниже 100",           "Мин. влияние = 100",            100, "🛡"),
+
     # Создатель гениев
     DonatTitle("genius_training", "Гений тренировок",        "genius_maker", "Тренировки +70%",             "+70% тренировки",    50,  "🏋️"),
     DonatTitle("genius_business", "Гений бизнеса",           "genius_maker", "Доход +50%",                  "+50% доход",         200, "💼"),
@@ -197,17 +198,20 @@ DONAT_TITLES: list[DonatTitle] = [
     DonatTitle("genius_medicine", "Гений медицины",          "genius_maker", "Способности пути ×1.30",      "+30% способности",   100, "🩺"),
     DonatTitle("genius_scale",    "Гений масштабирования",   "genius_maker", "Тренировки/доход/вербовка +15%","+15% всё",         200, "📈"),
     DonatTitle("legend_1gen",     "Легенда первого поколения","genius_maker","Крит удар ×3 (шанс 2%)",      "Крит ×3",            250, "👑"),
+
     # Монстр
     DonatTitle("monster_training","Гений тренировок (Монстр)","monster",     "Тренировки +100%",            "+100% тренировки",   150, "🏋️"),
     DonatTitle("reverse_eyes",    "Обратные глаза",          "monster",      "КД атаки -30%",               "-30% КД атаки",      300, "👁"),
     DonatTitle("selection",       "Отбор",                   "monster",      "+шанс сильных статистов",     "+шанс статистов",    350, "🎯"),
     DonatTitle("manager_fav",     "Любимый перс менеджера",  "monster",      "Шанс тикетов +10%",           "+10% тикет",         400, "💎"),
+
     # Поток
     DonatTitle("concentration",   "Концентрация",            "flow",         "КД атаки -30%",               "-30% КД атаки",      300, "🎯"),
     DonatTitle("focus",           "Фокус",                   "flow",         "КД вербовки/тренировки -20%", "-20% КД",            200, "🧘"),
+    
     # UI
     DonatTitle("ui_title",        "UI",                      "ui_set",       "Полная автоматизация + +3 тикета","Авто + +3 тикета",1000, "🤖"),
-    DonatTitle("ui_potion",       "Алхимик УИ",              "ui_set",       "Авто-покупка всех зелий по КД",  "Авто-зелья",       500,  "🧪"),
+    # DonatTitle("ui_potion",       "Алхимик УИ",              "ui_set",       "Авто-покупка всех зелий по КД",  "Авто-зелья",       500,  "🧪"),
 ]
 
 DONAT_TITLE_MAP: dict[str, DonatTitle] = {t.title_id: t for t in DONAT_TITLES}

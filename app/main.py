@@ -52,7 +52,8 @@ async def main():
     dp.callback_query.middleware(UserLoaderMiddleware())
     dp.message.middleware(NetworkErrorMiddleware())
     dp.callback_query.middleware(NetworkErrorMiddleware())
-    dp.callback_query.middleware(RateLimitMiddleware(limit=0.5))
+    dp.message.middleware(RateLimitMiddleware())
+    dp.callback_query.middleware(RateLimitMiddleware())
 
     dp.include_router(common.router)
     dp.include_router(attack.router)

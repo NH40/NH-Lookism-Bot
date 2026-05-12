@@ -23,13 +23,13 @@ RANKS: list[RankConfig] = [
     RankConfig("SR",    "🌟", 1_750,    0,  900),
     RankConfig("SSR",   "✨", 2_000,    0,  1_000),
     RankConfig("UR",    "💎", 2_500,    0, 1_250),
-    RankConfig("LR",    "👑", 5_000,  0, 1_500),
-    RankConfig("MP",    "🔱", 6_000,  0, 1_750),
-    RankConfig("X",     "⚡", 7_500,  0, 2_000),
-    RankConfig("XX",    "🌀", 10_000, 0, 2_250),
-    RankConfig("XXX",   "🔥", 12_000, 0, 2_500),
-    RankConfig("DX",    "💀", 15_000, 0, 2_750),
-    RankConfig("ERROR", "❌", 50_000,0, 3_000),
+    RankConfig("LR",    "👑", 3_000,  0, 1_500),
+    RankConfig("MP",    "🔱", 5_000,  0, 1_750),
+    RankConfig("X",     "⚡", 6_000,  0, 2_000),
+    RankConfig("XX",    "🌀", 7_500, 0, 2_250),
+    RankConfig("XXX",   "🔥", 10_000, 0, 2_500),
+    RankConfig("DX",    "💀", 12_000, 0, 2_750),
+    RankConfig("ERROR", "❌", 15_000,0, 3_000),
 ]
 
 RANKS_BY_ID: dict[str, RankConfig] = {r.rank: r for r in RANKS}

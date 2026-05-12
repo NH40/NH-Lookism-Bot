@@ -121,8 +121,16 @@ class PrestigeService:
         from app.services.title_service import title_service
         await title_service.reapply_all_titles(session, user)
 
-        # Восстанавливаем бонусы достижений (перманентные)
-        await self._reapply_achievement_bonuses(session, user, keep_progress)
+        # Сбрасываем несекретные достижения — игроки могут выполнить их заново
+        from app.models.title import UserAchievement
+        from app.data.titles import ACHIEVEMENT_MAP
+        secret_ids = {a.achievement_id for a in ACHIEVEMENT_MAP.values() if a.secret}
+        await session.execute(
+            delete(UserAchievement).where(
+                UserAchievement.user_id == user.id,
+                UserAchievement.achievement_id.not_in(list(secret_ids)),
+            )
+        )
 
         await session.flush()
 
@@ -141,46 +149,5 @@ class PrestigeService:
         # При престиже — УИ и фрагменты сохраняются (keep_ui=True)
         await self._reset_progress(session, user, keep_ui=True)
         return {"ok": True, "level": user.prestige_level}
-
-    async def _reapply_achievement_bonuses(
-        self, session: AsyncSession, user: User, keep_progress: bool = False
-    ) -> None:
-        """Восстанавливает % бонусы от достижений после вайпа."""
-        from app.models.title import UserAchievement
-        from app.data.titles import ACHIEVEMENT_MAP
-
-        result = await session.execute(
-            select(UserAchievement).where(
-                UserAchievement.user_id == user.id,
-                UserAchievement.claimed == True,
-            )
-        )
-        achievements = result.scalars().all()
-
-        pct_map = {
-            "coins_and_income":    5,
-            "coins_and_income_2":  2,
-            "coins_and_income_3":  3,
-            "coins_and_income_7":  7,
-            "coins_and_income_10": 10,
-            "coins_and_income_15": 15,
-            "quest_reward":        3,
-        }
-
-        for ach_record in achievements:
-            ach = ACHIEVEMENT_MAP.get(ach_record.achievement_id)
-            if not ach:
-                continue
-
-            key = ach.bonus_key
-            val = ach.bonus_value
-
-            # Восстанавливаем только % бонусы и очки пути
-            # Монеты НЕ возвращаем — они уже были выданы при получении
-            if key == "path_points" and not keep_progress:
-                user.skill_path_points += val
-            elif key in pct_map:
-                user.income_bonus_percent += pct_map[key]
-
 
 prestige_service = PrestigeService()

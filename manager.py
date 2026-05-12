@@ -112,6 +112,43 @@ async def stats():
                 print(f"  {phase}: {count}")
 
 
+async def set_clan_leader(clan_name: str, tg_id: int):
+    """Принудительно меняет лидера клана."""
+    from app.database import AsyncSessionFactory
+    from sqlalchemy import select
+    from app.models.clan import Clan, ClanMember
+    from app.models.user import User
+
+    async with AsyncSessionFactory() as session:
+        async with session.begin():
+            clan = await session.scalar(select(Clan).where(Clan.name == clan_name))
+            if not clan:
+                print(f"❌ Клан '{clan_name}' не найден")
+                return
+
+            user = await session.scalar(select(User).where(User.tg_id == tg_id))
+            if not user:
+                print(f"❌ Игрок с tg_id {tg_id} не найден")
+                return
+
+            member = await session.scalar(
+                select(ClanMember).where(
+                    ClanMember.clan_id == clan.id,
+                    ClanMember.user_id == user.id,
+                )
+            )
+            if not member:
+                print(f"❌ Игрок {tg_id} не состоит в клане '{clan_name}'")
+                return
+
+            old_owner = await session.scalar(select(User).where(User.id == clan.owner_id))
+            clan.owner_id = user.id
+            print(
+                f"✅ Лидер клана '{clan_name}' сменён: "
+                f"{old_owner.tg_id if old_owner else '?'} → {tg_id}"
+            )
+
+
 async def auto_backup_loop():
     """Авто-бэкап каждые 6 часов."""
     print("🔄 Запущен авто-бэкап каждые 6 часов")
@@ -125,12 +162,13 @@ def print_help():
 Lookism Battle Planet — Manager
 
 Команды:
-  backup              Создать бэкап
-  restore <file>      Восстановить из файла
-  list                Список бэкапов
-  migrate             Создать таблицы в БД
-  stats               Статистика игроков
-  autobackup          Авто-бэкап (для Docker)
+  backup                        Создать бэкап
+  restore <file>                Восстановить из файла
+  list                          Список бэкапов
+  migrate                       Создать таблицы в БД
+  stats                         Статистика игроков
+  set_clan_leader <clan> <tg>   Сменить лидера клана
+  autobackup                    Авто-бэкап (для Docker)
     """)
 
 
@@ -148,6 +186,8 @@ if __name__ == "__main__":
         asyncio.run(migrate())
     elif args[0] == "stats":
         asyncio.run(stats())
+    elif args[0] == "set_clan_leader" and len(args) == 3:
+        asyncio.run(set_clan_leader(args[1], int(args[2])))
     elif args[0] == "autobackup":
         asyncio.run(auto_backup_loop())
     else:

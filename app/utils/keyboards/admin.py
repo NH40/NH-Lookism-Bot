@@ -8,9 +8,9 @@ def admin_main_kb():
     builder.row(InlineKeyboardButton(text="🔍 Найти игрока", callback_data="admin_find"))
     builder.row(InlineKeyboardButton(text="🔧 Патч", callback_data="admin_patch"))
     builder.row(InlineKeyboardButton(text="🎁 Промокоды", callback_data="admin_promos"))
+    builder.row(InlineKeyboardButton(text="🏯 Клан-донат", callback_data="admin_clan_donat"))
     builder.row(InlineKeyboardButton(text="📢 Рассылка", callback_data="admin_broadcast"))
     builder.row(InlineKeyboardButton(text="👥 Действия со всеми", callback_data="admin_bulk"))
-    builder.row(InlineKeyboardButton(text="🏯 Клан-донат", callback_data="admin_clan_donat"))
     builder.row(InlineKeyboardButton(text="💾 Бэкапы", callback_data="admin_backup"))
     return builder.as_markup()
 
@@ -26,6 +26,9 @@ def admin_user_kb(tg_id: int) -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="🎟 Тикеты", callback_data=f"adm_tickets:{tg_id}"),
     )
     builder.row(
+        InlineKeyboardButton(text="📦 Ресурсы", callback_data=f"adm_resources:{tg_id}"),
+    )
+    builder.row(
         InlineKeyboardButton(text="👁 TUI", callback_data=f"adm_tui:{tg_id}"),
         InlineKeyboardButton(text="❌ Убрать TUI", callback_data=f"adm_untui:{tg_id}"),
     )
@@ -36,6 +39,9 @@ def admin_user_kb(tg_id: int) -> InlineKeyboardMarkup:
     builder.row(
         InlineKeyboardButton(text="🔱 Ебать (всё)", callback_data=f"adm_all:{tg_id}"),
         InlineKeyboardButton(text="💀 Лох (снять)", callback_data=f"adm_none:{tg_id}"),
+    )
+    builder.row(
+        InlineKeyboardButton(text="🗑 Удалить аккаунт", callback_data=f"adm_delete_confirm:{tg_id}"),
     )
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="admin_main"))
     return builder.as_markup()

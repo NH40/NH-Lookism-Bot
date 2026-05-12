@@ -16,6 +16,12 @@ class ClanShopService(ClanBaseService):
         if clan.treasury < item.price:
             return {"ok": False, "reason": f"Недостаточно в казне (нужно {item.price:,})"}
 
+        # Check before modifying treasury to prevent autoflush from committing the deduction
+        if item.item_type == "auction":
+            existing = await self.get_active_auction(session, clan.id)
+            if existing:
+                return {"ok": False, "reason": "В клане уже идёт аукцион"}
+
         clan.treasury -= item.price
         members = await self.get_clan_members(session, clan.id)
         user_ids = [m.user_id for m in members]
@@ -55,9 +61,6 @@ class ClanShopService(ClanBaseService):
             from datetime import datetime, timezone, timedelta
             from app.models.clan import ClanAuction
             import json
-            existing = await self.get_active_auction(session, clan.id)
-            if existing:
-                return {"ok": False, "reason": "В клане уже идёт аукцион"}
             rewards = CLAN_AUCTION_REWARDS.get(item.value, CLAN_AUCTION_REWARDS["common"])
             reward = random.choice(rewards)
             auction = ClanAuction(

@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from app.models.user import User
 from app.models.promo import PromoCode, PromoUse
 
@@ -111,6 +111,17 @@ class PromoService:
         if not promo:
             return {"ok": False, "reason": "Промокод не найден"}
         promo.is_active = False
+        await session.flush()
+        return {"ok": True}
+
+    async def delete_promo(self, session: AsyncSession, promo_id: int) -> dict:
+        promo = await session.scalar(
+            select(PromoCode).where(PromoCode.id == promo_id)
+        )
+        if not promo:
+            return {"ok": False, "reason": "Промокод не найден"}
+        await session.execute(delete(PromoUse).where(PromoUse.promo_id == promo_id))
+        await session.delete(promo)
         await session.flush()
         return {"ok": True}
 

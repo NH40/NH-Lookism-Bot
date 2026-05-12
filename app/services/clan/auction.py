@@ -16,7 +16,10 @@ class ClanAuctionService(ClanBaseService):
 
     async def bid_auction(self, session: AsyncSession, auction: ClanAuction, user: User, amount: int) -> dict:
         now = datetime.now(timezone.utc)
-        if now >= auction.ends_at:
+        ends_at = auction.ends_at
+        if ends_at.tzinfo is None:
+            ends_at = ends_at.replace(tzinfo=timezone.utc)
+        if now >= ends_at:
             return {"ok": False, "reason": "Аукцион завершён"}
         if amount <= auction.current_bid:
             return {"ok": False, "reason": f"Ставка должна быть больше {auction.current_bid:,}"}

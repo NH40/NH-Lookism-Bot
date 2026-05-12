@@ -12,7 +12,8 @@ def setup_scheduler() -> AsyncIOScheduler:
         ultra_instinct_tick,
         auction_round_tick,
         auction_start_tick,
-        clan_war_tick
+        clan_war_tick,
+        clan_auction_tick,
     )
 
     scheduler = AsyncIOScheduler()
@@ -49,7 +50,15 @@ def setup_scheduler() -> AsyncIOScheduler:
     )
 
 
-    scheduler.add_job(clan_war_tick, "interval", minutes=5, id="clan_war_tick") 
+    scheduler.add_job(clan_war_tick, "interval", minutes=5, id="clan_war_tick")
+    scheduler.add_job(
+        clan_auction_tick,
+        trigger=IntervalTrigger(minutes=1),
+        id="clan_auction_tick",
+        name="clan_auction_tick",
+        max_instances=1,
+        misfire_grace_time=30,
+    )
 
-    logger.info("Scheduler configured with 4 jobs")
+    logger.info("Scheduler configured with 6 jobs")
     return scheduler

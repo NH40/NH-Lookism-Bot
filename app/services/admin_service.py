@@ -53,41 +53,54 @@ class AdminService:
                 select(func.count(User.id)).where(User.phase == phase)
             )
             phases[phase] = count
-        return {"total": total, "phases": phases}
+        with_power = await session.scalar(
+            select(func.count(User.id)).where(User.combat_power > 0)
+        )
+        return {"total": total, "phases": phases, "with_power": with_power}
 
     async def patch_reset_progress(self, session: AsyncSession, version: str) -> int:
         from app.services.prestige_service import prestige_service
         from app.models.clan import Clan, ClanMember
-        from app.services.clan_service import clan_service
+        from app.models.market import MarketListing
+        from app.services.clan import clan_service
+        from sqlalchemy import update
 
         result = await session.execute(select(User))
         users = result.scalars().all()
 
         # ── Топ-10 и топ-5 кланов ПЕРЕД сбросом ─────────────────────────────────
         top_players = sorted(users, key=lambda u: u.combat_power, reverse=True)[:10]
-        top_rewards = {0: 10, 1: 9, 2: 8, 3: 7, 4: 6, 5: 5, 6: 4, 7: 4, 8: 3, 9: 3}
+        top_rewards = {0: 20, 1: 18, 2: 16, 3: 14, 4: 12, 5: 10, 6: 8, 7: 8, 8: 6, 9: 6}
 
         top_clans_r = await session.execute(
             select(Clan).order_by(Clan.combat_power.desc()).limit(5)
         )
         top_clans = top_clans_r.scalars().all()
-        clan_rewards = {0: 8, 1: 6, 2: 5, 3: 4, 4: 3}
+        clan_rewards = {0: 16, 1: 12, 2: 10, 3: 8, 4: 6}
 
         # Собираем bonus_tickets ДО сброса
         bonus_tickets: dict[int, int] = {}
         for i, u in enumerate(top_players):
-            bonus_tickets[u.id] = top_rewards.get(i, 3)
+            bonus_tickets[u.id] = top_rewards.get(i, 6)
 
         for i, clan in enumerate(top_clans):
-            tickets = clan_rewards.get(i, 3)
+            tickets = clan_rewards.get(i, 6)
             members_r = await session.execute(
                 select(ClanMember).where(ClanMember.clan_id == clan.id)
             )
             for member in members_r.scalars().all():
                 existing = bonus_tickets.get(member.user_id, 0)
                 bonus_tickets[member.user_id] = max(existing, tickets)
-            # Обнуляем казну
-            clan.treasury = 0
+
+        # ── Сброс биржи ───────────────────────────────────────────────────────────
+        await session.execute(
+            update(MarketListing)
+            .where(
+                MarketListing.is_sold == False,
+                MarketListing.is_cancelled == False,
+            )
+            .values(is_cancelled=True)
+        )
 
         # ── Сброс прогресса ───────────────────────────────────────────────────────
         for user in users:
@@ -99,12 +112,16 @@ class AdminService:
             if extra > 0:
                 user.tickets = min(user.tickets + extra, user.max_tickets)
 
-        # ── Пересчёт боевой мощи кланов ПОСЛЕ сброса ─────────────────────────────
-        # После сброса у всех игроков combat_power = 0 (нет статистов)
-        # Поэтому мощь клана тоже = 0, это корректно
+        # ── Сброс казны и улучшений кланов (кроме доната) ПОСЛЕ сброса ───────────
         all_clans_r = await session.execute(select(Clan))
         all_clans = all_clans_r.scalars().all()
         for clan in all_clans:
+            clan.treasury = 0
+            clan.bonus_max_members = 0
+            clan.bonus_income_pct = 0
+            clan.bonus_ticket_pct = 0
+            clan.bonus_train_pct = 0
+            clan.max_members = 5
             await clan_service.recalc_power(session, clan)
 
         # ── Версия ────────────────────────────────────────────────────────────────
@@ -159,6 +176,38 @@ class AdminService:
                     size = 0
                 files.append({"name": f, "path": path, "size_kb": size})
         return files
+
+    async def give_mastery_points(self, session: AsyncSession, user: User, amount: int) -> None:
+        user.mastery_points += amount
+        await session.flush()
+
+    async def give_path_points(self, session: AsyncSession, user: User, amount: int) -> None:
+        user.skill_path_points += amount
+        await session.flush()
+
+    async def give_ui_fragments(self, session: AsyncSession, user: User, amount: int) -> None:
+        user.ui_fragments += amount
+        await session.flush()
+
+    async def give_alchemy_fragments(self, session: AsyncSession, user: User, amount: int) -> None:
+        user.alchemy_fragments = getattr(user, "alchemy_fragments", 0) + amount
+        await session.flush()
+
+    async def delete_user(self, session: AsyncSession, user: User) -> None:
+        from app.services.prestige_service import prestige_service
+        from app.models.title import UserAchievement, UserDonatTitle
+        from app.models.skill import UserMastery
+        from app.models.clan import ClanMember
+        from sqlalchemy import delete as sa_delete
+
+        await prestige_service._reset_progress(session, user, keep_ui=False)
+
+        await session.execute(sa_delete(UserAchievement).where(UserAchievement.user_id == user.id))
+        await session.execute(sa_delete(UserDonatTitle).where(UserDonatTitle.user_id == user.id))
+        await session.execute(sa_delete(UserMastery).where(UserMastery.user_id == user.id))
+        await session.execute(sa_delete(ClanMember).where(ClanMember.user_id == user.id))
+        await session.delete(user)
+        await session.flush()
 
     async def give_prestige(self, session: AsyncSession, user: User, amount: int = 1) -> None:
         """Добавляет пробуждения игроку с бонусами как при обычном пробуждении."""

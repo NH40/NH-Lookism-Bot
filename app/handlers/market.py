@@ -203,19 +203,30 @@ async def cb_market_create_type(
 
     # Статисты — выбор ранга
     if item_type == "squad_member":
+        from app.models.squad_member import SquadMember
+        from app.data.squad import RANKS
+
         builder = InlineKeyboardBuilder()
-        for rank in ["S", "A", "B", "C"]:
-            from app.models.squad_member import SquadMember
+        has_any = False
+        for rank_cfg in RANKS:
             cnt = await session.scalar(
                 select(func.count(SquadMember.id)).where(
                     SquadMember.user_id == user.id,
-                    SquadMember.rank == rank,
+                    SquadMember.rank == rank_cfg.rank,
                 )
             ) or 0
+            if cnt == 0:
+                continue
+            has_any = True
             builder.row(InlineKeyboardButton(
-                text=f"Ранг {rank} (есть: {cnt})",
-                callback_data=f"market_create_rank:{rank}"
+                text=f"{rank_cfg.emoji} Ранг {rank_cfg.rank} (есть: {cnt})",
+                callback_data=f"market_create_rank:{rank_cfg.rank}"
             ))
+
+        if not has_any:
+            await cb.answer("У вас нет статистов", show_alert=True)
+            return
+
         builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_create"))
         await state.update_data(item_type=item_type)
         try:

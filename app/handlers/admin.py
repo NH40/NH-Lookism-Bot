@@ -35,6 +35,10 @@ class AdminFSM(StatesGroup):
     waiting_bulk_tickets = State()
     waiting_promo_create = State()
     waiting_clan_donat_search = State()
+    waiting_mastery_points = State()
+    waiting_path_points = State()
+    waiting_ui_fragments = State()
+    waiting_alchemy_fragments = State()
 
 
 # ── Главное меню ────────────────────────────────────────────────────────────
@@ -73,6 +77,7 @@ async def cb_admin_stats(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.message.edit_text(
             f"📊 <b>Статистика</b>\n\n"
             f"Всего игроков: {stats['total']}\n"
+            f"⚔️ С боевой мощью > 0: {stats['with_power']}\n"
             f"🔖 {version_str}\n\n"
             f"По фазам:\n{phase_lines}",
             reply_markup=back_kb("admin_main"),
@@ -519,6 +524,203 @@ async def cb_adm_none(cb: CallbackQuery, session: AsyncSession, user: User):
     await cb.answer("💀 Все титулы сняты!")
 
 
+# ── Ресурсы ─────────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data.startswith("adm_resources:"))
+async def cb_adm_resources(cb: CallbackQuery, user: User):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = cb.data.split(":")[1]
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="⭐ Очки мастерства", callback_data=f"adm_mastery:{tg_id}"))
+    builder.row(InlineKeyboardButton(text="🔷 Очки пути", callback_data=f"adm_pathpts:{tg_id}"))
+    builder.row(InlineKeyboardButton(text="🔮 Фрагменты УИ", callback_data=f"adm_uifrag:{tg_id}"))
+    builder.row(InlineKeyboardButton(text="🧪 Фрагменты алхимии", callback_data=f"adm_alchfrag:{tg_id}"))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"adm_user:{tg_id}"))
+    try:
+        await cb.message.edit_text("📦 Выберите ресурс для выдачи:", reply_markup=builder.as_markup())
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("adm_mastery:"))
+async def cb_adm_mastery(cb: CallbackQuery, user: User, state: FSMContext):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = cb.data.split(":")[1]
+    await state.set_state(AdminFSM.waiting_mastery_points)
+    await state.update_data(target_tg_id=tg_id)
+    try:
+        await cb.message.edit_text(f"⭐ Введите количество очков мастерства:", reply_markup=back_kb(f"adm_resources:{tg_id}"))
+    except Exception:
+        pass
+
+
+@router.message(AdminFSM.waiting_mastery_points)
+async def msg_adm_mastery(message: Message, session: AsyncSession, user: User, state: FSMContext):
+    if not is_admin(user.tg_id):
+        return
+    data = await state.get_data()
+    tg_id = data.get("target_tg_id")
+    await state.clear()
+    try:
+        amount = int(message.text.strip())
+    except ValueError:
+        await message.answer("Введите число")
+        return
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await message.answer("Игрок не найден")
+        return
+    await admin_service.give_mastery_points(session, found, amount)
+    await message.answer(f"✅ Выдано {amount} очков мастерства игроку {html.escape(found.full_name)}", parse_mode="HTML")
+    await _show_user_card(message, session, found)
+
+
+@router.callback_query(F.data.startswith("adm_pathpts:"))
+async def cb_adm_pathpts(cb: CallbackQuery, user: User, state: FSMContext):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = cb.data.split(":")[1]
+    await state.set_state(AdminFSM.waiting_path_points)
+    await state.update_data(target_tg_id=tg_id)
+    try:
+        await cb.message.edit_text(f"🔷 Введите количество очков пути:", reply_markup=back_kb(f"adm_resources:{tg_id}"))
+    except Exception:
+        pass
+
+
+@router.message(AdminFSM.waiting_path_points)
+async def msg_adm_pathpts(message: Message, session: AsyncSession, user: User, state: FSMContext):
+    if not is_admin(user.tg_id):
+        return
+    data = await state.get_data()
+    tg_id = data.get("target_tg_id")
+    await state.clear()
+    try:
+        amount = int(message.text.strip())
+    except ValueError:
+        await message.answer("Введите число")
+        return
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await message.answer("Игрок не найден")
+        return
+    await admin_service.give_path_points(session, found, amount)
+    await message.answer(f"✅ Выдано {amount} очков пути игроку {html.escape(found.full_name)}", parse_mode="HTML")
+    await _show_user_card(message, session, found)
+
+
+@router.callback_query(F.data.startswith("adm_uifrag:"))
+async def cb_adm_uifrag(cb: CallbackQuery, user: User, state: FSMContext):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = cb.data.split(":")[1]
+    await state.set_state(AdminFSM.waiting_ui_fragments)
+    await state.update_data(target_tg_id=tg_id)
+    try:
+        await cb.message.edit_text(f"🔮 Введите количество фрагментов УИ:", reply_markup=back_kb(f"adm_resources:{tg_id}"))
+    except Exception:
+        pass
+
+
+@router.message(AdminFSM.waiting_ui_fragments)
+async def msg_adm_uifrag(message: Message, session: AsyncSession, user: User, state: FSMContext):
+    if not is_admin(user.tg_id):
+        return
+    data = await state.get_data()
+    tg_id = data.get("target_tg_id")
+    await state.clear()
+    try:
+        amount = int(message.text.strip())
+    except ValueError:
+        await message.answer("Введите число")
+        return
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await message.answer("Игрок не найден")
+        return
+    await admin_service.give_ui_fragments(session, found, amount)
+    await message.answer(f"✅ Выдано {amount} фрагментов УИ игроку {html.escape(found.full_name)}", parse_mode="HTML")
+    await _show_user_card(message, session, found)
+
+
+@router.callback_query(F.data.startswith("adm_alchfrag:"))
+async def cb_adm_alchfrag(cb: CallbackQuery, user: User, state: FSMContext):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = cb.data.split(":")[1]
+    await state.set_state(AdminFSM.waiting_alchemy_fragments)
+    await state.update_data(target_tg_id=tg_id)
+    try:
+        await cb.message.edit_text(f"🧪 Введите количество фрагментов алхимии:", reply_markup=back_kb(f"adm_resources:{tg_id}"))
+    except Exception:
+        pass
+
+
+@router.message(AdminFSM.waiting_alchemy_fragments)
+async def msg_adm_alchfrag(message: Message, session: AsyncSession, user: User, state: FSMContext):
+    if not is_admin(user.tg_id):
+        return
+    data = await state.get_data()
+    tg_id = data.get("target_tg_id")
+    await state.clear()
+    try:
+        amount = int(message.text.strip())
+    except ValueError:
+        await message.answer("Введите число")
+        return
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await message.answer("Игрок не найден")
+        return
+    await admin_service.give_alchemy_fragments(session, found, amount)
+    await message.answer(f"✅ Выдано {amount} фрагментов алхимии игроку {html.escape(found.full_name)}", parse_mode="HTML")
+    await _show_user_card(message, session, found)
+
+
+# ── Удаление аккаунта ────────────────────────────────────────────────────────
+
+@router.callback_query(F.data.startswith("adm_delete_confirm:"))
+async def cb_adm_delete_confirm(cb: CallbackQuery, user: User):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = cb.data.split(":")[1]
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="💀 Да, удалить насовсем", callback_data=f"adm_delete_do:{tg_id}"))
+    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data=f"adm_user:{tg_id}"))
+    try:
+        await cb.message.edit_text(
+            f"⚠️ <b>Удаление аккаунта {tg_id}</b>\n\nВсе данные игрока будут удалены без возможности восстановления!\n\nПодтвердить?",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("adm_delete_do:"))
+async def cb_adm_delete_do(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = int(cb.data.split(":")[1])
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await cb.answer("Игрок не найден", show_alert=True)
+        return
+    name = found.full_name
+    await admin_service.delete_user(session, found)
+    await cb.answer(f"💀 Аккаунт {name} удалён!")
+    try:
+        await cb.message.edit_text(
+            f"💀 <b>Аккаунт удалён</b>\n\n{html.escape(name)} (tg_id: {tg_id})",
+            reply_markup=back_kb("admin_main"),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
 # ── Патч ────────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "admin_patch")
@@ -841,6 +1043,10 @@ async def cb_admin_promo_info(cb: CallbackQuery, session: AsyncSession, user: Us
             text="❌ Деактивировать",
             callback_data=f"admin_promo_deactivate:{promo_id}"
         ))
+    builder.row(InlineKeyboardButton(
+        text="🗑 Удалить",
+        callback_data=f"admin_promo_delete:{promo_id}"
+    ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="admin_promos"))
 
     try:
@@ -865,6 +1071,19 @@ async def cb_admin_promo_deactivate(cb: CallbackQuery, session: AsyncSession, us
     result = await promo_service.deactivate_promo(session, promo_id)
     if result["ok"]:
         await cb.answer("✅ Промокод деактивирован")
+    else:
+        await cb.answer(result["reason"], show_alert=True)
+    await cb_admin_promos(cb, session, user)
+
+
+@router.callback_query(F.data.startswith("admin_promo_delete:"))
+async def cb_admin_promo_delete(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not is_admin(user.tg_id):
+        return
+    promo_id = int(cb.data.split(":")[1])
+    result = await promo_service.delete_promo(session, promo_id)
+    if result["ok"]:
+        await cb.answer("🗑 Промокод удалён")
     else:
         await cb.answer(result["reason"], show_alert=True)
     await cb_admin_promos(cb, session, user)
@@ -1312,6 +1531,25 @@ async def cb_adm_clan_donat_reset(cb: CallbackQuery, session: AsyncSession, user
     await cb.answer("✅ Донат-бонусы клана сброшены!")
     await session.refresh(clan)
     await _show_clan_donat_panel(cb.message, clan)
+
+
+# ── Анти-скрипт: разбан ────────────────────────────────────────────────────
+
+@router.message(Command("unban"))
+async def cmd_unban(message: Message, user: User):
+    if not is_admin(user.tg_id):
+        return
+    parts = message.text.strip().split()
+    if len(parts) != 2 or not parts[1].lstrip("-").isdigit():
+        await message.answer("Использование: /unban <user_id>")
+        return
+    uid = int(parts[1])
+    import redis.asyncio as aioredis
+    from app.config import settings as cfg
+    r = aioredis.from_url(cfg.redis_url, decode_responses=True)
+    await r.delete(f"rl:ban:{uid}", f"rl:vio:{uid}", f"rl:cnt:{uid}")
+    await r.aclose()
+    await message.answer(f"✅ Пользователь {uid} разбанен и счётчик нарушений сброшен.")
 
 
 # ── Утилиты ─────────────────────────────────────────────────────────────────

@@ -211,7 +211,7 @@ DONAT_TITLES: list[DonatTitle] = [
     
     # UI
     DonatTitle("ui_title",        "UI",                      "ui_set",       "Полная автоматизация + +3 тикета","Авто + +3 тикета",1000, "🤖"),
-    # DonatTitle("ui_potion",       "Алхимик УИ",              "ui_set",       "Авто-покупка всех зелий по КД",  "Авто-зелья",       500,  "🧪"),
+    DonatTitle("ui_potion",       "Алхимик УИ",              "ui_set",       "Авто-покупка всех зелий по КД",  "Авто-зелья",       500,  "🧪"),
 ]
 
 DONAT_TITLE_MAP: dict[str, DonatTitle] = {t.title_id: t for t in DONAT_TITLES}

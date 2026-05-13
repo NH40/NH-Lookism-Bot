@@ -67,24 +67,17 @@ async def build_king_menu(session, user, page: int = 0):
             )
         ) or 0
 
-        # Пропускаем только если ВСЕ районы мои (нечего атаковать)
-        if free_count == 0 and not_mine == 0 and my_in_city > 0:
+        if free_count == 0 and not_mine == 0:
             continue
 
         dominant_id = await game_service._get_city_dominant_player(session, city.id, user.id)
-        bot_power = int(KING_DISTRICT_BASE_POWER * city.total_districts * city.district_power_multiplier)
         if dominant_id:
             defender = await user_repo.get_by_id(session, dominant_id)
-            # PvP только если доминирующий — тоже Король
-            if defender and defender.phase == "king":
-                def_power = int(defender.combat_power)
-                can = "✅" if user.combat_power >= def_power else "❌"
-                def_str = f"👤 {can} {fmt_num(def_power)}"
-            else:
-                # Кулак или другая фаза — показываем как бот
-                can = "✅" if user.combat_power >= bot_power else "❌"
-                def_str = f"🤖 {can} {fmt_num(bot_power)}"
+            def_power = int(defender.combat_power) if defender else 0
+            can = "✅" if user.combat_power >= def_power else "❌"
+            def_str = f"👤 {can} {fmt_num(def_power)}"
         else:
+            bot_power = int(KING_DISTRICT_BASE_POWER * city.total_districts * city.district_power_multiplier)
             can = "✅" if user.combat_power >= bot_power else "❌"
             def_str = f"🤖 {can} {fmt_num(bot_power)}"
 

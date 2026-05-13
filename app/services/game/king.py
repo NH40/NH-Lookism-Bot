@@ -20,6 +20,13 @@ class GameKingService(GameBase):
     ) -> dict:
         if user.phase != "king":
             return {"ok": False, "reason": "Только для фазы Короля"}
+
+        # Принудительное повышение если уже >= 10 городов
+        real_count = await self._count_my_king_cities(session, user.id)
+        if real_count >= 10:
+            user.king_cities_count = real_count
+            return await self._promote_to_fist(session, user)
+
         if is_truce_active(user):
             return {"ok": False, "reason": "Во время перемирия нельзя атаковать"}
 

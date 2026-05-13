@@ -103,9 +103,10 @@ async def cb_fist_bot(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.message.edit_text(text, reply_markup=back_kb("main_menu"), parse_mode="HTML")
         return
     if result["win"]:
+        city_size = result.get("city_size", "?")
         text = (
             f"✅ <b>Победа над {result['bot_name']}!{crit_str}</b>\n\n"
-            f"Получено городов: +{result['cities_gained']}\n"
+            f"🏙 Получен город: <b>{city_size} районов</b>\n"
             f"Всего городов: {result['fist_cities']}\n"
             f"Побед над кулаками: {result['fist_wins']}/10\n\n"
             f"💪 Твоя мощь: {fmt_num(result['user_power'])}\n"

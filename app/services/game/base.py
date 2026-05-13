@@ -12,7 +12,8 @@ ATTACK_CD: dict[str, int] = {
     "emperor": 1000,
 }
 
-FIST_MIN_CITIES = 10
+FIST_MIN_CITIES = 5
+FIST_CITY_SIZES = [8, 16, 32, 64]
 
 FIST_BOT_CONFIGS = [
     {"name": "Рю",  "ratio": 0.80},
@@ -121,6 +122,8 @@ class GameBase:
     async def _demote_fist_to_king(
         self, session: AsyncSession, user: User
     ) -> None:
+        # Remove all fist city districts from this player
+        await self._take_fist_cities_from(session, user, 9999)
         user.phase = "king"
         user.fist_cities_count = 0
         user.king_cities_count = await self._count_my_king_cities(session, user.id)
@@ -202,6 +205,76 @@ class GameBase:
         await prestige_service._reset_progress(session, user, keep_ui=True, keep_progress=True)
         return {"ok": True, "destroyed": True, "message": "💀 Вы потеряли все города!"}
     
+    async def _give_fist_city_one(
+        self, session: AsyncSession, user: User, total_districts: int
+    ) -> None:
+        """Выдаёт игроку один fist-город с total_districts районами (все районы его)."""
+        from app.models.city import City, District
+        from app.repositories.city_repo import city_repo
+        from sqlalchemy import select, func
+
+        sector = user.sector or "Н"
+        type_id = {8: 2, 16: 3, 32: 4, 64: 5}.get(total_districts, 2)
+
+        result = await session.execute(
+            select(City).where(
+                City.sector == sector,
+                City.phase == "fist",
+                City.total_districts == total_districts,
+            ).order_by(City.id)
+        )
+        all_cities = result.scalars().all()
+
+        target_city = None
+        for city in all_cities:
+            my_in_city = await session.scalar(
+                select(func.count(District.id)).where(
+                    District.owner_id == user.id,
+                    District.city_id == city.id,
+                    District.is_captured == True,
+                )
+            ) or 0
+            if my_in_city == 0:
+                target_city = city
+                break
+
+        if not target_city:
+            from app.data.cities import CITY_NAMES_BY_SECTOR
+            names = CITY_NAMES_BY_SECTOR.get(sector, [])
+            used_names = {c.name for c in all_cities}
+            available = [n for n in names if n not in used_names]
+            name = (
+                random.choice(available) if available
+                else f"Кулак-{sector}-{total_districts}-{len(all_cities)+1}"
+            )
+            target_city = City(
+                sector=sector, phase="fist",
+                type_id=type_id, name=name,
+                total_districts=total_districts,
+                captured_districts=0, is_fully_captured=False,
+                district_power_multiplier=1.0,
+            )
+            session.add(target_city)
+            await session.flush()
+
+        await city_repo.init_city_districts(session, target_city)
+        await session.flush()
+
+        districts_r = await session.execute(
+            select(District).where(
+                District.city_id == target_city.id,
+            ).order_by(District.number)
+        )
+        districts = districts_r.scalars().all()
+        for d in districts:
+            d.owner_id = user.id
+            d.is_captured = True
+
+        target_city.captured_districts = len(districts)
+        target_city.owner_id = user.id
+        target_city.is_fully_captured = True
+        await session.flush()
+
     async def _give_fist_cities(
         self, session: AsyncSession, user: User, count: int
     ) -> None:

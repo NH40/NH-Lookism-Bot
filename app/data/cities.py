@@ -97,3 +97,6 @@ CITY_NAMES_BY_SECTOR: dict[str, list[str]] = {
 
 DISTRICT_BASE_POWER = 100
 KING_DISTRICT_BASE_POWER = 150
+
+# Лимит бизнесов в fist-городе по количеству районов
+FIST_CITY_MAX_BUSINESSES = {8: 1, 16: 2, 32: 3, 64: 4}

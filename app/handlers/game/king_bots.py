@@ -54,7 +54,7 @@ async def cb_king_bots_menu(cb: CallbackQuery, session: AsyncSession, user: User
     bots = await king_bot_service.get_or_create_bots(session, user)
     now = datetime.now(timezone.utc)
 
-    cd_key = f"king_bot_attack:{user.id}"
+    cd_key = cooldown_service.attack_key(user.id)
     attack_on_cd = await cooldown_service.is_on_cooldown(cd_key)
     attack_ttl = await cooldown_service.get_ttl(cd_key) if attack_on_cd else 0
 
@@ -120,7 +120,7 @@ async def cb_king_bot_info(cb: CallbackQuery, session: AsyncSession, user: User)
         await session.flush()
         on_cd = False
 
-    cd_key = f"king_bot_attack:{user.id}"
+    cd_key = cooldown_service.attack_key(user.id)
     attack_on_cd = await cooldown_service.is_on_cooldown(cd_key)
     attack_ttl = await cooldown_service.get_ttl(cd_key) if attack_on_cd else 0
 

@@ -113,6 +113,24 @@ class BusinessService:
                 "reason": f"Недостаточно районов (нужно {cost}, свободно {free})"
             }
 
+        # Для fist-городов: лимит бизнесов по размеру города
+        if city_id:
+            from app.models.city import City as CityModel
+            from app.data.cities import FIST_CITY_MAX_BUSINESSES
+            city_obj = await session.get(CityModel, city_id)
+            if city_obj and city_obj.phase == "fist":
+                max_biz = FIST_CITY_MAX_BUSINESSES.get(city_obj.total_districts, 1)
+                existing_biz = await session.scalar(
+                    select(func.count(UserBuilding.id)).where(
+                        UserBuilding.user_id == user.id,
+                        UserBuilding.city_id == city_id,
+                        UserBuilding.is_active == True,
+                    )
+                ) or 0
+                if existing_biz >= max_biz:
+                    sfx = "бизнес" if max_biz == 1 else "бизнеса"
+                    return {"ok": False, "reason": f"В этом городе максимум {max_biz} {sfx}"}
+
         if user.business_path == "illegal":
             loss = cost * 3
             user.influence = max(10, user.influence - loss)

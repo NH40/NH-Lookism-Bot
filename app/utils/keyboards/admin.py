@@ -29,6 +29,10 @@ def admin_user_kb(tg_id: int) -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="📦 Ресурсы", callback_data=f"adm_resources:{tg_id}"),
     )
     builder.row(
+        InlineKeyboardButton(text="⭐ Абсолютный перс", callback_data=f"adm_chars:{tg_id}"),
+        InlineKeyboardButton(text="👥 Статист", callback_data=f"adm_squads:{tg_id}"),
+    )
+    builder.row(
         InlineKeyboardButton(text="👁 TUI", callback_data=f"adm_tui:{tg_id}"),
         InlineKeyboardButton(text="❌ Убрать TUI", callback_data=f"adm_untui:{tg_id}"),
     )

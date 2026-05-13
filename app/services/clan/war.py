@@ -70,9 +70,9 @@ class ClanWarService(ClanBaseService):
             winner, loser = clan2, clan1
             winner_gain, loser_gain = gain2, gain1
 
-        # Награды в казну (победитель не более 20М)
+        # Награды в казну (не более 20М каждой стороне)
         winner_reward = min(int(abs(winner_gain) * 0.1) + 500_000, 20_000_000)
-        loser_reward = int(abs(loser_gain) * 0.05) + 100_000
+        loser_reward = min(int(abs(loser_gain) * 0.05) + 100_000, 20_000_000)
         winner.treasury += winner_reward
         loser.treasury += loser_reward
 

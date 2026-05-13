@@ -1552,6 +1552,106 @@ async def cmd_unban(message: Message, user: User):
     await message.answer(f"✅ Пользователь {uid} разбанен и счётчик нарушений сброшен.")
 
 
+# ── Абсолютные персонажи ────────────────────────────────────────────────────
+
+@router.callback_query(F.data.startswith("adm_chars:"))
+async def cb_adm_chars(cb: CallbackQuery, user: User):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = cb.data.split(":")[1]
+    from app.data.characters import CHARACTERS
+    absolutes = [c for c in CHARACTERS if c["rank"] == "absolute"]
+    builder = InlineKeyboardBuilder()
+    for i, char in enumerate(absolutes):
+        builder.row(InlineKeyboardButton(
+            text=f"⭐ {char['name']}",
+            callback_data=f"adm_give_char:{tg_id}:{i}"
+        ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"adm_user:{tg_id}"))
+    try:
+        await cb.message.edit_text(
+            "⭐ Выберите абсолютного персонажа для выдачи:",
+            reply_markup=builder.as_markup(),
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("adm_give_char:"))
+async def cb_adm_give_char(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not is_admin(user.tg_id):
+        return
+    parts = cb.data.split(":")
+    tg_id, char_idx = int(parts[1]), int(parts[2])
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await cb.answer("Игрок не найден", show_alert=True)
+        return
+    from app.data.characters import CHARACTERS
+    absolutes = [c for c in CHARACTERS if c["rank"] == "absolute"]
+    if char_idx >= len(absolutes):
+        await cb.answer("Персонаж не найден", show_alert=True)
+        return
+    char_data = absolutes[char_idx]
+    result = await admin_service.give_character(session, found, char_data["name"])
+    if result["ok"]:
+        await cb.answer(f"✅ {char_data['name']} выдан!")
+        try:
+            if found.notifications_enabled:
+                await cb.bot.send_message(
+                    found.tg_id,
+                    f"⭐ <b>Вам выдан абсолютный персонаж!</b>\n\n"
+                    f"<b>{html.escape(char_data['name'])}</b>\n"
+                    f"💥 Мощь: {char_data['power']:,}",
+                    parse_mode="HTML",
+                )
+        except Exception:
+            pass
+    else:
+        await cb.answer(result["reason"], show_alert=True)
+
+
+# ── Статисты ────────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data.startswith("adm_squads:"))
+async def cb_adm_squads(cb: CallbackQuery, user: User):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = cb.data.split(":")[1]
+    from app.data.squad import RANKS
+    builder = InlineKeyboardBuilder()
+    for rank_cfg in RANKS:
+        builder.row(InlineKeyboardButton(
+            text=f"{rank_cfg.emoji} {rank_cfg.rank} — {rank_cfg.base_power:,} мощи",
+            callback_data=f"adm_give_squad:{tg_id}:{rank_cfg.rank}"
+        ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"adm_user:{tg_id}"))
+    try:
+        await cb.message.edit_text(
+            "👥 Выберите ранг статиста для выдачи:",
+            reply_markup=builder.as_markup(),
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("adm_give_squad:"))
+async def cb_adm_give_squad(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not is_admin(user.tg_id):
+        return
+    parts = cb.data.split(":")
+    tg_id, rank = int(parts[1]), parts[2]
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await cb.answer("Игрок не найден", show_alert=True)
+        return
+    result = await admin_service.give_squad_member(session, found, rank)
+    if result["ok"]:
+        await cb.answer(f"✅ Статист {rank} выдан!")
+    else:
+        await cb.answer(result["reason"], show_alert=True)
+
+
 # ── Утилиты ─────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "noop")

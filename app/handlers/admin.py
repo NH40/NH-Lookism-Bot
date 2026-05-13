@@ -39,6 +39,7 @@ class AdminFSM(StatesGroup):
     waiting_path_points = State()
     waiting_ui_fragments = State()
     waiting_alchemy_fragments = State()
+    waiting_squad_count = State()
 
 
 # ── Главное меню ────────────────────────────────────────────────────────────
@@ -1636,20 +1637,53 @@ async def cb_adm_squads(cb: CallbackQuery, user: User):
 
 
 @router.callback_query(F.data.startswith("adm_give_squad:"))
-async def cb_adm_give_squad(cb: CallbackQuery, session: AsyncSession, user: User):
+async def cb_adm_give_squad(cb: CallbackQuery, user: User, state: FSMContext):
     if not is_admin(user.tg_id):
         return
     parts = cb.data.split(":")
-    tg_id, rank = int(parts[1]), parts[2]
+    tg_id, rank = parts[1], parts[2]
+    await state.set_state(AdminFSM.waiting_squad_count)
+    await state.update_data(target_tg_id=tg_id, squad_rank=rank)
+    from app.data.squad import RANKS_BY_ID
+    rank_cfg = RANKS_BY_ID.get(rank)
+    rank_label = f"{rank_cfg.emoji} {rank}" if rank_cfg else rank
+    try:
+        await cb.message.edit_text(
+            f"👥 Введите количество статистов {rank_label} для выдачи:",
+            reply_markup=back_kb(f"adm_squads:{tg_id}"),
+        )
+    except Exception:
+        pass
+
+
+@router.message(AdminFSM.waiting_squad_count)
+async def msg_adm_give_squad(message: Message, session: AsyncSession, user: User, state: FSMContext):
+    if not is_admin(user.tg_id):
+        return
+    data = await state.get_data()
+    tg_id = data.get("target_tg_id")
+    rank = data.get("squad_rank")
+    await state.clear()
+    try:
+        count = int(message.text.strip())
+        if count <= 0:
+            raise ValueError
+    except ValueError:
+        await message.answer("Введите положительное число")
+        return
     found = await admin_service.find_user(session, str(tg_id))
     if not found:
-        await cb.answer("Игрок не найден", show_alert=True)
+        await message.answer("Игрок не найден")
         return
-    result = await admin_service.give_squad_member(session, found, rank)
+    result = await admin_service.give_squad_member(session, found, rank, count)
     if result["ok"]:
-        await cb.answer(f"✅ Статист {rank} выдан!")
+        await message.answer(
+            f"✅ Выдано {count} статистов {rank} игроку {html.escape(found.full_name)}",
+            parse_mode="HTML",
+        )
+        await _show_user_card(message, session, found)
     else:
-        await cb.answer(result["reason"], show_alert=True)
+        await message.answer(f"❌ {result['reason']}")
 
 
 # ── Утилиты ─────────────────────────────────────────────────────────────────

@@ -173,6 +173,7 @@ class CityRepo:
         result = await session.execute(
             select(City).where(
                 City.sector == sector,
+                City.phase == "king",
             ).order_by(City.type_id.desc(), City.id)
         )
         return result.scalars().all()

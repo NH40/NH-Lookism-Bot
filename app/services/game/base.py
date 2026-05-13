@@ -169,6 +169,45 @@ class GameBase:
         }
 
     async def _promote_to_fist(self, session: AsyncSession, user: User) -> dict:
+        # Освобождаем все районы игрока из Королевских городов — они становятся
+        # пустыми и снова доступны для атаки другим королям
+        king_districts_r = await session.execute(
+            select(District)
+            .join(City, City.id == District.city_id)
+            .where(
+                District.owner_id == user.id,
+                District.is_captured == True,
+                City.phase == "king",
+            )
+        )
+        king_districts = king_districts_r.scalars().all()
+
+        affected_city_ids: set[int] = set()
+        for d in king_districts:
+            affected_city_ids.add(d.city_id)
+            d.owner_id = None
+            d.is_captured = False
+
+        await session.flush()
+
+        for city_id in affected_city_ids:
+            city_r = await session.execute(select(City).where(City.id == city_id))
+            city = city_r.scalar_one_or_none()
+            if city:
+                real_captured = await session.scalar(
+                    select(func.count(District.id)).where(
+                        District.city_id == city_id,
+                        District.is_captured == True,
+                    )
+                ) or 0
+                city.captured_districts = min(real_captured, city.total_districts)
+                if city.owner_id == user.id:
+                    city.owner_id = None
+                if city.captured_districts < city.total_districts:
+                    city.is_fully_captured = False
+
+        await session.flush()
+
         user.phase = "fist"
         user.fist_cities_count = FIST_MIN_CITIES
         user.extra_attack_count = await self._get_max_extra_attacks_async(session, user)

@@ -49,6 +49,11 @@ class GameKingService(GameBase):
         if dominant_defender and dominant_defender.phase == "king":
             return await self._king_pvp(session, user, dominant_defender, city, cd_key)
 
+        # Нельзя атаковать в PvP кулака — сбрасываем доминанта
+        if dominant_defender and dominant_defender.phase == "fist":
+            dominant_defender = None
+            dominant_id = None
+
         # ── Рассчитываем мощь бота ────────────────────────────────────────
         from app.data.cities import KING_DISTRICT_BASE_POWER
         from app.models.building import UserBuilding
@@ -61,7 +66,7 @@ class GameKingService(GameBase):
         ) or 0
 
         if dominant_defender and dominant_defender.phase != "king":
-            # Доминирующий не-король — его мощь как защита
+            # Доминирующий не-король (не кулак) — его мощь как защита
             bot_power = max(100, int(dominant_defender.combat_power * 0.7))
         elif buildings_count > 0:
             bot_power = int(buildings_count * 50 * city.district_power_multiplier * 0.7)
@@ -109,6 +114,11 @@ class GameKingService(GameBase):
                 steal_from = dominant_id or await self._get_city_dominant_player(
                     session, city_id, user.id
                 )
+                if steal_from:
+                    steal_user = await user_repo.get_by_id(session, steal_from)
+                    # Не воруем у кулаков — их здания защищены
+                    if steal_user and steal_user.phase == "fist":
+                        steal_from = None
                 if steal_from:
                     target = random.randint(1, 3)
                     stolen_r = await session.execute(

@@ -168,7 +168,51 @@ class GameBase:
             )
         }
 
+    async def _release_king_districts(self, session: AsyncSession, user: User) -> None:
+        """Release all king/gang-phase districts on fist promotion. Buildings stay active."""
+        from sqlalchemy import update as sql_update
+
+        districts_r = await session.execute(
+            select(District.id, District.city_id)
+            .join(City, City.id == District.city_id)
+            .where(
+                District.owner_id == user.id,
+                District.is_captured == True,
+                City.phase != "fist",
+            )
+        )
+        rows = districts_r.all()
+        if not rows:
+            return
+
+        district_ids = [r[0] for r in rows]
+        city_ids = set(r[1] for r in rows)
+
+        await session.execute(
+            sql_update(District)
+            .where(District.id.in_(district_ids))
+            .values(owner_id=None, is_captured=False)
+        )
+        await session.flush()
+
+        for city_id in city_ids:
+            city = await session.get(City, city_id)
+            if city:
+                real_captured = await session.scalar(
+                    select(func.count(District.id)).where(
+                        District.city_id == city_id,
+                        District.is_captured == True,
+                    )
+                ) or 0
+                city.captured_districts = real_captured
+                if city.owner_id == user.id:
+                    city.owner_id = None
+                    city.is_fully_captured = False
+
+        await session.flush()
+
     async def _promote_to_fist(self, session: AsyncSession, user: User) -> dict:
+        await self._release_king_districts(session, user)
         user.phase = "fist"
         user.fist_cities_count = FIST_MIN_CITIES
         user.extra_attack_count = await self._get_max_extra_attacks_async(session, user)

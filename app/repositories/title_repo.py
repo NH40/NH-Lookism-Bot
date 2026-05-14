@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from app.models.title import UserDonatTitle
 from app.data.titles import DONAT_TITLE_MAP, DONAT_SET_MAP, DONAT_SETS, DONAT_TITLES
 
@@ -45,14 +45,16 @@ class TitleRepo:
     async def has_set(
         self, session: AsyncSession, user_id: int, set_id: str
     ) -> bool:
-        s = DONAT_SET_MAP.get(set_id)
-        if not s:
-            return False
         titles_in_set = [t.title_id for t in DONAT_TITLES if t.set_id == set_id]
-        for tid in titles_in_set:
-            if not await self.has_title(session, user_id, tid):
-                return False
-        return True
+        if not titles_in_set:
+            return False
+        count = await session.scalar(
+            select(func.count(UserDonatTitle.title_id)).where(
+                UserDonatTitle.user_id == user_id,
+                UserDonatTitle.title_id.in_(titles_in_set),
+            )
+        )
+        return (count or 0) == len(titles_in_set)
 
     async def get_titles_display(
         self, session: AsyncSession, user_id: int

@@ -7,6 +7,7 @@ from aiogram.types import InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.services.auction_service import auction_service
+from app.services.cooldown_service import cooldown_service
 from app.utils.keyboards.common import back_kb
 from app.utils.formatters import fmt_num
 
@@ -112,6 +113,10 @@ async def cb_auction(cb: CallbackQuery, session: AsyncSession, user: User):
 
 @router.callback_query(F.data.startswith("auction_bid:"))
 async def cb_auction_bid(cb: CallbackQuery, session: AsyncSession, user: User):
+    lock_key = cooldown_service.auction_bid_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("Подожди...", show_alert=False)
+        return
     amount = int(cb.data.split(":")[1])
     result = await auction_service.place_bid(session, user, amount)
     if result["ok"]:
@@ -164,6 +169,10 @@ async def msg_auction_bid(
         await message.answer("Введите корректную сумму")
         return
 
+    lock_key = cooldown_service.auction_bid_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await message.answer("⏳ Подожди немного...")
+        return
     result = await auction_service.place_bid(session, user, amount)
     if result["ok"]:
         await message.answer(

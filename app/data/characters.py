@@ -17,7 +17,7 @@ CHARACTER_RANKS: list[CharacterRankConfig] = [
     CharacterRankConfig("king",        "Король",               1500,    4000,    12.0),
     CharacterRankConfig("strong_king", "Сильный король",       4000,    10000,   7.0),
     CharacterRankConfig("gen_zero",    "Нулевое поколение",    10000,   30000,   3.5),
-    CharacterRankConfig("new_legend",  "Новая легенда",        30000,   50000,   2.1),
+    CharacterRankConfig("new_legend",  "Новая легенда",        30000,   50000,   1.5),
     CharacterRankConfig("legend",      "Легенда",              50000,   900000,  0.3),
     CharacterRankConfig("peak",        "Вершина",              1000000, 2000000, 0.15),
     CharacterRankConfig("absolute",    "Абсолют",              5000000, 5000000, 0.01),

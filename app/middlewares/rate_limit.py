@@ -1,7 +1,6 @@
 import logging
 from typing import Callable, Any, Awaitable
 
-import redis.asyncio as aioredis
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, CallbackQuery
 
@@ -15,6 +14,16 @@ REQUESTS = 8
 WINDOW = 3          # seconds
 MAX_VIOLATIONS = 5  # violations before ban
 BAN_SECONDS = 300   # 5 minutes
+
+# Lua script: atomic INCR + EXPIRE-only-on-first-call.
+# Avoids two round-trips to Redis per request.
+_INCR_EXPIRE_LUA = """
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return count
+"""
 
 
 class RateLimitMiddleware(BaseMiddleware):
@@ -39,7 +48,9 @@ class RateLimitMiddleware(BaseMiddleware):
         self.window = window
         self.max_violations = max_violations
         self.ban_seconds = ban_seconds
-        self._redis = aioredis.from_url(settings.redis_url, decode_responses=True)
+        # Reuse the shared Redis client — no extra connection pool
+        from app.services.cooldown_service import cooldown_service
+        self._redis = cooldown_service.redis
 
     # ── Redis helpers ────────────────────────────────────────────────────────
 
@@ -47,18 +58,14 @@ class RateLimitMiddleware(BaseMiddleware):
         return await self._redis.exists(f"rl:ban:{uid}") == 1
 
     async def _record_request(self, uid: int) -> int:
-        key = f"rl:cnt:{uid}"
-        count = await self._redis.incr(key)
-        if count == 1:
-            await self._redis.expire(key, self.window)
-        return count
+        return int(await self._redis.eval(
+            _INCR_EXPIRE_LUA, 1, f"rl:cnt:{uid}", self.window
+        ))
 
     async def _record_violation(self, uid: int) -> int:
-        key = f"rl:vio:{uid}"
-        count = await self._redis.incr(key)
-        if count == 1:
-            await self._redis.expire(key, 3600)
-        return count
+        return int(await self._redis.eval(
+            _INCR_EXPIRE_LUA, 1, f"rl:vio:{uid}", 3600
+        ))
 
     async def _ban(self, uid: int) -> None:
         await self._redis.setex(f"rl:ban:{uid}", self.ban_seconds, "1")

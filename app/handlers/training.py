@@ -83,6 +83,11 @@ async def cb_training_menu(cb: CallbackQuery, session: AsyncSession, user: User)
 async def cb_train_with(cb: CallbackQuery, session: AsyncSession, user: User):
     trainer_id = cb.data.split(":")[1]
 
+    lock_key = cooldown_service.train_lock_key(user.id, trainer_id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("Подожди...", show_alert=False)
+        return
+
     if trainer_id == "tom_lee":
         result = await training_service.train_with_tom(session, user)
         if not result["ok"]:

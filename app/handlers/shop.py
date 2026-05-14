@@ -261,5 +261,9 @@ async def msg_recruit_count(
 async def _do_buy_recruits(
     session: AsyncSession, user: User, rank: str, count: int
 ) -> dict:
+    from app.services.cooldown_service import cooldown_service
     from app.services.squad_service import squad_service
+    lock_key = cooldown_service.buy_recruit_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        return {"ok": False, "reason": "Подожди..."}
     return await squad_service.buy_recruit(session, user, rank, count)

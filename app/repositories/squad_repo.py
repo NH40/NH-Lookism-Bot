@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update as sa_update
 from app.models.user import User
 from app.models.squad_member import SquadMember
 from app.models.character import UserCharacter
@@ -76,22 +76,21 @@ class SquadRepo:
 
         try:
             from app.models.clan import ClanMember, Clan
-            clan_member = await session.scalar(
-                select(ClanMember).where(ClanMember.user_id == user.id)
+            clan_id = await session.scalar(
+                select(ClanMember.clan_id).where(ClanMember.user_id == user.id)
             )
-            if clan_member:
-                clan = await session.scalar(
-                    select(Clan).where(Clan.id == clan_member.clan_id)
+            if clan_id:
+                # Single JOIN query — no extra loads for Clan object or member list
+                total_power = await session.scalar(
+                    select(func.sum(User.combat_power))
+                    .join(ClanMember, ClanMember.user_id == User.id)
+                    .where(ClanMember.clan_id == clan_id)
                 )
-                if clan:
-                    members_r = await session.execute(
-                        select(ClanMember).where(ClanMember.clan_id == clan.id)
-                    )
-                    user_ids = [m.user_id for m in members_r.scalars().all()]
-                    total_power = await session.scalar(
-                        select(func.sum(User.combat_power)).where(User.id.in_(user_ids))
-                    )
-                    clan.combat_power = total_power or 0
+                await session.execute(
+                    sa_update(Clan)
+                    .where(Clan.id == clan_id)
+                    .values(combat_power=total_power or 0)
+                )
         except Exception:
             pass
 

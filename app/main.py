@@ -83,8 +83,8 @@ async def main():
         await dp.start_polling(
             bot,
             allowed_updates=dp.resolve_used_update_types(),
-            timeout=30,
-            retry_after=5,          # ждать 5 сек при ошибке
+            timeout=10,
+            retry_after=5,
         )
     finally:
         scheduler.shutdown()

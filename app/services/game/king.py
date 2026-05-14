@@ -39,6 +39,9 @@ class GameKingService(GameBase):
         if not city:
             return {"ok": False, "reason": "Город не найден"}
 
+        if city.sector != (user.sector or "Н"):
+            return {"ok": False, "reason": "Этот город не в твоём секторе"}
+
         # ── Определяем доминирующего игрока ──────────────────────────────
         dominant_id = await self._get_city_dominant_player(session, city_id, user.id)
         dominant_defender = None
@@ -56,20 +59,10 @@ class GameKingService(GameBase):
 
         # ── Рассчитываем мощь бота ────────────────────────────────────────
         from app.data.cities import KING_DISTRICT_BASE_POWER
-        from app.models.building import UserBuilding
-
-        buildings_count = await session.scalar(
-            select(func.count(UserBuilding.id)).where(
-                UserBuilding.city_id == city_id,
-                UserBuilding.is_active == True,
-            )
-        ) or 0
 
         if dominant_defender and dominant_defender.phase != "king":
             # Доминирующий не-король (не кулак) — его мощь как защита
             bot_power = max(100, int(dominant_defender.combat_power * 0.7))
-        elif buildings_count > 0:
-            bot_power = int(buildings_count * 50 * city.district_power_multiplier * 0.7)
         else:
             bot_power = int(KING_DISTRICT_BASE_POWER * city.total_districts * city.district_power_multiplier)
 

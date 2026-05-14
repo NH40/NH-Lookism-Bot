@@ -95,7 +95,7 @@ CITY_NAMES_BY_SECTOR: dict[str, list[str]] = {
     ],
 }
 
-DISTRICT_BASE_POWER = 100
+DISTRICT_BASE_POWER = 10
 KING_DISTRICT_BASE_POWER = 150
 
 # Лимит бизнесов в fist-городе по количеству районов

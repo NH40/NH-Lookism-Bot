@@ -1,3 +1,4 @@
+import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import AsyncSessionFactory
 from app.services.business_service import business_service
@@ -9,6 +10,24 @@ from app.utils.formatters import fmt_num
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Semaphore caps concurrent Telegram sends — stays within the 30 msg/s global limit.
+_NOTIF_SEM = asyncio.Semaphore(20)
+
+
+async def _send_notifications(bot, tg_ids: list[int], text: str) -> None:
+    """Send `text` to all `tg_ids` concurrently (rate-limited by semaphore)."""
+    if not tg_ids:
+        return
+
+    async def _one(tg_id: int) -> None:
+        async with _NOTIF_SEM:
+            try:
+                await bot.send_message(tg_id, text, parse_mode="HTML")
+            except Exception:
+                pass
+
+    await asyncio.gather(*[_one(tid) for tid in tg_ids])
 
 
 async def income_tick():
@@ -133,18 +152,13 @@ async def _notify_auction_started(tier: int, tier_name: str, tier_emoji: str):
             f"Открой аукцион чтобы сделать ставку!"
         )
 
+        from sqlalchemy import select
+        from app.models.user import User
         async with AsyncSessionFactory() as session:
-            async with session.begin():
-                from sqlalchemy import select
-                from app.models.user import User
-                users_r = await session.execute(
-                    select(User).where(User.notifications_enabled == True)
-                )
-                for u in users_r.scalars().all():
-                    try:
-                        await bot.send_message(u.tg_id, text, parse_mode="HTML")
-                    except Exception:
-                        pass
+            tg_ids = list((await session.execute(
+                select(User.tg_id).where(User.notifications_enabled == True)
+            )).scalars())
+        await _send_notifications(bot, tg_ids, text)
     except Exception as e:
         logger.error(f"notify_auction_started error: {e}")
 
@@ -195,18 +209,13 @@ async def _notify_round_end(result: dict):
             f"➡️ Раунд {next_round} уже начался!"
         )
 
+        from sqlalchemy import select
+        from app.models.user import User
         async with AsyncSessionFactory() as session:
-            async with session.begin():
-                from sqlalchemy import select
-                from app.models.user import User
-                users_r = await session.execute(
-                    select(User).where(User.notifications_enabled == True)
-                )
-                for u in users_r.scalars().all():
-                    try:
-                        await bot.send_message(u.tg_id, text, parse_mode="HTML")
-                    except Exception:
-                        pass
+            tg_ids = list((await session.execute(
+                select(User.tg_id).where(User.notifications_enabled == True)
+            )).scalars())
+        await _send_notifications(bot, tg_ids, text)
     except Exception as e:
         logger.error(f"notify_round_end error: {e}")
 
@@ -233,22 +242,21 @@ async def clan_war_tick():
                         (winner, outcome["winner_reward"], True),
                         (loser, outcome["loser_reward"], False),
                     ]:
-                        members_r = await session.execute(select(ClanMember).where(ClanMember.clan_id == clan.id))
-                        for m in members_r.scalars().all():
-                            u = await session.scalar(select(User).where(User.id == m.user_id))
-                            if not u or not bot:
-                                continue
-                            result_str = "🏆 Победа!" if is_winner else "❌ Поражение"
-                            try:
-                                await bot.send_message(
-                                    u.tg_id,
-                                    f"⚔️ <b>Война {war_type} завершена!</b>\n\n"
-                                    f"{result_str}\n"
-                                    f"💰 В казну: +{fmt_num(reward)} NHCoin",
-                                    parse_mode="HTML",
-                                )
-                            except Exception:
-                                pass
+                        # Single JOIN query — no N+1
+                        tg_ids_r = await session.execute(
+                            select(User.tg_id)
+                            .join(ClanMember, ClanMember.user_id == User.id)
+                            .where(ClanMember.clan_id == clan.id)
+                        )
+                        clan_tg_ids = list(tg_ids_r.scalars())
+                        result_str = "🏆 Победа!" if is_winner else "❌ Поражение"
+                        war_text = (
+                            f"⚔️ <b>Война {war_type} завершена!</b>\n\n"
+                            f"{result_str}\n"
+                            f"💰 В казну: +{fmt_num(reward)} NHCoin"
+                        )
+                        if bot:
+                            await _send_notifications(bot, clan_tg_ids, war_text)
 
     except Exception as e:
         logger.error(f"clan_war_tick error: {e}", exc_info=True)
@@ -301,19 +309,14 @@ async def _notify_auction_end(result: dict):
             except Exception:
                 pass
 
+        from sqlalchemy import select
+        from app.models.user import User
+        winner_tg_id = winner["tg_id"] if winner else None
         async with AsyncSessionFactory() as session:
-            async with session.begin():
-                from sqlalchemy import select
-                from app.models.user import User
-                users_r = await session.execute(
-                    select(User).where(User.notifications_enabled == True)
-                )
-                for u in users_r.scalars().all():
-                    if winner and u.tg_id == winner["tg_id"]:
-                        continue
-                    try:
-                        await bot.send_message(u.tg_id, text, parse_mode="HTML")
-                    except Exception:
-                        pass
+            tg_ids = list((await session.execute(
+                select(User.tg_id).where(User.notifications_enabled == True)
+            )).scalars())
+        tg_ids = [tid for tid in tg_ids if tid != winner_tg_id]
+        await _send_notifications(bot, tg_ids, text)
     except Exception as e:
         logger.error(f"notify_auction_end error: {e}")

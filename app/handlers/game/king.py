@@ -25,65 +25,114 @@ async def build_king_menu(session, user, page: int = 0):
     cities = await city_repo.get_available_king_cities(session, user.sector or "Н")
 
     from app.models.city import City
-    my_city_ids_r = await session.execute(
-        select(District.city_id)
+    from app.data.cities import KING_DISTRICT_BASE_POWER
+
+    # ── Query 1: count of distinct cities user owns (for 9/10 warning) ──────
+    my_cities_count = await session.scalar(
+        select(func.count(func.distinct(District.city_id)))
         .join(City, City.id == District.city_id)
         .where(
             District.owner_id == user.id,
             District.is_captured == True,
             City.phase != "fist",
-        ).distinct()
-    )
-    my_city_ids = set(my_city_ids_r.scalars().all())
+        )
+    ) or 0
 
-    from app.data.cities import KING_DISTRICT_BASE_POWER
+    if not cities:
+        eligible = []
+    else:
+        city_ids = [c.id for c in cities]
+        cities_by_id = {c.id: c for c in cities}
 
-    # Собираем все подходящие города с данными
-    eligible = []
-    for city in cities:
-        type_id = city.type_id or 1
-
-        my_in_city = await session.scalar(
-            select(func.count(District.id)).where(
-                District.owner_id == user.id,
-                District.city_id == city.id,
-                District.is_captured == True,
+        # ── Query 2: district counts for ALL cities in one aggregated query ─
+        counts_r = await session.execute(
+            select(
+                District.city_id,
+                func.count(District.id).filter(
+                    District.owner_id == user.id,
+                    District.is_captured == True,
+                ).label("my_count"),
+                func.count(District.id).filter(
+                    District.is_captured == False,
+                    District.owner_id == None,
+                ).label("free_count"),
+                func.count(District.id).filter(
+                    District.is_captured == True,
+                    District.owner_id != user.id,
+                    District.owner_id != None,
+                ).label("not_mine"),
             )
-        ) or 0
+            .where(District.city_id.in_(city_ids))
+            .group_by(District.city_id)
+        )
+        counts = {row.city_id: row for row in counts_r}
 
-        not_mine = await session.scalar(
-            select(func.count(District.id)).where(
-                District.city_id == city.id,
-                District.is_captured == True,
-                District.owner_id != user.id,
+        # Eligible cities: have something to attack
+        eligible_ids = [
+            cid for cid, row in counts.items()
+            if (row.free_count or 0) > 0 or (row.not_mine or 0) > 0
+        ]
+
+        # ── Query 3: dominant player per eligible city (single query) ────────
+        dominant_by_city: dict[int, int] = {}
+        if eligible_ids:
+            dom_subq = (
+                select(
+                    District.city_id.label("cid"),
+                    District.owner_id.label("oid"),
+                    func.count(District.id).label("cnt"),
+                )
+                .where(
+                    District.city_id.in_(eligible_ids),
+                    District.is_captured == True,
+                    District.owner_id != None,
+                    District.owner_id != user.id,
+                )
+                .group_by(District.city_id, District.owner_id)
+                .order_by(District.city_id, func.count(District.id).desc())
+                .subquery()
             )
-        ) or 0
+            dom_rows = (await session.execute(
+                select(dom_subq.c.cid, dom_subq.c.oid)
+            )).all()
+            for row in dom_rows:
+                if row.cid not in dominant_by_city:
+                    dominant_by_city[row.cid] = row.oid
 
-        free_count = await session.scalar(
-            select(func.count(District.id)).where(
-                District.city_id == city.id,
-                District.is_captured == False,
-                District.owner_id == None,
-            )
-        ) or 0
+        # ── Query 4: load all dominant users in one batch ────────────────────
+        defender_ids = list(set(dominant_by_city.values()))
+        defenders: dict[int, User] = {}
+        if defender_ids:
+            def_rows = (await session.execute(
+                select(User.id, User.combat_power, User.phase)
+                .where(User.id.in_(defender_ids))
+            )).all()
+            defenders = {row.id: row for row in def_rows}
 
-        if free_count == 0 and not_mine == 0:
-            continue
+        # ── Build eligible list (pure Python, no more DB calls) ──────────────
+        eligible = []
+        for city in cities:
+            cid = city.id
+            row = counts.get(cid)
+            if not row or ((row.free_count or 0) == 0 and (row.not_mine or 0) == 0):
+                continue
 
-        dominant_id = await game_service._get_city_dominant_player(session, city.id, user.id)
-        if dominant_id:
-            defender = await user_repo.get_by_id(session, dominant_id)
-            def_power = int(defender.combat_power) if defender else 0
-            can = "✅" if user.combat_power >= def_power else "❌"
-            def_str = f"👤 {can} {fmt_num(def_power)}"
-        else:
-            bot_power = int(KING_DISTRICT_BASE_POWER * city.total_districts * city.district_power_multiplier)
-            can = "✅" if user.combat_power >= bot_power else "❌"
-            def_str = f"🤖 {can} {fmt_num(bot_power)}"
+            dominant_id = dominant_by_city.get(cid)
+            defender = defenders.get(dominant_id) if dominant_id else None
+            if defender and defender.phase == "king":
+                def_power = int(defender.combat_power or 0)
+                can = "✅" if user.combat_power >= def_power else "❌"
+                def_str = f"👤 {can} {fmt_num(def_power)}"
+            else:
+                bot_power = int(KING_DISTRICT_BASE_POWER * city.total_districts * city.district_power_multiplier)
+                can = "✅" if user.combat_power >= bot_power else "❌"
+                def_str = f"🤖 {can} {fmt_num(bot_power)}"
 
-        my_str = f"[моих:{my_in_city}] " if my_in_city > 0 else ""
-        size_emoji = {1: "🏘", 2: "🏙", 3: "🌆", 4: "🌇", 5: "🌃"}.get(type_id, "🏙")
-        eligible.append((city, size_emoji, my_str, def_str))
+            type_id = city.type_id or 1
+            my_in_city = row.my_count or 0
+            my_str = f"[моих:{my_in_city}] " if my_in_city > 0 else ""
+            size_emoji = {1: "🏘", 2: "🏙", 3: "🌆", 4: "🌇", 5: "🌃"}.get(type_id, "🏙")
+            eligible.append((city, size_emoji, my_str, def_str))
 
     # Пагинация
     per_page = 10
@@ -112,7 +161,7 @@ async def build_king_menu(session, user, page: int = 0):
     if nav:
         builder.row(*nav)
 
-    cities_count = len(my_city_ids)
+    cities_count = my_cities_count
     if cities_count >= 9:
         builder.row(InlineKeyboardButton(
             text=f"⚠️ {cities_count}/10 — последний город не через ботов!",

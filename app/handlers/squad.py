@@ -68,6 +68,10 @@ async def cb_squad(cb: CallbackQuery, session: AsyncSession, user: User):
 
 @router.callback_query(F.data == "do_recruit")
 async def cb_do_recruit(cb: CallbackQuery, session: AsyncSession, user: User):
+    lock_key = cooldown_service.recruit_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("Подожди...", show_alert=False)
+        return
     result = await squad_service.recruit(session, user)
     if not result["ok"]:
         await cb.answer(result["reason"], show_alert=True)

@@ -68,6 +68,22 @@ class CooldownService:
     def pull_lock_key(user_id: int) -> str:
         return f"lock:pull:{user_id}"
 
+    @staticmethod
+    def recruit_lock_key(user_id: int) -> str:
+        return f"lock:recruit:{user_id}"
+
+    @staticmethod
+    def buy_recruit_lock_key(user_id: int) -> str:
+        return f"lock:buy_recruit:{user_id}"
+
+    @staticmethod
+    def train_lock_key(user_id: int, trainer_id: str) -> str:
+        return f"lock:train:{trainer_id}:{user_id}"
+
+    @staticmethod
+    def auction_bid_lock_key(user_id: int) -> str:
+        return f"lock:auction_bid:{user_id}"
+
     async def acquire_lock(self, key: str, ttl: int = 5) -> bool:
         """Returns True if lock acquired, False if already locked."""
         result = await self.redis.setnx(key, "1")

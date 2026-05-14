@@ -1,3 +1,4 @@
+import asyncio
 from aiogram import Router, F
 from aiogram.types import CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -12,6 +13,8 @@ from app.utils.keyboards.common import back_kb
 from app.utils.formatters import fmt_power, fmt_num, fmt_ttl
 from app.data.characters import RANK_CONFIG_MAP, RANK_EMOJI, CHARACTERS
 from app.services.potion_service import potion_service
+from app.database import AsyncSessionFactory
+from app.bot_instance import get_bot
 
 router = Router()
 
@@ -236,46 +239,147 @@ async def cb_try_ticket(cb: CallbackQuery, session: AsyncSession, user: User):
     await cb_deck(cb, session, user)
 
 
+async def _pull_one_bg(chat_id: int, message_id: int, user_db_id: int, lock_key: str) -> None:
+    """Фоновая задача: прокрутка 1 тикета с собственной сессией."""
+    bot = get_bot()
+    try:
+        async with AsyncSessionFactory() as bg_session:
+            bg_user = await bg_session.get(User, user_db_id)
+            result = await deck_service.pull(bg_session, bg_user)
+            await bg_session.commit()
+
+        if not result["ok"]:
+            try:
+                await bot.edit_message_text(
+                    result["reason"], chat_id=chat_id, message_id=message_id
+                )
+            except Exception:
+                pass
+            return
+
+        char = result["character"]
+        emoji = RANK_EMOJI.get(char["rank"], "❓")
+
+        builder = InlineKeyboardBuilder()
+        if bg_user.tickets > 0:
+            builder.row(InlineKeyboardButton(
+                text=f"🎰 Ещё раз ({bg_user.tickets} тик.)",
+                callback_data="pull_one"
+            ))
+        builder.row(InlineKeyboardButton(text="◀️ К колоде", callback_data="deck"))
+
+        try:
+            await bot.edit_message_text(
+                f"🎰 <b>Результат!</b>\n\n"
+                f"{emoji} <b>{char['name']}</b>\n"
+                f"Ранг: {result['rank_label']}\n"
+                f"Мощь: {fmt_num(result['power'])}\n\n"
+                f"<i>{char.get('desc', '')}</i>\n\n"
+                f"🎟 Осталось: {bg_user.tickets}/{bg_user.max_tickets}",
+                chat_id=chat_id,
+                message_id=message_id,
+                reply_markup=builder.as_markup(),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+    except Exception:
+        try:
+            await bot.edit_message_text(
+                "⚠️ Ошибка при прокрутке, попробуй снова.",
+                chat_id=chat_id,
+                message_id=message_id,
+            )
+        except Exception:
+            pass
+    finally:
+        await cooldown_service.clear_cooldown(lock_key)
+
+
+async def _pull_10_bg(chat_id: int, message_id: int, user_db_id: int, lock_key: str) -> None:
+    """Фоновая задача: прокрутка до 10 тикетов с собственной сессией."""
+    bot = get_bot()
+    try:
+        async with AsyncSessionFactory() as bg_session:
+            bg_user = await bg_session.get(User, user_db_id)
+            count = min(10, bg_user.tickets)
+            results = await deck_service.pull_n(bg_session, bg_user, count)
+            await bg_session.commit()
+
+        if not results:
+            try:
+                await bot.edit_message_text(
+                    "Нет тикетов", chat_id=chat_id, message_id=message_id
+                )
+            except Exception:
+                pass
+            return
+
+        lines = [f"🎰 <b>Прокрутка {count} тикетов!</b>\n"]
+
+        from collections import Counter
+        rank_counter: Counter = Counter()
+        for r in results:
+            rank_counter[r["character"]["rank"]] += 1
+
+        rank_order = [
+            "absolute", "peak", "legend", "new_legend",
+            "gen_zero", "strong_king", "king", "boss", "member"
+        ]
+        for rank in rank_order:
+            if rank not in rank_counter:
+                continue
+            emoji = RANK_EMOJI.get(rank, "❓")
+            cfg = RANK_CONFIG_MAP.get(rank)
+            label = cfg.label if cfg else rank
+            lines.append(f"{emoji} {label}: ×{rank_counter[rank]}")
+
+        best = max(results, key=lambda x: x["power"])
+        best_emoji = RANK_EMOJI.get(best["character"]["rank"], "❓")
+        lines.append(
+            f"\n⭐ <b>Лучший:</b> {best_emoji} {best['character']['name']} "
+            f"[{best['rank_label']}] — {fmt_num(best['power'])}"
+        )
+
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(text="◀️ К колоде", callback_data="deck"))
+
+        try:
+            await bot.edit_message_text(
+                "\n".join(lines),
+                chat_id=chat_id,
+                message_id=message_id,
+                reply_markup=builder.as_markup(),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+    except Exception:
+        try:
+            await bot.edit_message_text(
+                "⚠️ Ошибка при прокрутке, попробуй снова.",
+                chat_id=chat_id,
+                message_id=message_id,
+            )
+        except Exception:
+            pass
+    finally:
+        await cooldown_service.clear_cooldown(lock_key)
+
+
 @router.callback_query(F.data == "pull_one")
 async def cb_pull_one(cb: CallbackQuery, session: AsyncSession, user: User):
     lock_key = cooldown_service.pull_lock_key(user.id)
     if not await cooldown_service.acquire_lock(lock_key, ttl=5):
         await cb.answer("Подожди...", show_alert=False)
         return
+
+    await cb.answer()
     try:
-        result = await deck_service.pull(session, user)
-    finally:
-        await cooldown_service.clear_cooldown(lock_key)
-    if not result["ok"]:
-        await cb.answer(result["reason"], show_alert=True)
-        return
-
-    char = result["character"]
-    emoji = RANK_EMOJI.get(char["rank"], "❓")
-
-    builder = InlineKeyboardBuilder()
-    if user.tickets > 0:
-        builder.row(InlineKeyboardButton(
-            text=f"🎰 Ещё раз ({user.tickets} тик.)",
-            callback_data="pull_one"
-        ))
-    builder.row(InlineKeyboardButton(
-        text="◀️ К колоде", callback_data="deck"
-    ))
-
-    try:
-        await cb.message.edit_text(
-            f"🎰 <b>Результат!</b>\n\n"
-            f"{emoji} <b>{char['name']}</b>\n"
-            f"Ранг: {result['rank_label']}\n"
-            f"Мощь: {fmt_num(result['power'])}\n\n"
-            f"<i>{char.get('desc', '')}</i>\n\n"
-            f"🎟 Осталось: {user.tickets}/{user.max_tickets}",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
+        await cb.message.edit_text("🎰 Прокручиваем...")
     except Exception:
         pass
+    asyncio.create_task(_pull_one_bg(cb.message.chat.id, cb.message.message_id, user.id, lock_key))
 
 
 @router.callback_query(F.data == "pull_10")
@@ -289,55 +393,12 @@ async def cb_pull_10(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer("Подожди...", show_alert=False)
         return
 
+    await cb.answer()
     try:
-        count = min(10, user.tickets)
-        results = await deck_service.pull_n(session, user, count)
-    finally:
-        await cooldown_service.clear_cooldown(lock_key)
-    if not results:
-        await cb.answer("Нет тикетов", show_alert=True)
-        return
-
-    lines = [f"🎰 <b>Прокрутка {count} тикетов!</b>\n"]
-
-    # Группируем по рангу для краткости
-    from collections import Counter
-    rank_counter: Counter = Counter()
-    for r in results:
-        rank_counter[r["character"]["rank"]] += 1
-
-    rank_order = [
-        "absolute", "peak", "legend", "new_legend",
-        "gen_zero", "strong_king", "king", "boss", "member"
-    ]
-    for rank in rank_order:
-        if rank not in rank_counter:
-            continue
-        emoji = RANK_EMOJI.get(rank, "❓")
-        cfg = RANK_CONFIG_MAP.get(rank)
-        label = cfg.label if cfg else rank
-        lines.append(f"{emoji} {label}: ×{rank_counter[rank]}")
-
-    best = max(results, key=lambda x: x["power"])
-    best_emoji = RANK_EMOJI.get(best["character"]["rank"], "❓")
-    lines.append(
-        f"\n⭐ <b>Лучший:</b> {best_emoji} {best['character']['name']} "
-        f"[{best['rank_label']}] — {fmt_num(best['power'])}"
-    )
-
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(
-        text="◀️ К колоде", callback_data="deck"
-    ))
-
-    try:
-        await cb.message.edit_text(
-            "\n".join(lines),
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
+        await cb.message.edit_text("🎰 Прокручиваем тикеты...")
     except Exception:
         pass
+    asyncio.create_task(_pull_10_bg(cb.message.chat.id, cb.message.message_id, user.id, lock_key))
 
 
 @router.callback_query(F.data == "collection")

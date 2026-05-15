@@ -149,6 +149,41 @@ async def set_clan_leader(clan_name: str, tg_id: int):
             )
 
 
+async def add_king_cities():
+    """Добавляет 10 пустых king-городов каждого типа в каждый сектор."""
+    from app.database import AsyncSessionFactory
+    from app.models.city import City
+    from app.data.cities import SECTORS, CITY_TYPES, CITY_NAMES_BY_SECTOR
+    from sqlalchemy import select, func
+
+    async with AsyncSessionFactory() as session:
+        async with session.begin():
+            total = 0
+            for sector in SECTORS:
+                names = CITY_NAMES_BY_SECTOR.get(sector, [])
+                for city_type in CITY_TYPES:
+                    existing = await session.scalar(
+                        select(func.count(City.id)).where(
+                            City.sector == sector,
+                            City.phase == "king",
+                            City.type_id == city_type.type_id,
+                        )
+                    )
+                    offset = existing or 0
+                    for i in range(10):
+                        base_name = names[(offset + i) % len(names)] if names else "Город"
+                        city = City(
+                            sector=sector,
+                            phase="king",
+                            type_id=city_type.type_id,
+                            name=f"{base_name} К{city_type.type_id}-{offset + i + 1}",
+                            total_districts=city_type.total_districts,
+                        )
+                        session.add(city)
+                        total += 1
+            print(f"✅ Добавлено {total} king-городов")
+
+
 async def auto_backup_loop():
     """Авто-бэкап каждые 6 часов."""
     print("🔄 Запущен авто-бэкап каждые 6 часов")
@@ -168,6 +203,7 @@ Lookism Battle Planet — Manager
   migrate                       Создать таблицы в БД
   stats                         Статистика игроков
   set_clan_leader <clan> <tg>   Сменить лидера клана
+  add_king_cities               Добавить 10 king-городов каждого типа в каждый сектор
   autobackup                    Авто-бэкап (для Docker)
     """)
 
@@ -188,6 +224,8 @@ if __name__ == "__main__":
         asyncio.run(stats())
     elif args[0] == "set_clan_leader" and len(args) == 3:
         asyncio.run(set_clan_leader(args[1], int(args[2])))
+    elif args[0] == "add_king_cities":
+        asyncio.run(add_king_cities())
     elif args[0] == "autobackup":
         asyncio.run(auto_backup_loop())
     else:

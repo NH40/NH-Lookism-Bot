@@ -114,7 +114,7 @@ async def build_king_menu(session, user, page: int = 0):
         for city in cities:
             cid = city.id
             row = counts.get(cid)
-            if not row or ((row.free_count or 0) == 0 and (row.not_mine or 0) == 0):
+            if row and (row.free_count or 0) == 0 and (row.not_mine or 0) == 0:
                 continue
 
             dominant_id = dominant_by_city.get(cid)
@@ -129,7 +129,7 @@ async def build_king_menu(session, user, page: int = 0):
                 def_str = f"🤖 {can} {fmt_num(bot_power)}"
 
             type_id = city.type_id or 1
-            my_in_city = row.my_count or 0
+            my_in_city = (row.my_count if row else 0) or 0
             my_str = f"[моих:{my_in_city}] " if my_in_city > 0 else ""
             size_emoji = {1: "🏘", 2: "🏙", 3: "🌆", 4: "🌇", 5: "🌃"}.get(type_id, "🏙")
             eligible.append((city, size_emoji, my_str, def_str))
@@ -246,6 +246,11 @@ async def cb_king_city_info(cb: CallbackQuery, session: AsyncSession, user: User
 
     city.captured_districts = min(my_in_city + not_mine, city.total_districts)
 
+    total_initialized = await session.scalar(
+        select(func.count(District.id)).where(District.city_id == city_id)
+    ) or 0
+    if total_initialized == 0:
+        free_count = city.total_districts
     if free_count == 0 and not_mine == 0:
         await cb.answer("Все районы твои — нечего атаковать!", show_alert=True)
         return
@@ -359,7 +364,10 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         )
     ) or 0
 
-    if free_count == 0 and not_mine == 0:
+    total_initialized = await session.scalar(
+        select(func.count(District.id)).where(District.city_id == city_id)
+    ) or 0
+    if free_count == 0 and not_mine == 0 and total_initialized > 0:
         await cb.answer("Все районы твои — нечего атаковать!", show_alert=True)
         return
 

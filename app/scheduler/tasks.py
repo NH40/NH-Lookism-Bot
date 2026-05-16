@@ -1,6 +1,8 @@
 import asyncio
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import AsyncSessionFactory
+from app.models.user import User
 from app.services.business_service import business_service
 from app.services.deck_service import deck_service
 from app.services.squad_service import squad_service
@@ -46,12 +48,21 @@ async def income_tick():
 
 
 async def ultra_instinct_tick():
+    from sqlalchemy import or_
     async with AsyncSessionFactory() as session:
-        async with session.begin():
-            from app.repositories.user_repo import user_repo
-            users = await user_repo.get_all_ui_users(session)
-            for user in users:
-                try:
+        user_ids = list((await session.execute(
+            select(User.id).where(
+                or_(User.ultra_instinct == True, User.ui_is_donat == True, User.donat_ui_potion == True)
+            )
+        )).scalars())
+
+    for user_id in user_ids:
+        try:
+            async with AsyncSessionFactory() as session:
+                async with session.begin():
+                    user = await session.get(User, user_id)
+                    if not user:
+                        continue
                     if user.ui_auto_ticket:
                         await deck_service.try_get_ticket(session, user)
                     if user.ui_auto_pull and user.tickets > 0:
@@ -62,8 +73,8 @@ async def ultra_instinct_tick():
                         await squad_service.train(session, user)
                     if user.ui_auto_potion:
                         await _ui_auto_potion(session, user)
-                except Exception as e:
-                    logger.error(f"ui_tick error for {user.id}: {e}")
+        except Exception as e:
+            logger.error(f"ui_tick error for user {user_id}: {e}")
 
 
 async def _ui_recruit(session: AsyncSession, user):
@@ -222,41 +233,46 @@ async def _notify_round_end(result: dict):
 async def clan_war_tick():
     """Завершает просроченные войны кланов и выдаёт награды."""
     try:
+        # Step 1: commit treasury updates; collect primitive data for notifications
+        notif_queue = []
         async with AsyncSessionFactory() as session:
             async with session.begin():
                 from app.services.clan import clan_service
-                from app.bot_instance import get_bot
                 finished = await clan_service.finish_expired_wars(session)
-                bot = get_bot()
                 for outcome in finished:
                     if not outcome.get("ok"):
                         continue
-                    winner = outcome["winner"]
-                    loser = outcome["loser"]
-                    war_type = "вооружения" if outcome["war_type"] == "power" else "богатств"
-                    # Уведомляем участников обоих кланов
-                    from sqlalchemy import select
-                    from app.models.clan import ClanMember
-                    from app.models.user import User
-                    for clan, reward, is_winner in [
-                        (winner, outcome["winner_reward"], True),
-                        (loser, outcome["loser_reward"], False),
-                    ]:
-                        # Single JOIN query — no N+1
-                        tg_ids_r = await session.execute(
-                            select(User.tg_id)
-                            .join(ClanMember, ClanMember.user_id == User.id)
-                            .where(ClanMember.clan_id == clan.id)
-                        )
-                        clan_tg_ids = list(tg_ids_r.scalars())
-                        result_str = "🏆 Победа!" if is_winner else "❌ Поражение"
-                        war_text = (
-                            f"⚔️ <b>Война {war_type} завершена!</b>\n\n"
-                            f"{result_str}\n"
-                            f"💰 В казну: +{fmt_num(reward)} NHCoin"
-                        )
-                        if bot:
-                            await _send_notifications(bot, clan_tg_ids, war_text)
+                    notif_queue.append(outcome)
+
+        if not notif_queue:
+            return
+
+        # Step 2: send notifications outside the transaction (treasury already committed)
+        from app.bot_instance import get_bot
+        from app.models.clan import ClanMember
+        bot = get_bot()
+
+        async with AsyncSessionFactory() as session:
+            for outcome in notif_queue:
+                war_type_str = "вооружения" if outcome["war_type"] == "power" else "богатств"
+                for clan_id, reward, is_winner in [
+                    (outcome["winner_id"], outcome["winner_reward"], True),
+                    (outcome["loser_id"], outcome["loser_reward"], False),
+                ]:
+                    tg_ids_r = await session.execute(
+                        select(User.tg_id)
+                        .join(ClanMember, ClanMember.user_id == User.id)
+                        .where(ClanMember.clan_id == clan_id)
+                    )
+                    clan_tg_ids = list(tg_ids_r.scalars())
+                    result_str = "🏆 Победа!" if is_winner else "❌ Поражение"
+                    war_text = (
+                        f"⚔️ <b>Война {war_type_str} завершена!</b>\n\n"
+                        f"{result_str}\n"
+                        f"💰 В казну: +{fmt_num(reward)} NHCoin"
+                    )
+                    if bot:
+                        await _send_notifications(bot, clan_tg_ids, war_text)
 
     except Exception as e:
         logger.error(f"clan_war_tick error: {e}", exc_info=True)

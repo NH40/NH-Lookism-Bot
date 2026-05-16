@@ -70,21 +70,26 @@ class ClanWarService(ClanBaseService):
             winner, loser = clan2, clan1
             winner_gain, loser_gain = gain2, gain1
 
-        # Награды в казну (не более 20М каждой стороне)
-        winner_reward = min(int(abs(winner_gain) * 0.1) + 500_000, 20_000_000)
-        loser_reward = min(int(abs(loser_gain) * 0.05) + 100_000, 20_000_000)
+        # Capture primitives before flush — async session expires ORM objects on flush
+        winner_id = winner.id
+        loser_id = loser.id
+        war_type = war.war_type
+
+        # Награды в казну (не более 80М каждой стороне)
+        winner_reward = min(int(abs(winner_gain) * 0.1) + 500_000, 80_000_000)
+        loser_reward = min(int(abs(loser_gain) * 0.05) + 100_000, 80_000_000)
         winner.treasury += winner_reward
         loser.treasury += loser_reward
 
         war.is_finished = True
-        war.winner_clan_id = winner.id
+        war.winner_clan_id = winner_id
         await session.flush()
 
         return {
             "ok": True,
-            "winner": winner,
-            "loser": loser,
+            "winner_id": winner_id,
+            "loser_id": loser_id,
             "winner_reward": winner_reward,
             "loser_reward": loser_reward,
-            "war_type": war.war_type,
+            "war_type": war_type,
         }

@@ -72,30 +72,31 @@ class ClanShopService(ClanBaseService):
 
         await session.flush()
 
-        # Уведомляем всех участников
-        await self._notify_shop_purchase(clan, buyer, item, users)
+        import asyncio
+        tg_ids = [u.tg_id for u in users if u.id != buyer.id]
+        clan_name = clan.name
+        buyer_name = buyer.full_name
+        asyncio.create_task(self._notify_shop_purchase(clan_name, buyer_name, item, tg_ids))
 
         return {"ok": True, "item": item}
 
-    async def _notify_shop_purchase(self, clan, buyer, item, users) -> None:
+    async def _notify_shop_purchase(self, clan_name: str, buyer_name: str, item, tg_ids: list) -> None:
         try:
             from app.bot_instance import get_bot
+            import asyncio
             bot = get_bot()
             if not bot:
                 return
-            for u in users:
-                if u.id == buyer.id:
-                    continue
+            text = (
+                f"🛒 <b>Покупка в магазине клана!</b>\n\n"
+                f"🏯 Клан: {clan_name}\n"
+                f"👤 Куплено: {buyer_name}\n"
+                f"🎁 {item.name}\n"
+                f"💰 Потрачено из казны: {item.price:,} NHCoin"
+            )
+            for tg_id in tg_ids:
                 try:
-                    await bot.send_message(
-                        u.tg_id,
-                        f"🛒 <b>Покупка в магазине клана!</b>\n\n"
-                        f"🏯 Клан: {clan.name}\n"
-                        f"👤 Куплено: {buyer.full_name}\n"
-                        f"🎁 {item.name}\n"
-                        f"💰 Потрачено из казны: {item.price:,} NHCoin",
-                        parse_mode="HTML",
-                    )
+                    await bot.send_message(tg_id, text, parse_mode="HTML")
                 except Exception:
                     pass
         except Exception:

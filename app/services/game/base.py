@@ -169,7 +169,7 @@ class GameBase:
         }
 
     async def _release_king_districts(self, session: AsyncSession, user: User) -> None:
-        """Release all king/gang-phase districts on fist promotion. Buildings stay active."""
+        """Release all king/gang-phase districts on fist promotion and deactivate their buildings."""
         from sqlalchemy import update as sql_update
 
         districts_r = await session.execute(
@@ -208,6 +208,15 @@ class GameBase:
                 if city.owner_id == user.id:
                     city.owner_id = None
                     city.is_fully_captured = False
+
+        # Deactivate buildings on the released districts so income doesn't persist
+        # without district ownership — prevents orphaned buildings after Fist demotion.
+        from app.repositories.building_repo import building_repo
+        from app.services.business_service import business_service
+        await building_repo.deactivate_buildings_on_district_loss(
+            session, user.id, len(district_ids)
+        )
+        await business_service._recalc_income(session, user)
 
         await session.flush()
 

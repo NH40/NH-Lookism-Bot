@@ -51,27 +51,26 @@ class DeckService:
 
         return {"ok": True, "got": False, "roll": roll, "chance": chance}
 
+    def _pick_char(self, user: User) -> dict:
+        """Списывает 1 тикет и генерирует данные персонажа без IO."""
+        user.tickets -= 1
+        weights = [RANK_CONFIG_MAP[c["rank"]].weight for c in CHARACTERS]
+        return random.choices(CHARACTERS, weights=weights, k=1)[0]
+
     async def pull(self, session: AsyncSession, user: User) -> dict:
         """Крутим тикет — получаем персонажа."""
         if user.tickets <= 0:
             return {"ok": False, "reason": "Нет тикетов"}
 
-        user.tickets -= 1
-
-        # Взвешенный выбор персонажа
-        weights = [RANK_CONFIG_MAP[c["rank"]].weight for c in CHARACTERS]
-        char_data = random.choices(CHARACTERS, weights=weights, k=1)[0]
-
-        char = UserCharacter(
+        char_data = self._pick_char(user)
+        session.add(UserCharacter(
             user_id=user.id,
             character_id=char_data["name"],
             rank=char_data["rank"],
             power=char_data["power"],
-        )
-        session.add(char)
+        ))
         await session.flush()
 
-        # Пересчёт боевой мощи
         from app.repositories.squad_repo import squad_repo
         await squad_repo.update_user_combat_power(session, user)
 
@@ -87,10 +86,24 @@ class DeckService:
         """Прокрутить все тикеты сразу."""
         results = []
         while user.tickets > 0:
-            result = await self.pull(session, user)
-            if not result["ok"]:
-                break
-            results.append(result)
+            char_data = self._pick_char(user)
+            session.add(UserCharacter(
+                user_id=user.id,
+                character_id=char_data["name"],
+                rank=char_data["rank"],
+                power=char_data["power"],
+            ))
+            rank_cfg = RANK_CONFIG_MAP[char_data["rank"]]
+            results.append({
+                "ok": True,
+                "character": char_data,
+                "rank_label": rank_cfg.label,
+                "power": char_data["power"],
+            })
+        if results:
+            await session.flush()
+            from app.repositories.squad_repo import squad_repo
+            await squad_repo.update_user_combat_power(session, user)
         return results
 
     async def pull_n(self, session: AsyncSession, user: User, n: int) -> list[dict]:
@@ -99,10 +112,24 @@ class DeckService:
         for _ in range(n):
             if user.tickets <= 0:
                 break
-            result = await self.pull(session, user)
-            if not result["ok"]:
-                break
-            results.append(result)
+            char_data = self._pick_char(user)
+            session.add(UserCharacter(
+                user_id=user.id,
+                character_id=char_data["name"],
+                rank=char_data["rank"],
+                power=char_data["power"],
+            ))
+            rank_cfg = RANK_CONFIG_MAP[char_data["rank"]]
+            results.append({
+                "ok": True,
+                "character": char_data,
+                "rank_label": rank_cfg.label,
+                "power": char_data["power"],
+            })
+        if results:
+            await session.flush()
+            from app.repositories.squad_repo import squad_repo
+            await squad_repo.update_user_combat_power(session, user)
         return results
 
     async def get_collection_summary(

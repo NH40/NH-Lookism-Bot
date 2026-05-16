@@ -43,7 +43,14 @@ async def cb_clan_treasury(cb: CallbackQuery, session: AsyncSession, user: User,
 
 @router.message(TreasuryFSM.waiting_amount)
 async def msg_treasury_amount(message: Message, session: AsyncSession, user: User, state: FSMContext):
+    from app.services.cooldown_service import cooldown_service
     await state.clear()
+
+    lock_key = cooldown_service.treasury_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await message.answer("❌ Подожди...")
+        return
+
     clan = await clan_service.get_user_clan(session, user.id)
     if not clan:
         return

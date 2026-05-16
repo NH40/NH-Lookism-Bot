@@ -474,6 +474,12 @@ async def cb_biz_select_building(
 async def cb_biz_build_in(
     cb: CallbackQuery, session: AsyncSession, user: User
 ):
+    from app.services.cooldown_service import cooldown_service
+    lock_key = cooldown_service.biz_build_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("Подожди...", show_alert=False)
+        return
+
     parts = cb.data.split(":")
     building_id = parts[1]
     city_id = int(parts[2])

@@ -168,6 +168,12 @@ async def cb_raid_boss(cb: CallbackQuery, session: AsyncSession, user: User):
 
 @router.callback_query(F.data.startswith("raid_start:"))
 async def cb_raid_start(cb: CallbackQuery, session: AsyncSession, user: User):
+    from app.services.cooldown_service import cooldown_service
+    lock_key = cooldown_service.raid_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
+        await cb.answer("Подожди...", show_alert=False)
+        return
+
     parts = cb.data.split(":")
     clan_id, boss_id = parts[1], parts[2]
 

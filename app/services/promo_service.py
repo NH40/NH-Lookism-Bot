@@ -44,9 +44,16 @@ class PromoService:
     async def use_promo(
         self, session: AsyncSession, user: User, code: str
     ) -> dict:
+        # Per-code lock prevents multiple concurrent users from racing past max_uses
+        from app.services.cooldown_service import cooldown_service
+        code_upper = code.upper()
+        code_lock = f"lock:promo_code:{code_upper}"
+        if not await cooldown_service.acquire_lock(code_lock, ttl=5):
+            return {"ok": False, "reason": "Подожди..."}
+
         promo = await session.scalar(
             select(PromoCode).where(
-                PromoCode.code == code.upper(),
+                PromoCode.code == code_upper,
                 PromoCode.is_active == True,
             )
         )

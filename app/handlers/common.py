@@ -345,8 +345,15 @@ async def cmd_promo(message: Message, state: FSMContext):
 @router.message(CommonFSM.waiting_promo)
 async def msg_promo(message: Message, session: AsyncSession, user: User, state: FSMContext):
     from app.services.promo_service import promo_service
+    from app.services.cooldown_service import cooldown_service
     await state.clear()
     code = message.text.strip()
+
+    lock_key = cooldown_service.promo_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
+        await message.answer("❌ Подожди...", reply_markup=back_kb("main_menu"))
+        return
+
     result = await promo_service.use_promo(session, user, code)
     if result["ok"]:
         await message.answer(

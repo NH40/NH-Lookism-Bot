@@ -81,6 +81,22 @@ class CooldownService:
         return f"lock:train:{trainer_id}:{user_id}"
 
     @staticmethod
+    def biz_build_lock_key(user_id: int) -> str:
+        return f"lock:biz_build:{user_id}"
+
+    @staticmethod
+    def promo_lock_key(user_id: int) -> str:
+        return f"lock:promo:{user_id}"
+
+    @staticmethod
+    def treasury_lock_key(user_id: int) -> str:
+        return f"lock:treasury:{user_id}"
+
+    @staticmethod
+    def raid_lock_key(user_id: int) -> str:
+        return f"lock:raid:{user_id}"
+
+    @staticmethod
     def auction_bid_lock_key(user_id: int) -> str:
         return f"lock:auction_bid:{user_id}"
 

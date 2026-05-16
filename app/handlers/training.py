@@ -91,11 +91,10 @@ async def cb_train_with(cb: CallbackQuery, session: AsyncSession, user: User):
     if trainer_id == "tom_lee":
         result = await training_service.train_with_tom(session, user)
         if not result["ok"]:
-            from app.services.quest_service import quest_service
-            await quest_service.add_progress(session, user, "train")
-
             await cb.answer(result["reason"], show_alert=True)
             return
+        from app.services.quest_service import quest_service
+        await quest_service.add_progress(session, user, "train")
         points = result["points"]
         await cb.message.edit_text(
             f"🥋 <b>Тренировка с Томом Ли завершена!</b>\n\n"
@@ -111,11 +110,10 @@ async def cb_train_with(cb: CallbackQuery, session: AsyncSession, user: User):
     elif trainer_id == "jeon_gon":
         result = await training_service.train_with_jeon_gon(session, user)
         if not result["ok"]:
-            from app.services.quest_service import quest_service
-            await quest_service.add_progress(session, user, "train")
-            
             await cb.answer(result["reason"], show_alert=True)
             return
+        from app.services.quest_service import quest_service
+        await quest_service.add_progress(session, user, "train")
         points = result["points"]
         path_emoji = {"businessman": "💼", "romantic": "💝", "monster": "👹"}.get(
             user.skill_path, "🛤"

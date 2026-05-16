@@ -722,6 +722,28 @@ async def cb_adm_delete_do(cb: CallbackQuery, session: AsyncSession, user: User)
         pass
 
 
+@router.callback_query(F.data.startswith("adm_clear_buildings:"))
+async def cb_adm_clear_buildings(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = int(cb.data.split(":")[1])
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await cb.answer("Игрок не найден", show_alert=True)
+        return
+    from sqlalchemy import delete
+    from app.models.building import UserBuilding
+    result = await session.execute(
+        delete(UserBuilding).where(UserBuilding.user_id == found.id)
+    )
+    from app.services.business_service import business_service
+    found.income_per_minute = 0
+    await session.flush()
+    await business_service._recalc_income(session, found)
+    deleted = result.rowcount
+    await cb.answer(f"🏗 Удалено {deleted} зданий, доход пересчитан", show_alert=True)
+
+
 # ── Патч ────────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "admin_patch")

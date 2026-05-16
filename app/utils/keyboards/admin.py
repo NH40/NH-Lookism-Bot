@@ -45,6 +45,9 @@ def admin_user_kb(tg_id: int) -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="💀 Лох (снять)", callback_data=f"adm_none:{tg_id}"),
     )
     builder.row(
+        InlineKeyboardButton(text="🏗 Очистить здания", callback_data=f"adm_clear_buildings:{tg_id}"),
+    )
+    builder.row(
         InlineKeyboardButton(text="🗑 Удалить аккаунт", callback_data=f"adm_delete_confirm:{tg_id}"),
     )
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="admin_main"))

@@ -102,6 +102,12 @@ class AdminService:
             .values(is_cancelled=True)
         )
 
+        # ── Предварительная очистка зданий глобально (гарантирует 0 зданий после вайпа) ──
+        from app.models.building import UserBuilding
+        from sqlalchemy import delete as sa_delete
+        await session.execute(sa_delete(UserBuilding))
+        await session.flush()
+
         # ── Сброс прогресса ───────────────────────────────────────────────────────
         for user in users:
             await prestige_service._reset_progress(session, user, keep_ui=False)

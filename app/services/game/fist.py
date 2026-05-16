@@ -90,7 +90,7 @@ class GameFistService(GameBase):
             await self._take_fist_cities_from(session, user, 1)
             user.fist_cities_count = max(0, user.fist_cities_count - 1)
             if user.fist_cities_count < FIST_MIN_CITIES:
-                await self._demote_fist_to_king(session, user)
+                await self._demote_fist_to_king(session, user, king_cities_lost=1)
                 await self._handle_attack_cd(session, user, cd_key, "fist")
                 await session.flush()
                 return {
@@ -135,7 +135,7 @@ class GameFistService(GameBase):
             await self._take_fist_cities_from(session, defender, 1)
             defender.fist_cities_count = max(0, defender.fist_cities_count - 1)
             if defender.fist_cities_count < FIST_MIN_CITIES:
-                await self._demote_fist_to_king(session, defender)
+                await self._demote_fist_to_king(session, defender, king_cities_lost=1)
             if attacker.fist_wins >= 10:
                 await notify_pvp_attack(attacker, defender, True, "fist")
                 return await self._promote_to_emperor(session, attacker)
@@ -144,7 +144,7 @@ class GameFistService(GameBase):
             attacker.fist_cities_count = max(0, attacker.fist_cities_count - 1)
             if attacker.fist_cities_count < FIST_MIN_CITIES:
                 await notify_pvp_attack(attacker, defender, False, "fist")
-                await self._demote_fist_to_king(session, attacker)
+                await self._demote_fist_to_king(session, attacker, king_cities_lost=1)
                 await self._handle_attack_cd(session, attacker, cd_key, "fist")
                 await session.flush()
                 return {

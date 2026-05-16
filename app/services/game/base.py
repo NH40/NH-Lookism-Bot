@@ -120,28 +120,35 @@ class GameBase:
         user.extra_attack_count = await self._get_max_extra_attacks_async(session, user)
 
     async def _demote_fist_to_king(
-        self, session: AsyncSession, user: User
+        self, session: AsyncSession, user: User, king_cities_lost: int = 0
     ) -> None:
-        # Remove all fist city districts from this player
         await self._take_fist_cities_from(session, user, 9999)
-        user.phase = "king"
         user.fist_cities_count = 0
+        # Remove king cities equal to how many the opponent destroyed in the fight
+        if king_cities_lost > 0:
+            await self._take_king_cities_from(session, user, king_cities_lost)
+        user.phase = "king"
         user.king_cities_count = await self._count_my_king_cities(session, user.id)
         user.extra_attack_count = await self._get_max_extra_attacks_async(session, user)
-        # Пересоздаём ботов-королей по текущей мощи игрока
         from sqlalchemy import delete as sql_delete
         from app.models.king_bot import KingBot
         await session.execute(sql_delete(KingBot).where(KingBot.user_id == user.id))
         await session.flush()
+        need = max(0, 10 - user.king_cities_count)
         try:
             from app.bot_instance import get_bot
             bot = get_bot()
             if bot and user.notifications_enabled:
+                need_text = (
+                    f"Осталось городов: <b>{user.king_cities_count}/10</b>. "
+                    f"Нужно захватить ещё <b>{need}</b>."
+                    if need > 0
+                    else "У вас уже 10 городов — можете снова стать Кулаком!"
+                )
                 await bot.send_message(
                     user.tg_id,
                     "⚠️ <b>Вы потеряли слишком много городов!</b>\n\n"
-                    "Вы понижены до фазы Короля.\n"
-                    "Захватите 10 городов снова чтобы вернуть статус Кулака.",
+                    f"Вы понижены до фазы Короля.\n{need_text}",
                     parse_mode="HTML",
                 )
         except Exception:
@@ -221,10 +228,13 @@ class GameBase:
         await session.flush()
 
     async def _promote_to_fist(self, session: AsyncSession, user: User) -> dict:
-        await self._release_king_districts(session, user)
+        # King districts are intentionally kept — player retains their territory
         user.phase = "fist"
-        user.fist_cities_count = FIST_MIN_CITIES
+        user.fist_cities_count = 0
         user.extra_attack_count = await self._get_max_extra_attacks_async(session, user)
+        for _ in range(FIST_MIN_CITIES):
+            await self._give_fist_city_one(session, user, random.choice(FIST_CITY_SIZES))
+        user.fist_cities_count = FIST_MIN_CITIES
         # Удаляем старых ботов — при следующем вызове get_fist_bots создадутся
         # новые с актуальной боевой мощью игрока
         from sqlalchemy import delete as sql_delete
@@ -386,6 +396,68 @@ class GameBase:
             given += 1
 
         await session.flush()
+
+    async def _take_king_cities_from(
+        self, session: AsyncSession, user: User, count: int
+    ) -> int:
+        """Забирает king-районы у игрока при падении с фазы Кулака."""
+        from app.models.city import City, District
+        from sqlalchemy import select, func, desc
+        from app.repositories.building_repo import building_repo
+        from app.services.business_service import business_service
+
+        cities_r = await session.execute(
+            select(District.city_id, func.count(District.id).label("cnt"))
+            .join(City, City.id == District.city_id)
+            .where(
+                District.owner_id == user.id,
+                District.is_captured == True,
+                City.phase != "fist",
+            )
+            .group_by(District.city_id)
+            .order_by(desc("cnt"))
+        )
+        city_groups = cities_r.all()
+
+        taken_cities = 0
+        total_districts_lost = 0
+
+        for row in city_groups:
+            if taken_cities >= count:
+                break
+            city_id = row[0]
+
+            districts_r = await session.execute(
+                select(District).where(
+                    District.owner_id == user.id,
+                    District.city_id == city_id,
+                    District.is_captured == True,
+                )
+            )
+            districts = districts_r.scalars().all()
+            for d in districts:
+                d.owner_id = None
+                d.is_captured = False
+                total_districts_lost += 1
+
+            city_r = await session.execute(select(City).where(City.id == city_id))
+            city_obj = city_r.scalar_one_or_none()
+            if city_obj:
+                city_obj.captured_districts = max(0, city_obj.captured_districts - len(districts))
+                if city_obj.owner_id == user.id:
+                    city_obj.owner_id = None
+                city_obj.is_fully_captured = False
+
+            taken_cities += 1
+
+        if total_districts_lost > 0:
+            await building_repo.deactivate_buildings_on_district_loss(
+                session, user.id, total_districts_lost
+            )
+            await business_service._recalc_income(session, user)
+
+        await session.flush()
+        return taken_cities
 
     async def _take_fist_cities_from(
         self, session: AsyncSession, user: User, count: int

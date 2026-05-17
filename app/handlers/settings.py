@@ -55,6 +55,9 @@ async def cb_settings(cb: CallbackQuery, session: AsyncSession, user: User):
         text="💀 Удалить банду", callback_data="delete_gang_confirm"
     ))
     builder.row(InlineKeyboardButton(
+        text="📖 Гайд", callback_data="guide"
+    ))
+    builder.row(InlineKeyboardButton(
         text="◀️ Назад", callback_data="main_menu"
     ))
 

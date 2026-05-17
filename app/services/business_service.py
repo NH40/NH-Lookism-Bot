@@ -36,7 +36,7 @@ class BusinessService:
         if user.referred_by and earned > 0:
             teacher_share = max(1, int(earned * user.teacher_income_share / 100))
             student_gets = earned - teacher_share
-            await self._pay_teacher(session, user.referred_by, teacher_share)
+            await self._pay_teacher(session, user.referred_by, user.id, teacher_share)
         else:
             student_gets = earned
 
@@ -45,20 +45,24 @@ class BusinessService:
         return student_gets
 
     async def _pay_teacher(
-        self, session: AsyncSession, teacher_db_id: int, amount: int
+        self, session: AsyncSession, teacher_db_id: int, student_db_id: int, amount: int
     ) -> None:
         from sqlalchemy import update
         from app.models.user import User as UserModel
         from app.models.referral import Referral
 
-        await session.execute(
-            update(UserModel)
-            .where(UserModel.id == teacher_db_id)
-            .values(nh_coins=UserModel.nh_coins + amount)
-        )
+        # Use ORM get so the cached identity-map object is updated in-place,
+        # preventing a later flush of the same teacher row from overwriting this payment.
+        teacher = await session.get(UserModel, teacher_db_id)
+        if teacher:
+            teacher.nh_coins += amount
+
         await session.execute(
             update(Referral)
-            .where(Referral.teacher_id == teacher_db_id)
+            .where(
+                Referral.teacher_id == teacher_db_id,
+                Referral.student_id == student_db_id,
+            )
             .values(total_earned=Referral.total_earned + amount)
         )
 

@@ -23,13 +23,8 @@ class ReferralService:
             return False
 
         student.referred_by = teacher.id
-        # +5% от мощи учителя
-        student.teacher_power_bonus = int(teacher.combat_power * 0.05)
-
-        # Учитель получает бонусные монеты за ученика
         teacher.nh_coins += 1000
 
-        # Проверяем нет ли уже записи
         existing = await session.execute(
             select(Referral).where(Referral.student_id == student.id)
         )
@@ -41,6 +36,11 @@ class ReferralService:
             session.add(referral)
 
         await session.flush()
+
+        # Пересчитываем мощь ученика (чтобы бонус учителя применился сразу)
+        from app.repositories.squad_repo import squad_repo
+        await squad_repo.update_user_combat_power(session, student)
+
         return True
 
     async def get_students(

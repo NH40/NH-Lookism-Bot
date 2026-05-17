@@ -62,8 +62,13 @@ class GameFistService(GameBase):
         fight = await fight_district(session, user, bot.current_power)
 
         if fight["win"]:
-            city_size = random.choice(FIST_CITY_SIZES)
-            user.fist_cities_count += 1
+            cities_gained = random.randint(2, 4)
+            city_sizes = []
+            for _ in range(cities_gained):
+                city_size = random.choice(FIST_CITY_SIZES)
+                city_sizes.append(city_size)
+                await self._give_fist_city_one(session, user, city_size)
+            user.fist_cities_count += cities_gained
             user.fist_wins += 1
             user.total_wins += 1
             user.influence += ATTACK_WIN_INFLUENCE_BONUS["fist"]
@@ -72,7 +77,6 @@ class GameFistService(GameBase):
             new_power = int(user.combat_power * bot.power_ratio * (1 + 0.1 * bot.defeat_count))
             bot.current_power = min(new_power, int(user.combat_power * bot.power_ratio * 3.0))
 
-            await self._give_fist_city_one(session, user, city_size)
             await session.flush()
 
             if user.fist_wins >= 10:
@@ -81,21 +85,23 @@ class GameFistService(GameBase):
             await session.flush()
             return {
                 "ok": True, "win": True,
-                "city_size": city_size, "fist_wins": user.fist_wins,
+                "cities_gained": cities_gained, "city_sizes": city_sizes,
+                "fist_wins": user.fist_wins,
                 "fist_cities": user.fist_cities_count, "is_crit": fight["is_crit"],
                 "user_power": fight["user_power"], "bot_power": bot.current_power,
                 "bot_name": bot.name,
             }
         else:
-            await self._take_fist_cities_from(session, user, 1)
-            user.fist_cities_count = max(0, user.fist_cities_count - 1)
+            cities_lost = random.randint(2, 4)
+            await self._take_fist_cities_from(session, user, cities_lost)
+            user.fist_cities_count = max(0, user.fist_cities_count - cities_lost)
             if user.fist_cities_count < FIST_MIN_CITIES:
                 await self._demote_fist_to_king(session, user, king_cities_lost=1)
                 await self._handle_attack_cd(session, user, cd_key, "fist")
                 await session.flush()
                 return {
                     "ok": True, "win": False, "demoted": True,
-                    "cities_lost": 1, "fist_cities": user.fist_cities_count,
+                    "cities_lost": cities_lost, "fist_cities": user.fist_cities_count,
                     "king_cities_count": user.king_cities_count,
                     "user_power": fight["user_power"], "bot_power": bot.current_power,
                     "bot_name": bot.name,
@@ -104,7 +110,7 @@ class GameFistService(GameBase):
             await session.flush()
             return {
                 "ok": True, "win": False,
-                "cities_lost": 1, "fist_cities": user.fist_cities_count,
+                "cities_lost": cities_lost, "fist_cities": user.fist_cities_count,
                 "user_power": fight["user_power"], "bot_power": bot.current_power,
                 "bot_name": bot.name,
             }
@@ -125,23 +131,27 @@ class GameFistService(GameBase):
             return {"ok": False, "reason": f"КД: {cooldown_service.format_ttl(ttl)}", "cd": ttl}
         result = await fight_player(session, attacker, defender)
         if result["win"]:
-            city_size = random.choice(FIST_CITY_SIZES)
-            await self._give_fist_city_one(session, attacker, city_size)
-            attacker.fist_cities_count += 1
+            cities_gained = random.randint(2, 4)
+            for _ in range(cities_gained):
+                city_size = random.choice(FIST_CITY_SIZES)
+                await self._give_fist_city_one(session, attacker, city_size)
+            attacker.fist_cities_count += cities_gained
             attacker.fist_wins += 1
             attacker.total_wins += 1
             attacker.influence += ATTACK_WIN_INFLUENCE_BONUS["fist"]
-            # Забираем 1 город у защитника
-            await self._take_fist_cities_from(session, defender, 1)
-            defender.fist_cities_count = max(0, defender.fist_cities_count - 1)
+            # Забираем 2-4 города у защитника
+            cities_taken = random.randint(2, 4)
+            await self._take_fist_cities_from(session, defender, cities_taken)
+            defender.fist_cities_count = max(0, defender.fist_cities_count - cities_taken)
             if defender.fist_cities_count < FIST_MIN_CITIES:
                 await self._demote_fist_to_king(session, defender, king_cities_lost=1)
             if attacker.fist_wins >= 10:
                 await notify_pvp_attack(attacker, defender, True, "fist")
                 return await self._promote_to_emperor(session, attacker)
         else:
-            await self._take_fist_cities_from(session, attacker, 1)
-            attacker.fist_cities_count = max(0, attacker.fist_cities_count - 1)
+            cities_lost = random.randint(2, 4)
+            await self._take_fist_cities_from(session, attacker, cities_lost)
+            attacker.fist_cities_count = max(0, attacker.fist_cities_count - cities_lost)
             if attacker.fist_cities_count < FIST_MIN_CITIES:
                 await notify_pvp_attack(attacker, defender, False, "fist")
                 await self._demote_fist_to_king(session, attacker, king_cities_lost=1)

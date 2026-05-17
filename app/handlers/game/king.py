@@ -288,9 +288,9 @@ async def cb_king_city_info(cb: CallbackQuery, session: AsyncSession, user: User
 
     # Прогресс бар
     total = city.total_districts
-    captured = my_in_city + not_mine
-    pct = int(captured / total * 100) if total > 0 else 0
-    bar_filled = int(pct / 10)
+    captured = min(my_in_city + not_mine, total)
+    pct = min(int(captured / total * 100) if total > 0 else 0, 100)
+    bar_filled = min(int(pct / 10), 10)
     progress_bar = "🟩" * bar_filled + "⬛" * (10 - bar_filled)
 
     size_emoji = {1: "🏘", 2: "🏙", 3: "🌆", 4: "🌇", 5: "🌃"}.get(city.type_id or 1, "🏙")

@@ -111,6 +111,11 @@ class CityRepo:
     async def init_city_districts(
         self, session: AsyncSession, city: City
     ) -> None:
+        # SELECT FOR UPDATE сериализует параллельные вызовы и предотвращает
+        # дублирование районов при одновременных атаках на один город
+        await session.execute(
+            select(City).where(City.id == city.id).with_for_update()
+        )
         existing = await session.scalar(
             select(func.count(District.id)).where(
                 District.city_id == city.id
@@ -118,7 +123,6 @@ class CityRepo:
         )
         if existing and existing >= city.total_districts:
             return
-        # Если районов меньше чем нужно — добавляем недостающие
         existing_numbers_r = await session.execute(
             select(District.number).where(District.city_id == city.id)
         )

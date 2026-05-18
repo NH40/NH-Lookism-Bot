@@ -56,6 +56,16 @@ class GameKingService(GameBase):
         if dominant_defender and dominant_defender.phase == "fist":
             dominant_defender = None
             dominant_id = None
+            # Проверяем до боя: если свободных нет — атака бесполезна, КД не тратим
+            free_before = await session.scalar(
+                select(func.count(District.id)).where(
+                    District.city_id == city_id,
+                    District.is_captured == False,
+                    District.owner_id == None,
+                )
+            ) or 0
+            if free_before == 0:
+                return {"ok": False, "reason": "Все районы принадлежат Кулаку — захватить нельзя"}
 
         # ── Рассчитываем мощь бота ────────────────────────────────────────
         from app.data.cities import KING_DISTRICT_BASE_POWER
@@ -253,6 +263,8 @@ class GameKingService(GameBase):
                 "districts_taken": taken,
                 "my_in_city": my_in_city,
                 "cities_count": my_cities_count,
+                "city_captured": city.captured_districts,
+                "city_total": city.total_districts,
             }
         else:
             await notify_pvp_attack(attacker, defender, False, "king")
@@ -271,4 +283,6 @@ class GameKingService(GameBase):
                     session, attacker.id, city.id
                 ),
                 "cities_count": attacker.king_cities_count,
+                "city_captured": city.captured_districts,
+                "city_total": city.total_districts,
             }

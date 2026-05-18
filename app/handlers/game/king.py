@@ -67,7 +67,8 @@ async def build_king_menu(session, user, page: int = 0):
         )
         counts = {row.city_id: row for row in counts_r}
 
-        # Eligible cities: have something to attack
+        # Eligible cities: have something to attack (free districts OR stealable non-fist districts)
+        # Фильтр Кулак-заблокированных городов применяется ниже после загрузки фаз защитников
         eligible_ids = [
             cid for cid, row in counts.items()
             if (row.free_count or 0) > 0 or (row.not_mine or 0) > 0
@@ -119,6 +120,14 @@ async def build_king_menu(session, user, page: int = 0):
 
             dominant_id = dominant_by_city.get(cid)
             defender = defenders.get(dominant_id) if dominant_id else None
+
+            # Пропускаем города, где все чужие районы принадлежат Кулаку и свободных нет
+            if (
+                defender and getattr(defender, 'phase', None) == "fist"
+                and (row.free_count or 0) == 0
+            ):
+                continue
+
             if defender and defender.phase == "king":
                 def_power = int(defender.combat_power or 0)
                 can = "✅" if user.combat_power >= def_power else "❌"
@@ -206,6 +215,7 @@ async def cb_king_city_info(cb: CallbackQuery, session: AsyncSession, user: User
     city_id = int(cb.data.split(":")[1])
 
     from app.models.city import City
+    from app.data.cities import KING_DISTRICT_BASE_POWER
     city_result = await session.execute(
         select(District.city_id).where(District.city_id == city_id).limit(1)
     )
@@ -259,16 +269,20 @@ async def cb_king_city_info(cb: CallbackQuery, session: AsyncSession, user: User
     dominant_id = await game_service._get_city_dominant_player(session, city_id, user.id)
     is_pvp = False
     defender_name = None
+    is_fist_locked = False  # все чужие районы принадлежат Кулаку
     if dominant_id:
         defender = await user_repo.get_by_id(session, dominant_id)
         if defender and defender.phase == "king":
             is_pvp = True
             defender_name = defender.full_name
             enemy_power = int(defender.combat_power)
+        elif defender and defender.phase == "fist":
+            is_fist_locked = free_count == 0
+            enemy_power = int(KING_DISTRICT_BASE_POWER * city.total_districts * city.district_power_multiplier)
+            enemy_power = max(100, enemy_power)
         else:
             enemy_power = int(defender.combat_power * 0.7) if defender else 0
     else:
-        from app.data.cities import KING_DISTRICT_BASE_POWER
         from app.models.building import UserBuilding
         buildings_count = await session.scalar(
             select(func.count(UserBuilding.id)).where(
@@ -297,7 +311,12 @@ async def cb_king_city_info(cb: CallbackQuery, session: AsyncSession, user: User
 
     builder = InlineKeyboardBuilder()
 
-    if attack_on_cd:
+    if is_fist_locked:
+        builder.row(InlineKeyboardButton(
+            text="🔒 Все районы у Кулака — захватить нельзя",
+            callback_data="noop_king"
+        ))
+    elif attack_on_cd:
         builder.row(InlineKeyboardButton(
             text=f"⏳ КД: {fmt_ttl(cd)}",
             callback_data="attack_cd"
@@ -392,6 +411,14 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
     crit_str = " ⚡КРИТ!" if result.get("is_crit") else ""
     is_pvp = result.get("defender_name") is not None
 
+    # Прогресс-бар города
+    city_total = result.get('city_total', 0)
+    city_captured = result.get('city_captured', 0)
+    pct = min(int(city_captured / city_total * 100) if city_total > 0 else 0, 100)
+    bar_filled = min(int(pct / 10), 10)
+    progress_bar = "🟩" * bar_filled + "⬛" * (10 - bar_filled)
+    progress_str = f"\n{progress_bar} {pct}%\n" if city_total > 0 else ""
+
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
         text="⚔️ Атаковать снова", callback_data=f"king_city_info:{city_id}"
@@ -410,7 +437,8 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
                 f"Город: <b>{html.escape(result['city'])}</b>\n\n"
                 f"🏘 Забрано районов: <b>+{taken}</b>\n"
                 f"Моих в городе: {result.get('my_in_city', 0)}\n"
-                f"Городов с районами: {result.get('cities_count', 0)}/10\n\n"
+                f"Городов с районами: {result.get('cities_count', 0)}/10\n"
+                + progress_str +
                 f"{'─' * 20}\n"
                 f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
                 f"⚔️ Его мощь: {fmt_num(result['defender_power'])}"
@@ -420,7 +448,8 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
                 f"❌ <b>Поражение в PvP!</b>\n\n"
                 f"{'─' * 20}\n"
                 f"Противник: <b>{html.escape(result['defender_name'])}</b>\n"
-                f"Город: <b>{html.escape(result['city'])}</b>\n\n"
+                f"Город: <b>{html.escape(result['city'])}</b>\n"
+                + progress_str +
                 f"{'─' * 20}\n"
                 f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
                 f"⚔️ Его мощь: {fmt_num(result['defender_power'])}"
@@ -433,8 +462,9 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
                 f"Город: <b>{html.escape(result['city'])}</b>\n\n"
                 f"🏘 Захвачено районов: <b>+{result.get('districts_gained', 0)}</b>\n"
                 f"Моих в городе: {result.get('my_in_city', 0)}\n"
-                f"Всего в городе: {result.get('city_captured', 0)}/{result.get('city_total', 0)}\n"
-                f"Городов с районами: {result['cities_count']}/10\n\n"
+                f"Всего в городе: {city_captured}/{city_total}\n"
+                f"Городов с районами: {result['cities_count']}/10\n"
+                + progress_str +
                 f"{'─' * 20}\n"
                 f"💪 Твоя мощь: {fmt_num(result['user_power'])}\n"
                 f"🤖 Мощь противника: {fmt_num(result['bot_power'])}"
@@ -443,8 +473,9 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
             text = (
                 f"❌ <b>Поражение!</b>\n\n"
                 f"{'─' * 20}\n"
-                f"Город: <b>{html.escape(result['city'])}</b>\n\n"
-                f"Районов в городе: {result.get('city_captured', 0)}/{result.get('city_total', 0)}\n\n"
+                f"Город: <b>{html.escape(result['city'])}</b>\n"
+                + progress_str +
+                f"Районов в городе: {city_captured}/{city_total}\n\n"
                 f"{'─' * 20}\n"
                 f"💪 Твоя мощь: {fmt_num(result['user_power'])}\n"
                 f"🤖 Мощь противника: {fmt_num(result['bot_power'])}"

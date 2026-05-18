@@ -256,10 +256,13 @@ class TitleService:
                 if skill.skill_id not in bought_ids:
                     continue
                 for field, value in skill.effect.items():
-                    if isinstance(value, (bool, float)):
-                        continue  # float-поля (district_multiplier) не сбрасываются
-                    current = getattr(user, field, 0)
-                    setattr(user, field, current + int(value * multiplier))
+                    if isinstance(value, float):
+                        continue  # district_multiplier — не аддитивное поле, не сбрасывается
+                    if isinstance(value, bool):
+                        setattr(user, field, value)  # double_recruit, double_train, double_attack
+                    else:
+                        current = getattr(user, field, 0)
+                        setattr(user, field, current + int(value * multiplier))
 
         # 3. Бонусы к доходу от достижений
         _income_keys: dict[str, int] = {

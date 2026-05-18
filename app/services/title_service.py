@@ -249,6 +249,8 @@ class TitleService:
         from app.models.skill import UserMastery, UserPathSkills
         from app.data.skills import MASTERY_BY_ID, PATH_SKILLS
 
+        multiplier = user.skill_path_bonus_multiplier
+
         # 1. Мастерство «Техника» — одинаковый бонус к тренировке и доходу
         mastery = await session.scalar(
             sa_select(UserMastery).where(UserMastery.user_id == user.id)
@@ -268,7 +270,6 @@ class TitleService:
                 )
             )
             bought_ids = set(bought_r.scalars().all())
-            multiplier = user.skill_path_bonus_multiplier
             for skill in PATH_SKILLS.get(user.skill_path, []):
                 if skill.skill_id not in bought_ids:
                     continue

@@ -370,6 +370,73 @@ async def cb_adm_grant_title(cb: CallbackQuery, session: AsyncSession, user: Use
         await _show_set_panel(cb.message, session, user, tg_id, cfg.set_id, found)
 
 
+async def _render_untitle(message, session: AsyncSession, tg_id: int, found) -> None:
+    from app.data.titles import DONAT_SETS, DONAT_TITLES
+    owned = set(await title_service.get_user_titles(session, found.id))
+    if not owned:
+        try:
+            await message.edit_text(
+                f"У {html.escape(found.full_name)} нет титулов",
+                reply_markup=InlineKeyboardBuilder().row(
+                    InlineKeyboardButton(text="◀️ Назад", callback_data=f"adm_user:{tg_id}")
+                ).as_markup(),
+            )
+        except Exception:
+            pass
+        return
+    builder = InlineKeyboardBuilder()
+    for s in DONAT_SETS:
+        titles_in_set = [t for t in DONAT_TITLES if t.set_id == s.set_id]
+        owned_in_set = [t for t in titles_in_set if t.title_id in owned]
+        if not owned_in_set:
+            continue
+        count_str = f"{len(owned_in_set)}/{len(titles_in_set)}"
+        builder.row(InlineKeyboardButton(
+            text=f"📦 {s.name} [{count_str}]",
+            callback_data=f"adm_untset:{tg_id}:{s.set_id}"
+        ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"adm_user:{tg_id}"))
+    try:
+        await message.edit_text(
+            f"❌ <b>Снятие титулов</b> — {html.escape(found.full_name)}\n\nВыбери сет:",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+async def _render_untset(message, session: AsyncSession, tg_id: int, set_id: str, found) -> None:
+    from app.data.titles import DONAT_TITLES, DONAT_SET_MAP
+    owned = set(await title_service.get_user_titles(session, found.id))
+    set_cfg = DONAT_SET_MAP.get(set_id)
+    titles_in_set = [t for t in DONAT_TITLES if t.set_id == set_id]
+    owned_in_set = [t for t in titles_in_set if t.title_id in owned]
+    if not owned_in_set:
+        await _render_untitle(message, session, tg_id, found)
+        return
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text=f"🗑 Снять весь сет ({len(owned_in_set)} шт.)",
+        callback_data=f"adm_revset:{tg_id}:{set_id}"
+    ))
+    for t in owned_in_set:
+        builder.row(InlineKeyboardButton(
+            text=f"❌ {t.emoji} {t.name}",
+            callback_data=f"adm_revoke:{tg_id}:{t.title_id}"
+        ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"adm_untitle:{tg_id}"))
+    set_name = set_cfg.name if set_cfg else set_id
+    try:
+        await message.edit_text(
+            f"📦 <b>{html.escape(set_name)}</b> — {html.escape(found.full_name)}\n\nВыбери что снять:",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
 @router.callback_query(F.data.startswith("adm_untitle:"))
 async def cb_adm_untitle(cb: CallbackQuery, session: AsyncSession, user: User):
     if not is_admin(user.tg_id):
@@ -379,28 +446,41 @@ async def cb_adm_untitle(cb: CallbackQuery, session: AsyncSession, user: User):
     if not found:
         await cb.answer("Игрок не найден", show_alert=True)
         return
-    owned = await title_service.get_user_titles(session, found.id)
-    if not owned:
-        await cb.answer("У игрока нет титулов", show_alert=True)
+    await _render_untitle(cb.message, session, tg_id, found)
+
+
+@router.callback_query(F.data.startswith("adm_untset:"))
+async def cb_adm_untset(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not is_admin(user.tg_id):
         return
-    from app.data.titles import DONAT_TITLE_MAP
-    builder = InlineKeyboardBuilder()
-    for tid in owned:
-        cfg = DONAT_TITLE_MAP.get(tid)
-        if cfg:
-            builder.row(InlineKeyboardButton(
-                text=f"❌ {cfg.emoji} {cfg.name}",
-                callback_data=f"adm_revoke:{tg_id}:{tid}"
-            ))
-    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"adm_user:{tg_id}"))
-    try:
-        await cb.message.edit_text(
-            f"❌ Выберите титул для снятия с {html.escape(found.full_name)}:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    parts = cb.data.split(":")
+    tg_id, set_id = int(parts[1]), parts[2]
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await cb.answer("Игрок не найден", show_alert=True)
+        return
+    await _render_untset(cb.message, session, tg_id, set_id, found)
+
+
+@router.callback_query(F.data.startswith("adm_revset:"))
+async def cb_adm_revset(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not is_admin(user.tg_id):
+        return
+    parts = cb.data.split(":")
+    tg_id, set_id = int(parts[1]), parts[2]
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await cb.answer("Игрок не найден", show_alert=True)
+        return
+    from app.data.titles import DONAT_TITLES
+    owned = set(await title_service.get_user_titles(session, found.id))
+    removed = 0
+    for t in DONAT_TITLES:
+        if t.set_id == set_id and t.title_id in owned:
+            await title_service.revoke_title(session, found, t.title_id)
+            removed += 1
+    await cb.answer(f"✅ Снято {removed} титулов", show_alert=True)
+    await _render_untitle(cb.message, session, tg_id, found)
 
 
 @router.callback_query(F.data.startswith("adm_revoke:"))
@@ -413,12 +493,20 @@ async def cb_adm_revoke(cb: CallbackQuery, session: AsyncSession, user: User):
     if not found:
         await cb.answer("Игрок не найден", show_alert=True)
         return
+    from app.data.titles import DONAT_TITLE_MAP, DONAT_TITLES
+    cfg = DONAT_TITLE_MAP.get(title_id)
     result = await title_service.revoke_title(session, found, title_id)
-    if result["ok"]:
-        await cb.answer("✅ Титул снят")
-    else:
+    if not result["ok"]:
         await cb.answer("Ошибка", show_alert=True)
-    await cb_adm_untitle(cb, session, user)
+        return
+    await cb.answer("✅ Титул снят")
+    if cfg:
+        owned_after = set(await title_service.get_user_titles(session, found.id))
+        remaining = [t for t in DONAT_TITLES if t.set_id == cfg.set_id and t.title_id in owned_after]
+        if remaining:
+            await _render_untset(cb.message, session, tg_id, cfg.set_id, found)
+            return
+    await _render_untitle(cb.message, session, tg_id, found)
 
 
 # ── TUI ─────────────────────────────────────────────────────────────────────
@@ -1284,6 +1372,7 @@ async def cb_admin_bulk(cb: CallbackQuery, user: User):
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="💰 Выдать монеты всем", callback_data="admin_bulk_coins"))
     builder.row(InlineKeyboardButton(text="🎟 Выдать тикеты всем", callback_data="admin_bulk_tickets"))
+    builder.row(InlineKeyboardButton(text="🔄 Пересчитать бонусы всем", callback_data="admin_bulk_reapply"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="admin_main"))
     try:
         await cb.message.edit_text(
@@ -1369,6 +1458,26 @@ async def msg_bulk_tickets(
         f"✅ Выдано {count} тикетов {len(users)} игрокам!",
         reply_markup=back_kb("admin_main"),
     )
+
+
+@router.callback_query(F.data == "admin_bulk_reapply")
+async def cb_admin_bulk_reapply(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not is_admin(user.tg_id):
+        return
+    from app.models.user import User as UserModel
+    from app.services.title_service import title_service as ts
+    users_r = await session.execute(select(UserModel))
+    users = users_r.scalars().all()
+    for u in users:
+        await ts.reapply_all_titles(session, u)
+    await cb.answer(f"✅ Бонусы пересчитаны для {len(users)} игроков", show_alert=True)
+    try:
+        await cb.message.edit_text(
+            f"✅ Бонусы пересчитаны для {len(users)} игроков",
+            reply_markup=back_kb("admin_bulk"),
+        )
+    except Exception:
+        pass
 
 
 # ── Клан-донат ──────────────────────────────────────────────────────────────

@@ -51,7 +51,8 @@ async def fight_district(
     endurance_bonus = 0
     if mastery:
         endurance_levels = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
-        endurance_bonus = endurance_levels.get(mastery.endurance, 0)
+        raw = endurance_levels.get(mastery.endurance, 0)
+        endurance_bonus = int(raw * user.skill_path_bonus_multiplier)
 
     effective_threshold = int(district_power * (1 - endurance_bonus / 100))
     win = user_power >= effective_threshold

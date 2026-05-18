@@ -51,7 +51,8 @@ class TrainingService:
         # КД с учётом скорости мастерства
         mastery_r = await session.execute(select(UserMastery).where(UserMastery.user_id == user.id))
         mastery = mastery_r.scalar_one_or_none()
-        speed_pct = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(mastery.speed if mastery else 0, 0)
+        raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(mastery.speed if mastery else 0, 0)
+        speed_pct = int(raw_speed * user.skill_path_bonus_multiplier)
         cd = cooldown_service.apply_speed_reduction(TOM_LEE_CD_SECONDS, speed_pct)
         await cooldown_service.set_cooldown(cd_key, cd)
 
@@ -96,7 +97,8 @@ class TrainingService:
 
         mastery_r = await session.execute(select(UserMastery).where(UserMastery.user_id == user.id))
         mastery = mastery_r.scalar_one_or_none()
-        speed_pct = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(mastery.speed if mastery else 0, 0)
+        raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(mastery.speed if mastery else 0, 0)
+        speed_pct = int(raw_speed * user.skill_path_bonus_multiplier)
         cd = cooldown_service.apply_speed_reduction(JEON_GON_CD_SECONDS, speed_pct)
         await cooldown_service.set_cooldown(cd_key, cd)
 

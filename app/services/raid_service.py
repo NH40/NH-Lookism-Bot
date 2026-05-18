@@ -116,7 +116,7 @@ class RaidService:
         await session.flush()
 
         # Ставим КД на первую атаку
-        speed_pct = await self._get_speed_pct(session, user.id)
+        speed_pct = await self._get_speed_pct(session, user)
         attack_cd = cooldown_service.apply_speed_reduction(RAID_ATTACK_CD_SECONDS, speed_pct)
         attack_cd_key = self.attack_cd_key(raid.id, user.id)
         await cooldown_service.set_cooldown(attack_cd_key, attack_cd)
@@ -169,7 +169,7 @@ class RaidService:
         raid.damage_dealt += power
         raid.attack_count += 1
 
-        speed_pct = await self._get_speed_pct(session, user.id)
+        speed_pct = await self._get_speed_pct(session, user)
         attack_cd = cooldown_service.apply_speed_reduction(RAID_ATTACK_CD_SECONDS, speed_pct)
         await cooldown_service.set_cooldown(attack_cd_key, attack_cd)
 
@@ -256,7 +256,7 @@ class RaidService:
             total_fragments = user.ui_fragments
 
         # КД на босса с учётом скорости
-        speed_pct = await self._get_speed_pct(session, user.id)
+        speed_pct = await self._get_speed_pct(session, user)
         boss_cd = cooldown_service.apply_speed_reduction(boss["cd_hours"] * 3600, speed_pct)
         cd_key = self.boss_cd_key(raid.boss_id, user.id)
         await cooldown_service.set_cooldown(cd_key, boss_cd)
@@ -366,16 +366,17 @@ class RaidService:
         await session.flush()
         return {"ok": True, "fragments_left": user.alchemy_fragments}
 
-    async def _get_speed_pct(self, session: AsyncSession, user_id: int) -> int:
-        """Получает % сокращения КД от мастерства скорости."""
+    async def _get_speed_pct(self, session: AsyncSession, user: User) -> int:
+        """Получает % сокращения КД от мастерства скорости с учётом мультипликатора."""
         from sqlalchemy import select
         from app.models.skill import UserMastery
         speed_levels = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
         r = await session.execute(
-            select(UserMastery).where(UserMastery.user_id == user_id)
+            select(UserMastery).where(UserMastery.user_id == user.id)
         )
         mastery = r.scalar_one_or_none()
-        return speed_levels.get(mastery.speed if mastery else 0, 0)
+        raw = speed_levels.get(mastery.speed if mastery else 0, 0)
+        return int(raw * user.skill_path_bonus_multiplier)
     
     def _apply_ui_level(self, user: User, level: int) -> None:
         user.ultra_instinct = level >= 1

@@ -34,9 +34,9 @@ class SquadRepo:
         mastery = mastery_r.scalar_one_or_none()
         if mastery:
             strength_bonus = {0: 0, 1: 5, 2: 10, 3: 20, 4: 30}
-            squad_power = int(
-                squad_power * (1 + strength_bonus.get(mastery.strength, 0) / 100)
-            )
+            raw = strength_bonus.get(mastery.strength, 0)
+            effective = raw * user.skill_path_bonus_multiplier
+            squad_power = int(squad_power * (1 + effective / 100))
 
         # 2. Мощь персонажей
         char_r = await session.execute(

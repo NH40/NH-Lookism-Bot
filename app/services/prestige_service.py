@@ -117,9 +117,18 @@ class PrestigeService:
                 mastery.endurance = 0
                 mastery.technique = 0
 
+        # Сохраняем крафтовый УИ до reapply_all_titles (она сбрасывает ui_level через _reset_donat_bonuses)
+        saved_ui_level = user.ui_level if (keep_ui or keep_progress) and not user.ui_is_donat else 0
+
         # Переприменяем донат-бонусы
         from app.services.title_service import title_service
         await title_service.reapply_all_titles(session, user)
+
+        # Восстанавливаем крафтовый УИ после сброса донат-бонусов
+        if saved_ui_level > 0:
+            from app.services.raid_service import raid_service as rs
+            user.ui_level = saved_ui_level
+            rs._apply_ui_level(user, saved_ui_level)
 
         # Сбрасываем несекретные достижения — игроки могут выполнить их заново
         from app.models.title import UserAchievement

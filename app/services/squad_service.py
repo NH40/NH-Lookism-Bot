@@ -28,11 +28,11 @@ async def _get_mastery(session: AsyncSession, user_id: int) -> UserMastery | Non
     return result.scalar_one_or_none()
 
 
-def _get_speed_reduction(mastery: UserMastery | None) -> int:
+def _get_speed_reduction(mastery: UserMastery | None, multiplier: float = 1.0) -> int:
     speed_levels = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
     if not mastery:
         return 0
-    return speed_levels.get(mastery.speed, 0)
+    return int(speed_levels.get(mastery.speed, 0) * multiplier)
 
 
 class SquadService:
@@ -95,7 +95,7 @@ class SquadService:
 
         # КД с учётом скорости и титула focus
         mastery = await _get_mastery(session, user.id)
-        speed_pct = _get_speed_reduction(mastery)
+        speed_pct = _get_speed_reduction(mastery, user.skill_path_bonus_multiplier)
         from app.repositories.title_repo import title_repo
         has_focus = await title_repo.has_title(session, user.id, "focus")
         extra = 20 if has_focus else 0
@@ -223,7 +223,7 @@ class SquadService:
 
         # КД тренировки с учётом скорости и focus
         mastery = await _get_mastery(session, user.id)
-        speed_pct = _get_speed_reduction(mastery)
+        speed_pct = _get_speed_reduction(mastery, user.skill_path_bonus_multiplier)
         from app.repositories.title_repo import title_repo
         has_focus = await title_repo.has_title(session, user.id, "focus")
         extra = 20 if has_focus else 0

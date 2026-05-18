@@ -240,8 +240,8 @@ class TitleService:
             tech_cfg = MASTERY_BY_ID.get("technique")
             if tech_cfg and mastery.technique < len(tech_cfg.levels):
                 bonus = tech_cfg.levels[mastery.technique].bonus
-                user.income_bonus_percent += bonus
-                user.train_bonus_percent += bonus
+                user.income_bonus_percent += int(bonus * multiplier)
+                user.train_bonus_percent += int(bonus * multiplier)
 
         # 2. Путевые навыки — целочисленные аддитивные эффекты
         if user.skill_path:

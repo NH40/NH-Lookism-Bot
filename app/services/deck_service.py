@@ -36,12 +36,11 @@ class DeckService:
 
         # КД с учётом скорости мастерства + ticket_cd_reduction
         mastery = await _get_mastery(session, user.id)
-        speed_pct = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(
-            mastery.speed if mastery else 0, 0
-        )
-        cd_seconds = cooldown_service.apply_speed_reduction(
+        raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(mastery.speed if mastery else 0, 0)
+        speed_pct = int(raw_speed * user.skill_path_bonus_multiplier)
+        cd_seconds = max(60, cooldown_service.apply_speed_reduction(
             5 * 60, speed_pct, user.ticket_cd_reduction
-        )
+        ))
         await cooldown_service.set_cooldown(cd_key, cd_seconds)
 
         if got:

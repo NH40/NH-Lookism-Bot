@@ -14,13 +14,18 @@ async def get_effective_power(session: AsyncSession, user: User) -> int:
 async def roll_crit(session: AsyncSession, user: User) -> tuple[int, bool]:
     """
     Возвращает (effective_power, is_crit).
-    Крит: ×3 если есть титул legend_gen1 и random() < 0.02
+    Крит: ×3 если есть титул legend_1gen и random() < 0.02 (2.4% с полным сетом genius_maker).
     """
     from app.repositories.title_repo import title_repo
+    from app.data.titles import DONAT_TITLES
     power = await get_effective_power(session, user)
-    has_legend = await title_repo.has_title(session, user.id, "legend_gen1")
-    if has_legend and random.random() < 0.02:
-        return power * 3, True
+    has_legend = await title_repo.has_title(session, user.id, "legend_1gen")
+    if has_legend:
+        genius_set_titles = [t.title_id for t in DONAT_TITLES if t.set_id == "genius_maker"]
+        owned = set(await title_repo.get_user_titles(session, user.id))
+        crit_chance = 0.024 if all(tid in owned for tid in genius_set_titles) else 0.02
+        if random.random() < crit_chance:
+            return power * 3, True
     return power, False
 
 

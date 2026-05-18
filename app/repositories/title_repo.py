@@ -32,15 +32,29 @@ class TitleRepo:
         # Кулак: +20% мощи
         if "fist_power" in title_ids:
             mult *= 1.20
-        # Гений оружия: +15%
+        # Гений оружия: +15%, с полным сетом genius_maker +18% (×1.20)
         if "genius_weapon" in title_ids:
-            mult *= 1.15
+            genius_titles = [t.title_id for t in DONAT_TITLES if t.set_id == "genius_maker"]
+            if all(tid in title_ids for tid in genius_titles):
+                mult *= 1.18
+            else:
+                mult *= 1.15
         # Монстр (сет целиком): +100%
         monster_titles = [t.title_id for t in DONAT_TITLES if t.set_id == "monster"]
         if all(tid in title_ids for tid in monster_titles):
             mult *= 2.0
 
         return mult
+
+    async def get_user_titles(
+        self, session: AsyncSession, user_id: int
+    ) -> list[str]:
+        result = await session.execute(
+            select(UserDonatTitle.title_id).where(
+                UserDonatTitle.user_id == user_id
+            )
+        )
+        return result.scalars().all()
 
     async def has_set(
         self, session: AsyncSession, user_id: int, set_id: str

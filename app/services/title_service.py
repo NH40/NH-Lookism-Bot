@@ -207,6 +207,9 @@ class TitleService:
             user.train_bonus_percent = int(user.train_bonus_percent * 1.20)
             user.income_bonus_percent = int(user.income_bonus_percent * 1.20)
             user.recruit_count_bonus = int(user.recruit_count_bonus * 1.20)
+            # +20% к мультипликатору навыков пути (genius_combat + genius_medicine)
+            if user.skill_path_bonus_multiplier > 1.0:
+                user.skill_path_bonus_multiplier = round(user.skill_path_bonus_multiplier * 1.20, 4)
         elif set_id == "monster":
             user.double_attack = True
             if user.skill_path == "monster":

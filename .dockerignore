@@ -1,0 +1,8 @@
+backups/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+.git/
+.env
+*.log

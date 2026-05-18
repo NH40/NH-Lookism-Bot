@@ -240,6 +240,8 @@ class GameBase:
         from sqlalchemy import delete as sql_delete
         from app.models.city import FistBot
         await session.execute(sql_delete(FistBot).where(FistBot.challenger_id == user.id))
+        from app.services.business_service import business_service
+        await business_service._recalc_income(session, user)
         await session.flush()
         return {
             "ok": True, "promoted": True, "new_phase": "fist",
@@ -326,9 +328,42 @@ class GameBase:
         districts_r = await session.execute(
             select(District).where(
                 District.city_id == target_city.id,
+                District.owner_id == None,
+                District.is_captured == False,
             ).order_by(District.number)
         )
         districts = districts_r.scalars().all()
+
+        # If all districts are already owned by others, create a fresh city instead
+        if not districts:
+            from app.data.cities import CITY_NAMES_BY_SECTOR
+            names = CITY_NAMES_BY_SECTOR.get(sector, [])
+            used_names = {c.name for c in all_cities}
+            if target_city in all_cities:
+                used_names.add(target_city.name)
+            available = [n for n in names if n not in used_names]
+            name = (
+                random.choice(available) if available
+                else f"Кулак-{sector}-{total_districts}-new"
+            )
+            target_city = City(
+                sector=sector, phase="fist",
+                type_id=type_id, name=name,
+                total_districts=total_districts,
+                captured_districts=0, is_fully_captured=False,
+                district_power_multiplier=1.0,
+            )
+            session.add(target_city)
+            await session.flush()
+            await city_repo.init_city_districts(session, target_city)
+            await session.flush()
+            districts_r = await session.execute(
+                select(District).where(
+                    District.city_id == target_city.id,
+                ).order_by(District.number)
+            )
+            districts = districts_r.scalars().all()
+
         for d in districts:
             d.owner_id = user.id
             d.is_captured = True

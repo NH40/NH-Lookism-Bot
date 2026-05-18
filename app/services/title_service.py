@@ -72,6 +72,23 @@ class TitleService:
                 count += 1
         return count
 
+    async def revoke_set(
+        self, session: AsyncSession, user: User, set_id: str
+    ) -> int:
+        """Снимает все титулы сета за один запрос, один reapply в конце."""
+        from app.data.titles import DONAT_TITLES
+        ids = [t.title_id for t in DONAT_TITLES if t.set_id == set_id]
+        result = await session.execute(
+            delete(UserDonatTitle).where(
+                UserDonatTitle.user_id == user.id,
+                UserDonatTitle.title_id.in_(ids),
+            )
+        )
+        removed = result.rowcount
+        await session.flush()
+        await self.reapply_all_titles(session, user)
+        return removed
+
     async def revoke_all_titles(
         self, session: AsyncSession, user: User
     ) -> None:

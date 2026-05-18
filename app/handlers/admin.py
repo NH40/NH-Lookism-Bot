@@ -472,13 +472,7 @@ async def cb_adm_revset(cb: CallbackQuery, session: AsyncSession, user: User):
     if not found:
         await cb.answer("Игрок не найден", show_alert=True)
         return
-    from app.data.titles import DONAT_TITLES
-    owned = set(await title_service.get_user_titles(session, found.id))
-    removed = 0
-    for t in DONAT_TITLES:
-        if t.set_id == set_id and t.title_id in owned:
-            await title_service.revoke_title(session, found, t.title_id)
-            removed += 1
+    removed = await title_service.revoke_set(session, found, set_id)
     await cb.answer(f"✅ Снято {removed} титулов", show_alert=True)
     await _render_untitle(cb.message, session, tg_id, found)
 

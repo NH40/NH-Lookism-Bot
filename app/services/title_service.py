@@ -105,6 +105,8 @@ class TitleService:
             if all(tid in owned for tid in titles_in_set):
                 self._apply_set_bonus(user, s.set_id)
 
+        await self._rebuild_base_bonuses(session, user)
+
         from app.services.business_service import business_service
         await business_service._recalc_income(session, user)
         from app.repositories.squad_repo import squad_repo
@@ -221,6 +223,67 @@ class TitleService:
         elif set_id == "ui_set":
             user.ultra_instinct = True
             
+    async def _rebuild_base_bonuses(
+        self, session: AsyncSession, user: User
+    ) -> None:
+        """Восстанавливает не-донат бонусы (мастерство, путевые навыки, достижения)
+        после _reset_donat_bonuses. Вызывается в конце reapply_all_titles."""
+        from sqlalchemy import select as sa_select
+        from app.models.skill import UserMastery, UserPathSkills
+        from app.data.skills import MASTERY_BY_ID, PATH_SKILLS
+
+        # 1. Мастерство «Техника» — одинаковый бонус к тренировке и доходу
+        mastery = await session.scalar(
+            sa_select(UserMastery).where(UserMastery.user_id == user.id)
+        )
+        if mastery and mastery.technique > 0:
+            tech_cfg = MASTERY_BY_ID.get("technique")
+            if tech_cfg and mastery.technique < len(tech_cfg.levels):
+                bonus = tech_cfg.levels[mastery.technique].bonus
+                user.income_bonus_percent += bonus
+                user.train_bonus_percent += bonus
+
+        # 2. Путевые навыки — целочисленные аддитивные эффекты
+        if user.skill_path:
+            bought_r = await session.execute(
+                sa_select(UserPathSkills.skill_id).where(
+                    UserPathSkills.user_id == user.id
+                )
+            )
+            bought_ids = set(bought_r.scalars().all())
+            multiplier = user.skill_path_bonus_multiplier
+            for skill in PATH_SKILLS.get(user.skill_path, []):
+                if skill.skill_id not in bought_ids:
+                    continue
+                for field, value in skill.effect.items():
+                    if isinstance(value, (bool, float)):
+                        continue  # float-поля (district_multiplier) не сбрасываются
+                    current = getattr(user, field, 0)
+                    setattr(user, field, current + int(value * multiplier))
+
+        # 3. Бонусы к доходу от достижений
+        _income_keys: dict[str, int] = {
+            "coins_and_income": 5,
+            "coins_and_income_2": 2,
+            "coins_and_income_3": 3,
+            "coins_and_income_7": 7,
+            "coins_and_income_10": 10,
+            "coins_and_income_15": 15,
+            "quest_reward": 3,
+        }
+        from app.models.title import UserAchievement
+        from app.data.titles import ACHIEVEMENT_MAP
+        claimed_r = await session.execute(
+            sa_select(UserAchievement.achievement_id).where(
+                UserAchievement.user_id == user.id,
+                UserAchievement.claimed == True,
+            )
+        )
+        for ach_id in claimed_r.scalars().all():
+            ach = ACHIEVEMENT_MAP.get(ach_id)
+            if ach and ach.bonus_key in _income_keys:
+                user.income_bonus_percent += _income_keys[ach.bonus_key]
+
     async def _check_set_completion(
         self, session: AsyncSession, user: User, set_id: str
     ) -> None:

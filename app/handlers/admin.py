@@ -472,7 +472,11 @@ async def cb_adm_revset(cb: CallbackQuery, session: AsyncSession, user: User):
     if not found:
         await cb.answer("Игрок не найден", show_alert=True)
         return
-    removed = await title_service.revoke_set(session, found, set_id)
+    try:
+        removed = await title_service.revoke_set(session, found, set_id)
+    except Exception as e:
+        await cb.answer(f"Ошибка: {e}", show_alert=True)
+        return
     await cb.answer(f"✅ Снято {removed} титулов", show_alert=True)
     await _render_untitle(cb.message, session, tg_id, found)
 
@@ -489,7 +493,11 @@ async def cb_adm_revoke(cb: CallbackQuery, session: AsyncSession, user: User):
         return
     from app.data.titles import DONAT_TITLE_MAP, DONAT_TITLES
     cfg = DONAT_TITLE_MAP.get(title_id)
-    result = await title_service.revoke_title(session, found, title_id)
+    try:
+        result = await title_service.revoke_title(session, found, title_id)
+    except Exception as e:
+        await cb.answer(f"Ошибка: {e}", show_alert=True)
+        return
     if not result["ok"]:
         await cb.answer("Ошибка", show_alert=True)
         return

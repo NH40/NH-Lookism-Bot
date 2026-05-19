@@ -22,6 +22,7 @@ class Clan(Base):
     donat_income_pct: Mapped[int] = mapped_column(Integer, default=0)
     donat_ticket_pct: Mapped[int] = mapped_column(Integer, default=0)
     donat_train_pct: Mapped[int] = mapped_column(Integer, default=0)
+    vvip_level: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

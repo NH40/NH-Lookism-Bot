@@ -2,7 +2,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.clan import Clan, ClanMember
 from app.models.user import User
-from app.constants.clan import CLAN_DONAT_PACKAGES_MAP
+from app.constants.clan import CLAN_DONAT_PACKAGES_MAP, CLAN_DONAT_PACKAGES
+
+VVIP_MAX_LEVEL = 5
 
 
 class ClanDonatService:
@@ -39,10 +41,41 @@ class ClanDonatService:
 
         return {"ok": True, "package": pkg}
 
+    async def apply_full_level(self, session: AsyncSession, clan: Clan) -> dict:
+        if clan.vvip_level >= VVIP_MAX_LEVEL:
+            return {"ok": False, "reason": f"Достигнут максимальный уровень VVIP ({VVIP_MAX_LEVEL})"}
+
+        for pkg in CLAN_DONAT_PACKAGES:
+            clan.donat_income_pct += pkg.income_pct
+            clan.donat_ticket_pct += pkg.ticket_pct
+            clan.donat_train_pct  += pkg.train_pct
+        clan.vvip_level += 1
+
+        members_r = await session.execute(
+            select(ClanMember).where(ClanMember.clan_id == clan.id)
+        )
+        members = members_r.scalars().all()
+        user_ids = [m.user_id for m in members]
+        users_r = await session.execute(select(User).where(User.id.in_(user_ids)))
+        users = users_r.scalars().all()
+        for u in users:
+            u.clan_donat_income_bonus = clan.donat_income_pct
+            u.clan_donat_ticket_bonus = clan.donat_ticket_pct
+            u.clan_donat_train_bonus  = clan.donat_train_pct
+
+        await session.flush()
+
+        from app.services.business_service import business_service
+        for u in users:
+            await business_service._recalc_income(session, u)
+
+        return {"ok": True, "level": clan.vvip_level}
+
     async def reset_clan_donat(self, session: AsyncSession, clan: Clan) -> dict:
         clan.donat_income_pct = 0
         clan.donat_ticket_pct = 0
         clan.donat_train_pct  = 0
+        clan.vvip_level       = 0
 
         members_r = await session.execute(
             select(ClanMember).where(ClanMember.clan_id == clan.id)

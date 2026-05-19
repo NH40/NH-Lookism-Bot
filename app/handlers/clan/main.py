@@ -104,6 +104,9 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
     if clan.donat_train_pct:  donat_lines.append(f"🏋 +{clan.donat_train_pct}%")
     donat_str = "\n💎 Донат: " + " | ".join(donat_lines) if donat_lines else ""
 
+    vvip_level = getattr(clan, "vvip_level", 0)
+    vvip_str = f"\n👑 VVIP: {vvip_level}" if vvip_level > 0 else ""
+
     war_str = "\n⚔️ Идёт война!" if active_war else ""
 
     try:
@@ -116,6 +119,7 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
             f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin"
             f"{upgrade_str}"
             f"{donat_str}"
+            f"{vvip_str}"
             f"{war_str}\n\n"
             f"Выбери действие:",
             reply_markup=builder.as_markup(),

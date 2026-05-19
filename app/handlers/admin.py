@@ -1538,13 +1538,29 @@ async def msg_clan_donat_search(
 
 async def _show_clan_donat_panel(message, clan):
     from app.constants.clan import CLAN_DONAT_PACKAGES
+    from app.services.clan.donat import VVIP_MAX_LEVEL
     active = []
     if clan.donat_income_pct: active.append(f"💰 Доход +{clan.donat_income_pct}%")
     if clan.donat_ticket_pct: active.append(f"🍀 Тикет +{clan.donat_ticket_pct}%")
     if clan.donat_train_pct:  active.append(f"🏋 Тренировка +{clan.donat_train_pct}%")
     active_str = "\n".join(active) if active else "нет"
 
+    vvip_level = getattr(clan, "vvip_level", 0)
+
     builder = InlineKeyboardBuilder()
+
+    # Кнопка выдачи полного уровня VVIP
+    if vvip_level < VVIP_MAX_LEVEL:
+        builder.row(InlineKeyboardButton(
+            text=f"👑 Выдать +1 уровень VVIP ({vvip_level}/{VVIP_MAX_LEVEL}) — весь круг",
+            callback_data=f"adm_clan_vvip_level:{clan.id}"
+        ))
+    else:
+        builder.row(InlineKeyboardButton(
+            text=f"✅ MAX VVIP достигнут ({VVIP_MAX_LEVEL}/{VVIP_MAX_LEVEL})",
+            callback_data="noop"
+        ))
+
     for pkg in CLAN_DONAT_PACKAGES:
         bonuses = []
         if pkg.income_pct:  bonuses.append(f"+{pkg.income_pct}% дох")
@@ -1560,9 +1576,11 @@ async def _show_clan_donat_panel(message, clan):
     ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="admin_main"))
 
+    vvip_str = f"👑 <b>VVIP уровень: {vvip_level}/{VVIP_MAX_LEVEL}</b>\n" if vvip_level > 0 else ""
     text = (
         f"🏯 <b>Клан: {html.escape(clan.name)}</b>\n"
-        f"👥 Участников: до {clan.max_members + clan.bonus_max_members}\n\n"
+        f"👥 Участников: до {clan.max_members + clan.bonus_max_members}\n"
+        f"{vvip_str}\n"
         f"<b>Текущий донат:</b>\n{active_str}\n\n"
         f"Выберите пакет для выдачи (значения накапливаются):"
     )
@@ -1641,6 +1659,62 @@ async def cb_adm_clan_donat_apply(cb: CallbackQuery, session: AsyncSession, user
         user_ids = [m.user_id for m in members_r.scalars().all()]
         users_r = await session.execute(
             sa_select(UserModel).where(UserModel.id.in_(user_ids))
+        )
+        for u in users_r.scalars().all():
+            try:
+                await bot.send_message(u.tg_id, text, parse_mode="HTML")
+            except Exception:
+                pass
+
+
+@router.callback_query(F.data == "noop")
+async def cb_noop(cb: CallbackQuery):
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("adm_clan_vvip_level:"))
+async def cb_adm_clan_vvip_level(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not is_admin(user.tg_id):
+        return
+    clan_id = int(cb.data.split(":")[1])
+    from sqlalchemy import select as sa_select
+    from app.models.clan import Clan
+    from app.services.clan import clan_service
+    clan = await session.scalar(sa_select(Clan).where(Clan.id == clan_id))
+    if not clan:
+        await cb.answer("Клан не найден", show_alert=True)
+        return
+    result = await clan_service.apply_full_level(session, clan)
+    if not result["ok"]:
+        await cb.answer(result["reason"], show_alert=True)
+        return
+    lvl = result["level"]
+    await cb.answer(f"✅ VVIP уровень {lvl} выдан клану {clan.name}!")
+    await session.refresh(clan)
+    await _show_clan_donat_panel(cb.message, clan)
+
+    # Уведомляем участников клана
+    from app.bot_instance import get_bot
+    from app.models.clan import ClanMember
+    from app.models.user import User as UserModel
+    from app.services.clan.donat import VVIP_MAX_LEVEL
+    bot = get_bot()
+    if bot:
+        from sqlalchemy import select as sa_select2
+        import html as _html
+        text = (
+            f"👑 <b>Клан получил VVIP уровень {lvl}/{VVIP_MAX_LEVEL}!</b>\n\n"
+            f"🏯 {_html.escape(clan.name)}\n\n"
+            f"💰 Доход +{clan.donat_income_pct}%\n"
+            f"🍀 Тикет +{clan.donat_ticket_pct}%\n"
+            f"🏋 Тренировка +{clan.donat_train_pct}%"
+        )
+        members_r = await session.execute(
+            sa_select2(ClanMember).where(ClanMember.clan_id == clan.id)
+        )
+        user_ids = [m.user_id for m in members_r.scalars().all()]
+        users_r = await session.execute(
+            sa_select2(UserModel).where(UserModel.id.in_(user_ids))
         )
         for u in users_r.scalars().all():
             try:

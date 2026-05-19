@@ -25,7 +25,7 @@ class User(Base):
     # ── Ресурсы ────────────────────────────────────────────────────────────
     nh_coins: Mapped[int] = mapped_column(BigInteger, default=0)
     influence: Mapped[int] = mapped_column(BigInteger, default=100)
-    combat_power: Mapped[int] = mapped_column(BigInteger, default=0)
+    combat_power: Mapped[int] = mapped_column(BigInteger, default=0, index=True)
 
     # ── Бизнес ────────────────────────────────────────────────────────────
     business_path: Mapped[str | None] = mapped_column(String(16))

@@ -63,13 +63,13 @@ class UserRepo:
 
     async def get_top_by_power(
         self, session: AsyncSession, limit: int = 10
-    ) -> list[User]:
+    ) -> list:
         result = await session.execute(
-            select(User)
+            select(User.full_name, User.combat_power, User.phase, User.ultra_instinct)
             .order_by(User.combat_power.desc())
             .limit(limit)
         )
-        return result.scalars().all()
+        return result.all()
 
     async def get_rank_by_power(
         self, session: AsyncSession, user_id: int

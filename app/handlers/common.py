@@ -1,3 +1,8 @@
+import asyncio
+import html
+import json
+from types import SimpleNamespace
+
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.types import InlineKeyboardButton
@@ -10,11 +15,62 @@ from sqlalchemy import select, func
 from app.models.user import User
 from app.utils.keyboards.common import main_menu_kb, back_kb
 from app.utils.formatters import fmt_num, fmt_power, phase_label
-import html
+
+_TOP_TTL = 30      # секунды
+_PAGE_TTL = 30
 
 router = Router()
 
 PAGE_SIZE = 10
+
+
+def _redis():
+    from app.services.cooldown_service import cooldown_service
+    return cooldown_service.redis
+
+
+async def _get_top_cached(session: AsyncSession) -> list:
+    r = _redis()
+    raw = await r.get("cache:top10")
+    if raw:
+        return [SimpleNamespace(**d) for d in json.loads(raw)]
+    result = await session.execute(
+        select(User.full_name, User.combat_power, User.phase, User.ultra_instinct)
+        .order_by(User.combat_power.desc())
+        .limit(10)
+    )
+    data = [
+        {"full_name": row.full_name, "combat_power": row.combat_power,
+         "phase": row.phase, "ultra_instinct": row.ultra_instinct}
+        for row in result.all()
+    ]
+    await r.setex("cache:top10", _TOP_TTL, json.dumps(data, ensure_ascii=False))
+    return [SimpleNamespace(**d) for d in data]
+
+
+async def _get_players_page_cached(session: AsyncSession, page: int) -> tuple[list, int]:
+    r = _redis()
+    count_key = "cache:players:count"
+    page_key = f"cache:players:page:{page}"
+    cached_count = await r.get(count_key)
+    cached_page = await r.get(page_key)
+    if cached_count and cached_page:
+        return [SimpleNamespace(**d) for d in json.loads(cached_page)], int(cached_count)
+    total = await session.scalar(select(func.count(User.id))) or 0
+    result = await session.execute(
+        select(User.id, User.full_name, User.combat_power, User.phase, User.ultra_instinct)
+        .order_by(User.combat_power.desc())
+        .offset(page * PAGE_SIZE)
+        .limit(PAGE_SIZE)
+    )
+    data = [
+        {"id": row.id, "full_name": row.full_name, "combat_power": row.combat_power,
+         "phase": row.phase, "ultra_instinct": row.ultra_instinct}
+        for row in result.all()
+    ]
+    await r.setex(count_key, 60, str(total))
+    await r.setex(page_key, _PAGE_TTL, json.dumps(data, ensure_ascii=False))
+    return [SimpleNamespace(**d) for d in data], total
 
 
 class CommonFSM(StatesGroup):
@@ -219,8 +275,10 @@ async def cb_profile(cb: CallbackQuery, session: AsyncSession, user: User):
 @router.message(Command("top"))
 async def cmd_top(message: Message, session: AsyncSession, user: User):
     from app.repositories.user_repo import user_repo
-    top     = await user_repo.get_top_by_power(session, 10)
-    my_rank = await user_repo.get_rank_by_power(session, user.id)
+    top, my_rank = await asyncio.gather(
+        _get_top_cached(session),
+        user_repo.get_rank_by_power(session, user.id),
+    )
 
     lines  = ["🏆 <b>Топ-10 игроков по боевой мощи</b>\n"]
     medals = {0: "🥇", 1: "🥈", 2: "🥉"}
@@ -247,17 +305,10 @@ async def cmd_players(message: Message, session: AsyncSession, user: User):
 
 
 async def _show_players_page(message, session: AsyncSession, user: User, page: int, edit: bool = True) -> None:
-    from app.models.user import User as UserModel
+    players, total = await _get_players_page_cached(session, page)
 
-    total = await session.scalar(select(func.count(UserModel.id))) or 0
     total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
     page = max(0, min(page, total_pages - 1))
-
-    result = await session.execute(
-        select(UserModel).order_by(UserModel.combat_power.desc())
-        .offset(page * PAGE_SIZE).limit(PAGE_SIZE)
-    )
-    players = result.scalars().all()
 
     start_rank = page * PAGE_SIZE + 1
     lines = [f"👥 <b>Все игроки</b> (стр. {page + 1}/{total_pages}, всего {total})\n"]
@@ -307,8 +358,10 @@ async def cb_noop_players(cb: CallbackQuery):
 @router.callback_query(F.data == "show_top")
 async def cb_show_top(cb: CallbackQuery, session: AsyncSession, user: User):
     from app.repositories.user_repo import user_repo
-    top     = await user_repo.get_top_by_power(session, 10)
-    my_rank = await user_repo.get_rank_by_power(session, user.id)
+    top, my_rank = await asyncio.gather(
+        _get_top_cached(session),
+        user_repo.get_rank_by_power(session, user.id),
+    )
 
     lines  = ["🏆 <b>Топ-10 по боевой мощи</b>\n"]
     medals = {0: "🥇", 1: "🥈", 2: "🥉"}

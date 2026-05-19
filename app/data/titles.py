@@ -170,7 +170,7 @@ class DonatSet:
 
 DONAT_SETS: list[DonatSet] = [
     DonatSet("strongest_0gen", "Сильнейший 0 поколения",
-        "Влияние +100%, +5% шанс тикета, 2 прокрутки тикета подряд", 750),
+        "Влияние +100%, +5% шанс тикета, 2 прокрутки тикета подряд, +3 слота доп. навыков, макс. тикет 90%", 1500),
     DonatSet("genius_maker", "Создатель гениев",
         "Увеличение всех баффов гениев на 20%", 1150),
     DonatSet("monster", "Монстр",
@@ -212,6 +212,10 @@ DONAT_TITLES: list[DonatTitle] = [
     # UI
     DonatTitle("ui_title",        "UI",                      "ui_set",       "Полная автоматизация + +3 тикета","Авто + +3 тикета",1000, "🤖"),
     DonatTitle("ui_potion",       "Алхимик УИ",              "ui_set",       "Авто-покупка всех зелий по КД",  "Авто-зелья",       500,  "🧪"),
+
+    # Сильнейший 0 поколения — расширение
+    DonatTitle("rom_extra_skills", "Три пути",               "strongest_0gen", "3 слота для навыков других путей (покупка за 5× цену)", "+3 слота доп. навыков", 500, "🌐"),
+    DonatTitle("rom_max_chance",   "Фавор судьбы",           "strongest_0gen", "Максимальный шанс тикета 90%",   "Макс. тикет 90%",  400,  "🍀"),
 ]
 
 DONAT_TITLE_MAP: dict[str, DonatTitle] = {t.title_id: t for t in DONAT_TITLES}

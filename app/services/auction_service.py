@@ -7,7 +7,7 @@ from app.models.user import User
 
 from app.constants.auction import (
     AUCTION_ROUND_SECONDS, BID_EXTEND_SECONDS, NEXT_AUCTION_KEY,
-    TIER_WEIGHTS, AUCTION_TIERS, RANK_BY_TIER,
+    TIER_WEIGHTS, AUCTION_TIERS, RANK_BY_TIER, FRAGMENT_TIERS,
     AUCTION_PAUSE_MIN, AUCTION_PAUSE_MAX,
 )
 
@@ -87,13 +87,37 @@ class AuctionService:
         cfg = AUCTION_TIERS[tier]
 
         if cfg["reward_type"] == "tickets":
-            amount = random.randint(1, 3) * tier
+            amount = random.randint(2, 4) * max(1, tier)
             return json.dumps({"tickets": amount})
 
         elif cfg["reward_type"] == "potion":
             from app.data.shop import POTIONS
             potion = random.choice(POTIONS)
             return json.dumps({"potion_id": potion.potion_id, "name": potion.name})
+
+        elif cfg["reward_type"] == "fragments":
+            frag_types = FRAGMENT_TIERS.get(tier, ["ui_fragments"])
+            frag_type = random.choice(frag_types)
+            amount = random.randint(20, 50)
+            labels = {
+                "ui_fragments": "🔮 Фрагменты УИ",
+                "alchemy_fragments": "🧪 Фрагменты алхимии",
+                "path_fragments": "🔷 Фрагменты Пути",
+            }
+            return json.dumps({"frag_type": frag_type, "amount": amount, "label": labels.get(frag_type, frag_type)})
+
+        elif cfg["reward_type"] == "absolute":
+            from app.data.characters import CHARACTERS
+            allowed = RANK_BY_TIER.get(tier, ["absolute"])
+            candidates = [c for c in CHARACTERS if c["rank"] in allowed]
+            if not candidates:
+                candidates = [c for c in CHARACTERS if c["rank"] in ["gen_zero", "new_legend"]]
+            char = random.choice(candidates)
+            return json.dumps({
+                "character": char["name"],
+                "rank": char["rank"],
+                "power": char["power"],
+            })
 
         else:
             from app.data.characters import CHARACTERS
@@ -287,7 +311,7 @@ class AuctionService:
                     session, user.id,
                     cfg.effect_key, cfg.effect_value, cfg.duration_minutes
                 )
-        elif lot.reward_type == "character":
+        elif lot.reward_type in ("character", "absolute"):
             from app.models.character import UserCharacter
             char = UserCharacter(
                 user_id=user.id,
@@ -299,6 +323,11 @@ class AuctionService:
             await session.flush()
             from app.repositories.squad_repo import squad_repo
             await squad_repo.update_user_combat_power(session, user)
+        elif lot.reward_type == "fragments":
+            frag_type = data.get("frag_type", "ui_fragments")
+            amount = data.get("amount", 10)
+            current = getattr(user, frag_type, 0)
+            setattr(user, frag_type, current + amount)
 
     async def get_display_data(
         self, session: AsyncSession, user: User
@@ -351,7 +380,7 @@ class AuctionService:
                     reward_str = f"🎟 {data['tickets']} тикетов"
                 elif lot.reward_type == "potion":
                     reward_str = f"🧪 {data.get('name', 'Зелье')}"
-                elif lot.reward_type == "character":
+                elif lot.reward_type in ("character", "absolute"):
                     from app.data.characters import RANK_EMOJI, RANK_CONFIG_MAP
                     rank = data.get("rank", "")
                     emoji = RANK_EMOJI.get(rank, "❓")
@@ -361,6 +390,8 @@ class AuctionService:
                         f"{emoji} {data['character']} "
                         f"[{label}] {data['power']:,} мощи"
                     )
+                elif lot.reward_type == "fragments":
+                    reward_str = f"{data.get('label', '🔷 Фрагменты')} ×{data.get('amount', '?')}"
             except Exception:
                 pass
 

@@ -44,11 +44,13 @@ class DeckService:
         await cooldown_service.set_cooldown(cd_key, cd_seconds)
 
         if got:
-            user.tickets += 1
+            double = getattr(user, "double_ticket", False)
+            tickets_gained = 2 if (double and user.tickets + 1 < user.max_tickets) else 1
+            user.tickets = min(user.max_tickets, user.tickets + tickets_gained)
             await session.flush()
-            return {"ok": True, "got": True, "roll": roll, "chance": chance}
+            return {"ok": True, "got": True, "roll": roll, "chance": chance, "double": double and tickets_gained == 2}
 
-        return {"ok": True, "got": False, "roll": roll, "chance": chance}
+        return {"ok": True, "got": False, "roll": roll, "chance": chance, "double": False}
 
     def _pick_char(self, user: User) -> dict:
         """Списывает 1 тикет и генерирует данные персонажа без IO."""

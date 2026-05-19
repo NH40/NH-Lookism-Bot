@@ -42,9 +42,13 @@ async def cb_clan_auction_info(cb: CallbackQuery, session: AsyncSession, user: U
             "🏛 <b>Клановый аукцион</b>\n\n"
             "Сейчас активного аукциона нет.\n\n"
             "Запустить аукцион можно через магазин клана:\n"
-            "• Обычный — 1.5M NHCoin (приз 1-2M+ и др.)\n"
-            "• Редкий — 7.5M NHCoin (приз 5-10M+ и др.)\n"
-            "• Эпический — 20M NHCoin (приз 30M+ и др.)\n\n"
+            "• Обычный — 1.5M NHCoin\n"
+            "  └ Приз: до 7M монет, тикеты, статисты, фрагменты пути\n"
+            "• Редкий — 7.5M NHCoin\n"
+            "  └ Приз: до 35M монет, персонажи, мастерство\n"
+            "• Эпический — 20M NHCoin\n"
+            "  └ Приз: до 150M монет, LR/MP статисты, UI-фрагменты\n\n"
+            "Победитель получает приз, остальные возвращают ставки.\n"
             "Только участники клана могут делать ставки.",
             reply_markup=builder.as_markup(),
             parse_mode="HTML",
@@ -69,7 +73,6 @@ async def cb_clan_auction(cb: CallbackQuery, session: AsyncSession, user: User, 
         remaining = max(0, int((ends_at - now).total_seconds()))
     except Exception:
         remaining = 0
-    h, m = divmod(remaining // 60, 60)
 
     try:
         reward = json.loads(auction.reward_data) if auction.reward_data else {}
@@ -93,15 +96,38 @@ async def cb_clan_auction(cb: CallbackQuery, session: AsyncSession, user: User, 
     ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clans_menu"))
 
-    status = "✅ Завершён" if auction.is_finished else f"⏳ До конца: {h}ч {m}м"
+    if auction.is_finished:
+        status = "✅ Завершён"
+    elif remaining >= 3600:
+        h, m = divmod(remaining // 60, 60)
+        status = f"⏳ До конца: {h}ч {m}м"
+    elif remaining >= 60:
+        m, s = divmod(remaining, 60)
+        status = f"⏳ До конца: {m}м {s}с"
+    else:
+        status = f"⏳ До конца: {remaining}с"
+
+    min_bid = auction.current_bid + max(1, int(auction.current_bid * 0.1)) if auction.current_bid > 0 else 1
+    is_leader = leader and leader.id == user.id
+
+    lines = [
+        f"🏛 <b>Клановый аукцион</b>",
+        f"",
+        f"🎁 Приз: <b>{reward_str}</b>",
+        f"💰 Текущая ставка: <b>{fmt_num(auction.current_bid)} NHCoin</b>",
+        f"👤 Лидер: {html.escape(leader.full_name) if leader else 'нет'}",
+    ]
+    if not auction.is_finished and remaining > 0:
+        if is_leader:
+            lines.append(f"✅ Вы лидер аукциона!")
+        else:
+            lines.append(f"💡 Мин. ставка: {fmt_num(min_bid)} NHCoin")
+    lines.append(f"")
+    lines.append(status)
 
     try:
         await cb.message.edit_text(
-            f"🏛 <b>Клановый аукцион</b>\n\n"
-            f"🎁 Приз: {reward_str}\n"
-            f"💰 Текущая ставка: {fmt_num(auction.current_bid)} NHCoin\n"
-            f"👤 Лидер: {html.escape(leader.full_name) if leader else 'нет'}\n\n"
-            f"{status}",
+            "\n".join(lines),
             reply_markup=builder.as_markup(),
             parse_mode="HTML",
         )
@@ -120,6 +146,8 @@ async def cb_clan_bid(cb: CallbackQuery, session: AsyncSession, user: User, stat
     await state.set_state(ClanAuctionFSM.waiting_bid)
     await state.update_data(auction_id=auction_id)
 
+    min_bid = auction.current_bid + max(1, int(auction.current_bid * 0.1)) if auction.current_bid > 0 else 1
+
     cancel_kb = InlineKeyboardBuilder()
     cancel_kb.row(InlineKeyboardButton(
         text="❌ Отмена", callback_data=f"clan_auction:{auction_id}"
@@ -128,6 +156,7 @@ async def cb_clan_bid(cb: CallbackQuery, session: AsyncSession, user: User, stat
         await cb.message.edit_text(
             f"💰 <b>Сделать ставку</b>\n\n"
             f"Текущая ставка: {fmt_num(auction.current_bid)} NHCoin\n"
+            f"Минимальная ставка: {fmt_num(min_bid)} NHCoin\n"
             f"У вас: {fmt_num(user.nh_coins)} NHCoin\n\n"
             f"Введите сумму ставки:",
             reply_markup=cancel_kb.as_markup(),

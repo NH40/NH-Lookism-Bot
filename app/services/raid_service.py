@@ -11,6 +11,7 @@ from app.constants.raid import (
     RAID_BOSSES, UI_CRAFT_COST, UI_LEVEL_PERKS,
     RAID_ATTACK_CD_SECONDS, RAID_ATTACK_CD_KEY,
     ALCHEMY_CRAFT_COST, ALCHEMY_MAX_FRAGMENTS_PER_RAID,
+    PATH_SPIN_CRAFT_COST, PATH_FRAGMENTS_MAX_PER_RAID,
 )
 
 
@@ -44,7 +45,7 @@ class RaidService:
         return {"on_cd": on_cd, "ttl": ttl}
 
     async def get_user_power_for_boss(
-        self, session: AsyncSession, user: User, damage_source: str
+        self, session: AsyncSession, user: User, damage_source: str, divisor: int = 2
     ) -> int:
         if damage_source == "squad":
             result = await session.scalar(
@@ -61,7 +62,7 @@ class RaidService:
             )
             return result or 0
         elif damage_source == "combat_power":
-            return user.combat_power // 2
+            return user.combat_power // divisor
         return 0
 
     async def start_raid(
@@ -89,7 +90,8 @@ class RaidService:
         if existing.scalar_one_or_none():
             return {"ok": False, "reason": "У вас уже есть активный рейд!"}
 
-        power = await self.get_user_power_for_boss(session, user, boss["damage_source"])
+        divisor = boss.get("combat_power_divisor", 2)
+        power = await self.get_user_power_for_boss(session, user, boss["damage_source"], divisor)
         if power == 0:
             if boss["damage_source"] == "squad":
                 source_name = "статистов"
@@ -162,7 +164,8 @@ class RaidService:
         if not boss:
             return {"ok": False, "reason": "Босс не найден"}
 
-        power = await self.get_user_power_for_boss(session, user, boss["damage_source"])
+        divisor = boss.get("combat_power_divisor", 2)
+        power = await self.get_user_power_for_boss(session, user, boss["damage_source"], divisor)
         if power == 0:
             return {"ok": False, "reason": "Нет бойцов для атаки!"}
 
@@ -183,6 +186,9 @@ class RaidService:
             if reward_type == "alchemy":
                 user.alchemy_fragments += fragments
                 total_fragments = user.alchemy_fragments
+            elif reward_type == "path":
+                user.path_fragments += fragments
+                total_fragments = user.path_fragments
             else:
                 user.ui_fragments += fragments
                 total_fragments = user.ui_fragments
@@ -251,6 +257,9 @@ class RaidService:
         if reward_type == "alchemy":
             user.alchemy_fragments += fragments
             total_fragments = user.alchemy_fragments
+        elif reward_type == "path":
+            user.path_fragments += fragments
+            total_fragments = user.path_fragments
         else:
             user.ui_fragments += fragments
             total_fragments = user.ui_fragments
@@ -295,6 +304,15 @@ class RaidService:
                 return random.randint(5, 11)
             else:
                 return random.randint(1, 4)
+        if reward_type == "path":
+            if ratio >= 0.5:
+                return random.randint(15, PATH_FRAGMENTS_MAX_PER_RAID)
+            elif ratio >= 0.2:
+                return random.randint(8, 14)
+            elif ratio >= 0.05:
+                return random.randint(3, 7)
+            else:
+                return random.randint(1, 2)
         if ratio >= 0.5:
             return random.randint(15, 25)
         elif ratio >= 0.2:
@@ -303,6 +321,25 @@ class RaidService:
             return random.randint(3, 8)
         else:
             return random.randint(1, 3)
+
+    async def craft_path_spin(
+        self, session: AsyncSession, user: User
+    ) -> dict:
+        if not user.skill_path:
+            return {"ok": False, "reason": "Сначала выбери путь в Навыках!"}
+        if user.path_fragments < PATH_SPIN_CRAFT_COST:
+            return {
+                "ok": False,
+                "reason": (
+                    f"Недостаточно фрагментов Пути "
+                    f"(нужно {PATH_SPIN_CRAFT_COST}, есть {user.path_fragments})"
+                ),
+            }
+        user.path_fragments -= PATH_SPIN_CRAFT_COST
+        from app.services.skill_service import skill_service
+        result = await skill_service.spin_for_random_extra_skill(session, user)
+        await session.flush()
+        return result
 
     async def craft_ui(
         self, session: AsyncSession, user: User, target_level: int

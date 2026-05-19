@@ -226,10 +226,16 @@ async def cb_try_ticket(cb: CallbackQuery, session: AsyncSession, user: User):
         return
 
     if result["got"]:
-        await cb.answer(
-            f"🎟 Тикет получен!\n({result['roll']} ≤ {result['chance']}%)",
-            show_alert=True
-        )
+        if result.get("double"):
+            await cb.answer(
+                f"🎟🎟 Двойной тикет! +2 прокрутки!\n({result['roll']} ≤ {result['chance']}%)",
+                show_alert=True
+            )
+        else:
+            await cb.answer(
+                f"🎟 Тикет получен!\n({result['roll']} ≤ {result['chance']}%)",
+                show_alert=True
+            )
     else:
         await cb.answer(
             f"😔 Не повезло ({result['roll']} > {result['chance']}%)",

@@ -144,6 +144,7 @@ class TitleService:
         user.true_ultra_instinct = False
         user.double_recruit = False
         user.double_attack = False
+        user.double_ticket = False
         user.extra_attack_count = 0
         user.ticket_cd_reduction = 0
         user.recruit_count_bonus = 0
@@ -152,6 +153,8 @@ class TitleService:
         user.max_tickets = 3
         user.ticket_chance = 25
         user.skill_path_bonus_multiplier = 1.0
+        user.extra_path_skill_slots = 1
+        user.max_ticket_chance = 70
         # ← сбрасываем донатный УИ при отзыве всех титулов
         user.ui_is_donat = False
         user.ui_level = 0
@@ -200,7 +203,7 @@ class TitleService:
         elif title_id == "selection":
             pass
         elif title_id == "manager_fav":
-            user.ticket_chance = min(95, user.ticket_chance + 10)
+            user.ticket_chance = min(getattr(user, "max_ticket_chance", 70), user.ticket_chance + 10)
         elif title_id == "concentration":
             user.ticket_cd_reduction += 30
         elif title_id == "focus":
@@ -216,12 +219,19 @@ class TitleService:
             if user.ui_auto_potion:
                 from app.services.potion_service import potion_service
                 await potion_service.buy_missing(session, user)
+        elif title_id == "rom_extra_skills":
+            user.extra_path_skill_slots = 3
+        elif title_id == "rom_max_chance":
+            user.max_ticket_chance = 90
 
     def _apply_set_bonus(self, user: User, set_id: str) -> None:
         if set_id == "strongest_0gen":
             user.influence = int(user.influence * 2.0)
-            user.ticket_chance = min(95, user.ticket_chance + 5)
+            user.extra_path_skill_slots = 3
+            user.max_ticket_chance = 90
+            user.ticket_chance = min(getattr(user, "max_ticket_chance", 70), user.ticket_chance + 5)
             user.double_recruit = True
+            user.double_ticket = True
         elif set_id == "genius_maker":
             user.train_bonus_percent = int(user.train_bonus_percent * 1.20)
             user.income_bonus_percent = int(user.income_bonus_percent * 1.20)
@@ -262,22 +272,27 @@ class TitleService:
                 user.income_bonus_percent += int(bonus * multiplier)
                 user.train_bonus_percent += int(bonus * multiplier)
 
-        # 2. Путевые навыки — целочисленные аддитивные эффекты
-        if user.skill_path:
-            bought_r = await session.execute(
-                sa_select(UserPathSkills.skill_id).where(
-                    UserPathSkills.user_id == user.id
-                )
+        # 2. Путевые навыки — все купленные (основные + дополнительные из других путей)
+        bought_r = await session.execute(
+            sa_select(UserPathSkills.skill_id).where(
+                UserPathSkills.user_id == user.id
             )
-            bought_ids = set(bought_r.scalars().all())
-            for skill in PATH_SKILLS.get(user.skill_path, []):
-                if skill.skill_id not in bought_ids:
+        )
+        bought_ids = set(bought_r.scalars().all())
+        if bought_ids:
+            all_skills_map: dict = {}
+            for path_skills in PATH_SKILLS.values():
+                for s in path_skills:
+                    all_skills_map[s.skill_id] = s
+            for skill_id in bought_ids:
+                skill = all_skills_map.get(skill_id)
+                if not skill:
                     continue
                 for field, value in skill.effect.items():
                     if isinstance(value, float):
                         continue  # district_multiplier — не аддитивное поле, не сбрасывается
                     if isinstance(value, bool):
-                        setattr(user, field, value)  # double_recruit, double_train, double_attack
+                        setattr(user, field, value)
                     else:
                         current = getattr(user, field, 0)
                         setattr(user, field, current + int(value * multiplier))

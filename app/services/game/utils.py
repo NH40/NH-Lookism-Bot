@@ -7,7 +7,7 @@ async def notify_pvp_attack(
     win: bool, phase: str
 ) -> None:
     try:
-        if not defender.notifications_enabled:
+        if not defender.notifications_enabled or not getattr(defender, "notif_pvp", True):
             return
         from app.bot_instance import get_bot
         bot = get_bot()

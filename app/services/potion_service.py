@@ -95,7 +95,8 @@ class PotionService:
     async def get_effective_ticket_chance(self, session: AsyncSession, user: User) -> int:
         potions = await self.get_active(session, user.id)
         bonus = sum(p.bonus_value for p in potions if p.potion_type == "luck")
-        return min(95, user.ticket_chance + bonus)
+        cap = getattr(user, "max_ticket_chance", 70)
+        return min(cap, user.ticket_chance + bonus)
 
     async def get_effective_train_bonus(self, session: AsyncSession, user: User) -> int:
         potions = await self.get_active(session, user.id)

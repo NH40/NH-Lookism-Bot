@@ -8,7 +8,8 @@ REWARD_LABELS = {
     "coins":              "💰 NHCoin",
     "ui_fragments":       "🔮 Фрагменты УИ",
     "alchemy_fragments":  "🧪 Фрагменты алхимии",
-    "path_points":        "🔷 Очки пути",
+    "path_fragments":     "🔷 Фрагменты Пути",
+    "path_points":        "💎 Очки пути",
     "mastery_points":     "⭐ Очки мастерства",
 }
 
@@ -93,13 +94,15 @@ class PromoService:
 
     def _apply_reward(self, user: User, reward_type: str, amount: int) -> None:
         if reward_type == "tickets":
-            user.tickets += amount  
+            user.tickets += amount
         elif reward_type == "coins":
             user.nh_coins += amount
         elif reward_type == "ui_fragments":
             user.ui_fragments += amount
         elif reward_type == "alchemy_fragments":
             user.alchemy_fragments += amount
+        elif reward_type == "path_fragments":
+            user.path_fragments += amount
         elif reward_type == "path_points":
             user.skill_path_points += amount
         elif reward_type == "mastery_points":

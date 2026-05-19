@@ -167,7 +167,10 @@ async def _notify_auction_started(tier: int, tier_name: str, tier_emoji: str):
         from app.models.user import User
         async with AsyncSessionFactory() as session:
             tg_ids = list((await session.execute(
-                select(User.tg_id).where(User.notifications_enabled == True)
+                select(User.tg_id).where(
+                    User.notifications_enabled == True,
+                    User.notif_auction == True,
+                )
             )).scalars())
         await _send_notifications(bot, tg_ids, text)
     except Exception as e:
@@ -224,7 +227,10 @@ async def _notify_round_end(result: dict):
         from app.models.user import User
         async with AsyncSessionFactory() as session:
             tg_ids = list((await session.execute(
-                select(User.tg_id).where(User.notifications_enabled == True)
+                select(User.tg_id).where(
+                    User.notifications_enabled == True,
+                    User.notif_auction == True,
+                )
             )).scalars())
         await _send_notifications(bot, tg_ids, text)
     except Exception as e:
@@ -299,7 +305,11 @@ async def clan_war_tick():
                     tg_ids_r = await session.execute(
                         select(User.tg_id)
                         .join(ClanMember, ClanMember.user_id == User.id)
-                        .where(ClanMember.clan_id == clan_id)
+                        .where(
+                            ClanMember.clan_id == clan_id,
+                            User.notifications_enabled == True,
+                            User.notif_clan_war == True,
+                        )
                     )
                     clan_tg_ids = list(tg_ids_r.scalars())
                     result_str = "🏆 Победа!" if is_winner else "❌ Поражение"
@@ -367,7 +377,10 @@ async def _notify_auction_end(result: dict):
         winner_tg_id = winner["tg_id"] if winner else None
         async with AsyncSessionFactory() as session:
             tg_ids = list((await session.execute(
-                select(User.tg_id).where(User.notifications_enabled == True)
+                select(User.tg_id).where(
+                    User.notifications_enabled == True,
+                    User.notif_auction == True,
+                )
             )).scalars())
         tg_ids = [tid for tid in tg_ids if tid != winner_tg_id]
         await _send_notifications(bot, tg_ids, text)

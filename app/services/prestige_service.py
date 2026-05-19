@@ -153,7 +153,7 @@ class PrestigeService:
         user.prestige_recruit_bonus += PRESTIGE_RECRUIT_BONUS_PER_LEVEL
         user.prestige_train_bonus += PRESTIGE_TRAIN_BONUS_PER_LEVEL
         user.prestige_ticket_bonus += PRESTIGE_TICKET_BONUS_PER_LEVEL
-        user.ticket_chance = min(95, user.ticket_chance + 1)
+        user.ticket_chance = min(getattr(user, "max_ticket_chance", 70), user.ticket_chance + 1)
 
         # При престиже — УИ и фрагменты сохраняются (keep_ui=True)
         await self._reset_progress(session, user, keep_ui=True)

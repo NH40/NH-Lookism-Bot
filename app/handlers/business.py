@@ -436,6 +436,7 @@ async def cb_biz_select_building(
     cost = max(1, int(cfg.district_cost * (1 - discount / 100)))
 
     builder = InlineKeyboardBuilder()
+    available_cities = []
     for city_id, city_name in cities_with_districts:
         districts_count = await session.scalar(
             select(func.count(District.id)).where(
@@ -448,14 +449,29 @@ async def cb_biz_select_building(
             session, user.id, city_id
         )
         free_in_city = districts_count - used
-        can = "✅" if free_in_city >= cost else "❌"
-        builder.row(InlineKeyboardButton(
-            text=f"{can} 🏙 {city_name} | 🏘 свободно: {free_in_city}",
-            callback_data=f"biz_build_in:{building_id}:{city_id}"
-        ))
+        if free_in_city >= cost:
+            available_cities.append((city_id, city_name, free_in_city))
+            builder.row(InlineKeyboardButton(
+                text=f"✅ 🏙 {city_name} | 🏘 свободно: {free_in_city}",
+                callback_data=f"biz_build_in:{building_id}:{city_id}"
+            ))
     builder.row(InlineKeyboardButton(
         text="◀️ Назад", callback_data="biz_build"
     ))
+
+    if not available_cities:
+        no_cities_text = (
+            f"🏗 <b>{cfg.emoji} {cfg.name}</b>\n\n"
+            f"💰 Доход: {fmt_num(cfg.base_income)}/мин\n"
+            f"🏘 Стоимость: {cost} районов\n\n"
+            f"❌ Нет городов с достаточным количеством свободных районов.\n"
+            f"<i>Захвати больше районов или снеси другие здания.</i>"
+        )
+        try:
+            await cb.message.edit_text(no_cities_text, reply_markup=builder.as_markup(), parse_mode="HTML")
+        except Exception:
+            pass
+        return
 
     try:
         await cb.message.edit_text(

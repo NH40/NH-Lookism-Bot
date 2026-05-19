@@ -55,6 +55,9 @@ class User(Base):
     double_train: Mapped[bool] = mapped_column(Boolean, default=False)
     prestige_train_bonus: Mapped[int] = mapped_column(Integer, default=0)
 
+    # ── Тикеты — двойная прокрутка ───────────────────────────────────────
+    double_ticket: Mapped[bool] = mapped_column(Boolean, default=False)
+
     # ── Атака ─────────────────────────────────────────────────────────────
     double_attack: Mapped[bool] = mapped_column(Boolean, default=False)
     double_attack_used: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -79,6 +82,17 @@ class User(Base):
     # ── Рейды ─────────────────────────────────────────────────────────────
     ui_fragments: Mapped[int] = mapped_column(Integer, default=0)
     alchemy_fragments: Mapped[int] = mapped_column(Integer, default=0)
+    path_fragments: Mapped[int] = mapped_column(Integer, default=0)
+
+    # ── Путь — дополнительные слоты ──────────────────────────────────────
+    extra_path_skill_slots: Mapped[int] = mapped_column(Integer, default=1)
+
+    # ── Путь — уровень и пробуждение ─────────────────────────────────────
+    skill_path_level: Mapped[int] = mapped_column(Integer, default=0)
+    path_awakened: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # ── Максимальный шанс тикета ──────────────────────────────────────────
+    max_ticket_chance: Mapped[int] = mapped_column(Integer, default=70)
 
     # ── Ультра Инстинкт (переработка) ────────────────────────────────────
     ui_level: Mapped[int] = mapped_column(Integer, default=0)        # 0-4
@@ -115,6 +129,10 @@ class User(Base):
 
     # ── Настройки ─────────────────────────────────────────────────────────
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    notif_pvp: Mapped[bool] = mapped_column(Boolean, default=True)
+    notif_auction: Mapped[bool] = mapped_column(Boolean, default=True)
+    notif_cities: Mapped[bool] = mapped_column(Boolean, default=True)
+    notif_clan_war: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

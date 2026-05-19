@@ -199,6 +199,10 @@ class AdminService:
         user.alchemy_fragments = getattr(user, "alchemy_fragments", 0) + amount
         await session.flush()
 
+    async def give_path_fragments(self, session: AsyncSession, user: User, amount: int) -> None:
+        user.path_fragments = getattr(user, "path_fragments", 0) + amount
+        await session.flush()
+
     async def delete_user(self, session: AsyncSession, user: User) -> None:
         from app.services.prestige_service import prestige_service
         from app.models.title import UserAchievement, UserDonatTitle
@@ -226,7 +230,7 @@ class AdminService:
             user.prestige_recruit_bonus += 5
             user.prestige_train_bonus += 5
             user.prestige_ticket_bonus += 1
-            user.ticket_chance = min(95, user.ticket_chance + 1)
+            user.ticket_chance = min(getattr(user, "max_ticket_chance", 70), user.ticket_chance + 1)
         await session.flush()
 
     async def remove_prestige(self, session: AsyncSession, user: User, amount: int = 1) -> None:
@@ -263,6 +267,138 @@ class AdminService:
         await squad_repo.update_user_combat_power(session, user)
 
         return {"ok": True, "character": char_data}
+
+    async def give_absolute_character(self, session: AsyncSession, user: User, char_name: str) -> dict:
+        from app.data.characters import CHARACTERS
+        from app.models.character import UserCharacter
+
+        char_data = next((c for c in CHARACTERS if c["name"] == char_name and c["rank"] == "absolute"), None)
+        if not char_data:
+            return {"ok": False, "reason": "Абсолютный персонаж не найден"}
+
+        char = UserCharacter(
+            user_id=user.id,
+            character_id=char_data["name"],
+            rank=char_data["rank"],
+            power=char_data["power"],
+        )
+        session.add(char)
+        await session.flush()
+
+        from app.repositories.squad_repo import squad_repo
+        await squad_repo.update_user_combat_power(session, user)
+        return {"ok": True, "character": char_data}
+
+    async def take_absolute_characters(self, session: AsyncSession, user: User) -> dict:
+        from app.models.character import UserCharacter
+        from sqlalchemy import delete as sa_delete
+
+        result = await session.execute(
+            sa_delete(UserCharacter).where(
+                UserCharacter.user_id == user.id,
+                UserCharacter.rank == "absolute",
+            )
+        )
+        count = result.rowcount
+        await session.flush()
+
+        from app.repositories.squad_repo import squad_repo
+        await squad_repo.update_user_combat_power(session, user)
+        return {"ok": True, "removed": count}
+
+    async def give_king_city(self, session: AsyncSession, user: User) -> dict:
+        import random
+        from app.models.city import City, District
+        from app.repositories.city_repo import city_repo
+        from sqlalchemy import select, func
+
+        sector = user.sector or "Н"
+
+        result = await session.execute(
+            select(City).where(
+                City.sector == sector,
+                City.phase.in_(["gang", "king"]),
+                City.total_districts == 16,
+            ).order_by(City.id)
+        )
+        all_cities = result.scalars().all()
+
+        target_city = None
+        for city in all_cities:
+            my_count = await session.scalar(
+                select(func.count(District.id)).where(
+                    District.owner_id == user.id,
+                    District.city_id == city.id,
+                    District.is_captured == True,
+                )
+            ) or 0
+            if my_count == 0:
+                target_city = city
+                break
+
+        if not target_city:
+            from app.data.cities import CITY_NAMES_BY_SECTOR
+            names = CITY_NAMES_BY_SECTOR.get(sector, [])
+            used_names = {c.name for c in all_cities}
+            available = [n for n in names if n not in used_names]
+            name = random.choice(available) if available else f"Адм-{sector}-{len(all_cities)+1}"
+            target_city = City(
+                sector=sector, phase="king", type_id=3, name=name,
+                total_districts=16, captured_districts=0,
+                is_fully_captured=False, district_power_multiplier=1.0,
+            )
+            session.add(target_city)
+            await session.flush()
+
+        await city_repo.init_city_districts(session, target_city)
+        await session.flush()
+
+        districts_r = await session.execute(
+            select(District).where(District.city_id == target_city.id)
+        )
+        districts = districts_r.scalars().all()
+        for d in districts:
+            d.owner_id = user.id
+            d.is_captured = True
+
+        target_city.captured_districts = len(districts)
+        target_city.owner_id = user.id
+        target_city.is_fully_captured = True
+
+        cities_r = await session.execute(
+            select(District.city_id)
+            .join(City, City.id == District.city_id)
+            .where(
+                District.owner_id == user.id,
+                District.is_captured == True,
+                City.phase != "fist",
+            ).distinct()
+        )
+        user.king_cities_count = len(cities_r.scalars().all())
+        await session.flush()
+        return {"ok": True, "cities_count": user.king_cities_count, "city_name": target_city.name}
+
+    async def take_all_cities(self, session: AsyncSession, user: User) -> dict:
+        from app.models.city import City, District
+        from sqlalchemy import update as sa_update
+
+        districts_result = await session.execute(
+            sa_update(District)
+            .where(District.owner_id == user.id)
+            .values(owner_id=None, is_captured=False)
+        )
+        await session.execute(
+            sa_update(City)
+            .where(City.owner_id == user.id)
+            .values(owner_id=None, is_fully_captured=False, captured_districts=0)
+        )
+        user.king_cities_count = 0
+        user.fist_cities_count = 0
+        await session.flush()
+
+        from app.services.business_service import business_service
+        await business_service._recalc_income(session, user)
+        return {"ok": True, "removed": districts_result.rowcount}
 
     async def give_squad_member(self, session: AsyncSession, user: User, rank: str, count: int = 1) -> dict:
         from app.data.squad import RANKS_BY_ID

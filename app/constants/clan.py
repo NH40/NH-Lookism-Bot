@@ -71,7 +71,6 @@ CLAN_SHOP_ITEMS: list[ClanShopItem] = [
     ClanShopItem("potion_luck_all",      "🍀 Зелье удачи всем",      "Шанс тикета +20% на 30 мин всем",     60_000,   "potions", "potion", "potion_luck"),
 
     # ── Статисты ──────────────────────────────────────────────────────────────
-    # ── Статисты ──────────────────────────────────────────────────────────────
     ClanShopItem("squad_s_all",   "🟥 100×S всем",    "100 статистов S всем",    900_000,   "squad", "squad", {"rank": "S",   "amount": 100}),
     ClanShopItem("squad_ss_all",  "💠 100×SS всем",   "100 статистов SS всем",   1_000_000, "squad", "squad", {"rank": "SS",  "amount": 100}),
     ClanShopItem("squad_sss_all", "🔷 100×SSS всем",  "100 статистов SSS всем",  1_500_000, "squad", "squad", {"rank": "SSS", "amount": 100}),
@@ -79,12 +78,12 @@ CLAN_SHOP_ITEMS: list[ClanShopItem] = [
     ClanShopItem("squad_ssr_all", "✨ 100×SSR всем",  "100 статистов SSR всем",  2_500_000, "squad", "squad", {"rank": "SSR", "amount": 100}),
     ClanShopItem("squad_ur_all",  "💎 100×UR всем",   "100 статистов UR всем",   3_000_000, "squad", "squad", {"rank": "UR",  "amount": 100}),
     ClanShopItem("squad_lr_all",  "👑 100×LR всем",   "100 статистов LR всем",   5_000_000, "squad", "squad", {"rank": "LR",  "amount": 100}),
-    ClanShopItem("squad_mp_all",  "🔱 50×MP всем",    "50 статистов MP всем",    8_000_000, "squad", "squad", {"rank": "MP",  "amount": 50}),
-    ClanShopItem("squad_x_all",   "⚡ 25×X всем",     "25 статистов X всем",    12_000_000, "squad", "squad", {"rank": "X",   "amount": 25}),
-    ClanShopItem("squad_xx_all",  "🌀 25×XX всем",    "25 статистов XX всем",   18_000_000, "squad", "squad", {"rank": "XX",  "amount": 25}),
-    ClanShopItem("squad_xxx_all", "🔥 10×XXX всем",   "10 статистов XXX всем",  25_000_000, "squad", "squad", {"rank": "XXX", "amount": 10}),
-    ClanShopItem("squad_dx_all",  "💀 5×DX всем",     "5 статистов DX всем",    35_000_000, "squad", "squad", {"rank": "DX",  "amount": 5}),
-    ClanShopItem("squad_err_all", "❌ 1×ERROR всем",  "1 ERROR всем",            50_000_000, "squad", "squad", {"rank": "ERROR","amount": 1}),
+    ClanShopItem("squad_mp_all",  "🔱 100×MP всем",    "100 статистов MP всем",    8_000_000, "squad", "squad", {"rank": "MP",  "amount": 100}),
+    ClanShopItem("squad_x_all",   "⚡ 100×X всем",     "100 статистов X всем",    12_000_000, "squad", "squad", {"rank": "X",   "amount": 100}),
+    ClanShopItem("squad_xx_all",  "🌀 100×XX всем",    "100 статистов XX всем",   18_000_000, "squad", "squad", {"rank": "XX",  "amount": 100}),
+    ClanShopItem("squad_xxx_all", "🔥 100×XXX всем",   "100 статистов XXX всем",  25_000_000, "squad", "squad", {"rank": "XXX", "amount": 100}),
+    ClanShopItem("squad_dx_all",  "💀 100×DX всем",     "100 статистов DX всем",    35_000_000, "squad", "squad", {"rank": "DX",  "amount": 100}),
+    ClanShopItem("squad_err_all", "❌ 100×ERROR всем",  "100 ERROR всем",            50_000_000, "squad", "squad", {"rank": "ERROR","amount": 100}),
 
     # ── Персонажи ─────────────────────────────────────────────────────────────
     ClanShopItem("char_member_all",    "⬜ Персонаж member всем",    "Случайный member всем",    2_000_000,   "character", "character", "member"),
@@ -102,32 +101,42 @@ CLAN_SHOP_ITEMS: list[ClanShopItem] = [
 
 CLAN_SHOP_MAP: dict[str, ClanShopItem] = {i.item_id: i for i in CLAN_SHOP_ITEMS}
 
-# ── Аукционные призы (без очков/фрагментов/легенд+) ───────────────────────────
+# ── Аукционные призы ───────────────────────────────────────────────────────────
 CLAN_AUCTION_REWARDS = {
     "common": [
-        {"type": "coins",     "amount": 1_000_000,  "label": "💰 1M NHCoin"},
-        {"type": "coins",     "amount": 2_000_000,  "label": "💰 2M NHCoin"},
-        {"type": "tickets",   "amount": 3,           "label": "🎟 3 тикета"},
-        {"type": "potion",    "potion_id": "potion_combat",   "label": "⚔️ Зелье силы"},
-        {"type": "potion",    "potion_id": "potion_income",   "label": "💰 Зелье богатства"},
-        {"type": "squad",     "rank": "SS",  "amount": 50,  "label": "💠 50×SS статистов"},
+        {"type": "coins",          "amount": 4_000_000,  "label": "💰 4M NHCoin"},
+        {"type": "coins",          "amount": 7_000_000,  "label": "💰 7M NHCoin"},
+        {"type": "tickets",        "amount": 5,           "label": "🎟 5 тикетов"},
+        {"type": "tickets",        "amount": 8,           "label": "🎟 8 тикетов"},
+        {"type": "squad",          "rank": "SSS", "amount": 200, "label": "🔷 200×SSS статистов"},
+        {"type": "squad",          "rank": "SR",  "amount": 75,  "label": "🌟 75×SR статистов"},
+        {"type": "path_fragments", "amount": 15,          "label": "🔮 15 фрагментов пути"},
+        {"type": "potion",         "potion_id": "potion_combat",  "label": "⚔️ Зелье силы"},
+        {"type": "potion",         "potion_id": "potion_income",  "label": "💰 Зелье богатства"},
     ],
     "rare": [
-        {"type": "coins",     "amount": 5_000_000,  "label": "💰 5M NHCoin"},
-        {"type": "coins",     "amount": 10_000_000, "label": "💰 10M NHCoin"},
-        {"type": "tickets",   "amount": 5,           "label": "🎟 5 тикетов"},
-        {"type": "squad",     "rank": "SSS", "amount": 30,  "label": "🔷 30×SSS статистов"},
-        {"type": "squad",     "rank": "SR",  "amount": 10,  "label": "🌟 10×SR статистов"},
-        {"type": "character", "rank": "king",        "label": "🟩 Персонаж King"},
-        {"type": "character", "rank": "strong_king", "label": "🟨 Персонаж Strong King"},
+        {"type": "coins",          "amount": 20_000_000,  "label": "💰 20M NHCoin"},
+        {"type": "coins",          "amount": 35_000_000,  "label": "💰 35M NHCoin"},
+        {"type": "tickets",        "amount": 12,           "label": "🎟 12 тикетов"},
+        {"type": "tickets",        "amount": 18,           "label": "🎟 18 тикетов"},
+        {"type": "squad",          "rank": "SSR", "amount": 75,  "label": "✨ 75×SSR статистов"},
+        {"type": "squad",          "rank": "UR",  "amount": 30,  "label": "💎 30×UR статистов"},
+        {"type": "character",      "rank": "gen_zero",    "label": "🟧 Персонаж Gen Zero"},
+        {"type": "character",      "rank": "strong_king", "label": "🟨 Персонаж Strong King"},
+        {"type": "path_fragments", "amount": 40,           "label": "🔮 40 фрагментов пути"},
+        {"type": "mastery_points", "amount": 500,          "label": "🏅 500 очков мастерства"},
     ],
     "epic": [
-        {"type": "coins",     "amount": 30_000_000, "label": "💰 30M NHCoin"},
-        {"type": "tickets",   "amount": 10,          "label": "🎟 10 тикетов"},
-        {"type": "squad",     "rank": "SSR", "amount": 10,  "label": "✨ 10×SSR статистов"},
-        {"type": "squad",     "rank": "UR",  "amount": 5,   "label": "💎 5×UR статистов"},
-        {"type": "character", "rank": "gen_zero",    "label": "🟧 Персонаж Gen Zero"},
-        {"type": "character", "rank": "new_legend",  "label": "🟥 Персонаж New Legend"},
+        {"type": "coins",          "amount": 100_000_000, "label": "💰 100M NHCoin"},
+        {"type": "coins",          "amount": 150_000_000, "label": "💰 150M NHCoin"},
+        {"type": "tickets",        "amount": 25,           "label": "🎟 25 тикетов"},
+        {"type": "squad",          "rank": "LR",  "amount": 25,  "label": "👑 25×LR статистов"},
+        {"type": "squad",          "rank": "MP",  "amount": 10,  "label": "🔱 10×MP статистов"},
+        {"type": "character",      "rank": "new_legend",  "label": "🟥 Персонаж New Legend"},
+        {"type": "character",      "rank": "gen_zero",    "label": "🟧 Персонаж Gen Zero"},
+        {"type": "path_fragments", "amount": 80,           "label": "🔮 80 фрагментов пути"},
+        {"type": "mastery_points", "amount": 2_000,        "label": "🏅 2000 очков мастерства"},
+        {"type": "ui_fragments",   "amount": 50,           "label": "⚡ 50 UI-фрагментов"},
     ],
 }
 

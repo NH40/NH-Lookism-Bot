@@ -44,13 +44,30 @@ RAID_BOSSES = {
                 "name": "Джинен",
                 "emoji": "🌑",
                 "description": (
-                    "Один из сильнейших бойцов нулевого поколения. Зеркальный король"
+                    "Один из сильнейших бойцов нулевого поколения. Зеркальный король. "
                     "Атаковать его может любой, но твоя боевая мощь делится на 2."
                 ),
                 "damage_source": "combat_power",
-                "base_hp": 800_000_000,
+                "combat_power_divisor": 2,
+                "base_hp": 2_000_000_000,
                 "reward_fragments": "alchemy",
                 "cd_hours": 6,
+                "raid_duration_seconds": 3600,
+            },
+            "gauren": {
+                "id": "gauren",
+                "name": "Гапрен",
+                "emoji": "🔷",
+                "description": (
+                    "Молчаливый страж пути. Легенда, постигшая все известные техники. "
+                    "Сразить его — значит прикоснуться к сокровенным знаниям нулевого поколения. "
+                    "Твоя боевая мощь делится на 3."
+                ),
+                "damage_source": "combat_power",
+                "combat_power_divisor": 3,
+                "base_hp": 3_500_000_000,
+                "reward_fragments": "path",
+                "cd_hours": 8,
                 "raid_duration_seconds": 3600,
             },
         }
@@ -59,6 +76,9 @@ RAID_BOSSES = {
 
 ALCHEMY_CRAFT_COST = 80
 ALCHEMY_MAX_FRAGMENTS_PER_RAID = 25
+
+PATH_SPIN_CRAFT_COST = 40
+PATH_FRAGMENTS_MAX_PER_RAID = 20
 
 UI_CRAFT_COST = {
     1: 50,
@@ -76,3 +96,21 @@ UI_LEVEL_PERKS = {
 
 RAID_ATTACK_CD_SECONDS = 300
 RAID_ATTACK_CD_KEY = "raid_attack:{raid_id}:{user_id}"
+
+# ── Уровни пути ───────────────────────────────────────────────────────────────
+PATH_LEVEL_COSTS = [20, 40, 80, 150, 300]   # стоимость уровня 1→2→3→4→5 в фрагментах
+PATH_LEVEL_MAX = 5
+
+# Бонус за каждый уровень пути (накопительный)
+PATH_LEVEL_BONUSES: dict[str, dict] = {
+    "businessman": {"income_bonus_percent": 5},
+    "romantic":    {"ticket_chance": 3},
+    "monster":     {"train_bonus_percent": 5},
+}
+
+# Бонус за Пробуждение (получение всех навыков основного пути)
+PATH_AWAKENING_BONUSES: dict[str, dict] = {
+    "businessman": {"income_bonus_percent": 20},
+    "romantic":    {"max_tickets": 1, "ticket_chance": 5},
+    "monster":     {"train_bonus_percent": 20},
+}

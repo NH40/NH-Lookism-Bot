@@ -21,8 +21,9 @@ class ClanAuctionService(ClanBaseService):
             ends_at = ends_at.replace(tzinfo=timezone.utc)
         if now >= ends_at:
             return {"ok": False, "reason": "Аукцион завершён"}
-        if amount <= auction.current_bid:
-            return {"ok": False, "reason": f"Ставка должна быть больше {auction.current_bid:,}"}
+        min_bid = auction.current_bid + max(1, int(auction.current_bid * 0.1)) if auction.current_bid > 0 else 1
+        if amount < min_bid:
+            return {"ok": False, "reason": f"Ставка должна быть минимум {min_bid:,} NHCoin"}
         if user.nh_coins < amount:
             return {"ok": False, "reason": "Недостаточно NHCoin"}
         if auction.leader_id and auction.leader_id != user.id:
@@ -63,6 +64,12 @@ class ClanAuctionService(ClanBaseService):
             winner.nh_coins += reward.get("amount", 0)
         elif rtype == "tickets":
             winner.tickets += reward.get("amount", 0)
+        elif rtype == "path_fragments":
+            winner.path_fragments = (winner.path_fragments or 0) + reward.get("amount", 0)
+        elif rtype == "mastery_points":
+            winner.mastery_points = (winner.mastery_points or 0) + reward.get("amount", 0)
+        elif rtype == "ui_fragments":
+            winner.ui_fragments = (winner.ui_fragments or 0) + reward.get("amount", 0)
         elif rtype == "potion":
             from app.services.potion_service import potion_service
             await potion_service.activate(session, winner, reward.get("potion_id"))

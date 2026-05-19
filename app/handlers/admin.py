@@ -40,6 +40,7 @@ class AdminFSM(StatesGroup):
     waiting_ui_fragments = State()
     waiting_alchemy_fragments = State()
     waiting_squad_count = State()
+    waiting_path_fragments = State()
 
 
 # ── Главное меню ────────────────────────────────────────────────────────────
@@ -627,6 +628,7 @@ async def cb_adm_resources(cb: CallbackQuery, user: User):
     builder.row(InlineKeyboardButton(text="🔷 Очки пути", callback_data=f"adm_pathpts:{tg_id}"))
     builder.row(InlineKeyboardButton(text="🔮 Фрагменты УИ", callback_data=f"adm_uifrag:{tg_id}"))
     builder.row(InlineKeyboardButton(text="🧪 Фрагменты алхимии", callback_data=f"adm_alchfrag:{tg_id}"))
+    builder.row(InlineKeyboardButton(text="🔷 Фрагменты Пути", callback_data=f"adm_pathfrag:{tg_id}"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"adm_user:{tg_id}"))
     try:
         await cb.message.edit_text("📦 Выберите ресурс для выдачи:", reply_markup=builder.as_markup())
@@ -767,6 +769,40 @@ async def msg_adm_alchfrag(message: Message, session: AsyncSession, user: User, 
         return
     await admin_service.give_alchemy_fragments(session, found, amount)
     await message.answer(f"✅ Выдано {amount} фрагментов алхимии игроку {html.escape(found.full_name)}", parse_mode="HTML")
+    await _show_user_card(message, session, found)
+
+
+@router.callback_query(F.data.startswith("adm_pathfrag:"))
+async def cb_adm_pathfrag(cb: CallbackQuery, user: User, state: FSMContext):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = cb.data.split(":")[1]
+    await state.set_state(AdminFSM.waiting_path_fragments)
+    await state.update_data(target_tg_id=tg_id)
+    try:
+        await cb.message.edit_text(f"🔷 Введите количество фрагментов Пути:", reply_markup=back_kb(f"adm_resources:{tg_id}"))
+    except Exception:
+        pass
+
+
+@router.message(AdminFSM.waiting_path_fragments)
+async def msg_adm_pathfrag(message: Message, session: AsyncSession, user: User, state: FSMContext):
+    if not is_admin(user.tg_id):
+        return
+    data = await state.get_data()
+    tg_id = data.get("target_tg_id")
+    await state.clear()
+    try:
+        amount = int(message.text.strip())
+    except ValueError:
+        await message.answer("Введите число")
+        return
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await message.answer("Игрок не найден")
+        return
+    await admin_service.give_path_fragments(session, found, amount)
+    await message.answer(f"✅ Выдано {amount} фрагментов Пути игроку {html.escape(found.full_name)}", parse_mode="HTML")
     await _show_user_card(message, session, found)
 
 
@@ -1760,64 +1796,6 @@ async def cmd_unban(message: Message, user: User):
     await message.answer(f"✅ Пользователь {uid} разбанен и счётчик нарушений сброшен.")
 
 
-# ── Абсолютные персонажи ────────────────────────────────────────────────────
-
-@router.callback_query(F.data.startswith("adm_chars:"))
-async def cb_adm_chars(cb: CallbackQuery, user: User):
-    if not is_admin(user.tg_id):
-        return
-    tg_id = cb.data.split(":")[1]
-    from app.data.characters import CHARACTERS
-    absolutes = [c for c in CHARACTERS if c["rank"] == "absolute"]
-    builder = InlineKeyboardBuilder()
-    for i, char in enumerate(absolutes):
-        builder.row(InlineKeyboardButton(
-            text=f"⭐ {char['name']}",
-            callback_data=f"adm_give_char:{tg_id}:{i}"
-        ))
-    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"adm_user:{tg_id}"))
-    try:
-        await cb.message.edit_text(
-            "⭐ Выберите абсолютного персонажа для выдачи:",
-            reply_markup=builder.as_markup(),
-        )
-    except Exception:
-        pass
-
-
-@router.callback_query(F.data.startswith("adm_give_char:"))
-async def cb_adm_give_char(cb: CallbackQuery, session: AsyncSession, user: User):
-    if not is_admin(user.tg_id):
-        return
-    parts = cb.data.split(":")
-    tg_id, char_idx = int(parts[1]), int(parts[2])
-    found = await admin_service.find_user(session, str(tg_id))
-    if not found:
-        await cb.answer("Игрок не найден", show_alert=True)
-        return
-    from app.data.characters import CHARACTERS
-    absolutes = [c for c in CHARACTERS if c["rank"] == "absolute"]
-    if char_idx >= len(absolutes):
-        await cb.answer("Персонаж не найден", show_alert=True)
-        return
-    char_data = absolutes[char_idx]
-    result = await admin_service.give_character(session, found, char_data["name"])
-    if result["ok"]:
-        await cb.answer(f"✅ {char_data['name']} выдан!")
-        try:
-            if found.notifications_enabled:
-                await cb.bot.send_message(
-                    found.tg_id,
-                    f"⭐ <b>Вам выдан абсолютный персонаж!</b>\n\n"
-                    f"<b>{html.escape(char_data['name'])}</b>\n"
-                    f"💥 Мощь: {char_data['power']:,}",
-                    parse_mode="HTML",
-                )
-        except Exception:
-            pass
-    else:
-        await cb.answer(result["reason"], show_alert=True)
-
 
 # ── Статисты ────────────────────────────────────────────────────────────────
 
@@ -1891,6 +1869,148 @@ async def msg_adm_give_squad(message: Message, session: AsyncSession, user: User
         await _show_user_card(message, session, found)
     else:
         await message.answer(f"❌ {result['reason']}")
+
+
+# ── Абсолютные карты ─────────────────────────────────────────────────────────
+
+@router.callback_query(F.data.startswith("adm_give_abs:"))
+async def cb_adm_give_abs(cb: CallbackQuery, user: User):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = cb.data.split(":")[1]
+    from app.data.characters import CHARACTERS
+    absolutes = [c for c in CHARACTERS if c["rank"] == "absolute"]
+    builder = InlineKeyboardBuilder()
+    for c in absolutes:
+        builder.row(InlineKeyboardButton(
+            text=f"🌟 {c['name']} ({c['power']:,} мощи)",
+            callback_data=f"adm_pick_abs:{tg_id}:{c['name']}"
+        ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"adm_user:{tg_id}"))
+    try:
+        await cb.message.edit_text(
+            "🌟 <b>Выдать абсолютную карту</b>\n\nВыберите персонажа:",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("adm_pick_abs:"))
+async def cb_adm_pick_abs(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not is_admin(user.tg_id):
+        return
+    parts = cb.data.split(":", 2)
+    tg_id, char_name = parts[1], parts[2]
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await cb.answer("Игрок не найден", show_alert=True)
+        return
+    result = await admin_service.give_absolute_character(session, found, char_name)
+    if result["ok"]:
+        c = result["character"]
+        await cb.answer(f"✅ {c['name']} выдан! (+{c['power']:,} мощи)", show_alert=True)
+        await _show_user_card(cb.message, session, found)
+    else:
+        await cb.answer(result["reason"], show_alert=True)
+
+
+@router.callback_query(F.data.startswith("adm_take_abs:"))
+async def cb_adm_take_abs(cb: CallbackQuery, user: User):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = cb.data.split(":")[1]
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text="🗑 Да, удалить все абсолютные карты",
+        callback_data=f"adm_take_abs_do:{tg_id}"
+    ))
+    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data=f"adm_user:{tg_id}"))
+    try:
+        await cb.message.edit_text(
+            "⚠️ <b>Удалить все абсолютные карты игрока?</b>\n\nПодтвердить?",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("adm_take_abs_do:"))
+async def cb_adm_take_abs_do(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = int(cb.data.split(":")[1])
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await cb.answer("Игрок не найден", show_alert=True)
+        return
+    result = await admin_service.take_absolute_characters(session, found)
+    await cb.answer(f"✅ Удалено {result['removed']} абс. карт", show_alert=True)
+    await _show_user_card(cb.message, session, found)
+
+
+# ── Города ───────────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data.startswith("adm_give_city:"))
+async def cb_adm_give_city(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = int(cb.data.split(":")[1])
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await cb.answer("Игрок не найден", show_alert=True)
+        return
+    result = await admin_service.give_king_city(session, found)
+    if result["ok"]:
+        await cb.answer(
+            f"✅ Выдан город «{result['city_name']}»\n"
+            f"Городов: {result['cities_count']}",
+            show_alert=True,
+        )
+        await _show_user_card(cb.message, session, found)
+    else:
+        await cb.answer(result.get("reason", "Ошибка"), show_alert=True)
+
+
+@router.callback_query(F.data.startswith("adm_take_cities:"))
+async def cb_adm_take_cities(cb: CallbackQuery, user: User):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = cb.data.split(":")[1]
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text="🏙 Да, забрать все города",
+        callback_data=f"adm_take_cities_do:{tg_id}"
+    ))
+    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data=f"adm_user:{tg_id}"))
+    try:
+        await cb.message.edit_text(
+            "⚠️ <b>Забрать все города игрока?</b>\n\n"
+            "Все районы будут освобождены, счётчики городов обнулятся.\n\nПодтвердить?",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("adm_take_cities_do:"))
+async def cb_adm_take_cities_do(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = int(cb.data.split(":")[1])
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await cb.answer("Игрок не найден", show_alert=True)
+        return
+    result = await admin_service.take_all_cities(session, found)
+    await cb.answer(
+        f"✅ Освобождено {result['removed']} районов, города обнулены",
+        show_alert=True,
+    )
+    await _show_user_card(cb.message, session, found)
 
 
 # ── Утилиты ─────────────────────────────────────────────────────────────────

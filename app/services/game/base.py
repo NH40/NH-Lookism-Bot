@@ -139,7 +139,7 @@ class GameBase:
         try:
             from app.bot_instance import get_bot
             bot = get_bot()
-            if bot and user.notifications_enabled:
+            if bot and user.notifications_enabled and getattr(user, "notif_cities", True):
                 need_text = (
                     f"Осталось городов: <b>{user.king_cities_count}/10</b>. "
                     f"Нужно захватить ещё <b>{need}</b>."

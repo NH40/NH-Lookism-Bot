@@ -44,9 +44,8 @@ async def cb_settings(cb: CallbackQuery, session: AsyncSession, user: User):
     builder.row(InlineKeyboardButton(
         text="✏️ Сменить название банды", callback_data="change_gang_name"
     ))
-    notif_text = f"🔔 Уведомления: {'ВКЛ' if user.notifications_enabled else 'ВЫКЛ'}"
     builder.row(InlineKeyboardButton(
-        text=notif_text, callback_data="toggle_notifications"
+        text="🔔 Уведомления", callback_data="notifications_menu"
     ))
     builder.row(InlineKeyboardButton(
         text="🔗 Реферальная ссылка", callback_data="referral_info"
@@ -61,10 +60,11 @@ async def cb_settings(cb: CallbackQuery, session: AsyncSession, user: User):
         text="◀️ Назад", callback_data="main_menu"
     ))
 
+    master = "ВКЛ" if user.notifications_enabled else "ВЫКЛ"
     await cb.message.edit_text(
         f"⚙️ <b>Настройки</b>\n\n"
         f"🏴 Название банды: {user.gang_name or 'не задано'}\n"
-        f"🔔 Уведомления: {'ВКЛ' if user.notifications_enabled else 'ВЫКЛ'}\n"
+        f"🔔 Уведомления: {master}\n"
         f"🔖 Версия: {version}\n\n"
         f"Выбери действие:",
         reply_markup=builder.as_markup(),
@@ -141,13 +141,86 @@ async def msg_gang_name(
     )
 
 
-@router.callback_query(F.data == "toggle_notifications")
-async def cb_toggle_notifications(
-    cb: CallbackQuery, session: AsyncSession, user: User
-):
-    user.notifications_enabled = not user.notifications_enabled
+def _notif_icon(enabled: bool) -> str:
+    return "🔔" if enabled else "🔕"
+
+
+def _on_off(enabled: bool) -> str:
+    return "ВКЛ" if enabled else "ВЫКЛ"
+
+
+@router.callback_query(F.data == "notifications_menu")
+async def cb_notifications_menu(cb: CallbackQuery, session: AsyncSession, user: User):
+    master = user.notifications_enabled
+    pvp = getattr(user, "notif_pvp", True)
+    auction = getattr(user, "notif_auction", True)
+    cities = getattr(user, "notif_cities", True)
+    clan_war = getattr(user, "notif_clan_war", True)
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text=f"{'🔔' if master else '🔕'} Все уведомления: {_on_off(master)}",
+        callback_data="toggle_notif:master"
+    ))
+    builder.row(InlineKeyboardButton(
+        text=f"{'─' * 20}", callback_data="noop"
+    ))
+    if master:
+        builder.row(InlineKeyboardButton(
+            text=f"{_notif_icon(pvp)} ⚔️ PvP атаки: {_on_off(pvp)}",
+            callback_data="toggle_notif:pvp"
+        ))
+        builder.row(InlineKeyboardButton(
+            text=f"{_notif_icon(auction)} 🏆 Аукционы: {_on_off(auction)}",
+            callback_data="toggle_notif:auction"
+        ))
+        builder.row(InlineKeyboardButton(
+            text=f"{_notif_icon(cities)} 🏙 Прогресс городов: {_on_off(cities)}",
+            callback_data="toggle_notif:cities"
+        ))
+        builder.row(InlineKeyboardButton(
+            text=f"{_notif_icon(clan_war)} 🏯 Клановые войны: {_on_off(clan_war)}",
+            callback_data="toggle_notif:clan_war"
+        ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="settings"))
+
+    lines = [
+        f"🔔 <b>Настройки уведомлений</b>\n",
+        f"Мастер: <b>{_on_off(master)}</b>",
+    ]
+    if master:
+        lines += [
+            f"",
+            f"⚔️ PvP атаки: <b>{_on_off(pvp)}</b>",
+            f"🏆 Аукционы: <b>{_on_off(auction)}</b>",
+            f"🏙 Прогресс городов: <b>{_on_off(cities)}</b>",
+            f"🏯 Клановые войны: <b>{_on_off(clan_war)}</b>",
+        ]
+    else:
+        lines.append(f"\n<i>Включи мастер-переключатель чтобы настроить категории</i>")
+
+    await cb.message.edit_text(
+        "\n".join(lines),
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(F.data.startswith("toggle_notif:"))
+async def cb_toggle_notif(cb: CallbackQuery, session: AsyncSession, user: User):
+    key = cb.data.split(":")[1]
+    if key == "master":
+        user.notifications_enabled = not user.notifications_enabled
+    elif key == "pvp":
+        user.notif_pvp = not getattr(user, "notif_pvp", True)
+    elif key == "auction":
+        user.notif_auction = not getattr(user, "notif_auction", True)
+    elif key == "cities":
+        user.notif_cities = not getattr(user, "notif_cities", True)
+    elif key == "clan_war":
+        user.notif_clan_war = not getattr(user, "notif_clan_war", True)
     await session.flush()
-    await cb_settings(cb, session, user)
+    await cb_notifications_menu(cb, session, user)
 
 @router.callback_query(F.data == "delete_gang_confirm")
 async def cb_delete_gang_confirm(cb: CallbackQuery, session: AsyncSession, user: User):

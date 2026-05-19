@@ -23,6 +23,7 @@ class ReferralService:
             return False
 
         student.referred_by = teacher.id
+        student.teacher_power_bonus = 75_000
         teacher.nh_coins += 1000
 
         existing = await session.execute(

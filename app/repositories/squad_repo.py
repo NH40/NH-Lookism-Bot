@@ -46,13 +46,8 @@ class SquadRepo:
         )
         char_power = char_r.scalar() or 0
 
-        # 3. Бонус от учителя (пересчитывается по текущей мощи учителя)
-        teacher_bonus = 0
-        if user.referred_by:
-            teacher = await session.get(User, user.referred_by)
-            if teacher:
-                teacher_bonus = int(teacher.combat_power * 0.05)
-                user.teacher_power_bonus = teacher_bonus
+        # 3. Бонус от учителя (обновляется scheduler'ом каждые 30 мин)
+        teacher_bonus = user.teacher_power_bonus if user.referred_by else 0
 
         total = squad_power + char_power + teacher_bonus
 

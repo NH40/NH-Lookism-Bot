@@ -4,22 +4,44 @@
  • Communists(Clan) - 75,000,000
 
 Абсолют:
-  • Табаско (Unlucky) — 30,000,001 мощи
-  • Malosolny Ogurchik (Emperor) — 31,000,000 мощи
-  • Quan’de Manchesten (100M) — 20,000,000 мощи
-  • Менеджер (Fair) — -4,000,000 мощи
-  • Никита (Despair) — 35,000,000 мощи
-  • Архангел (VVIP) — 40,000,000 мощи
-
+ • Табаско (Unlucky) — 21,000,001 мощи
+ • Malosolny Ogurchik (Emperor) — 21,000,000 мощи
+ • Quan’de Manchesten (100M) — 21,000,000 мощи
+ • Менеджер (Fair) — -4,000,000 мощи
+ • Никита (Despair) — 35,000,000 мощи
+ • Архангел (WWIP) — 40,000,000 мощи
+ • Some Thing (STYLIST) — 28,600,000 мощи
+ 
 Вершина:
- • Daniel (Prime) — 20,000,000 мощи
- • 
- • 
- • 
+ • Daniel (Prime) — 12,000,000 мощи
+ • Gapryong (Prime) — 5,000,000 мощи
+ • Shingen (Prime) — 4,200,000 мощи
+ • James (Prime) — 4,000,000 мощи
+ • Gitae (Path) — 3,800,000 мощи
+ • Mujin (Prime) — 2,000,000 мощи
+ • Jinyoung (Path) — 1,900,000 мощи
 
 Легенда:
-
+ • Tom (Rage mode) — 990,000
+ • Gapryong (Overcoming) — 800,000
+ • Gun (TUI) — 700,000
+ • Goo (Hwarang) — 700,000
+ • Big Danuel (UI) — 650,000
+ • Jincheol (Path) — 600,000
+ • Sophia (Path) — 600,000
+ • Samdak (Prime) — 550,000
+ • Meneger Kim (Path) — 500,000
+ • Hansu (0%) — 400,000
+ • Goo (50 styles) — 400,000
+ • Brekdak (Legend) — 320,000
+  
 Новая легенда:
+ • Og Daniel (UI) — 100,000
+ • Meneger Kim (Path) — 500,000
+ • Hansu (0%) — 400,000
+ • Goo (50 styles) — 400,000
+ • Brekdak (Legend) — 320,000
+
 
 0 поколение:
 

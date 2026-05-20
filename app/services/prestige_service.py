@@ -7,6 +7,7 @@ from app.models.character import UserCharacter
 from app.models.city import District, FistBot
 from app.models.king_bot import KingBot
 from app.models.skill import UserMastery, UserPathSkills
+from app.models.potion import ActivePotion
 
 # Убираем MAX_PRESTIGE = 10 и добавляем вверху:
 from app.constants.prestige import (
@@ -65,9 +66,14 @@ class PrestigeService:
         user.double_attack_used = False
         user.extra_attack_count = 0
 
-        # ── Путь сбрасывается всегда (выбранный путь / мультипликатор) ───
+        # ── Путь сбрасывается всегда ──────────────────────────────────────
         user.skill_path = None
         user.skill_path_bonus_multiplier = 1.0
+        user.skill_path_level = 0
+        user.path_fragments = 0
+        user.extra_path_skill_slots = 1
+        user.double_ticket = False
+        user.path_awakened = False
 
         # ── Очки мастерства и пути — только при полном сбросе ────────────
         if not keep_progress:
@@ -91,6 +97,9 @@ class PrestigeService:
         )
         await session.execute(
             delete(UserCharacter).where(UserCharacter.user_id == user.id)
+        )
+        await session.execute(
+            delete(ActivePotion).where(ActivePotion.user_id == user.id)
         )
         await session.execute(
             delete(District).where(District.owner_id == user.id)

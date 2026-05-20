@@ -102,10 +102,23 @@ class AdminService:
             .values(is_cancelled=True)
         )
 
-        # ── Предварительная очистка зданий глобально (гарантирует 0 зданий после вайпа) ──
+        # ── Глобальная очистка таблиц (быстрее, чем по одному в цикле) ─────────
         from app.models.building import UserBuilding
-        from sqlalchemy import delete as sa_delete
+        from app.models.potion import ActivePotion
+        from app.models.squad_member import SquadMember
+        from app.models.character import UserCharacter
+        from app.models.skill import UserPathSkills
+        from app.models.king_bot import KingBot
+        from app.models.city import District, FistBot
+        from sqlalchemy import delete as sa_delete, update as sa_update
         await session.execute(sa_delete(UserBuilding))
+        await session.execute(sa_delete(ActivePotion))
+        await session.execute(sa_delete(SquadMember))
+        await session.execute(sa_delete(UserCharacter))
+        await session.execute(sa_delete(UserPathSkills))
+        await session.execute(sa_delete(KingBot))
+        await session.execute(sa_update(District).values(owner_id=None, is_captured=False))
+        await session.execute(sa_update(FistBot).values(challenger_id=None, is_defeated=False))
         await session.flush()
 
         # ── Сброс прогресса ───────────────────────────────────────────────────────

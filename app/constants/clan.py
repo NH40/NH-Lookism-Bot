@@ -134,8 +134,8 @@ CLAN_AUCTION_REWARDS = {
         {"type": "squad",          "rank": "MP",  "amount": 10,  "label": "🔱 10×MP статистов"},
         {"type": "character",      "rank": "new_legend",  "label": "🟥 Персонаж New Legend"},
         {"type": "character",      "rank": "gen_zero",    "label": "🟧 Персонаж Gen Zero"},
-        {"type": "path_fragments", "amount": 80,           "label": "🔮 80 фрагментов пути"},
-        {"type": "mastery_points", "amount": 2_000,        "label": "🏅 2000 очков мастерства"},
+        {"type": "path_fragments", "amount": 50,           "label": "🔮 80 фрагментов пути"},
+        {"type": "mastery_points", "amount": 100,        "label": "🏅 100 очков мастерства"},
         {"type": "ui_fragments",   "amount": 50,           "label": "⚡ 50 UI-фрагментов"},
     ],
 }

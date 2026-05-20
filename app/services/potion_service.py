@@ -107,6 +107,10 @@ class PotionService:
         potions = await self.get_active(session, user_id)
         return sum(p.bonus_value for p in potions if p.potion_type == "income")
 
+    async def get_raid_drop_bonus(self, session: AsyncSession, user_id: int) -> int:
+        potions = await self.get_active(session, user_id)
+        return sum(p.bonus_value for p in potions if p.potion_type == "raid_drop")
+
     _TYPE_LABEL = {
         "power":     "⚔️ Зелье силы",
         "income":    "💰 Зелье богатства",

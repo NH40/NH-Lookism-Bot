@@ -117,11 +117,15 @@ class RaidService:
         session.add(raid)
         await session.flush()
 
-        # Ставим КД на первую атаку
-        speed_pct = await self._get_speed_pct(session, user)
-        attack_cd = cooldown_service.apply_speed_reduction(RAID_ATTACK_CD_SECONDS, speed_pct)
+        # Первая атака: тратим заряд если есть, иначе ставим КД
         attack_cd_key = self.attack_cd_key(raid.id, user.id)
-        await cooldown_service.set_cooldown(attack_cd_key, attack_cd)
+        if user.extra_attack_count > 0:
+            user.extra_attack_count -= 1
+        else:
+            speed_pct = await self._get_speed_pct(session, user)
+            attack_cd = cooldown_service.apply_speed_reduction(RAID_ATTACK_CD_SECONDS, speed_pct)
+            await cooldown_service.set_cooldown(attack_cd_key, attack_cd)
+            user.extra_attack_count = await self._get_max_extra_attacks(session, user)
 
         return {
             "ok": True,
@@ -172,15 +176,21 @@ class RaidService:
         raid.damage_dealt += power
         raid.attack_count += 1
 
-        speed_pct = await self._get_speed_pct(session, user)
-        attack_cd = cooldown_service.apply_speed_reduction(RAID_ATTACK_CD_SECONDS, speed_pct)
-        await cooldown_service.set_cooldown(attack_cd_key, attack_cd)
+        if user.extra_attack_count > 0:
+            user.extra_attack_count -= 1
+        else:
+            speed_pct = await self._get_speed_pct(session, user)
+            attack_cd = cooldown_service.apply_speed_reduction(RAID_ATTACK_CD_SECONDS, speed_pct)
+            await cooldown_service.set_cooldown(attack_cd_key, attack_cd)
+            user.extra_attack_count = await self._get_max_extra_attacks(session, user)
 
         # ── Проверяем убит ли босс ──────────────────────────────────────
         boss_killed = raid.damage_dealt >= boss["base_hp"]
         if boss_killed:
             reward_type = boss.get("reward_fragments", "ui")
-            fragments = self._calc_fragments(raid.damage_dealt, boss["base_hp"], reward_type)
+            from app.services.potion_service import potion_service
+            drop_bonus = await potion_service.get_raid_drop_bonus(session, user.id)
+            fragments = self._calc_fragments(raid.damage_dealt, boss["base_hp"], reward_type, drop_bonus)
             raid.is_finished = True
             raid.fragments_earned = fragments
             if reward_type == "alchemy":
@@ -251,7 +261,9 @@ class RaidService:
             }
 
         reward_type = boss.get("reward_fragments", "ui")
-        fragments = self._calc_fragments(raid.damage_dealt, boss["base_hp"], reward_type)
+        from app.services.potion_service import potion_service
+        drop_bonus = await potion_service.get_raid_drop_bonus(session, user.id)
+        fragments = self._calc_fragments(raid.damage_dealt, boss["base_hp"], reward_type, drop_bonus)
         raid.is_finished = True
         raid.fragments_earned = fragments
         if reward_type == "alchemy":
@@ -293,34 +305,56 @@ class RaidService:
         )
         return result.scalar_one_or_none()
 
-    def _calc_fragments(self, damage: int, boss_hp: int, reward_type: str = "ui") -> int:
+    async def _get_max_extra_attacks(self, session: AsyncSession, user: User) -> int:
+        if not user.double_attack:
+            return 0
+        from app.models.skill import UserPathSkills
+        path_skill_r = await session.execute(
+            select(UserPathSkills).where(
+                UserPathSkills.user_id == user.id,
+                UserPathSkills.skill_id == "mon_dattack",
+            )
+        )
+        has_path_attack = path_skill_r.scalar_one_or_none() is not None
+        from app.repositories.title_repo import title_repo
+        has_monster_set = await title_repo.has_set(session, user.id, "monster")
+        count = 0
+        if has_path_attack:
+            count += 1
+        if has_monster_set:
+            count += 1
+        return count
+
+    def _calc_fragments(self, damage: int, boss_hp: int, reward_type: str = "ui", drop_bonus_pct: int = 0) -> int:
         ratio = min(1.0, damage / boss_hp)
         if reward_type == "alchemy":
             if ratio >= 0.5:
-                return random.randint(20, ALCHEMY_MAX_FRAGMENTS_PER_RAID)
+                base = random.randint(20, ALCHEMY_MAX_FRAGMENTS_PER_RAID)
             elif ratio >= 0.2:
-                return random.randint(12, 19)
+                base = random.randint(12, 19)
             elif ratio >= 0.05:
-                return random.randint(5, 11)
+                base = random.randint(5, 11)
             else:
-                return random.randint(1, 4)
-        if reward_type == "path":
+                base = random.randint(1, 4)
+        elif reward_type == "path":
             if ratio >= 0.5:
-                return random.randint(15, PATH_FRAGMENTS_MAX_PER_RAID)
+                base = random.randint(15, PATH_FRAGMENTS_MAX_PER_RAID)
             elif ratio >= 0.2:
-                return random.randint(8, 14)
+                base = random.randint(8, 14)
             elif ratio >= 0.05:
-                return random.randint(3, 7)
+                base = random.randint(3, 7)
             else:
-                return random.randint(1, 2)
-        if ratio >= 0.5:
-            return random.randint(15, 25)
-        elif ratio >= 0.2:
-            return random.randint(8, 15)
-        elif ratio >= 0.05:
-            return random.randint(3, 8)
+                base = random.randint(1, 2)
         else:
-            return random.randint(1, 3)
+            if ratio >= 0.5:
+                base = random.randint(15, 25)
+            elif ratio >= 0.2:
+                base = random.randint(8, 15)
+            elif ratio >= 0.05:
+                base = random.randint(3, 8)
+            else:
+                base = random.randint(1, 3)
+        return int(base * (1 + drop_bonus_pct / 100))
 
     async def craft_path_spin(
         self, session: AsyncSession, user: User

@@ -226,22 +226,28 @@ async def cb_raid_status(cb: CallbackQuery, session: AsyncSession, user: User):
 
     builder = InlineKeyboardBuilder()
 
+    extra_charges = user.extra_attack_count if remaining > 0 else 0
+    can_attack_now = remaining > 0 and (not attack_cd["on_cd"] or extra_charges > 0)
+
     if remaining == 0:
         builder.row(InlineKeyboardButton(
             text="🎁 Получить награду!",
             callback_data=f"raid_claim:{raid_id}"
         ))
     else:
-        if attack_cd["on_cd"]:
+        if can_attack_now:
+            label = "⚔️ Атаковать босса!"
+            if extra_charges > 0:
+                label = f"⚔️ Атаковать ({extra_charges} заряда осталось)"
+            builder.row(InlineKeyboardButton(
+                text=label,
+                callback_data=f"raid_attack:{raid_id}"
+            ))
+        else:
             ttl_str = cooldown_service.format_ttl(attack_cd["ttl"])
             builder.row(InlineKeyboardButton(
                 text=f"⚔️ Атака — ⏳ {ttl_str}",
                 callback_data="noop_raid"
-            ))
-        else:
-            builder.row(InlineKeyboardButton(
-                text="⚔️ Атаковать босса!",
-                callback_data=f"raid_attack:{raid_id}"
             ))
 
     builder.row(InlineKeyboardButton(
@@ -254,10 +260,19 @@ async def cb_raid_status(cb: CallbackQuery, session: AsyncSession, user: User):
     boss_name = boss["name"] if boss else raid.boss_id
     boss_hp = boss["base_hp"] if boss else 0
 
-    # Считаем процент урона от HP
     damage_pct = min(100.0, (raid.damage_dealt / boss_hp * 100)) if boss_hp > 0 else 0
     hp_bar_filled = int(damage_pct / 10)
     hp_bar = "🟥" * hp_bar_filled + "⬛" * (10 - hp_bar_filled)
+
+    status_line = (
+        f"⏳ До конца рейда: {cooldown_service.format_ttl(remaining)}"
+        if remaining > 0 else "✅ Рейд завершён! Забери награду."
+    )
+    extra_line = ""
+    if remaining > 0 and extra_charges > 0:
+        extra_line = f"\n⚡ Доп. атак: <b>{extra_charges}</b> (без КД)"
+    elif remaining > 0 and not attack_cd["on_cd"]:
+        extra_line = "\n\n⚔️ Атакуй снова чтобы накопить больше урона!"
 
     await cb.message.edit_text(
         f"⚔️ <b>Активный рейд — {boss_name}</b>\n\n"
@@ -265,9 +280,7 @@ async def cb_raid_status(cb: CallbackQuery, session: AsyncSession, user: User):
         f"💥 Нанесённый урон: <b>{fmt_num(raid.damage_dealt)}</b> ({damage_pct:.1f}%)\n"
         f"{hp_bar}\n"
         f"🗡 Атак совершено: <b>{raid.attack_count}</b>\n\n"
-        + (f"⏳ До конца рейда: {cooldown_service.format_ttl(remaining)}"
-           if remaining > 0 else "✅ Рейд завершён! Забери награду.")
-        + ("\n\n⚔️ Атакуй снова чтобы накопить больше урона!" if remaining > 0 and not attack_cd["on_cd"] else ""),
+        + status_line + extra_line,
         reply_markup=builder.as_markup(),
         parse_mode="HTML",
     )

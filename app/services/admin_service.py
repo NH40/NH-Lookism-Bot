@@ -118,7 +118,7 @@ class AdminService:
         await session.execute(sa_delete(UserPathSkills))
         await session.execute(sa_delete(KingBot))
         await session.execute(sa_update(District).values(owner_id=None, is_captured=False))
-        await session.execute(sa_update(FistBot).values(challenger_id=None, is_defeated=False))
+        await session.execute(sa_update(FistBot).values(challenger_id=None))
         await session.flush()
 
         # ── Сброс прогресса ───────────────────────────────────────────────────────

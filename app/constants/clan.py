@@ -94,9 +94,9 @@ CLAN_SHOP_ITEMS: list[ClanShopItem] = [
     ClanShopItem("char_newlegend_all", "🟥 Персонаж new_legend всем","Случайный new_legend всем",60_000_000,  "character", "character", "new_legend"),
 
     # ── Аукцион ───────────────────────────────────────────────────────────────
-    ClanShopItem("auction_common",    "🏛 Аукцион (обычный)",    "Аукцион обычного тира",    1_500_000,  "auction", "auction", "common"),
-    ClanShopItem("auction_rare",      "🏛 Аукцион (редкий)",     "Аукцион редкого тира",     7_500_000,  "auction", "auction", "rare"),
-    ClanShopItem("auction_epic",      "🏛 Аукцион (эпический)",  "Аукцион эпического тира",  20_000_000,  "auction", "auction", "epic"),
+    ClanShopItem("auction_common",    "🏛 Аукцион (обычный)",    "Аукцион обычного тира",    5_500_000,  "auction", "auction", "common"),
+    ClanShopItem("auction_rare",      "🏛 Аукцион (редкий)",     "Аукцион редкого тира",     15_500_000,  "auction", "auction", "rare"),
+    ClanShopItem("auction_epic",      "🏛 Аукцион (эпический)",  "Аукцион эпического тира",  50_000_000,  "auction", "auction", "epic"),
 ]
 
 CLAN_SHOP_MAP: dict[str, ClanShopItem] = {i.item_id: i for i in CLAN_SHOP_ITEMS}

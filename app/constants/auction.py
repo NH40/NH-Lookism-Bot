@@ -9,10 +9,10 @@ TIER_WEIGHTS = {
     1: 35,
     2: 25,
     3: 18,
-    4: 10,
+    4: 12,
     5: 7,
-    6: 4,
-    7: 1,
+    6: 2.9,
+    7: 0.1,
 }
 
 AUCTION_TIERS = {
@@ -22,7 +22,7 @@ AUCTION_TIERS = {
     4: {"name": "Платиновый",   "emoji": "🟦", "rounds": 3, "min_bid": 15000,  "reward_type": "character"},
     5: {"name": "Королевский",  "emoji": "🟧", "rounds": 4, "min_bid": 50000,  "reward_type": "character"},
     6: {"name": "Хрустальный",  "emoji": "🔷", "rounds": 3, "min_bid": 8000,   "reward_type": "fragments"},
-    7: {"name": "Реликвия",     "emoji": "🌟", "rounds": 5, "min_bid": 100000, "reward_type": "absolute"},
+    7: {"name": "Реликвия",     "emoji": "🌟", "rounds": 1, "min_bid": 100000, "reward_type": "absolute"},
 }
 
 RANK_BY_TIER = {

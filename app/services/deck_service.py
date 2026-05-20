@@ -28,9 +28,10 @@ class DeckService:
         if user.tickets >= user.max_tickets:
             return {"ok": False, "reason": f"Хранилище полно ({user.tickets}/{user.max_tickets})"}
 
-        # Шанс тикета
+        # Шанс тикета (все бонусы суммируются, но не превышают max_ticket_chance)
+        cap = getattr(user, "max_ticket_chance", 70)
         chance = await potion_service.get_effective_ticket_chance(session, user)
-        chance = min(95, chance + user.prestige_ticket_bonus + getattr(user, 'clan_ticket_bonus', 0) + getattr(user, 'clan_donat_ticket_bonus', 0))
+        chance = min(cap, chance + user.prestige_ticket_bonus + getattr(user, 'clan_ticket_bonus', 0) + getattr(user, 'clan_donat_ticket_bonus', 0))
         roll = random.randint(1, 100)
         got = roll <= chance
 

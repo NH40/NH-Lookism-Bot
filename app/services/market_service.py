@@ -185,6 +185,12 @@ class MarketService:
                 return {"ok": False, "reason": f"Недостаточно фрагментов алхимии (есть {user.alchemy_fragments})"}
             user.alchemy_fragments -= amount
 
+        elif item_type == "path_fragments":
+            cur = user.path_fragments or 0
+            if cur < amount:
+                return {"ok": False, "reason": f"Недостаточно фрагментов Пути (есть {cur})"}
+            user.path_fragments = cur - amount
+
         elif item_type == "squad_member":
             from app.models.squad_member import SquadMember
             rank = meta.get("rank") if meta else None
@@ -248,6 +254,9 @@ class MarketService:
 
         elif item_type == "alchemy_fragments":
             user.alchemy_fragments += amount
+
+        elif item_type == "path_fragments":
+            user.path_fragments = (user.path_fragments or 0) + amount
 
         elif item_type == "squad_member":
             from app.models.squad_member import SquadMember

@@ -53,6 +53,14 @@ class ClanExchangeService(ClanBaseService):
             from_user.alchemy_fragments -= amount
             to_user.alchemy_fragments += amount
 
+        elif resource_type == "path_fragments":
+            if amount <= 0:
+                return {"ok": False, "reason": "Количество должно быть больше 0"}
+            if (from_user.path_fragments or 0) < amount:
+                return {"ok": False, "reason": "Недостаточно фрагментов Пути"}
+            from_user.path_fragments = (from_user.path_fragments or 0) - amount
+            to_user.path_fragments = (to_user.path_fragments or 0) + amount
+
         elif resource_type == "path_points":
             if amount <= 0:
                 return {"ok": False, "reason": "Количество должно быть больше 0"}

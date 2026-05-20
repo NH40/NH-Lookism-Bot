@@ -26,18 +26,6 @@ class SquadRepo:
             star_bonus = STAR_BONUS_PERCENT.get(m.stars, 0)
             squad_power += int(m.base_power * (1 + star_bonus / 100))
 
-        # Бонус мастерства силы
-        from app.models.skill import UserMastery
-        mastery_r = await session.execute(
-            select(UserMastery).where(UserMastery.user_id == user.id)
-        )
-        mastery = mastery_r.scalar_one_or_none()
-        if mastery:
-            strength_bonus = {0: 0, 1: 5, 2: 10, 3: 20, 4: 30}
-            raw = strength_bonus.get(mastery.strength, 0)
-            effective = raw * user.skill_path_bonus_multiplier
-            squad_power = int(squad_power * (1 + effective / 100))
-
         # 2. Мощь персонажей
         char_r = await session.execute(
             select(func.sum(UserCharacter.power)).where(
@@ -50,6 +38,18 @@ class SquadRepo:
         teacher_bonus = user.teacher_power_bonus if user.referred_by else 0
 
         total = squad_power + char_power + teacher_bonus
+
+        # Бонус мастерства силы — применяется ко ВСЕЙ боевой мощи (отряд + персонажи)
+        from app.models.skill import UserMastery
+        mastery_r = await session.execute(
+            select(UserMastery).where(UserMastery.user_id == user.id)
+        )
+        mastery = mastery_r.scalar_one_or_none()
+        if mastery:
+            strength_bonus = {0: 0, 1: 5, 2: 10, 3: 20, 4: 30}
+            raw = strength_bonus.get(mastery.strength, 0)
+            effective = raw * user.skill_path_bonus_multiplier
+            total = int(total * (1 + effective / 100))
 
         # 4. Донат-множители
         from app.repositories.title_repo import title_repo

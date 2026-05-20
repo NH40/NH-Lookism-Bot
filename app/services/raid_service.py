@@ -134,7 +134,8 @@ class RaidService:
             "damage": power,
             "total_damage": power,
             "ends_at": ends_at,
-            "duration_hours": boss["raid_duration_seconds"] // 3600,  
+            "duration_hours": boss["raid_duration_seconds"] // 3600,
+            "reward_type": boss.get("reward_fragments", "ui"),
         }
 
     async def attack_boss(
@@ -156,7 +157,8 @@ class RaidService:
             return {"ok": False, "reason": "Время рейда истекло! Забери награду."}
 
         attack_cd_key = self.attack_cd_key(raid_id, user.id)
-        if await cooldown_service.is_on_cooldown(attack_cd_key):
+        # Проверяем КД только если нет доп. зарядов атаки
+        if user.extra_attack_count <= 0 and await cooldown_service.is_on_cooldown(attack_cd_key):
             ttl = await cooldown_service.get_ttl(attack_cd_key)
             return {
                 "ok": False,

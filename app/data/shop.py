@@ -48,7 +48,7 @@ POTIONS: list[PotionConfig] = [
     PotionConfig("potion_influence", "⚡ Зелье влияния",    "Влияние +40% на 45 минут",           "influence",  40, 45, 18_000),
     PotionConfig("potion_training",  "🏋 Зелье тренировки", "Охват тренировки +25% на 60 минут",  "training",   25, 60, 15_000),
     PotionConfig("potion_luck",      "🍀 Зелье удачи",      "Шанс тикета +20% на 30 минут",       "luck",       20, 30, 12_000),
-    PotionConfig("potion_raid_drop", "💠 Зелье охотника",   "Дроп фрагментов с боссов +75% на 60 минут", "raid_drop", 75, 60, 40_000),
+    PotionConfig("potion_raid_drop", "💠 Зелье охотника",   "Дроп фрагментов с боссов +30% на 60 минут", "raid_drop", 30, 60, 40_000),
 ]
 
 POTION_MAP: dict[str, PotionConfig] = {p.potion_id: p for p in POTIONS}

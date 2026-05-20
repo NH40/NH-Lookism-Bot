@@ -25,6 +25,7 @@ RESOURCES = [
     ("mastery_points",    "⭐ Очки мастерства"),
     ("ui_fragments",      "🔮 Фрагменты УИ"),
     ("alchemy_fragments", "🧪 Фрагменты алхимии"),
+    ("path_fragments",    "🔷 Фрагменты Пути"),
     ("path_points",       "🔷 Очки пути"),
     ("squad",             "👥 Статисты"),
     ("character",         "🎴 Персонажи"),
@@ -36,6 +37,7 @@ RESOURCE_FIELDS = {
     "mastery_points":    "mastery_points",
     "ui_fragments":      "ui_fragments",
     "alchemy_fragments": "alchemy_fragments",
+    "path_fragments":    "path_fragments",
     "path_points":       "skill_path_points",
 }
 

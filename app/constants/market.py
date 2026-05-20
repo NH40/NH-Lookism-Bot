@@ -6,6 +6,7 @@ ITEM_TYPES = {
     "mastery_points":    "⭐ Очки мастерства",
     "ui_fragments":      "🔮 Фрагменты УИ",
     "alchemy_fragments": "🧪 Фрагменты алхимии",
+    "path_fragments":    "🔷 Фрагменты Пути",
 }
 
 MAX_LISTINGS_PER_USER = 5

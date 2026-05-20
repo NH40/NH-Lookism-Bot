@@ -190,6 +190,13 @@ async def cb_raid_start(cb: CallbackQuery, session: AsyncSession, user: User):
         return
 
     ends_at = result["ends_at"]
+    reward_type = result.get("reward_type", "ui")
+    if reward_type == "alchemy":
+        frag_line = "чтобы получить фрагменты алхимии!"
+    elif reward_type == "path":
+        frag_line = "чтобы получить фрагменты Пути!"
+    else:
+        frag_line = "чтобы получить фрагменты УИ!"
     await cb.message.edit_text(
         f"⚔️ <b>Рейд начался!</b>\n\n"
         f"👹 Босс: {result['boss_name']}\n"
@@ -197,7 +204,7 @@ async def cb_raid_start(cb: CallbackQuery, session: AsyncSession, user: User):
         f"⏱ Рейд завершится через: <b>{result['duration_hours']} час</b>\n"
         f"🕐 Время окончания: {ends_at.strftime('%H:%M')}\n\n"
         f"По истечении времени вернись сюда\n"
-        f"чтобы получить фрагменты УИ!",
+        f"{frag_line}",
         reply_markup=back_kb("raid_menu"),
         parse_mode="HTML",
     )

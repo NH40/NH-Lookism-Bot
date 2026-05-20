@@ -66,11 +66,12 @@ class PrestigeService:
         user.double_attack_used = False
         user.extra_attack_count = 0
 
-        # ── Путь сбрасывается всегда ──────────────────────────────────────
+        # ── Путь и алхимия сбрасываются всегда ───────────────────────────
         user.skill_path = None
         user.skill_path_bonus_multiplier = 1.0
         user.skill_path_level = 0
         user.path_fragments = 0
+        user.alchemy_fragments = 0
         user.extra_path_skill_slots = 1
         user.double_ticket = False
         user.path_awakened = False

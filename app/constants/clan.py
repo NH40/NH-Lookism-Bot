@@ -104,15 +104,14 @@ CLAN_SHOP_MAP: dict[str, ClanShopItem] = {i.item_id: i for i in CLAN_SHOP_ITEMS}
 # ── Аукционные призы ───────────────────────────────────────────────────────────
 CLAN_AUCTION_REWARDS = {
     "common": [
-        {"type": "coins",          "amount": 4_000_000,  "label": "💰 4M NHCoin"},
-        {"type": "coins",          "amount": 7_000_000,  "label": "💰 7M NHCoin"},
-        {"type": "tickets",        "amount": 5,           "label": "🎟 5 тикетов"},
-        {"type": "tickets",        "amount": 8,           "label": "🎟 8 тикетов"},
-        {"type": "squad",          "rank": "SSS", "amount": 200, "label": "🔷 200×SSS статистов"},
-        {"type": "squad",          "rank": "SR",  "amount": 75,  "label": "🌟 75×SR статистов"},
-        {"type": "path_fragments", "amount": 15,          "label": "🔮 15 фрагментов пути"},
-        {"type": "potion",         "potion_id": "potion_combat",  "label": "⚔️ Зелье силы"},
-        {"type": "potion",         "potion_id": "potion_income",  "label": "💰 Зелье богатства"},
+        {"type": "coins",   "amount": 4_000_000,  "label": "💰 4M NHCoin"},
+        {"type": "coins",   "amount": 7_000_000,  "label": "💰 7M NHCoin"},
+        {"type": "tickets", "amount": 5,           "label": "🎟 5 тикетов"},
+        {"type": "tickets", "amount": 8,           "label": "🎟 8 тикетов"},
+        {"type": "squad",   "rank": "SSS", "amount": 200, "label": "🔷 200×SSS статистов"},
+        {"type": "squad",   "rank": "SR",  "amount": 75,  "label": "🌟 75×SR статистов"},
+        {"type": "potion",  "potion_id": "potion_combat",  "label": "⚔️ Зелье силы"},
+        {"type": "potion",  "potion_id": "potion_income",  "label": "💰 Зелье богатства"},
     ],
     "rare": [
         {"type": "coins",          "amount": 20_000_000,  "label": "💰 20M NHCoin"},
@@ -123,8 +122,7 @@ CLAN_AUCTION_REWARDS = {
         {"type": "squad",          "rank": "UR",  "amount": 30,  "label": "💎 30×UR статистов"},
         {"type": "character",      "rank": "gen_zero",    "label": "🟧 Персонаж Gen Zero"},
         {"type": "character",      "rank": "strong_king", "label": "🟨 Персонаж Strong King"},
-        {"type": "path_fragments", "amount": 40,           "label": "🔮 40 фрагментов пути"},
-        {"type": "mastery_points", "amount": 500,          "label": "🏅 500 очков мастерства"},
+        # {"type": "mastery_points", "amount": 20,          "label": "🏅 20 очков мастерства"},
     ],
     "epic": [
         {"type": "coins",          "amount": 100_000_000, "label": "💰 100M NHCoin"},
@@ -134,9 +132,7 @@ CLAN_AUCTION_REWARDS = {
         {"type": "squad",          "rank": "MP",  "amount": 10,  "label": "🔱 10×MP статистов"},
         {"type": "character",      "rank": "new_legend",  "label": "🟥 Персонаж New Legend"},
         {"type": "character",      "rank": "gen_zero",    "label": "🟧 Персонаж Gen Zero"},
-        {"type": "path_fragments", "amount": 50,           "label": "🔮 80 фрагментов пути"},
-        {"type": "mastery_points", "amount": 100,        "label": "🏅 100 очков мастерства"},
-        {"type": "ui_fragments",   "amount": 50,           "label": "⚡ 50 UI-фрагментов"},
+        # {"type": "mastery_points", "amount": 80,         "label": "🏅 80 очков мастерства"},
     ],
 }
 

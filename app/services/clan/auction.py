@@ -36,6 +36,21 @@ class ClanAuctionService(ClanBaseService):
         await session.flush()
         return {"ok": True}
 
+    async def get_expired_auction_ids(self, session: AsyncSession) -> list[int]:
+        """Возвращает IDs истёкших незавершённых аукционов."""
+        now = datetime.now(timezone.utc)
+        result = await session.execute(
+            select(ClanAuction.id).where(ClanAuction.is_finished == False, ClanAuction.ends_at <= now)
+        )
+        return list(result.scalars().all())
+
+    async def finish_auction_by_id(self, session: AsyncSession, auction_id: int) -> None:
+        """Завершает один аукцион в уже открытой транзакции."""
+        auction = await session.get(ClanAuction, auction_id)
+        if not auction or auction.is_finished:
+            return
+        await self.give_auction_reward(session, auction)
+
     async def finish_expired_auctions(self, session: AsyncSession) -> None:
         import logging
         _log = logging.getLogger(__name__)

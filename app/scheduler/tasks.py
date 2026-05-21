@@ -326,12 +326,29 @@ async def clan_war_tick():
 
 
 async def clan_auction_tick():
-    """Каждую минуту — завершает истёкшие клановые аукционы и выдаёт награды."""
+    """Каждую минуту — завершает истёкшие клановые аукционы и выдаёт награды.
+
+    Каждый аукцион обрабатывается в своей транзакции, чтобы сбой одного
+    не откатывал награды остальных.
+    """
     try:
+        from app.services.clan import clan_service
+
+        # Шаг 1: собираем ID истёкших аукционов (read-only)
         async with AsyncSessionFactory() as session:
-            async with session.begin():
-                from app.services.clan import clan_service
-                await clan_service.finish_expired_auctions(session)
+            auction_ids = await clan_service.get_expired_auction_ids(session)
+
+        # Шаг 2: завершаем каждый аукцион в отдельной транзакции
+        for auction_id in auction_ids:
+            try:
+                async with AsyncSessionFactory() as session:
+                    async with session.begin():
+                        await clan_service.finish_auction_by_id(session, auction_id)
+            except Exception as e:
+                logger.error(
+                    f"clan_auction_tick error for auction {auction_id}: {e}",
+                    exc_info=True,
+                )
     except Exception as e:
         logger.error(f"clan_auction_tick error: {e}", exc_info=True)
 

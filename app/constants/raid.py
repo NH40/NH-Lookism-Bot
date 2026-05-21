@@ -65,9 +65,9 @@ RAID_BOSSES = {
                 ),
                 "damage_source": "combat_power",
                 "combat_power_divisor": 3,
-                "base_hp": 3_500_000_000,
+                "base_hp": 2_500_000_000,
                 "reward_fragments": "path",
-                "cd_hours": 8,
+                "cd_hours": 3,
                 "raid_duration_seconds": 3600,
             },
         }

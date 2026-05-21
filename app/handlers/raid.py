@@ -233,8 +233,7 @@ async def cb_raid_status(cb: CallbackQuery, session: AsyncSession, user: User):
 
     builder = InlineKeyboardBuilder()
 
-    extra_charges = user.extra_attack_count if remaining > 0 else 0
-    can_attack_now = remaining > 0 and (not attack_cd["on_cd"] or extra_charges > 0)
+    can_attack_now = remaining > 0 and not attack_cd["on_cd"]
 
     if remaining == 0:
         builder.row(InlineKeyboardButton(
@@ -243,11 +242,8 @@ async def cb_raid_status(cb: CallbackQuery, session: AsyncSession, user: User):
         ))
     else:
         if can_attack_now:
-            label = "⚔️ Атаковать босса!"
-            if extra_charges > 0:
-                label = f"⚔️ Атаковать ({extra_charges} заряда осталось)"
             builder.row(InlineKeyboardButton(
-                text=label,
+                text="⚔️ Атаковать босса!",
                 callback_data=f"raid_attack:{raid_id}"
             ))
         else:
@@ -276,9 +272,7 @@ async def cb_raid_status(cb: CallbackQuery, session: AsyncSession, user: User):
         if remaining > 0 else "✅ Рейд завершён! Забери награду."
     )
     extra_line = ""
-    if remaining > 0 and extra_charges > 0:
-        extra_line = f"\n⚡ Доп. атак: <b>{extra_charges}</b> (без КД)"
-    elif remaining > 0 and not attack_cd["on_cd"]:
+    if remaining > 0 and not attack_cd["on_cd"]:
         extra_line = "\n\n⚔️ Атакуй снова чтобы накопить больше урона!"
 
     await cb.message.edit_text(

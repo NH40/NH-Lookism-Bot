@@ -117,15 +117,11 @@ class RaidService:
         session.add(raid)
         await session.flush()
 
-        # Первая атака: тратим заряд если есть, иначе ставим КД
-        # Важно: в рейдах заряды НЕ перезаряжаются (только тратятся или ставится КД)
+        # Первая атака: всегда ставим КД (доп. атаки в рейдах не работают)
         attack_cd_key = self.attack_cd_key(raid.id, user.id)
-        if user.extra_attack_count > 0:
-            user.extra_attack_count -= 1
-        else:
-            speed_pct = await self._get_speed_pct(session, user)
-            attack_cd = cooldown_service.apply_speed_reduction(RAID_ATTACK_CD_SECONDS, speed_pct)
-            await cooldown_service.set_cooldown(attack_cd_key, attack_cd)
+        speed_pct = await self._get_speed_pct(session, user)
+        attack_cd = cooldown_service.apply_speed_reduction(RAID_ATTACK_CD_SECONDS, speed_pct)
+        await cooldown_service.set_cooldown(attack_cd_key, attack_cd)
 
         return {
             "ok": True,
@@ -157,8 +153,8 @@ class RaidService:
             return {"ok": False, "reason": "Время рейда истекло! Забери награду."}
 
         attack_cd_key = self.attack_cd_key(raid_id, user.id)
-        # Проверяем КД только если нет доп. зарядов атаки
-        if user.extra_attack_count <= 0 and await cooldown_service.is_on_cooldown(attack_cd_key):
+        # Доп. атаки в рейдах не работают — всегда проверяем КД
+        if await cooldown_service.is_on_cooldown(attack_cd_key):
             ttl = await cooldown_service.get_ttl(attack_cd_key)
             return {
                 "ok": False,
@@ -178,13 +174,10 @@ class RaidService:
         raid.damage_dealt += power
         raid.attack_count += 1
 
-        # Заряды тратятся, но НЕ перезаряжаются в рейдах
-        if user.extra_attack_count > 0:
-            user.extra_attack_count -= 1
-        else:
-            speed_pct = await self._get_speed_pct(session, user)
-            attack_cd = cooldown_service.apply_speed_reduction(RAID_ATTACK_CD_SECONDS, speed_pct)
-            await cooldown_service.set_cooldown(attack_cd_key, attack_cd)
+        # Всегда ставим КД (доп. атаки в рейдах не работают)
+        speed_pct = await self._get_speed_pct(session, user)
+        attack_cd = cooldown_service.apply_speed_reduction(RAID_ATTACK_CD_SECONDS, speed_pct)
+        await cooldown_service.set_cooldown(attack_cd_key, attack_cd)
 
         # ── Проверяем убит ли босс ──────────────────────────────────────
         boss_killed = raid.damage_dealt >= boss["base_hp"]

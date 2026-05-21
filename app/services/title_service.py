@@ -111,6 +111,11 @@ class TitleService:
     async def reapply_all_titles(
         self, session: AsyncSession, user: User
     ) -> None:
+        # Сохраняем состояние УИ Алхимии ДО сброса — он мог быть скрафчен,
+        # а не получен через титул, поэтому после сброса нужно восстановить
+        had_alchemy_ui = user.donat_ui_potion
+        had_ui_auto_potion = user.ui_auto_potion
+
         self._reset_donat_bonuses(user)
         title_ids = await self.get_user_titles(session, user.id)
         for title_id in title_ids:
@@ -123,6 +128,13 @@ class TitleService:
                 self._apply_set_bonus(user, s.set_id)
 
         await self._rebuild_base_bonuses(session, user)
+
+        # Восстанавливаем УИ Алхимии если он был скрафчен (а не выдан через титул)
+        # Если titl'ы восстановили его — уже True, иначе восстанавливаем вручную
+        if had_alchemy_ui and not user.donat_ui_potion:
+            user.donat_ui_potion = True
+        if had_ui_auto_potion and not user.ui_auto_potion:
+            user.ui_auto_potion = True
 
         from app.services.business_service import business_service
         await business_service._recalc_income(session, user)
@@ -149,13 +161,17 @@ class TitleService:
         user.ticket_cd_reduction = 0
         user.recruit_count_bonus = 0
         user.train_bonus_percent = 0
+        user.train_quality_bonus = 0      # ← _rebuild_base_bonuses пересчитывает из навыков
         user.income_bonus_percent = 0
+        user.building_discount_percent = 0  # ← _rebuild_base_bonuses пересчитывает из навыков
         user.max_tickets = 3
         user.ticket_chance = 25
         user.skill_path_bonus_multiplier = 1.0
         user.extra_path_skill_slots = 1
         user.max_ticket_chance = 70
         # ← сбрасываем донатный УИ при отзыве всех титулов
+        # (donat_ui_potion/ui_auto_potion восстанавливаются в reapply_all_titles
+        #  если были получены через крафт, а не только через титул)
         user.ui_is_donat = False
         user.ui_level = 0
         user.ui_auto_recruit = False

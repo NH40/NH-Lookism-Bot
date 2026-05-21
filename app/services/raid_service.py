@@ -118,6 +118,7 @@ class RaidService:
         await session.flush()
 
         # Первая атака: тратим заряд если есть, иначе ставим КД
+        # Важно: в рейдах заряды НЕ перезаряжаются (только тратятся или ставится КД)
         attack_cd_key = self.attack_cd_key(raid.id, user.id)
         if user.extra_attack_count > 0:
             user.extra_attack_count -= 1
@@ -125,7 +126,6 @@ class RaidService:
             speed_pct = await self._get_speed_pct(session, user)
             attack_cd = cooldown_service.apply_speed_reduction(RAID_ATTACK_CD_SECONDS, speed_pct)
             await cooldown_service.set_cooldown(attack_cd_key, attack_cd)
-            user.extra_attack_count = await self._get_max_extra_attacks(session, user)
 
         return {
             "ok": True,
@@ -178,13 +178,13 @@ class RaidService:
         raid.damage_dealt += power
         raid.attack_count += 1
 
+        # Заряды тратятся, но НЕ перезаряжаются в рейдах
         if user.extra_attack_count > 0:
             user.extra_attack_count -= 1
         else:
             speed_pct = await self._get_speed_pct(session, user)
             attack_cd = cooldown_service.apply_speed_reduction(RAID_ATTACK_CD_SECONDS, speed_pct)
             await cooldown_service.set_cooldown(attack_cd_key, attack_cd)
-            user.extra_attack_count = await self._get_max_extra_attacks(session, user)
 
         # ── Проверяем убит ли босс ──────────────────────────────────────
         boss_killed = raid.damage_dealt >= boss["base_hp"]

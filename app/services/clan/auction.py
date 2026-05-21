@@ -37,12 +37,24 @@ class ClanAuctionService(ClanBaseService):
         return {"ok": True}
 
     async def finish_expired_auctions(self, session: AsyncSession) -> None:
+        import logging
+        _log = logging.getLogger(__name__)
         now = datetime.now(timezone.utc)
         result = await session.execute(
             select(ClanAuction).where(ClanAuction.is_finished == False, ClanAuction.ends_at <= now)
         )
-        for auction in result.scalars().all():
-            await self.give_auction_reward(session, auction)
+        auctions = result.scalars().all()
+        for auction in auctions:
+            # Пропускаем уже закрытые (могли быть закрыты предыдущей итерацией)
+            if auction.is_finished:
+                continue
+            try:
+                await self.give_auction_reward(session, auction)
+            except Exception as e:
+                _log.error(
+                    f"give_auction_reward error for auction {auction.id}: {e}",
+                    exc_info=True,
+                )
 
     async def give_auction_reward(self, session: AsyncSession, auction: ClanAuction) -> None:
         if not auction.leader_id:
@@ -94,6 +106,9 @@ class ClanAuctionService(ClanBaseService):
 
         auction.is_finished = True
 
+        # Сначала сохраняем изменения в БД, потом уведомляем
+        await session.flush()
+
         # Уведомляем победителя
         try:
             from app.bot_instance import get_bot
@@ -107,5 +122,3 @@ class ClanAuctionService(ClanBaseService):
                 )
         except Exception:
             pass
-
-        await session.flush()

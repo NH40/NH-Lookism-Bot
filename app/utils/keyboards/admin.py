@@ -54,12 +54,6 @@ def admin_user_kb(tg_id: int) -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="🏚 −Все города", callback_data=f"adm_take_cities:{tg_id}"),
     )
 
-    # ── TUI ──────────────────────────────────────────────────────────────────
-    builder.row(
-        InlineKeyboardButton(text="👁 +TUI", callback_data=f"adm_tui:{tg_id}"),
-        InlineKeyboardButton(text="🚫 −TUI", callback_data=f"adm_untui:{tg_id}"),
-    )
-
     # ── Пробуждения ──────────────────────────────────────────────────────────
     builder.row(
         InlineKeyboardButton(text="⭐ +Пробуждение", callback_data=f"adm_prestige:{tg_id}"),

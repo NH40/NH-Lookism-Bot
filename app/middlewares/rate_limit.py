@@ -5,15 +5,20 @@ from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, CallbackQuery
 
 from app.config import settings
+from app.config.rate_limit import (
+    RATE_LIMIT_REQUESTS,
+    RATE_LIMIT_WINDOW,
+    RATE_LIMIT_MAX_VIOLATIONS,
+    RATE_LIMIT_BAN_SECONDS,
+)
 
 logger = logging.getLogger(__name__)
 
-# Per-user limits: max REQUESTS actions per WINDOW seconds.
-# After MAX_VIOLATIONS windows where limit is exceeded → temp ban.
-REQUESTS = 8
-WINDOW = 3          # seconds
-MAX_VIOLATIONS = 5  # violations before ban
-BAN_SECONDS = 300   # 5 minutes
+# Алиасы для обратной совместимости (используются ниже)
+REQUESTS = RATE_LIMIT_REQUESTS
+WINDOW = RATE_LIMIT_WINDOW
+MAX_VIOLATIONS = RATE_LIMIT_MAX_VIOLATIONS
+BAN_SECONDS = RATE_LIMIT_BAN_SECONDS
 
 # Lua script: atomic INCR + EXPIRE-only-on-first-call.
 # Avoids two round-trips to Redis per request.

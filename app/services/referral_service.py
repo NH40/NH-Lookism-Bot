@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.user import User
 from app.models.referral import Referral
+from app.config.game_balance import REFERRAL_TEACHER_BONUS_COINS, REFERRAL_STUDENT_POWER_BONUS
 
 
 class ReferralService:
@@ -23,8 +24,8 @@ class ReferralService:
             return False
 
         student.referred_by = teacher.id
-        student.teacher_power_bonus = 75_000
-        teacher.nh_coins += 1000
+        student.teacher_power_bonus = REFERRAL_STUDENT_POWER_BONUS
+        teacher.nh_coins += REFERRAL_TEACHER_BONUS_COINS
 
         existing = await session.execute(
             select(Referral).where(Referral.student_id == student.id)

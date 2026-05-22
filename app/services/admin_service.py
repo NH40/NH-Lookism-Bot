@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.models.user import User
 from app.services.title_service import title_service
+from app.config.game_balance import TUI_MAX_TICKETS, DEFAULT_MAX_TICKETS
 
 
 class AdminService:
@@ -31,12 +32,12 @@ class AdminService:
     async def give_tui(self, session: AsyncSession, user: User) -> None:
         user.ultra_instinct = True
         user.true_ultra_instinct = True
-        user.max_tickets = 999999
+        user.max_tickets = TUI_MAX_TICKETS
         await session.flush()
 
     async def remove_tui(self, session: AsyncSession, user: User) -> None:
         user.true_ultra_instinct = False
-        user.max_tickets = 3
+        user.max_tickets = DEFAULT_MAX_TICKETS
         await session.flush()
 
     async def give_all_titles(self, session: AsyncSession, user: User, admin_tg_id: int) -> int:

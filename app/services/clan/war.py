@@ -5,6 +5,15 @@ from sqlalchemy import select
 from app.models.user import User
 from app.models.clan import Clan, ClanMember, ClanWar
 from app.services.clan.base import ClanBaseService
+from app.config.game_balance import (
+    CLAN_WAR_WINNER_MULTIPLIER,
+    CLAN_WAR_LOSER_MULTIPLIER,
+    CLAN_WAR_WINNER_BASE,
+    CLAN_WAR_LOSER_BASE,
+    CLAN_WAR_MAX_REWARD,
+    CLAN_WAR_POWER_HOURS,
+    CLAN_WAR_TREASURY_HOURS,
+)
 
 
 class ClanWarService(ClanBaseService):
@@ -22,7 +31,7 @@ class ClanWarService(ClanBaseService):
         )
         if active:
             return {"ok": False, "reason": "Клан уже участвует в войне"}
-        hours = 6 if war_type == "power" else 4
+        hours = CLAN_WAR_POWER_HOURS if war_type == "power" else CLAN_WAR_TREASURY_HOURS
         now = datetime.now(timezone.utc)
         start1 = attacker_clan.combat_power if war_type == "power" else attacker_clan.treasury
         start2 = defender_clan.combat_power if war_type == "power" else defender_clan.treasury
@@ -75,9 +84,15 @@ class ClanWarService(ClanBaseService):
         loser_id = loser.id
         war_type = war.war_type
 
-        # Награды в казну (не более 80М каждой стороне)
-        winner_reward = min(int(abs(winner_gain) * 0.1) + 500_000, 80_000_000)
-        loser_reward = min(int(abs(loser_gain) * 0.05) + 100_000, 80_000_000)
+        # Награды в казну (не более CLAN_WAR_MAX_REWARD каждой стороне)
+        winner_reward = min(
+            int(abs(winner_gain) * CLAN_WAR_WINNER_MULTIPLIER) + CLAN_WAR_WINNER_BASE,
+            CLAN_WAR_MAX_REWARD,
+        )
+        loser_reward = min(
+            int(abs(loser_gain) * CLAN_WAR_LOSER_MULTIPLIER) + CLAN_WAR_LOSER_BASE,
+            CLAN_WAR_MAX_REWARD,
+        )
         winner.treasury += winner_reward
         loser.treasury += loser_reward
 

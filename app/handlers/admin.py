@@ -10,7 +10,7 @@ from sqlalchemy import select
 from app.models.user import User
 from app.services.admin_service import admin_service
 from app.services.title_service import title_service
-from app.services.promo_service import promo_service, REWARD_LABELS
+from app.services.promo_service import promo_service, REWARD_LABELS, _parse_rewards, _rewards_summary
 from app.utils.keyboards.admin import admin_main_kb, admin_user_kb, titles_grant_kb
 from app.utils.keyboards.common import back_kb
 from app.utils.formatters import fmt_num, fmt_power, phase_label
@@ -512,36 +512,6 @@ async def cb_adm_revoke(cb: CallbackQuery, session: AsyncSession, user: User):
     await _render_untitle(cb.message, session, tg_id, found)
 
 
-# ── TUI ─────────────────────────────────────────────────────────────────────
-
-@router.callback_query(F.data.startswith("adm_tui:"))
-async def cb_adm_tui(cb: CallbackQuery, session: AsyncSession, user: User):
-    if not is_admin(user.tg_id):
-        return
-    tg_id = int(cb.data.split(":")[1])
-    found = await admin_service.find_user(session, str(tg_id))
-    if not found:
-        await cb.answer("Игрок не найден", show_alert=True)
-        return
-    await admin_service.give_tui(session, found)
-    await cb.answer(f"✅ TUI выдан {found.full_name}")
-    await _show_user_card(cb.message, session, found)
-
-
-@router.callback_query(F.data.startswith("adm_untui:"))
-async def cb_adm_untui(cb: CallbackQuery, session: AsyncSession, user: User):
-    if not is_admin(user.tg_id):
-        return
-    tg_id = int(cb.data.split(":")[1])
-    found = await admin_service.find_user(session, str(tg_id))
-    if not found:
-        await cb.answer("Игрок не найден", show_alert=True)
-        return
-    await admin_service.remove_tui(session, found)
-    await cb.answer(f"✅ TUI снят с {found.full_name}")
-    await _show_user_card(cb.message, session, found)
-
-
 # ── Пробуждения ─────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("adm_prestige:"))
@@ -990,17 +960,21 @@ async def cb_admin_patch_confirm(cb: CallbackQuery, session: AsyncSession, user:
     from app.models.user import User as UserModel
     from app.models.clan import Clan, ClanMember
 
+    from app.config.game_balance import (
+        PATCH_TOP_PLAYER_REWARDS, PATCH_TOP_CLAN_REWARDS,
+        PATCH_TOP_PLAYERS_COUNT, PATCH_TOP_CLANS_COUNT,
+    )
     top_r = await session.execute(
-        select(UserModel).order_by(UserModel.combat_power.desc()).limit(10)
+        select(UserModel).order_by(UserModel.combat_power.desc()).limit(PATCH_TOP_PLAYERS_COUNT)
     )
     top_players = top_r.scalars().all()
-    top_rewards = {0: 10, 1: 9, 2: 8, 3: 7, 4: 6, 5: 5, 6: 4, 7: 4, 8: 3, 9: 3}
+    top_rewards = PATCH_TOP_PLAYER_REWARDS
 
     top_clans_r = await session.execute(
-        select(Clan).order_by(Clan.combat_power.desc()).limit(5)
+        select(Clan).order_by(Clan.combat_power.desc()).limit(PATCH_TOP_CLANS_COUNT)
     )
     top_clans = top_clans_r.scalars().all()
-    clan_rewards = {0: 8, 1: 6, 2: 5, 3: 4, 4: 3}
+    clan_rewards = PATCH_TOP_CLAN_REWARDS
 
     count = await admin_service.patch_reset_progress(session, version)
     bot = cb.bot
@@ -1087,9 +1061,18 @@ async def cb_admin_promos(cb: CallbackQuery, session: AsyncSession, user: User):
     ))
     for p in promos:
         status = "✅" if p.is_active else "❌"
-        label = REWARD_LABELS.get(p.reward_type, p.reward_type)
+        rewards = _parse_rewards(p)
+        rewards_short = ", ".join(
+            f"{REWARD_LABELS.get(r['type'], r['type'])} ×{r['amount']}"
+            for r in rewards
+        )
+        limit_info = (
+            f"{p.used_count}/{p.max_uses}"
+            if p.limit_type == "uses"
+            else f"до {p.expires_at.strftime('%d.%m %H:%M') if p.expires_at else '?'}"
+        )
         builder.row(InlineKeyboardButton(
-            text=f"{status} {p.code} | {label} ×{p.reward_amount} ({p.used_count}/{p.max_uses})",
+            text=f"{status} {p.code} | {rewards_short} ({limit_info})",
             callback_data=f"admin_promo_info:{p.id}"
         ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="admin_main"))
@@ -1114,12 +1097,16 @@ async def cb_admin_promo_create(cb: CallbackQuery, user: User, state: FSMContext
     try:
         await cb.message.edit_text(
             f"➕ <b>Создать промокод</b>\n\n"
-            f"Введите в формате:\n"
-            f"<code>КОД ТИП КОЛИЧЕСТВО МАКС_ИСПОЛЬЗОВАНИЙ</code>\n\n"
-            f"Например:\n"
-            f"<code>OLDNHSTARTERS coins 100000 50</code>\n"
-            f"<code>WELCOME tickets 5 1</code>\n\n"
-            f"Типы наград:\n{types_str}",
+            f"<b>Формат:</b>\n"
+            f"<code>КОД [uses|time] МАКС_ИСП/ЧАСОВ НАГРАДА1:КОЛ ...</code>\n\n"
+            f"<b>Примеры:</b>\n"
+            f"<code>WELCOME uses 50 coins:100000 tickets:5</code>\n"
+            f"  → 50 использований, монеты + тикеты\n\n"
+            f"<code>EVENT2026 time 24 ui_fragments:200 coins:50000</code>\n"
+            f"  → действует 24 часа, фрагменты + монеты\n\n"
+            f"<code>PROMO uses 1 mastery_points:10</code>\n"
+            f"  → разовый, очки мастерства\n\n"
+            f"<b>Типы наград:</b>\n{types_str}",
             reply_markup=back_kb("admin_promos"),
             parse_mode="HTML",
         )
@@ -1134,33 +1121,82 @@ async def msg_promo_create(
     if not is_admin(user.tg_id):
         return
     await state.clear()
-    parts = message.text.strip().split()
-    if len(parts) < 3:
+    raw = message.text.strip().split()
+
+    # Минимум: КОД uses|time ЗНАЧЕНИЕ НАГРАДА:КОЛ
+    if len(raw) < 4:
         await message.answer(
-            "❌ Неверный формат. Пример:\n<code>PROMO coins 100000 50</code>",
+            "❌ Неверный формат.\n"
+            "Пример: <code>PROMO uses 50 coins:100000 tickets:5</code>",
             parse_mode="HTML",
             reply_markup=back_kb("admin_promos"),
         )
         return
-    code = parts[0]
-    reward_type = parts[1]
-    try:
-        reward_amount = int(parts[2])
-        max_uses = int(parts[3]) if len(parts) > 3 else 1
-    except ValueError:
-        await message.answer("❌ Количество должно быть числом")
+
+    code = raw[0]
+    limit_type = raw[1].lower()
+    if limit_type not in ("uses", "time"):
+        await message.answer(
+            "❌ Второй параметр должен быть <code>uses</code> или <code>time</code>",
+            parse_mode="HTML",
+            reply_markup=back_kb("admin_promos"),
+        )
         return
 
+    try:
+        limit_value = int(raw[2])
+    except ValueError:
+        await message.answer("❌ Третий параметр (кол-во/часы) должен быть числом")
+        return
+
+    rewards = []
+    for token in raw[3:]:
+        if ":" not in token:
+            await message.answer(
+                f"❌ Формат награды: <code>тип:количество</code>\nПример: <code>coins:100000</code>",
+                parse_mode="HTML",
+            )
+            return
+        rtype, ramt_str = token.split(":", 1)
+        if rtype not in REWARD_LABELS:
+            await message.answer(f"❌ Неизвестный тип: {rtype}")
+            return
+        try:
+            ramt = int(ramt_str)
+        except ValueError:
+            await message.answer(f"❌ Неверное количество для {rtype}")
+            return
+        rewards.append({"type": rtype, "amount": ramt})
+
+    # Определяем параметры в зависимости от типа
+    from datetime import timedelta
+    expires_at = None
+    max_uses = 1
+    if limit_type == "uses":
+        max_uses = limit_value
+    else:
+        from datetime import datetime, timezone
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=limit_value)
+
     result = await promo_service.create_promo(
-        session, code, reward_type, reward_amount, max_uses
+        session, code, rewards,
+        limit_type=limit_type,
+        max_uses=max_uses,
+        expires_at=expires_at,
     )
     if result["ok"]:
-        label = REWARD_LABELS.get(reward_type, reward_type)
+        summary = _rewards_summary(rewards)
+        limit_str = (
+            f"Макс. использований: {max_uses}"
+            if limit_type == "uses"
+            else f"Активен до: {expires_at.strftime('%d.%m.%Y %H:%M UTC')}"
+        )
         await message.answer(
-            f"✅ Промокод создан!\n\n"
+            f"✅ <b>Промокод создан!</b>\n\n"
             f"Код: <code>{code.upper()}</code>\n"
-            f"Награда: {label} ×{reward_amount}\n"
-            f"Макс. использований: {max_uses}",
+            f"Тип: {'по кол-ву' if limit_type == 'uses' else 'по времени'}\n"
+            f"{limit_str}\n\n"
+            f"🎁 Награды:\n{summary}",
             reply_markup=back_kb("admin_promos"),
             parse_mode="HTML",
         )
@@ -1185,7 +1221,9 @@ async def cb_admin_promo_info(cb: CallbackQuery, session: AsyncSession, user: Us
         await cb.answer("Промокод не найден", show_alert=True)
         return
 
-    label = REWARD_LABELS.get(promo.reward_type, promo.reward_type)
+    rewards = _parse_rewards(promo)
+    summary = _rewards_summary(rewards)
+
     builder = InlineKeyboardBuilder()
     if promo.is_active:
         builder.row(InlineKeyboardButton(
@@ -1198,13 +1236,21 @@ async def cb_admin_promo_info(cb: CallbackQuery, session: AsyncSession, user: Us
     ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="admin_promos"))
 
+    if promo.limit_type == "time":
+        limit_str = (
+            f"До: {promo.expires_at.strftime('%d.%m.%Y %H:%M UTC')}"
+            if promo.expires_at else "Без срока"
+        )
+    else:
+        limit_str = f"Использований: {promo.used_count}/{promo.max_uses}"
+
     try:
         await cb.message.edit_text(
             f"🎁 <b>Промокод {promo.code}</b>\n\n"
-            f"Тип: {label}\n"
-            f"Количество: {fmt_num(promo.reward_amount)}\n"
-            f"Использований: {promo.used_count}/{promo.max_uses}\n"
-            f"Статус: {'✅ Активен' if promo.is_active else '❌ Неактивен'}",
+            f"Тип: {'⏰ По времени' if promo.limit_type == 'time' else '🔢 По кол-ву'}\n"
+            f"{limit_str}\n"
+            f"Статус: {'✅ Активен' if promo.is_active else '❌ Неактивен'}\n\n"
+            f"🎁 Награды:\n{summary}",
             reply_markup=builder.as_markup(),
             parse_mode="HTML",
         )

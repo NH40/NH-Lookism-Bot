@@ -17,6 +17,12 @@ from app.constants.prestige import (
     PRESTIGE_TRAIN_BONUS_PER_LEVEL,
     PRESTIGE_TICKET_BONUS_PER_LEVEL,
 )
+from app.config.game_balance import (
+    DEFAULT_MAX_TICKETS,
+    DEFAULT_TICKET_CHANCE,
+    DEFAULT_INFLUENCE,
+    EXTRA_SKILL_SLOTS_BASE,
+)
 
 class PrestigeService:
 
@@ -47,7 +53,7 @@ class PrestigeService:
         user.fist_wins = 0
         user.fist_cities_count = 0
         user.nh_coins = 0
-        user.influence = 100
+        user.influence = DEFAULT_INFLUENCE
         user.combat_power = 0
         user.business_path = None
         user.income_per_minute = 0
@@ -55,8 +61,8 @@ class PrestigeService:
         user.building_discount_percent = 0
         user.district_multiplier = 1.0
         user.tickets = 0
-        user.max_tickets = 3
-        user.ticket_chance = 25
+        user.max_tickets = DEFAULT_MAX_TICKETS
+        user.ticket_chance = DEFAULT_TICKET_CHANCE
         user.recruit_count_bonus = 0
         user.double_recruit = False
         user.train_bonus_percent = 0
@@ -72,7 +78,7 @@ class PrestigeService:
         user.skill_path_level = 0
         user.path_fragments = 0
         user.alchemy_fragments = 0
-        user.extra_path_skill_slots = 1
+        user.extra_path_skill_slots = EXTRA_SKILL_SLOTS_BASE
         user.double_ticket = False
         user.path_awakened = False
 

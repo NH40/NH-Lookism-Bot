@@ -1,5 +1,6 @@
 from datetime import datetime
-from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, func
+from typing import Optional
+from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
@@ -9,11 +10,26 @@ class PromoCode(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, index=True)
-    reward_type: Mapped[str] = mapped_column(String(32), nullable=False)
-    # tickets, coins, ui_fragments, path_points, mastery_points
-    reward_amount: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Тип ограничения: "uses" (по кол-ву использований) или "time" (по времени)
+    limit_type: Mapped[str] = mapped_column(String(8), default="uses", nullable=False)
+
+    # Мульти-награды хранятся как JSON-строка: '[{"type":"coins","amount":100000},{"type":"tickets","amount":5}]'
+    # Для обратной совместимости: если rewards_json пустой, используем старые поля
+    rewards_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Старые поля (legacy, для совместимости)
+    reward_type: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    reward_amount: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
     max_uses: Mapped[int] = mapped_column(Integer, default=1)
     used_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Для типа "time" — до какого времени промокод активен
+    expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

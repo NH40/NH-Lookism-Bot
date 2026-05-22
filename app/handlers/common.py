@@ -411,7 +411,7 @@ async def msg_promo(message: Message, session: AsyncSession, user: User, state: 
     if result["ok"]:
         await message.answer(
             f"✅ <b>Промокод активирован!</b>\n\n"
-            f"{result['label']}: <b>+{fmt_num(result['reward_amount'])}</b>",
+            f"🎁 Получено:\n{result['summary']}",
             parse_mode="HTML",
             reply_markup=back_kb("main_menu"),
         )

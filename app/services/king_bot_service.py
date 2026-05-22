@@ -7,6 +7,7 @@ from app.models.king_bot import KingBot
 from app.constants.king_bots import KING_BOT_NAMES, KING_BOT_SLOTS, KING_BOT_POWER_GROWTH, KING_BOT_MIN_POWER
 from app.services.cooldown_service import cooldown_service
 from app.services.game.base import GameBase
+from app.config.game_balance import CITIES_NEEDED_FOR_KING
 
 
 class KingBotService(GameBase):
@@ -108,9 +109,14 @@ class KingBotService(GameBase):
                 await self._give_king_city(session, user, bot, districts_to_give)
                 await session.flush()
 
+                from app.config.game_balance import (
+                    KING_BOT_WIN_INFLUENCE,
+                    KING_BOT_WIN_COINS_DIVISOR,
+                    KING_BOT_WIN_COINS_CAP,
+                )
                 user.total_wins += 1
-                user.influence += 500
-                coins_reward = min(old_power // 10, 4_000_000)
+                user.influence += KING_BOT_WIN_INFLUENCE
+                coins_reward = min(old_power // KING_BOT_WIN_COINS_DIVISOR, KING_BOT_WIN_COINS_CAP)
                 user.nh_coins += coins_reward
 
                 # 2. Теперь считаем — районы уже есть
@@ -121,7 +127,7 @@ class KingBotService(GameBase):
                 await session.flush()
 
                 # 4. Проверяем повышение
-                if user.king_cities_count >= 10:
+                if user.king_cities_count >= CITIES_NEEDED_FOR_KING:
                     return await self._promote_to_fist(session, user)
 
                 return {

@@ -10,6 +10,7 @@ from app.data.squad import ATTACK_WIN_INFLUENCE_BONUS
 from app.services.game.base import GameBase, FIST_MIN_CITIES, FIST_BOT_CONFIGS, FIST_CITY_SIZES
 from app.services.game.utils import notify_pvp_attack
 from app.utils.truce import is_truce_active
+from app.config.game_balance import FIST_WINS_NEEDED
 
 
 class GameFistService(GameBase):
@@ -79,7 +80,7 @@ class GameFistService(GameBase):
 
             await session.flush()
 
-            if user.fist_wins >= 10:
+            if user.fist_wins >= FIST_WINS_NEEDED:
                 return await self._promote_to_emperor(session, user)
             await self._handle_attack_cd(session, user, cd_key, "fist")
             await session.flush()
@@ -145,7 +146,7 @@ class GameFistService(GameBase):
             defender.fist_cities_count = max(0, defender.fist_cities_count - cities_taken)
             if defender.fist_cities_count < FIST_MIN_CITIES:
                 await self._demote_fist_to_king(session, defender, king_cities_lost=1)
-            if attacker.fist_wins >= 10:
+            if attacker.fist_wins >= FIST_WINS_NEEDED:
                 await notify_pvp_attack(attacker, defender, True, "fist")
                 return await self._promote_to_emperor(session, attacker)
         else:

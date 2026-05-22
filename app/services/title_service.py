@@ -236,14 +236,16 @@ class TitleService:
                 from app.services.potion_service import potion_service
                 await potion_service.buy_missing(session, user)
         elif title_id == "rom_extra_skills":
-            user.extra_path_skill_slots = 3
+            from app.config.game_balance import EXTRA_SKILL_SLOTS_WITH_TITLE
+            user.extra_path_skill_slots = EXTRA_SKILL_SLOTS_WITH_TITLE
         elif title_id == "rom_max_chance":
             user.max_ticket_chance = 90
 
     def _apply_set_bonus(self, user: User, set_id: str) -> None:
         if set_id == "strongest_0gen":
+            from app.config.game_balance import EXTRA_SKILL_SLOTS_WITH_TITLE
             user.influence = int(user.influence * 2.0)
-            user.extra_path_skill_slots = 3
+            user.extra_path_skill_slots = EXTRA_SKILL_SLOTS_WITH_TITLE
             user.max_ticket_chance = 90
             user.ticket_chance = min(getattr(user, "max_ticket_chance", 70), user.ticket_chance + 5)
             user.double_recruit = True

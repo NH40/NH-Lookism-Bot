@@ -1,7 +1,12 @@
-# app/config — игровые балансы, легко изменяемые параметры.
-# Отличие от app/constants: здесь числа, которые часто меняют в ходе баланса.
-# Отличие от app/data: здесь нет статичных описаний персонажей/зданий.
+# app/config — настройки приложения + игровые балансы.
+#
+# app/config.py был преобразован в пакет app/config/
+# Все `from app.config import settings` продолжают работать через реэкспорт.
 
+# ── Pydantic-settings (бывший app/config.py) ─────────────────────────────────
+from app.config.settings import Settings, settings  # noqa: F401
+
+# ── Игровой баланс ────────────────────────────────────────────────────────────
 from app.config.game_balance import (
     REFERRAL_TEACHER_BONUS_COINS,
     REFERRAL_STUDENT_POWER_BONUS,
@@ -43,6 +48,8 @@ from app.config.scheduler_config import (
 )
 
 __all__ = [
+    "Settings",
+    "settings",
     "REFERRAL_TEACHER_BONUS_COINS",
     "REFERRAL_STUDENT_POWER_BONUS",
     "DEFAULT_MAX_TICKETS",

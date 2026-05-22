@@ -93,6 +93,18 @@ class CooldownService:
         return f"lock:treasury:{user_id}"
 
     @staticmethod
+    def duel_bot_key(user_id: int) -> str:
+        return f"cd:duel_bot:{user_id}"
+
+    @staticmethod
+    def duel_lock_key(user_id: int) -> str:
+        return f"lock:duel:{user_id}"
+
+    @staticmethod
+    def duel_challenge_key(to_user_id: int) -> str:
+        return f"duel:challenge:{to_user_id}"
+
+    @staticmethod
     def raid_lock_key(user_id: int) -> str:
         return f"lock:raid:{user_id}"
 
@@ -101,11 +113,10 @@ class CooldownService:
         return f"lock:auction_bid:{user_id}"
 
     async def acquire_lock(self, key: str, ttl: int = 5) -> bool:
-        """Returns True if lock acquired, False if already locked."""
-        result = await self.redis.setnx(key, "1")
-        if result:
-            await self.redis.expire(key, ttl)
-        return bool(result)
+        """Returns True if lock acquired, False if already locked.
+        Uses atomic SET NX EX — single round-trip, no race window."""
+        result = await self.redis.set(key, "1", nx=True, ex=ttl)
+        return result is not None
 
     def format_ttl(self, seconds: int) -> str:
         if seconds <= 0:

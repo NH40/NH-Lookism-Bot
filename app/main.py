@@ -10,8 +10,9 @@ from app.database import init_db
 from app.middlewares.db_session import DbSessionMiddleware
 from app.middlewares.user_loader import UserLoaderMiddleware
 from app.scheduler.setup import setup_scheduler
-from app.handlers import common, attack, business, raid, squad, deck, skills, titles, shop, auction, settings as settings_handler, admin, guide
+from app.handlers import common, attack, business, raid, squad, skills, titles, shop, auction, settings as settings_handler, admin, guide
 from app.handlers import training
+from app.handlers.cards import router as cards_router
 from aiohttp import TCPConnector
 from app.middlewares.network_error import NetworkErrorMiddleware
 from app.middlewares.rate_limit import RateLimitMiddleware
@@ -60,7 +61,7 @@ async def main():
     
     dp.include_router(business.router)
     dp.include_router(squad.router)
-    dp.include_router(deck.router)
+    dp.include_router(cards_router)
     dp.include_router(skills.router)
     dp.include_router(titles.router)
     dp.include_router(shop.router)

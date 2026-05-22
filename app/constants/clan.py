@@ -132,7 +132,7 @@ CLAN_AUCTION_REWARDS = {
         {"type": "squad",          "rank": "MP",  "amount": 10,  "label": "🔱 10×MP статистов"},
         {"type": "character",      "rank": "new_legend",  "label": "🟥 Персонаж New Legend"},
         {"type": "character",      "rank": "gen_zero",    "label": "🟧 Персонаж Gen Zero"},
-        {"type": "mastery_points", "amount": 40,         "label": "🏅 80 очков мастерства"},
+        {"type": "mastery_points", "amount": 40,         "label": "🏅 40 очков мастерства"},
     ],
 }
 

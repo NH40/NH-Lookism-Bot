@@ -44,6 +44,9 @@ class User(Base):
     ticket_cd_reduction: Mapped[int] = mapped_column(Integer, default=0)
     prestige_ticket_bonus: Mapped[int] = mapped_column(Integer, default=0)
 
+    # ── Карточки: пыль для крафта ────────────────────────────────────────
+    card_dust: Mapped[int] = mapped_column(Integer, default=0)
+
     # ── Вербовка ──────────────────────────────────────────────────────────
     recruit_count_bonus: Mapped[int] = mapped_column(Integer, default=0)
     recruit_discount_percent: Mapped[int] = mapped_column(Integer, default=0)
@@ -108,6 +111,7 @@ class User(Base):
     ui_auto_pull: Mapped[bool] = mapped_column(Boolean, default=False)
     donat_ui_potion: Mapped[bool] = mapped_column(Boolean, default=False)  # владение донатом
     ui_auto_potion: Mapped[bool] = mapped_column(Boolean, default=False)   # пользовательский тоггл
+    donat_duel_cd: Mapped[bool] = mapped_column(Boolean, default=False)    # донат: -20% КД дуэлей
 
     # ── Статистика ────────────────────────────────────────────────────────
     total_wins: Mapped[int] = mapped_column(Integer, default=0)

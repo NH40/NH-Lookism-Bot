@@ -10,6 +10,8 @@ from app.utils.keyboards.shop import shop_kb
 from app.utils.keyboards.common import back_kb
 from app.utils.formatters import fmt_num
 from app.data.shop import POTIONS, SHOP_ITEMS, POTION_MAP, SHOP_MAP
+from app.services.cards.craft import craft_service
+from app.constants.cards import TICKET_CRAFT_COST
 
 router = Router()
 
@@ -31,6 +33,84 @@ async def cb_shop(cb: CallbackQuery, session: AsyncSession, user: User):
         )
     except Exception:
         pass
+
+
+# ── Крафт пыли → тикеты ───────────────────────────────────────────────────────
+
+@router.callback_query(F.data == "shop_craft")
+async def cb_shop_craft(cb: CallbackQuery, session: AsyncSession, user: User):
+    dust = getattr(user, "card_dust", 0)
+    can_craft = dust // TICKET_CRAFT_COST
+    ticket_space = user.max_tickets - user.tickets
+
+    builder = InlineKeyboardBuilder()
+    if can_craft > 0 and ticket_space > 0:
+        to_craft = min(can_craft, ticket_space)
+        builder.row(InlineKeyboardButton(
+            text=f"⚗️ Скрафтить ×1 тикет ({TICKET_CRAFT_COST} 💎)",
+            callback_data="craft_ticket_1",
+        ))
+        if to_craft > 1:
+            builder.row(InlineKeyboardButton(
+                text=f"⚗️ Скрафтить ×{to_craft} (макс)",
+                callback_data=f"craft_ticket_max",
+            ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="shop"))
+
+    try:
+        await cb.message.edit_text(
+            f"⚗️ <b>Крафт тикетов</b>\n\n"
+            f"💎 Пыль: {fmt_num(dust)}\n"
+            f"🎟 Тикеты: {user.tickets}/{user.max_tickets}\n\n"
+            f"1 тикет = {TICKET_CRAFT_COST} 💎 пыли\n"
+            f"Можно скрафтить: {can_craft} тик.\n\n"
+            f"<i>Пыль получается:\n"
+            f"• Распыление карточек из коллекции\n"
+            f"• Победа в дуэлях</i>",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    await cb.answer()
+
+
+@router.callback_query(F.data == "craft_ticket_1")
+async def cb_craft_ticket_1(cb: CallbackQuery, session: AsyncSession, user: User):
+    result = await craft_service.craft_ticket(session, user)
+    await session.commit()
+    if not result["ok"]:
+        await cb.answer(result["reason"], show_alert=True)
+        return
+    await cb.answer(
+        f"⚗️ Тикет скрафтен!\n"
+        f"💎 Пыль осталась: {result['dust_left']}\n"
+        f"🎟 Тикеты: {result['tickets']}/{user.max_tickets}",
+        show_alert=True,
+    )
+    await cb_shop_craft(cb, session, user)
+
+
+@router.callback_query(F.data == "craft_ticket_max")
+async def cb_craft_ticket_max(cb: CallbackQuery, session: AsyncSession, user: User):
+    space = user.max_tickets - user.tickets
+    dust = getattr(user, "card_dust", 0)
+    count = min(space, dust // TICKET_CRAFT_COST)
+    if count <= 0:
+        await cb.answer("Нельзя скрафтить", show_alert=True)
+        return
+    result = await craft_service.craft_ticket_bulk(session, user, count)
+    await session.commit()
+    if not result["ok"]:
+        await cb.answer(result["reason"], show_alert=True)
+        return
+    await cb.answer(
+        f"⚗️ Скрафтено {result['crafted']} тикетов!\n"
+        f"💎 Пыль осталась: {result['dust_left']}\n"
+        f"🎟 Тикеты: {result['tickets']}/{user.max_tickets}",
+        show_alert=True,
+    )
+    await cb_shop_craft(cb, session, user)
 
 
 @router.callback_query(F.data == "shop_potions")

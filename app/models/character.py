@@ -11,7 +11,19 @@ class UserCharacter(Base):
     user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     character_id: Mapped[str] = mapped_column(String(256), nullable=False)
     rank: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    # base_power — оригинальная мощь из таблицы CHARACTERS (не изменяется)
+    base_power: Mapped[int] = mapped_column(Integer, default=0)
+    # power — эффективная мощь с учётом уровня (= base_power * LEVEL_MULTIPLIERS[level])
+    # используется для расчёта боевой мощи в squad_repo
     power: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Уровень карточки: 0-3
+    level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Telegram file_id для быстрой повторной отправки фото карточки
+    tg_file_id: Mapped[str | None] = mapped_column(String(256), nullable=True, default=None)
+
     obtained_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

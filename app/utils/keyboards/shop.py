@@ -8,5 +8,8 @@ def shop_kb() -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="🧪 Зелья",    callback_data="shop_potions"),
         InlineKeyboardButton(text="👥 Статисты", callback_data="shop_recruits"),
     )
+    builder.row(
+        InlineKeyboardButton(text="⚗️ Крафт тикетов", callback_data="shop_craft"),
+    )
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
     return builder.as_markup()

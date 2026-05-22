@@ -21,7 +21,7 @@ def admin_main_kb():
     return builder.as_markup()
 
 
-def admin_user_kb(tg_id: int) -> InlineKeyboardMarkup:
+def admin_user_kb(tg_id: int, donat_duel_cd: bool = False) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
 
     # ── Титулы ──────────────────────────────────────────────────────────────
@@ -46,6 +46,17 @@ def admin_user_kb(tg_id: int) -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="👥 Статист", callback_data=f"adm_squads:{tg_id}"),
         InlineKeyboardButton(text="🌟 +Абс. карта", callback_data=f"adm_give_abs:{tg_id}"),
         InlineKeyboardButton(text="🗑 −Абс. карты", callback_data=f"adm_take_abs:{tg_id}"),
+    )
+    builder.row(
+        InlineKeyboardButton(text="🃏 Дать карту", callback_data=f"adm_give_card:{tg_id}"),
+        InlineKeyboardButton(text="💎 Дать пыль", callback_data=f"adm_give_dust:{tg_id}"),
+    )
+    duel_cd_icon = "✅" if donat_duel_cd else "❌"
+    builder.row(
+        InlineKeyboardButton(
+            text=f"{duel_cd_icon} Дуэль -20% КД",
+            callback_data=f"adm_toggle_duel_cd:{tg_id}",
+        ),
     )
 
     # ── Города ───────────────────────────────────────────────────────────────

@@ -113,9 +113,16 @@ class GameBase:
             raw = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(mastery.speed, 0)
             speed_pct = int(raw * user.skill_path_bonus_multiplier)
         from app.repositories.title_repo import title_repo
-        has_flow = await title_repo.has_set(session, user.id, "flow")
-        if has_flow:
+        title_ids = set(await title_repo.get_user_titles(session, user.id))
+        # Полный сет «Поток» +15%
+        flow_titles = {"concentration", "focus"}
+        if flow_titles.issubset(title_ids):
             speed_pct = min(80, speed_pct + 15)
+        # Индивидуальные титулы с -30% КД атаки
+        if "reverse_eyes" in title_ids:
+            speed_pct = min(80, speed_pct + 30)
+        if "concentration" in title_ids:
+            speed_pct = min(80, speed_pct + 30)
         cd = max(10, int(base_cd * (1 - speed_pct / 100)))
         await cooldown_service.set_cooldown(cd_key, cd)
         user.extra_attack_count = await self._get_max_extra_attacks_async(session, user)

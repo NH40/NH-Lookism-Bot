@@ -7,8 +7,8 @@ from app.models.skill import UserMastery
 from app.services.cooldown_service import cooldown_service
 from app.services.potion_service import potion_service
 from app.data.squad import RANKS_BY_ID, PHASE_RANKS, STAR_BONUS_PERCENT
-
 from app.constants.squad import PHASE_RANK_WEIGHTS
+from app.config.game_balance import TRAIN_BASE_COVERAGE, TRAIN_BASE_SUCCESS_CHANCE, TRAIN_MAX_SUCCESS_CHANCE
 
 # Базовый множитель количества статистов от влияния
 def _calc_recruit_count(influence: int, bonus_pct: int) -> int:
@@ -55,7 +55,7 @@ class SquadService:
             return {"ok": False, "reason": f"Вербовка через {cooldown_service.format_ttl(ttl)}"}
 
         # Доступные ранги и их веса для текущей фазы
-        phase_weights = PHASE_RANK_WEIGHTS.get(user.phase, PHASE_RANK_WEIGHTS["gang"])
+        phase_weights = dict(PHASE_RANK_WEIGHTS.get(user.phase, PHASE_RANK_WEIGHTS["gang"]))
 
         # Проверяем влияние — минимум для вербовки
         if user.influence < 10:
@@ -67,6 +67,14 @@ class SquadService:
         # double_recruit — удваивает
         if user.double_recruit:
             count *= 2
+
+        # Титул «Отбор» — ×3 к весам двух сильнейших (наиредких) рангов фазы
+        from app.repositories.title_repo import title_repo as _title_repo
+        if await _title_repo.has_title(session, user.id, "selection"):
+            # Сортируем по весу по возрастанию: первые = наиредкие = сильнейшие
+            rarest_ranks = sorted(phase_weights, key=lambda r: phase_weights[r])[:2]
+            for top_rank in rarest_ranks:
+                phase_weights[top_rank] = phase_weights[top_rank] * 3
 
         # Генерируем бойцов
         ranks = list(phase_weights.keys())
@@ -159,10 +167,10 @@ class SquadService:
     async def train(self, session: AsyncSession, user: User) -> dict:
         """
         Тренировка отряда.
-        - Охват = 10 + train_bonus_percent + prestige_train_bonus + зелье
+        - Охват = TRAIN_BASE_COVERAGE + train_bonus_percent + prestige_train_bonus + зелье
         - Случайный выбор статистов (только те у кого < 5 звёзд)
         - Каждый получает от 1 до 3 звёзд (не превышая 5)
-        - Шанс успеха тренировки: базово 50% + train_quality_bonus%
+        - Шанс успеха: TRAIN_BASE_SUCCESS_CHANCE + train_quality_bonus (макс TRAIN_MAX_SUCCESS_CHANCE)
         """
         cd_key = cooldown_service.train_key(user.id)
 
@@ -192,14 +200,14 @@ class SquadService:
         # Охват тренировки (% от кандидатов)
         train_bonus = await potion_service.get_effective_train_bonus(session, user)
         clan_train = getattr(user, 'clan_train_bonus', 0) + getattr(user, 'clan_donat_train_bonus', 0)
-        coverage_pct = min(100, 10 + train_bonus + clan_train)
+        coverage_pct = min(100, TRAIN_BASE_COVERAGE + train_bonus + clan_train)
         count_to_train = max(1, int(len(candidates) * coverage_pct / 100))
 
         # Случайный выбор
         to_train = random.sample(candidates, min(count_to_train, len(candidates)))
 
-        # Шанс успеха тренировки: 50% базово + train_quality_bonus
-        success_chance = min(95, 50 + user.train_quality_bonus)
+        # Шанс успеха тренировки: базово + train_quality_bonus
+        success_chance = min(TRAIN_MAX_SUCCESS_CHANCE, TRAIN_BASE_SUCCESS_CHANCE + user.train_quality_bonus)
 
         upgraded = 0
         failed = 0

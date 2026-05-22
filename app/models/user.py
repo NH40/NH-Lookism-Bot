@@ -78,6 +78,7 @@ class User(Base):
     skill_path: Mapped[str | None] = mapped_column(String(16))
     skill_path_points: Mapped[int] = mapped_column(Integer, default=0)
     skill_path_bonus_multiplier: Mapped[float] = mapped_column(Float, default=1.0)
+    squad_power_bonus: Mapped[int] = mapped_column(Integer, default=0)  # % бонус к боевой мощи (путь Монстра)
 
     # ── Рейды ─────────────────────────────────────────────────────────────
     ui_fragments: Mapped[int] = mapped_column(Integer, default=0)

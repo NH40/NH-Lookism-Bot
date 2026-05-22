@@ -169,6 +169,7 @@ class TitleService:
         user.skill_path_bonus_multiplier = 1.0
         user.extra_path_skill_slots = 1
         user.max_ticket_chance = 70
+        user.squad_power_bonus = 0
         # ← сбрасываем донатный УИ при отзыве всех титулов
         # (donat_ui_potion/ui_auto_potion восстанавливаются в reapply_all_titles
         #  если были получены через крафт, а не только через титул)
@@ -215,15 +216,15 @@ class TitleService:
         elif title_id == "monster_training":
             user.train_bonus_percent += 100
         elif title_id == "reverse_eyes":
-            user.ticket_cd_reduction += 30
+            pass  # -30% КД атаки — учитывается динамически в _handle_attack_cd
         elif title_id == "selection":
-            pass
+            pass  # ×3 к весам топ-2 рангов — учитывается в squad_service.recruit
         elif title_id == "manager_fav":
             user.ticket_chance = min(getattr(user, "max_ticket_chance", 70), user.ticket_chance + 10)
         elif title_id == "concentration":
-            user.ticket_cd_reduction += 30
+            pass  # -30% КД атаки — учитывается динамически в _handle_attack_cd
         elif title_id == "focus":
-            pass
+            pass  # -20% КД вербовки/тренировки — учитывается динамически в squad_service
         elif title_id == "ui_title":
             from app.services.raid_service import raid_service as rs
             rs.apply_donat_ui(user)

@@ -81,6 +81,7 @@ class PrestigeService:
         user.extra_path_skill_slots = EXTRA_SKILL_SLOTS_BASE
         user.double_ticket = False
         user.path_awakened = False
+        user.squad_power_bonus = 0
 
         # ── Очки мастерства и пути — только при полном сбросе ────────────
         if not keep_progress:

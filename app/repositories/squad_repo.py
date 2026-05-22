@@ -51,6 +51,10 @@ class SquadRepo:
             effective = raw * user.skill_path_bonus_multiplier
             total = int(total * (1 + effective / 100))
 
+        # Бонус навыков пути (squad_power_bonus): mon_power_1 / mon_power_2
+        if user.squad_power_bonus > 0:
+            total = int(total * (1 + user.squad_power_bonus / 100))
+
         # 4. Донат-множители
         from app.repositories.title_repo import title_repo
         mult = await title_repo.get_combat_power_mult(session, user.id)

@@ -14,7 +14,7 @@ from app.services.cards.fusion import fusion_service
 from app.utils.formatters import fmt_num, fmt_power
 from app.data.characters import RANK_CONFIG_MAP, RANK_EMOJI, CHARACTERS
 from app.data.card_images import get_image_path
-from app.constants.cards import LEVEL_LABELS, LEVEL_EMOJIS, DUST_PER_LEVEL, FUSION_COST
+from app.constants.cards import LEVEL_LABELS, LEVEL_EMOJIS, DUST_PER_LEVEL, FUSION_COST, calc_dust
 
 router = Router()
 
@@ -145,7 +145,7 @@ async def cb_card_act(cb: CallbackQuery, session: AsyncSession, user: User):
     r_emoji = RANK_EMOJI.get(uc.rank, "❓")
     cfg = RANK_CONFIG_MAP.get(uc.rank)
     rank_label = cfg.label if cfg else uc.rank
-    dust = DUST_PER_LEVEL.get(uc.level, 10)
+    dust = calc_dust(uc.rank, uc.level)
 
     in_deck = bool(await session.scalar(
         select(UserDeck.id).where(

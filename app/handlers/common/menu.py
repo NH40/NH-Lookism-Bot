@@ -27,18 +27,21 @@ async def cmd_start(message: Message, session: AsyncSession, user: User, is_new_
         except Exception:
             pass
 
+    from app.services.title_service import title_service
+    from app.data.titles import DONAT_SETS as _DS
+    has_vvip = all([await title_service.has_set(session, user.id, s.set_id) for s in _DS])
     if is_new_user:
         await message.answer(
             f"👋 Добро пожаловать, <b>{html.escape(user.full_name)}</b>!\n\n"
             f"Ты начинаешь путь уличного бойца.\n"
             f"Цель — стать Императором!\n\n"
             f"🏴 Банда → 👑 Король → ✊ Кулак → 🏛 Император",
-            reply_markup=main_menu_kb(),
+            reply_markup=main_menu_kb(has_vvip=has_vvip),
             parse_mode="HTML",
         )
     else:
         text = await _main_menu_text(session, user)
-        await message.answer(text, reply_markup=main_menu_kb(), parse_mode="HTML")
+        await message.answer(text, reply_markup=main_menu_kb(has_vvip=has_vvip), parse_mode="HTML")
 
 
 # ── Главное меню ────────────────────────────────────────────────────────────
@@ -46,8 +49,15 @@ async def cmd_start(message: Message, session: AsyncSession, user: User, is_new_
 @router.callback_query(F.data == "main_menu")
 async def cb_main_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     text = await _main_menu_text(session, user)
+    from app.services.title_service import title_service
+    from app.data.titles import DONAT_SETS as _DS
+    has_vvip = all([await title_service.has_set(session, user.id, s.set_id) for s in _DS])
     try:
-        await cb.message.edit_text(text, reply_markup=main_menu_kb(), parse_mode="HTML")
+        await cb.message.edit_text(
+            text,
+            reply_markup=main_menu_kb(has_vvip=has_vvip),
+            parse_mode="HTML",
+        )
     except Exception:
         pass
     await cb.answer()
@@ -77,13 +87,20 @@ async def cb_profile(cb: CallbackQuery, session: AsyncSession, user: User):
 
     ui_str = ""
     if user.ui_level > 0 or user.ui_is_donat or user.ui_fragments > 0 or user.alchemy_fragments > 0:
+        from app.handlers.skills.med_genius import any_unlocked, _unlocked_count, MG_POTIONS, is_donat as _mg_is_donat
         ui_level_label = "Донат (макс)" if user.ui_is_donat else f"Уровень {user.ui_level}/4"
-        alchemy_label = " ✅" if user.donat_ui_potion else ""
+        if _mg_is_donat(user):
+            mg_label = " ✅ Донат (все Ур.6)"
+        elif any_unlocked(user):
+            mg_label = f" {_unlocked_count(user)}/{len(MG_POTIONS)} зелий"
+        else:
+            mg_label = " 🔒 не открыто"
         ui_str = (
             f"\n\n━━━ 👁 Ультра Инстинкт ━━━\n"
             f"{ui_level_label}\n"
             f"🔮 Фрагменты УИ: {user.ui_fragments}\n"
-            f"🧪 Фрагменты алхимии: {user.alchemy_fragments}{alchemy_label}"
+            f"🧪 Фрагменты алхимии: {user.alchemy_fragments}\n"
+            f"🩺 Гений медицины:{mg_label}"
         )
 
     text = (

@@ -9,7 +9,6 @@ from app.services.raid_service import raid_service
 from app.services.cooldown_service import cooldown_service
 from app.constants.raid import (
     RAID_BOSSES,
-    ALCHEMY_CRAFT_COST,
     PATH_SPIN_CRAFT_COST,
     PATH_LEVEL_MAX,
     PATH_LEVEL_COSTS,
@@ -61,16 +60,23 @@ async def cb_raid_menu(cb: CallbackQuery, session: AsyncSession, user: User):
 
     ui_str = f"УИ {user.ui_level} уровень" if user.ui_level > 0 else "нет УИ"
     donat_str = " (донат 🔱)" if user.ui_is_donat else ""
-    alchemy_str = " ✅" if user.donat_ui_potion else f" ({user.alchemy_fragments}/{ALCHEMY_CRAFT_COST})"
     path_frags = getattr(user, "path_fragments", 0)
     path_str = f" ({path_frags}/{PATH_SPIN_CRAFT_COST} для крутки)" if path_frags < PATH_SPIN_CRAFT_COST else " ✅ готово к крутке"
+    from app.handlers.skills.med_genius import any_unlocked, _unlocked_count, MG_POTIONS, is_donat as _mg_is_donat
+    if _mg_is_donat(user):
+        mg_str = " ✅ Донат (все Ур.6)"
+    elif any_unlocked(user):
+        mg_str = f" {_unlocked_count(user)}/{len(MG_POTIONS)} зелий"
+    else:
+        mg_str = f" 🔒 ({user.alchemy_fragments}/30 🧪)"
 
     await cb.message.edit_text(
         f"⚔️ <b>Рейды</b>\n\n"
         f"🔮 Фрагменты УИ: <b>{user.ui_fragments}</b>\n"
-        f"🧪 Фрагменты алхимии: <b>{user.alchemy_fragments}</b>{alchemy_str}\n"
+        f"🧪 Фрагменты алхимии: <b>{user.alchemy_fragments}</b>\n"
         f"🔷 Фрагменты Пути: <b>{path_frags}</b>{path_str}\n"
-        f"👁 УИ: {ui_str}{donat_str}\n\n"
+        f"👁 УИ: {ui_str}{donat_str}\n"
+        f"🩺 Гений медицины:{mg_str}\n\n"
         f"Выбери цель для рейда:",
         reply_markup=builder.as_markup(),
         parse_mode="HTML",
@@ -127,12 +133,19 @@ async def cb_raid_craft(cb: CallbackQuery, session: AsyncSession, user: User):
     path_frags = getattr(user, "path_fragments", 0)
     path_level = getattr(user, "skill_path_level", 0)
     ui_str = f"УИ {user.ui_level}" if user.ui_level > 0 else ("Донат 🔱" if user.ui_is_donat else "нет")
+    from app.handlers.skills.med_genius import any_unlocked, _unlocked_count, MG_POTIONS, is_donat as _mg_is_donat
+    if _mg_is_donat(user):
+        mg_str = "✅ Донат (все Ур.6)"
+    elif any_unlocked(user):
+        mg_str = f"{_unlocked_count(user)}/{len(MG_POTIONS)} зелий"
+    else:
+        mg_str = f"🔒 ({user.alchemy_fragments}/30 🧪)"
 
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="👁 Крафт УИ",       callback_data="craft_ui_menu"))
-    builder.row(InlineKeyboardButton(text="🧪 Крафт Алхимии",  callback_data="craft_alchemy_menu"))
-    builder.row(InlineKeyboardButton(text="🔷 Крафт Пути",     callback_data="craft_path_menu"))
-    builder.row(InlineKeyboardButton(text="◀️ Назад",          callback_data="raid_menu"))
+    builder.row(InlineKeyboardButton(text="👁 Крафт УИ",          callback_data="craft_ui_menu"))
+    builder.row(InlineKeyboardButton(text="🩺 Гений медицины",    callback_data="craft_mg_menu"))
+    builder.row(InlineKeyboardButton(text="🔷 Крафт Пути",        callback_data="craft_path_menu"))
+    builder.row(InlineKeyboardButton(text="◀️ Назад",             callback_data="raid_menu"))
 
     await cb.message.edit_text(
         f"🔨 <b>Крафт</b>\n\n"
@@ -140,7 +153,7 @@ async def cb_raid_craft(cb: CallbackQuery, session: AsyncSession, user: User):
         f"🧪 Фрагменты алхимии: <b>{user.alchemy_fragments}</b>\n"
         f"🔷 Фрагменты Пути: <b>{path_frags}</b>\n\n"
         f"👁 УИ: <b>{ui_str}</b>\n"
-        f"🧪 УИ Алхимии: <b>{'✅' if user.donat_ui_potion else '❌'}</b>\n"
+        f"🩺 Гений медицины: <b>{mg_str}</b>\n"
         f"🔷 Уровень пути: <b>{path_level}/{PATH_LEVEL_MAX}</b>\n\n"
         f"Выбери раздел крафта:",
         reply_markup=builder.as_markup(),

@@ -47,8 +47,21 @@ class AdminBaseService:
         await title_service.revoke_all_titles(session, user)
 
     async def get_stats(self, session: AsyncSession) -> dict:
+        """Статистика с кешированием на 60 секунд."""
+        import json
+        try:
+            from app.services.cooldown_service import cooldown_service
+            r = cooldown_service.redis
+            cached = await r.get("admin:stats")
+            if cached:
+                return json.loads(cached)
+        except Exception:
+            pass
+
         total = await session.scalar(select(func.count(User.id)))
         phases = {}
+        # Один запрос вместо 4
+        from sqlalchemy import case, literal
         for phase in ["gang", "king", "fist", "emperor"]:
             count = await session.scalar(
                 select(func.count(User.id)).where(User.phase == phase)
@@ -57,7 +70,12 @@ class AdminBaseService:
         with_power = await session.scalar(
             select(func.count(User.id)).where(User.combat_power > 0)
         )
-        return {"total": total, "phases": phases, "with_power": with_power}
+        result = {"total": total, "phases": phases, "with_power": with_power}
+        try:
+            await r.setex("admin:stats", 60, json.dumps(result, ensure_ascii=False))
+        except Exception:
+            pass
+        return result
 
     async def delete_user(self, session: AsyncSession, user: User) -> None:
         from app.services.prestige_service import prestige_service

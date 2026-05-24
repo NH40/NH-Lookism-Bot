@@ -27,18 +27,24 @@ def reset_donat_bonuses(user: User) -> None:
     user.ui_auto_train = False
     user.ui_auto_ticket = False
     user.ui_auto_pull = False
-    user.donat_ui_potion = False
-    user.ui_auto_potion = False
     user.donat_duel_cd = False
+    user.all_cd_reduction = 0
+    user.med_genius_donat = False
+    # Уровни 1-5 заработаны фрагментами — НЕ сбрасываем.
+    # Уровень 6 — только от доната — откатываем до 5 если был 6.
+    for _field in ("mg_level_power", "mg_level_training", "mg_level_income",
+                   "mg_level_luck", "mg_level_influence", "mg_level_raid_drop"):
+        if getattr(user, _field, 0) >= 6:
+            setattr(user, _field, 5)
 
 
 async def apply_title_bonus(
     session: AsyncSession, user: User, title_id: str
 ) -> None:
     if title_id == "fist_power":
-        pass
+        user.squad_power_bonus += 20
     elif title_id == "romantic_recruit":
-        user.recruit_count_bonus += 100
+        user.recruit_count_bonus += 40
     elif title_id == "great_influence":
         pass
     elif title_id == "genius_training":
@@ -72,20 +78,23 @@ async def apply_title_bonus(
     elif title_id == "manager_fav":
         user.ticket_chance = min(getattr(user, "max_ticket_chance", 70), user.ticket_chance + 10)
     elif title_id == "concentration":
-        pass
+        user.all_cd_reduction = getattr(user, "all_cd_reduction", 0) + 10
     elif title_id == "focus":
-        pass
+        user.all_cd_reduction = getattr(user, "all_cd_reduction", 0) + 20
+    elif title_id == "raid_cd":
+        user.all_cd_reduction = getattr(user, "all_cd_reduction", 0) + 20
     elif title_id == "ui_title":
         from app.services.raid_service import raid_service as rs
         rs.apply_donat_ui(user)
-        if user.donat_ui_potion and user.ui_auto_potion:
-            from app.services.potion_service import potion_service
-            await potion_service.buy_missing(session, user)
     elif title_id == "ui_potion":
-        user.donat_ui_potion = True
-        if user.ui_auto_potion:
-            from app.services.potion_service import potion_service
-            await potion_service.buy_missing(session, user)
+        user.med_genius_donat = True
+        # Донат = максимальный тир всех зелий
+        user.mg_level_power     = 6
+        user.mg_level_training  = 6
+        user.mg_level_income    = 6
+        user.mg_level_luck      = 6
+        user.mg_level_influence = 6
+        user.mg_level_raid_drop = 6
     elif title_id == "duel_cd":
         user.donat_duel_cd = True
     elif title_id == "rom_extra_skills":
@@ -98,7 +107,7 @@ async def apply_title_bonus(
 def apply_set_bonus(user: User, set_id: str) -> None:
     if set_id == "strongest_0gen":
         from app.config.game_balance import EXTRA_SKILL_SLOTS_WITH_TITLE
-        user.influence = int(user.influence * 2.0)
+        user.influence = int(user.influence * 1.6)
         user.extra_path_skill_slots = EXTRA_SKILL_SLOTS_WITH_TITLE
         user.max_ticket_chance = 90
         user.ticket_chance = min(getattr(user, "max_ticket_chance", 70), user.ticket_chance + 5)

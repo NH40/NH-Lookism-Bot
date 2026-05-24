@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 
 
+MAX_DONAT_CIRCLES = 5
+
 @dataclass(frozen=True)
 class ClanDonatPackage:
     package_id: str
@@ -10,14 +12,16 @@ class ClanDonatPackage:
     income_pct: int
     ticket_pct: int
     train_pct: int
+    circles_field: str   # поле в Clan для счётчика кругов
+    max_circles: int = MAX_DONAT_CIRCLES
 
 
 CLAN_DONAT_PACKAGES: list[ClanDonatPackage] = [
-    ClanDonatPackage("donat_income",  "💰 Богатство клана", "+20% к доходу всем участникам",               500,  20, 0,  0 ),
-    ClanDonatPackage("donat_ticket",  "🍀 Удача клана",     "+10% к шансу тикета всем участникам",          400,  0,  10, 0 ),
-    ClanDonatPackage("donat_train",   "🏋 Школа клана",     "+20% к охвату тренировки всем участникам",     350,  0,  0,  20),
-    ClanDonatPackage("donat_war",     "⚔️ Клан Войн",       "+20% к доходу + +20% к тренировкам всем",      900,  20, 0,  20),
-    ClanDonatPackage("donat_premium", "👑 Премиум клан",    "+30% к доходу + +10% к тикетам + +25% к трен.",1500, 30, 10, 25),
+    ClanDonatPackage("donat_income",  "💰 Богатство клана", "+10% к доходу всем участникам",                500,  10, 0,  0,  "donat_wealth_circles"),
+    ClanDonatPackage("donat_ticket",  "🍀 Удача клана",     "+5% к шансу тикета всем участникам",           400,  0,  5,  0,  "donat_luck_circles"),
+    ClanDonatPackage("donat_train",   "🏋️ Школа клана",    "+10% к охвату тренировки всем участникам",     350,  0,  0,  10, "donat_school_circles"),
+    ClanDonatPackage("donat_war",     "⚔️ Клан Войн",       "+10% к доходу + +10% к тренировкам всем",      900,  10, 0,  10, "donat_war_circles"),
+    ClanDonatPackage("donat_premium", "👑 Премиум клан",    "+15% к доходу + +5% к тикетам + +10% к трен.", 1500, 15, 5,  10, "donat_premium_circles"),
 ]
 
 CLAN_DONAT_PACKAGES_MAP: dict[str, ClanDonatPackage] = {p.package_id: p for p in CLAN_DONAT_PACKAGES}

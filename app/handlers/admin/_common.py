@@ -1,4 +1,6 @@
 import html
+import json
+import logging
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton
@@ -9,6 +11,16 @@ from app.services.admin_service import admin_service
 from app.services.title_service import title_service
 from app.utils.keyboards.admin import admin_user_kb
 from app.utils.formatters import fmt_num, fmt_power, phase_label
+
+logger = logging.getLogger(__name__)
+
+# ── Кэш для карточек пользователей в панели администратора ──────────────────
+_ADMIN_CARD_TTL = 30   # секунды; короткий TTL чтобы данные были актуальны
+
+
+def _redis():
+    from app.services.cooldown_service import cooldown_service
+    return cooldown_service.redis
 
 
 def is_admin(tg_id: int) -> bool:
@@ -32,32 +44,77 @@ class AdminFSM(StatesGroup):
     waiting_alchemy_fragments = State()
     waiting_squad_count = State()
     waiting_path_fragments = State()
-    # Карточки
-    waiting_card_char = State()   # ввод имени персонажа
-    waiting_card_level = State()  # ввод уровня 0-3
-    waiting_dust_amount = State() # ввод количества пыли
+    # Карточки (старый поток — оставлен для совместимости)
+    waiting_card_char = State()
+    waiting_card_level = State()
+    waiting_dust_amount = State()
+    # Карточки (новый поток)
+    waiting_card_qty = State()       # ввод количества при выдаче
+    waiting_card_take_qty = State()  # ввод количества при удалении
 
 
-async def _show_user_card(message, session, found):
+async def _build_user_card_text(session: AsyncSession, found) -> tuple[str, bool]:
+    """Возвращает (текст карточки, donat_duel_cd). Использует кэш Redis."""
+    cache_key = f"admin_card:{found.tg_id}"
+    r = _redis()
+    try:
+        cached = await r.get(cache_key)
+        if cached:
+            data = json.loads(cached)
+            return data["text"], data["duel_cd"]
+    except Exception:
+        pass
+
     from app.repositories.title_repo import title_repo
     titles_str = await title_repo.get_titles_display(session, found.id)
     duel_cd = getattr(found, "donat_duel_cd", False)
+    text = (
+        f"👤 <b>{html.escape(found.full_name)}</b>\n"
+        f"🆔 tg_id: <code>{found.tg_id}</code>\n"
+        f"🏴 Банда: {html.escape(found.gang_name) if found.gang_name else '—'}\n"
+        f"{phase_label(found.phase)}\n"
+        f"⚔️ Мощь: {fmt_power(found.combat_power)}\n"
+        f"💰 Монеты: {fmt_num(found.nh_coins)}\n"
+        f"🎟 Тикеты: {found.tickets}/{found.max_tickets}\n"
+        f"🌟 Пробуждений: {found.prestige_level}\n"
+        f"💎 Титулы:\n{titles_str}"
+    )
+    try:
+        await r.setex(cache_key, _ADMIN_CARD_TTL, json.dumps(
+            {"text": text, "duel_cd": duel_cd}, ensure_ascii=False
+        ))
+    except Exception:
+        pass
+    return text, duel_cd
+
+
+async def invalidate_admin_card_cache(tg_id: int) -> None:
+    """Сбросить кэш карточки пользователя после изменения данных."""
+    try:
+        await _redis().delete(f"admin_card:{tg_id}")
+    except Exception:
+        pass
+
+
+async def _show_user_card(message, session, found):
+    text, duel_cd = await _build_user_card_text(session, found)
+    # Сбрасываем кэш сразу после отображения чтобы следующий запрос был свежим
+    await invalidate_admin_card_cache(found.tg_id)
     try:
         await message.edit_text(
-            f"👤 <b>{html.escape(found.full_name)}</b>\n"
-            f"🆔 tg_id: <code>{found.tg_id}</code>\n"
-            f"🏴 Банда: {html.escape(found.gang_name) if found.gang_name else '—'}\n"
-            f"{phase_label(found.phase)}\n"
-            f"⚔️ Мощь: {fmt_power(found.combat_power)}\n"
-            f"💰 Монеты: {fmt_num(found.nh_coins)}\n"
-            f"🎟 Тикеты: {found.tickets}/{found.max_tickets}\n"
-            f"🌟 Пробуждений: {found.prestige_level}\n"
-            f"💎 Титулы:\n{titles_str}",
+            text,
             reply_markup=admin_user_kb(found.tg_id, donat_duel_cd=duel_cd),
             parse_mode="HTML",
         )
     except Exception:
-        pass
+        try:
+            await message.answer(
+                text,
+                reply_markup=admin_user_kb(found.tg_id, donat_duel_cd=duel_cd),
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            logger.warning(f"_show_user_card failed: {e}")
 
 
 async def _show_set_panel(message, session, user, tg_id, set_id, found_user):
@@ -170,52 +227,51 @@ async def _render_untset(message, session: AsyncSession, tg_id: int, set_id: str
 
 
 async def _show_clan_donat_panel(message, clan):
-    from app.constants.clan import CLAN_DONAT_PACKAGES
-    from app.services.clan.donat import VVIP_MAX_LEVEL
+    from app.constants.clan import CLAN_DONAT_PACKAGES, MAX_DONAT_CIRCLES
     active = []
     if clan.donat_income_pct: active.append(f"💰 Доход +{clan.donat_income_pct}%")
     if clan.donat_ticket_pct: active.append(f"🍀 Тикет +{clan.donat_ticket_pct}%")
     if clan.donat_train_pct:  active.append(f"🏋 Тренировка +{clan.donat_train_pct}%")
     active_str = "\n".join(active) if active else "нет"
 
-    vvip_level = getattr(clan, "vvip_level", 0)
-
     builder = InlineKeyboardBuilder()
-
-    # Кнопка выдачи полного уровня VVIP
-    if vvip_level < VVIP_MAX_LEVEL:
-        builder.row(InlineKeyboardButton(
-            text=f"👑 Выдать +1 уровень VVIP ({vvip_level}/{VVIP_MAX_LEVEL}) — весь круг",
-            callback_data=f"adm_clan_vvip_level:{clan.id}"
-        ))
-    else:
-        builder.row(InlineKeyboardButton(
-            text=f"✅ MAX VVIP достигнут ({VVIP_MAX_LEVEL}/{VVIP_MAX_LEVEL})",
-            callback_data="noop"
-        ))
-
     for pkg in CLAN_DONAT_PACKAGES:
-        bonuses = []
-        if pkg.income_pct:  bonuses.append(f"+{pkg.income_pct}% дох")
-        if pkg.ticket_pct:  bonuses.append(f"+{pkg.ticket_pct}% тик")
-        if pkg.train_pct:   bonuses.append(f"+{pkg.train_pct}% трен")
-        builder.row(InlineKeyboardButton(
-            text=f"{pkg.name} ({', '.join(bonuses)}) — {pkg.price_rub}₽",
-            callback_data=f"adm_clan_donat_apply:{clan.id}:{pkg.package_id}"
-        ))
+        circles = getattr(clan, pkg.circles_field, 0)
+        if circles >= MAX_DONAT_CIRCLES:
+            # Максимум — показываем как заблокированную кнопку
+            builder.row(InlineKeyboardButton(
+                text=f"✅ {pkg.name} [{circles}/{MAX_DONAT_CIRCLES}] — MAX",
+                callback_data="noop"
+            ))
+        else:
+            bonuses = []
+            if pkg.income_pct:  bonuses.append(f"+{pkg.income_pct}% дох")
+            if pkg.ticket_pct:  bonuses.append(f"+{pkg.ticket_pct}% тик")
+            if pkg.train_pct:   bonuses.append(f"+{pkg.train_pct}% трен")
+            builder.row(InlineKeyboardButton(
+                text=f"{pkg.name} [{circles}/{MAX_DONAT_CIRCLES}] ({', '.join(bonuses)}) — {pkg.price_rub}₽",
+                callback_data=f"adm_clan_donat_apply:{clan.id}:{pkg.package_id}"
+            ))
     builder.row(InlineKeyboardButton(
         text="🗑 Сбросить донат-бонусы",
         callback_data=f"adm_clan_donat_reset:{clan.id}"
     ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="admin_main"))
 
-    vvip_str = f"👑 <b>VVIP уровень: {vvip_level}/{VVIP_MAX_LEVEL}</b>\n" if vvip_level > 0 else ""
+    # Строка кругов
+    circles_lines = []
+    for pkg in CLAN_DONAT_PACKAGES:
+        n = getattr(clan, pkg.circles_field, 0)
+        if n:
+            circles_lines.append(f"  {pkg.name}: {n}/{MAX_DONAT_CIRCLES}")
+    circles_str = "\n".join(circles_lines) if circles_lines else "нет"
+
     text = (
         f"🏯 <b>Клан: {html.escape(clan.name)}</b>\n"
-        f"👥 Участников: до {clan.max_members + clan.bonus_max_members}\n"
-        f"{vvip_str}\n"
+        f"👥 Участников: до {clan.max_members + clan.bonus_max_members}\n\n"
         f"<b>Текущий донат:</b>\n{active_str}\n\n"
-        f"Выберите пакет для выдачи (значения накапливаются):"
+        f"<b>Круги донатов:</b>\n{circles_str}\n\n"
+        f"Выберите пакет (макс {MAX_DONAT_CIRCLES} кругов каждый):"
     )
     try:
         await message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")

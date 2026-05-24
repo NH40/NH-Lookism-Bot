@@ -31,14 +31,18 @@ async def cb_path_choose(cb: CallbackQuery, session: AsyncSession, user: User):
     builder.row(InlineKeyboardButton(
         text="👹 Монстр", callback_data="choose_path:monster"
     ))
+    builder.row(InlineKeyboardButton(
+        text="🌑 Тень", callback_data="choose_path:shadow"
+    ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="skills"))
 
     await cb.message.edit_text(
         "🗺 <b>Выбор пути</b>\n\n"
-        "💼 <b>Бизнесмен</b>\n+% доход, скидки на здания, множитель районов\n\n"
-        "💝 <b>Романтик</b>\n+слоты тикетов, +% шанс, двойная вербовка\n\n"
-        "👹 <b>Монстр</b>\n+% тренировка, двойная тренировка, двойная атака\n\n"
-        "<i>Выбор нельзя изменить!</i>",
+        "💼 <b>Бизнесмен</b>\n+% доход, скидки на здания, множитель районов, рэкет\n\n"
+        "💝 <b>Романтик</b>\n+слоты тикетов, +% шанс, двойная вербовка, народная любовь\n\n"
+        "👹 <b>Монстр</b>\n+% тренировка, двойная тренировка, двойная атака, ярость\n\n"
+        "🌑 <b>Тень</b>\n-% КД всего, скрытность, удар из засады, серия убийств\n\n"
+        "<i>⚠️ Выбор нельзя изменить!</i>",
         reply_markup=builder.as_markup(),
         parse_mode="HTML",
     )
@@ -69,7 +73,7 @@ async def cb_path_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     path_level = getattr(user, "skill_path_level", 0)
     path_awakened = getattr(user, "path_awakened", False)
 
-    path_emoji = {"businessman": "💼", "romantic": "💝", "monster": "👹"}.get(user.skill_path, "")
+    path_emoji = {"businessman": "💼", "romantic": "💝", "monster": "👹", "shadow": "🌑"}.get(user.skill_path, "")
     path_name = skill_path_label(user.skill_path)
 
     bought_ids = set(bought)
@@ -169,7 +173,7 @@ async def cb_extra_skills_menu(cb: CallbackQuery, session: AsyncSession, user: U
 
     bought = set(await skill_service.get_path_skills_bought(session, user.id))
     other_paths = [p for p in PATH_SKILLS if p != user.skill_path]
-    path_emoji_map = {"businessman": "💼", "romantic": "💝", "monster": "👹"}
+    path_emoji_map = {"businessman": "💼", "romantic": "💝", "monster": "👹", "shadow": "🌑"}
 
     all_map = _all_path_skills_map()
     active_foreign_paths = set()

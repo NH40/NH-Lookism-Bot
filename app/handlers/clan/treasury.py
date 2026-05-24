@@ -63,10 +63,14 @@ async def msg_treasury_amount(message: Message, session: AsyncSession, user: Use
 
     result = await clan_service.deposit_treasury(session, clan, user, amount)
     if result["ok"]:
-        await message.answer(
+        cashback = result.get("cashback", 0)
+        cashback_pct = result.get("cashback_pct", 0)
+        text = (
             f"✅ Вы пополнили казну на <b>{fmt_num(amount)} NHCoin</b>!\n"
-            f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin",
-            parse_mode="HTML",
+            f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin"
         )
+        if cashback > 0:
+            text += f"\n\n💸 <b>Кешбэк!</b> +{fmt_num(cashback)} NHCoin ({cashback_pct}%) вернулось вам!"
+        await message.answer(text, parse_mode="HTML")
     else:
         await message.answer(f"❌ {result['reason']}")

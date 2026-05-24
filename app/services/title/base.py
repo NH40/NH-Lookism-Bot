@@ -97,9 +97,6 @@ class TitleService:
     async def reapply_all_titles(
         self, session: AsyncSession, user: User
     ) -> None:
-        had_alchemy_ui = user.donat_ui_potion
-        had_ui_auto_potion = user.ui_auto_potion
-
         reset_donat_bonuses(user)
         title_ids = await self.get_user_titles(session, user.id)
         for title_id in title_ids:
@@ -113,10 +110,9 @@ class TitleService:
 
         await rebuild_base_bonuses(session, user)
 
-        if had_alchemy_ui and not user.donat_ui_potion:
-            user.donat_ui_potion = True
-        if had_ui_auto_potion and not user.ui_auto_potion:
-            user.ui_auto_potion = True
+        # Круговые донаты: пересчитываем поверх готовых титульных бонусов
+        from app.services.circular_donat_service import rebuild_circular_bonuses
+        await rebuild_circular_bonuses(session, user)
 
         from app.services.business_service import business_service
         await business_service._recalc_income(session, user)

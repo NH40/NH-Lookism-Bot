@@ -23,6 +23,12 @@ class Clan(Base):
     donat_ticket_pct: Mapped[int] = mapped_column(Integer, default=0)
     donat_train_pct: Mapped[int] = mapped_column(Integer, default=0)
     vvip_level: Mapped[int] = mapped_column(Integer, default=0)
+    # Счётчики кругов по каждому донат-пакету (макс 5 каждый)
+    donat_wealth_circles: Mapped[int] = mapped_column(Integer, default=0)
+    donat_luck_circles: Mapped[int] = mapped_column(Integer, default=0)
+    donat_school_circles: Mapped[int] = mapped_column(Integer, default=0)
+    donat_war_circles: Mapped[int] = mapped_column(Integer, default=0)
+    donat_premium_circles: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

@@ -76,15 +76,26 @@ class UserRepo:
     ) -> int:
         from sqlalchemy import func
         user_r = await session.execute(
-            select(User.combat_power).where(User.id == user_id)
+            select(User.combat_power, User.path_unique_2).where(User.id == user_id)
         )
-        my_power = user_r.scalar_one_or_none() or 0
+        row = user_r.one_or_none()
+        if not row:
+            return 1
+        my_power, is_hidden = row.combat_power or 0, bool(row.path_unique_2)
 
-        rank = await session.scalar(
-            select(func.count(User.id)).where(
-                User.combat_power > my_power
+        if is_hidden:
+            # Скрытность (путь Тени): показываем ранг среди всех (включая себя)
+            rank = await session.scalar(
+                select(func.count(User.id)).where(User.combat_power > my_power)
             )
-        )
+        else:
+            # Обычный ранг — считаем только видимых игроков
+            rank = await session.scalar(
+                select(func.count(User.id)).where(
+                    User.combat_power > my_power,
+                    User.path_unique_2.is_(False),
+                )
+            )
         return (rank or 0) + 1
 
     async def get_all_with_income(
@@ -106,7 +117,6 @@ class UserRepo:
                 or_(
                     User.ultra_instinct == True,
                     User.ui_is_donat == True,
-                    User.donat_ui_potion == True,
                 )
             )
         )

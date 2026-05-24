@@ -6,7 +6,7 @@ from app.models.user import User
 from app.models.character import UserCharacter
 from app.models.card_deck import UserDeck
 from app.data.characters import CHARACTERS
-from app.constants.cards import LEVEL_MULTIPLIERS, FUSION_COST, DUST_PER_LEVEL
+from app.constants.cards import LEVEL_MULTIPLIERS, FUSION_COST, DUST_PER_LEVEL, calc_dust
 
 
 def effective_power(base_power: int, level: int) -> int:
@@ -31,7 +31,7 @@ class FusionService:
         if in_deck:
             return {"ok": False, "reason": "Карточка в активной колоде — сначала уберите её"}
 
-        dust = DUST_PER_LEVEL.get(uc.level, 10)
+        dust = calc_dust(uc.rank, uc.level)
         char_name = uc.character_id
         level = uc.level
 

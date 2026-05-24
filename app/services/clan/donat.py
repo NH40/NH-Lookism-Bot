@@ -16,6 +16,15 @@ class ClanDonatService:
         if not pkg:
             return {"ok": False, "reason": "Пакет не найден"}
 
+        # Проверяем лимит кругов
+        current_circles = getattr(clan, pkg.circles_field, 0)
+        if current_circles >= pkg.max_circles:
+            return {
+                "ok": False,
+                "reason": f"Достигнут максимум {pkg.max_circles} кругов для «{pkg.name}»"
+            }
+
+        setattr(clan, pkg.circles_field, current_circles + 1)
         clan.donat_income_pct += pkg.income_pct
         clan.donat_ticket_pct += pkg.ticket_pct
         clan.donat_train_pct  += pkg.train_pct
@@ -41,6 +50,13 @@ class ClanDonatService:
 
         return {"ok": True, "package": pkg}
 
+    async def _sync_vvip_to_members(
+        self, session: AsyncSession, clan: Clan, users: list
+    ) -> None:
+        """Синхронизировать уровень VVIP клана на всех участников."""
+        for u in users:
+            u.clan_vvip_level = clan.vvip_level
+
     async def apply_full_level(self, session: AsyncSession, clan: Clan) -> dict:
         if clan.vvip_level >= VVIP_MAX_LEVEL:
             return {"ok": False, "reason": f"Достигнут максимальный уровень VVIP ({VVIP_MAX_LEVEL})"}
@@ -62,6 +78,7 @@ class ClanDonatService:
             u.clan_donat_income_bonus = clan.donat_income_pct
             u.clan_donat_ticket_bonus = clan.donat_ticket_pct
             u.clan_donat_train_bonus  = clan.donat_train_pct
+        await self._sync_vvip_to_members(session, clan, users)
 
         await session.flush()
 
@@ -76,6 +93,9 @@ class ClanDonatService:
         clan.donat_ticket_pct = 0
         clan.donat_train_pct  = 0
         clan.vvip_level       = 0
+        # Сброс счётчиков кругов
+        for pkg in CLAN_DONAT_PACKAGES:
+            setattr(clan, pkg.circles_field, 0)
 
         members_r = await session.execute(
             select(ClanMember).where(ClanMember.clan_id == clan.id)
@@ -88,6 +108,7 @@ class ClanDonatService:
             u.clan_donat_income_bonus = 0
             u.clan_donat_ticket_bonus = 0
             u.clan_donat_train_bonus  = 0
+        await self._sync_vvip_to_members(session, clan, users)
 
         await session.flush()
 

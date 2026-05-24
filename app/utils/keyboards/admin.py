@@ -44,19 +44,8 @@ def admin_user_kb(tg_id: int, donat_duel_cd: bool = False) -> InlineKeyboardMark
     # ── Армия и карты ────────────────────────────────────────────────────────
     builder.row(
         InlineKeyboardButton(text="👥 Статист", callback_data=f"adm_squads:{tg_id}"),
-        InlineKeyboardButton(text="🌟 +Абс. карта", callback_data=f"adm_give_abs:{tg_id}"),
-        InlineKeyboardButton(text="🗑 −Абс. карты", callback_data=f"adm_take_abs:{tg_id}"),
-    )
-    builder.row(
-        InlineKeyboardButton(text="🃏 Дать карту", callback_data=f"adm_give_card:{tg_id}"),
+        InlineKeyboardButton(text="🃏 Карточки ▼", callback_data=f"adm_cards_menu:{tg_id}"),
         InlineKeyboardButton(text="💎 Дать пыль", callback_data=f"adm_give_dust:{tg_id}"),
-    )
-    duel_cd_icon = "✅" if donat_duel_cd else "❌"
-    builder.row(
-        InlineKeyboardButton(
-            text=f"{duel_cd_icon} Дуэль -20% КД",
-            callback_data=f"adm_toggle_duel_cd:{tg_id}",
-        ),
     )
 
     # ── Города ───────────────────────────────────────────────────────────────
@@ -69,6 +58,11 @@ def admin_user_kb(tg_id: int, donat_duel_cd: bool = False) -> InlineKeyboardMark
     builder.row(
         InlineKeyboardButton(text="⭐ +Пробуждение", callback_data=f"adm_prestige:{tg_id}"),
         InlineKeyboardButton(text="⭐ −Пробуждение", callback_data=f"adm_unprestige:{tg_id}"),
+    )
+
+    # ── Круговые донаты ───────────────────────────────────────────────────────
+    builder.row(
+        InlineKeyboardButton(text="🔄 Круговые донаты", callback_data=f"adm_circ_menu:{tg_id}"),
     )
 
     # ── Очистка ──────────────────────────────────────────────────────────────

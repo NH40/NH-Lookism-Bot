@@ -54,4 +54,5 @@ def skill_path_label(path: str | None) -> str:
         "businessman": "Бизнесмен",
         "romantic":    "Романтик",
         "monster":     "Монстр",
+        "shadow":      "Тень",
     }.get(path, path)

@@ -30,13 +30,42 @@ FUSION_COST: dict[int, int] = {
 }
 
 # ── Пыль (dust) ──────────────────────────────────────────────────────────────
-# Сколько пыли получаешь за распыление одной карточки нужного уровня
+# Базовое количество пыли за распыление — зависит от РАНГА карточки
+DUST_BY_RANK: dict[str, int] = {
+    "member":       5,
+    "boss":         15,
+    "king":         40,
+    "strong_king":  100,
+    "gen_zero":     280,
+    "new_legend":   700,
+    "legend":       2_000,
+    "peak":         7_000,
+    "absolute":     25_000,
+    "perfection":   100_000,
+}
+
+# Множитель по уровню карточки: базовая_пыль × level_factor
+DUST_LEVEL_FACTOR: dict[int, float] = {
+    0: 1.0,
+    1: 2.5,
+    2: 7.0,
+    3: 20.0,
+}
+
+# Для обратной совместимости (если где-то используется DUST_PER_LEVEL напрямую)
 DUST_PER_LEVEL: dict[int, int] = {
     0: 10,
     1: 30,
     2: 100,
     3: 300,
 }
+
+
+def calc_dust(rank: str, level: int) -> int:
+    """Вычислить количество пыли за распыление карточки (ранг + уровень)."""
+    base = DUST_BY_RANK.get(rank, 10)
+    factor = DUST_LEVEL_FACTOR.get(level, 1.0)
+    return max(1, int(base * factor))
 
 # Стоимость крафта одного тикета в пыли
 TICKET_CRAFT_COST = 50

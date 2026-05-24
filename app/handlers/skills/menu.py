@@ -18,15 +18,24 @@ async def cb_skills(cb: CallbackQuery, session: AsyncSession, user: User):
     )
 
     path_emoji = {
-        "businessman": "💼", "romantic": "💝", "monster": "👹"
+        "businessman": "💼", "romantic": "💝", "monster": "👹", "shadow": "🌑"
     }.get(user.skill_path, "❓") if user.skill_path else "❓"
 
     ui_status = "✅ Активен" if (user.ultra_instinct or user.true_ultra_instinct or user.ui_is_donat or user.ui_level > 0) else "❌"
+
+    from app.handlers.skills.med_genius import any_unlocked, _unlocked_count, MG_POTIONS, is_donat as _mg_is_donat
+    if _mg_is_donat(user):
+        mg_status = "Донат (все Ур.6)"
+    elif any_unlocked(user):
+        mg_status = f"{_unlocked_count(user)}/{len(MG_POTIONS)} зелий"
+    else:
+        mg_status = "🔒 не открыт"
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="⚔️ Мастерство",     callback_data="mastery_menu"))
     builder.row(InlineKeyboardButton(text="🗺 Путь",            callback_data="path_menu" if user.skill_path else "path_choose"))
     builder.row(InlineKeyboardButton(text="👁 Ультра Инстинкт", callback_data="ui_settings"))
+    builder.row(InlineKeyboardButton(text=f"🩺 Гений медицины ({mg_status})", callback_data="med_genius"))
     builder.row(InlineKeyboardButton(text="◀️ Назад",           callback_data="main_menu"))
 
     text = (

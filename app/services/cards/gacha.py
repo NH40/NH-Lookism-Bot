@@ -36,8 +36,11 @@ class GachaService:
             ttl = await cooldown_service.get_ttl(cd_key)
             return {"ok": False, "reason": cooldown_service.format_ttl(ttl)}
 
-        if user.tickets >= user.max_tickets:
-            return {"ok": False, "reason": f"Хранилище полно ({user.tickets}/{user.max_tickets})"}
+        # Круговой донат «Повелитель гор» круг 4: переполнение — лимит ×2
+        overflow = getattr(user, "circ_ticket_overflow", False)
+        ticket_cap = user.max_tickets * 2 if overflow else user.max_tickets
+        if user.tickets >= ticket_cap:
+            return {"ok": False, "reason": f"Хранилище полно ({user.tickets}/{ticket_cap})"}
 
         cap = getattr(user, "max_ticket_chance", 70)
         chance = await potion_service.get_effective_ticket_chance(session, user)
@@ -62,8 +65,8 @@ class GachaService:
 
         if got:
             double = getattr(user, "double_ticket", False)
-            gained = 2 if double and (user.tickets + 1 < user.max_tickets) else 1
-            user.tickets = min(user.max_tickets, user.tickets + gained)
+            gained = 2 if double and (user.tickets + 1 < ticket_cap) else 1
+            user.tickets = min(ticket_cap, user.tickets + gained)
             await session.flush()
             return {"ok": True, "got": True, "roll": roll, "chance": chance,
                     "double": double and gained == 2}

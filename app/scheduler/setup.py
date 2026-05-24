@@ -1,5 +1,6 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 
 import logging
 from app.config.scheduler_config import (
@@ -24,6 +25,7 @@ def setup_scheduler() -> AsyncIOScheduler:
         clan_war_tick,
         clan_auction_tick,
         referral_power_tick,
+        daily_tick,
     )
 
     scheduler = AsyncIOScheduler()
@@ -82,5 +84,15 @@ def setup_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=30,
     )
 
-    logger.info("Scheduler configured with 7 jobs")
+    # Ежедневные бонусы: circ_daily_districts (Архангел круг 10)
+    scheduler.add_job(
+        daily_tick,
+        trigger=CronTrigger(hour=0, minute=0, timezone="UTC"),
+        id="daily_tick",
+        name="daily_tick",
+        max_instances=1,
+        misfire_grace_time=300,
+    )
+
+    logger.info("Scheduler configured with 8 jobs")
     return scheduler

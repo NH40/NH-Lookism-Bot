@@ -231,14 +231,17 @@ async def cb_delete_gang_confirm(cb: CallbackQuery, session: AsyncSession, user:
     builder.row(InlineKeyboardButton(
         text="❌ Отмена", callback_data="settings"
     ))
-    await cb.message.edit_text(
-        "💀 <b>Удаление банды</b>\n\n"
-        "Весь прогресс будет сброшен!\n"
-        "Донаты и пробуждения сохранятся.\n\n"
-        "Подтвердить?",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
+    try:
+        await cb.message.edit_text(
+            "💀 <b>Удаление банды</b>\n\n"
+            "Весь прогресс будет сброшен!\n"
+            "Донаты и пробуждения сохранятся.\n\n"
+            "Подтвердить?",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data == "delete_gang_do")

@@ -109,6 +109,7 @@ async def cb_raid_attack(cb: CallbackQuery, session: AsyncSession, user: User):
             frag_emoji, frag_name = "🔷", "фрагментов Пути"
         else:
             frag_emoji, frag_name = "🔮", "фрагментов УИ"
+        doubled_line = "\n🌀 <b>Удача! Награда удвоена!</b>" if result.get("doubled") else ""
         await cb.answer(
             f"💀 Босс повержен!\n"
             f"{frag_emoji} Получено: +{result['fragments']}",
@@ -119,7 +120,8 @@ async def cb_raid_attack(cb: CallbackQuery, session: AsyncSession, user: User):
             f"💥 Суммарный урон: <b>{fmt_num(result['total_damage'])}</b>\n"
             f"🗡 Атак совершено: <b>{result['attack_count']}</b>\n\n"
             f"{frag_emoji} Получено {frag_name}: <b>+{result['fragments']}</b>\n"
-            f"📊 Всего: <b>{result['total_fragments']}</b>\n\n"
+            f"📊 Всего: <b>{result['total_fragments']}</b>"
+            + doubled_line + "\n\n"
             f"Используй фрагменты в <b>Рейды → Крафт</b>!",
             reply_markup=back_kb("raid_menu"),
             parse_mode="HTML",

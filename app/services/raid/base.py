@@ -1,3 +1,4 @@
+import random
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -10,7 +11,6 @@ from app.services.cooldown_service import cooldown_service
 from app.constants.raid import (
     RAID_BOSSES, UI_CRAFT_COST, UI_LEVEL_PERKS,
     RAID_ATTACK_CD_SECONDS,
-    ALCHEMY_CRAFT_COST,
     PATH_SPIN_CRAFT_COST,
 )
 from app.services.raid.rewards import calc_fragments, distribute_reward
@@ -54,17 +54,29 @@ class RaidService:
                     SquadMember.user_id == user.id
                 )
             )
-            return result or 0
+            power = result or 0
         elif damage_source == "characters":
             result = await session.scalar(
                 select(func.sum(UserCharacter.power)).where(
                     UserCharacter.user_id == user.id
                 )
             )
-            return result or 0
+            power = result or 0
         elif damage_source == "combat_power":
-            return user.combat_power // divisor
-        return 0
+            power = user.combat_power // divisor
+        else:
+            power = 0
+
+        # Круговой донат «Архангел» круг 3: +N% урон в рейдах
+        raid_bonus = getattr(user, "circ_raid_bonus_pct", 0)
+        if power > 0 and raid_bonus > 0:
+            power = int(power * (1 + raid_bonus / 100))
+
+        # Круговой донат «Дракон» круг 6: +15% урон в рейдах (мультипликативно)
+        if power > 0 and getattr(user, "circ_dragon_active", False):
+            power = int(power * 1.15)
+
+        return power
 
     async def start_raid(
         self, session: AsyncSession, user: User, clan_id: str, boss_id: str
@@ -118,6 +130,44 @@ class RaidService:
         session.add(raid)
         await session.flush()
 
+        reward_type = boss.get("reward_fragments", "ui")
+
+        # Круговой донат «Корейский дьявол» круг 3: шанс мгновенного рейда
+        instant_chance = getattr(user, "circ_instant_raid_chance", 0)
+        if instant_chance > 0 and random.randint(1, 100) <= instant_chance:
+            from app.services.potion_service import potion_service
+            drop_bonus = await potion_service.get_raid_drop_bonus(session, user.id)
+            frag_bonus = getattr(user, "fragment_bonus_pct", 0)
+            total_drop = drop_bonus + frag_bonus
+            fragments = calc_fragments(power, boss["base_hp"], reward_type, total_drop)
+            # Круговой донат «Корейский дьявол» круг 6: шанс удвоения наград
+            double_chance = getattr(user, "circ_double_raid_chance", 0)
+            doubled = False
+            if double_chance > 0 and random.randint(1, 100) <= double_chance:
+                fragments *= 2
+                doubled = True
+            raid.is_finished = True
+            raid.fragments_earned = fragments
+            total_fragments = distribute_reward(user, reward_type, fragments)
+            cd_key = self.boss_cd_key(boss_id, user.id)
+            speed_pct = await self._get_speed_pct(session, user)
+            boss_cd = cooldown_service.apply_speed_reduction(boss["cd_hours"] * 3600, speed_pct)
+            await cooldown_service.set_cooldown(cd_key, boss_cd)
+            await session.flush()
+            return {
+                "ok": True,
+                "instant": True,
+                "raid_id": raid.id,
+                "boss_name": boss["name"],
+                "damage": power,
+                "total_damage": power,
+                "ends_at": ends_at,
+                "fragments": fragments,
+                "total_fragments": total_fragments,
+                "reward_type": reward_type,
+                "doubled": doubled,
+            }
+
         attack_cd_key = self.attack_cd_key(raid.id, user.id)
         speed_pct = await self._get_speed_pct(session, user)
         attack_cd = cooldown_service.apply_speed_reduction(RAID_ATTACK_CD_SECONDS, speed_pct)
@@ -125,13 +175,14 @@ class RaidService:
 
         return {
             "ok": True,
+            "instant": False,
             "raid_id": raid.id,
             "boss_name": boss["name"],
             "damage": power,
             "total_damage": power,
             "ends_at": ends_at,
             "duration_hours": boss["raid_duration_seconds"] // 3600,
-            "reward_type": boss.get("reward_fragments", "ui"),
+            "reward_type": reward_type,
         }
 
     async def attack_boss(
@@ -182,7 +233,16 @@ class RaidService:
             reward_type = boss.get("reward_fragments", "ui")
             from app.services.potion_service import potion_service
             drop_bonus = await potion_service.get_raid_drop_bonus(session, user.id)
-            fragments = calc_fragments(raid.damage_dealt, boss["base_hp"], reward_type, drop_bonus)
+            # Круговой донат «Повелитель подземелья»: бонус к фрагментам
+            frag_bonus = getattr(user, "fragment_bonus_pct", 0)
+            total_drop = drop_bonus + frag_bonus
+            fragments = calc_fragments(raid.damage_dealt, boss["base_hp"], reward_type, total_drop)
+            # Круговой донат «Корейский дьявол» круг 6: шанс удвоения наград
+            doubled = False
+            double_chance = getattr(user, "circ_double_raid_chance", 0)
+            if double_chance > 0 and random.randint(1, 100) <= double_chance:
+                fragments *= 2
+                doubled = True
             raid.is_finished = True
             raid.fragments_earned = fragments
             total_fragments = distribute_reward(user, reward_type, fragments)
@@ -202,6 +262,7 @@ class RaidService:
                 "reward_type": reward_type,
                 "boss_name": boss["name"],
                 "remaining": 0,
+                "doubled": doubled,
             }
 
         await session.flush()
@@ -246,7 +307,16 @@ class RaidService:
         reward_type = boss.get("reward_fragments", "ui")
         from app.services.potion_service import potion_service
         drop_bonus = await potion_service.get_raid_drop_bonus(session, user.id)
-        fragments = calc_fragments(raid.damage_dealt, boss["base_hp"], reward_type, drop_bonus)
+        # Круговой донат «Повелитель подземелья»: бонус к фрагментам
+        frag_bonus = getattr(user, "fragment_bonus_pct", 0)
+        total_drop = drop_bonus + frag_bonus
+        fragments = calc_fragments(raid.damage_dealt, boss["base_hp"], reward_type, total_drop)
+        # Круговой донат «Корейский дьявол» круг 6: шанс удвоения наград
+        doubled = False
+        double_chance = getattr(user, "circ_double_raid_chance", 0)
+        if double_chance > 0 and random.randint(1, 100) <= double_chance:
+            fragments *= 2
+            doubled = True
         raid.is_finished = True
         raid.fragments_earned = fragments
         total_fragments = distribute_reward(user, reward_type, fragments)
@@ -266,6 +336,7 @@ class RaidService:
             "damage": raid.damage_dealt,
             "attack_count": raid.attack_count,
             "boss_name": boss["name"],
+            "doubled": doubled,
         }
 
     async def get_active_raid(
@@ -351,10 +422,6 @@ class RaidService:
         self._apply_ui_level(user, target_level)
         await session.flush()
 
-        if user.donat_ui_potion and user.ui_auto_potion:
-            from app.services.potion_service import potion_service
-            await potion_service.buy_missing(session, user)
-
         return {
             "ok": True,
             "new_level": target_level,
@@ -362,26 +429,46 @@ class RaidService:
             "fragments_left": user.ui_fragments,
         }
 
-    async def craft_alchemy_ui(
-        self, session: AsyncSession, user: User
+    async def craft_mg_level(
+        self, session: AsyncSession, user: User, potion_type: str, target_level: int
     ) -> dict:
-        if user.donat_ui_potion:
-            return {"ok": False, "reason": "УИ Алхимии уже получен!"}
-        if user.alchemy_fragments < ALCHEMY_CRAFT_COST:
+        """Открыть уровень зелья (Гений медицины) за фрагменты алхимии."""
+        from app.handlers.skills.med_genius import MG_POTION_MAP, MG_BUY_MAX_LEVEL, MG_LEVEL_COSTS
+
+        if getattr(user, "med_genius_donat", False):
+            return {"ok": False, "reason": "Донат активен — все уровни максимальны!"}
+
+        cfg = MG_POTION_MAP.get(potion_type)
+        if not cfg:
+            return {"ok": False, "reason": "Неизвестный тип зелья"}
+
+        current = getattr(user, cfg["level_field"], 0)
+        if target_level != current + 1:
+            return {"ok": False, "reason": "Открывайте уровни по порядку"}
+        if target_level > MG_BUY_MAX_LEVEL:
+            return {"ok": False, "reason": "Уровень 6 — только через донат"}
+
+        cost  = MG_LEVEL_COSTS[current]  # индекс = текущий уровень (0 = стоимость ур.1)
+        frags = getattr(user, "alchemy_fragments", 0)
+        if frags < cost:
             return {
                 "ok": False,
-                "reason": (
-                    f"Недостаточно фрагментов алхимии "
-                    f"(нужно {ALCHEMY_CRAFT_COST}, есть {user.alchemy_fragments})"
-                ),
+                "reason": f"Недостаточно 🧪 фрагментов алхимии: {frags}/{cost}",
             }
-        user.alchemy_fragments -= ALCHEMY_CRAFT_COST
-        user.donat_ui_potion = True
-        user.ui_auto_potion = True
-        from app.services.potion_service import potion_service
-        await potion_service.buy_missing(session, user)
+
+        user.alchemy_fragments -= cost
+        setattr(user, cfg["level_field"], target_level)
         await session.flush()
-        return {"ok": True, "fragments_left": user.alchemy_fragments}
+
+        from app.data.shop import MG_TIERS
+        tier = MG_TIERS[potion_type][target_level - 1]
+        return {
+            "ok": True,
+            "new_level": target_level,
+            "effect": tier.effect_value,
+            "cost": cost,
+            "fragments_left": user.alchemy_fragments,
+        }
 
     async def _get_speed_pct(self, session: AsyncSession, user: User) -> int:
         from sqlalchemy import select as sa_select

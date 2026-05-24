@@ -81,8 +81,30 @@ async def cb_raid_start(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer(result["reason"], show_alert=True)
         return
 
-    ends_at = result["ends_at"]
     reward_type = result.get("reward_type", "ui")
+    if reward_type == "alchemy":
+        frag_emoji, frag_name = "🧪", "фрагменты алхимии"
+    elif reward_type == "path":
+        frag_emoji, frag_name = "🔷", "фрагменты Пути"
+    else:
+        frag_emoji, frag_name = "🔮", "фрагменты УИ"
+
+    # Круговой донат «Корейский дьявол»: мгновенный рейд
+    if result.get("instant"):
+        doubled_line = "\n🌀 <b>Удача! Награда удвоена!</b>" if result.get("doubled") else ""
+        await cb.message.edit_text(
+            f"⚡ <b>Мгновенный рейд!</b>\n\n"
+            f"👹 Босс: {result['boss_name']}\n"
+            f"💥 Нанесённый урон: <b>{fmt_num(result['damage'])}</b>\n\n"
+            f"{frag_emoji} Получено {frag_name}: <b>+{result['fragments']}</b>\n"
+            f"📊 Всего: <b>{result['total_fragments']}</b>"
+            + doubled_line,
+            reply_markup=back_kb("raid_menu"),
+            parse_mode="HTML",
+        )
+        return
+
+    ends_at = result["ends_at"]
     if reward_type == "alchemy":
         frag_line = "чтобы получить фрагменты алхимии!"
     elif reward_type == "path":

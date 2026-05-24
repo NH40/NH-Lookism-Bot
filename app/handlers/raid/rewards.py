@@ -8,7 +8,6 @@ from app.services.raid_service import raid_service
 from app.services.cooldown_service import cooldown_service
 from app.services.skill_service import skill_service as _ss
 from app.constants.raid import (
-    ALCHEMY_CRAFT_COST,
     PATH_SPIN_CRAFT_COST,
     PATH_LEVEL_MAX,
     PATH_LEVEL_COSTS,
@@ -41,12 +40,14 @@ async def cb_raid_claim(cb: CallbackQuery, session: AsyncSession, user: User):
     else:
         frag_emoji, frag_name = "🔮", "фрагментов УИ"
 
+    doubled_line = "\n🌀 <b>Удача! Награда удвоена!</b>" if result.get("doubled") else ""
     await cb.message.edit_text(
         f"🎉 <b>Рейд завершён!</b>\n\n"
         f"👹 Босс: {result['boss_name']}\n"
         f"💥 Нанесённый урон: <b>{fmt_num(result['damage'])}</b>\n\n"
         f"{frag_emoji} Получено {frag_name}: <b>+{result['fragments']}</b>\n"
-        f"📊 Всего: <b>{result['total_fragments']}</b>\n\n"
+        f"📊 Всего: <b>{result['total_fragments']}</b>"
+        + doubled_line + "\n\n"
         f"Используй фрагменты в <b>Рейды → Крафт</b>!",
         reply_markup=back_kb("raid_menu"),
         parse_mode="HTML",
@@ -113,47 +114,101 @@ async def cb_craft_ui(cb: CallbackQuery, session: AsyncSession, user: User):
     await cb_craft_ui_menu(cb, session, user)
 
 
-# ── Крафт Алхимии — подменю ───────────────────────────────────────────────────
+# ── Крафт Гений медицины — подменю ───────────────────────────────────────────
 
-@router.callback_query(F.data == "craft_alchemy_menu")
-async def cb_craft_alchemy_menu(cb: CallbackQuery, session: AsyncSession, user: User):
+@router.callback_query(F.data == "craft_mg_menu")
+async def cb_craft_mg_menu(cb: CallbackQuery, session: AsyncSession, user: User):
+    from app.handlers.skills.med_genius import (
+        MG_POTIONS, MG_LEVEL_COSTS, MG_BUY_MAX_LEVEL,
+        is_donat as _mg_is_donat, potion_level,
+    )
+    from app.data.shop import MG_TIERS
+    from app.utils.formatters import fmt_num
+
+    donat = _mg_is_donat(user)
+    frags = getattr(user, "alchemy_fragments", 0)
+
     builder = InlineKeyboardBuilder()
+    lines = [
+        "🩺 <b>Гений медицины — Крафт</b>",
+        f"🧪 Фрагменты алхимии: <b>{frags}</b>",
+        "<i>Фрагменты получаются у босса Джинен</i>",
+        "",
+        "<b>Зелья:</b>",
+    ]
 
-    if user.donat_ui_potion:
-        builder.row(InlineKeyboardButton(
-            text="✅ УИ Алхимии — Авто-зелья активны",
-            callback_data="noop_raid"
-        ))
+    if donat:
+        lines.append("✨ <b>Донат активен</b> — все зелья на максимальном уровне (Ур.6)\n")
+        for p in MG_POTIONS:
+            tier = MG_TIERS[p["type"]][5]
+            lines.append(f"  👑 {p['name']} [Ур.6] — +{tier.effect_value}%")
     else:
-        can = "✅" if user.alchemy_fragments >= ALCHEMY_CRAFT_COST else "❌"
-        builder.row(InlineKeyboardButton(
-            text=f"{can} УИ Алхимии — {ALCHEMY_CRAFT_COST} 🧪 фрагментов",
-            callback_data="craft_alchemy_ui"
-        ))
+        for p in MG_POTIONS:
+            lvl   = potion_level(user, p["type"])
+            tiers = MG_TIERS[p["type"]]
+
+            if lvl == 0:
+                cost = MG_LEVEL_COSTS[0]
+                mark = "✅" if frags >= cost else "❌"
+                lines.append(f"🔒 {p['name']} — Ур.0 → <b>{cost} 🧪</b> {mark}")
+                builder.row(InlineKeyboardButton(
+                    text=f"{mark} {p['name']} Ур.1 — {cost} 🧪",
+                    callback_data=f"craft_mg_buy:{p['type']}:1" if frags >= cost else "noop_raid",
+                ))
+            elif lvl < MG_BUY_MAX_LEVEL:
+                cost      = MG_LEVEL_COSTS[lvl]
+                next_tier = tiers[lvl]
+                mark      = "✅" if frags >= cost else "❌"
+                lines.append(
+                    f"⬆️ {p['name']} [Ур.{lvl}] → Ур.{lvl+1}: "
+                    f"<b>{cost} 🧪</b> {mark}"
+                )
+                builder.row(InlineKeyboardButton(
+                    text=f"{mark} {p['name']} Ур.{lvl+1} — {cost} 🧪",
+                    callback_data=f"craft_mg_buy:{p['type']}:{lvl+1}" if frags >= cost else "noop_raid",
+                ))
+            elif lvl == MG_BUY_MAX_LEVEL:
+                lines.append(f"✅ {p['name']} [Ур.{lvl} макс] — Ур.6 только донат")
+                builder.row(InlineKeyboardButton(
+                    text=f"👑 {p['name']} Ур.6 — только донат",
+                    callback_data="noop_raid",
+                ))
+            else:
+                lines.append(f"✨ {p['name']} [Ур.{lvl}]")
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="raid_craft"))
 
-    status = "✅ Получен — авто-зелья активны" if user.donat_ui_potion else f"❌ Нужно {ALCHEMY_CRAFT_COST} фр."
-    await cb.message.edit_text(
-        f"🧪 <b>Крафт Алхимии</b>\n\n"
-        f"🧪 Фрагменты алхимии: <b>{user.alchemy_fragments}</b>\n\n"
-        f"<b>УИ Алхимии:</b> {status}\n"
-        f"<i>Автоматически покупает все зелья по кулдауну</i>",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
+    try:
+        await cb.message.edit_text(
+            "\n".join(lines),
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    await cb.answer()
 
 
-@router.callback_query(F.data == "craft_alchemy_ui")
-async def cb_craft_alchemy_ui(cb: CallbackQuery, session: AsyncSession, user: User):
-    result = await raid_service.craft_alchemy_ui(session, user)
+@router.callback_query(F.data.startswith("craft_mg_buy:"))
+async def cb_craft_mg_buy(cb: CallbackQuery, session: AsyncSession, user: User):
+    parts = cb.data.split(":")
+    potion_type  = parts[1]
+    target_level = int(parts[2])
 
+    result = await raid_service.craft_mg_level(session, user, potion_type, target_level)
     if not result["ok"]:
         await cb.answer(result["reason"], show_alert=True)
         return
 
-    await cb.answer("✅ УИ Алхимии получен!\n🧪 Авто-зелья активированы!", show_alert=True)
-    await cb_craft_alchemy_menu(cb, session, user)
+    from app.handlers.skills.med_genius import MG_POTION_MAP
+    name = MG_POTION_MAP.get(potion_type, {}).get("name", potion_type)
+    await cb.answer(
+        f"✅ {name} Ур.{result['new_level']} открыто!\n"
+        f"+{result['effect']}% к эффекту\n"
+        f"🧪 Осталось: {result['fragments_left']}",
+        show_alert=True,
+    )
+    await cb_craft_mg_menu(cb, session, user)
 
 
 # ── Крафт Пути — подменю ──────────────────────────────────────────────────────

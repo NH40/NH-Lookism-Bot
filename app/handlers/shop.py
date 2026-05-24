@@ -9,7 +9,7 @@ from app.models.user import User
 from app.utils.keyboards.shop import shop_kb
 from app.utils.keyboards.common import back_kb
 from app.utils.formatters import fmt_num
-from app.data.shop import POTIONS, SHOP_ITEMS, POTION_MAP, SHOP_MAP
+from app.data.shop import SHOP_ITEMS, SHOP_MAP, MG_TIERS, MG_TIER_MAP
 from app.services.cards.craft import craft_service
 from app.constants.cards import TICKET_CRAFT_COST
 
@@ -113,40 +113,89 @@ async def cb_craft_ticket_max(cb: CallbackQuery, session: AsyncSession, user: Us
     await cb_shop_craft(cb, session, user)
 
 
+# Имена разделов по типу зелья
+_MG_TYPE_LABELS: dict[str, str] = {
+    "power":     "⚔️ Зелья силы",
+    "training":  "🏋 Зелья тренировки",
+    "income":    "💰 Зелья богатства",
+    "luck":      "🍀 Зелья удачи",
+    "influence": "⚡ Зелья влияния",
+    "raid_drop": "💠 Зелья охотника",
+}
+
+
 @router.callback_query(F.data == "shop_potions")
 async def cb_shop_potions(cb: CallbackQuery, session: AsyncSession, user: User):
     builder = InlineKeyboardBuilder()
-    for p in POTIONS:
-        can = "✅" if user.nh_coins >= p.price else "❌"
-        builder.button(
-            text=f"{can} {p.name} | {fmt_num(p.price)}",
-            callback_data=f"buy_potion:{p.potion_id}"
-        )
-    builder.adjust(1)
+
+    for ptype, label in _MG_TYPE_LABELS.items():
+        tiers = MG_TIERS[ptype]
+        # Показываем диапазон эффектов
+        rng = f"+{tiers[0].effect_value}%–+{tiers[5].effect_value}%"
+        builder.row(InlineKeyboardButton(
+            text=f"{label} [{rng}]",
+            callback_data=f"shop_pot_type:{ptype}",
+        ))
+
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="shop"))
 
-    lines = ["🧪 <b>Зелья</b>\n", f"💰 Баланс: {fmt_num(user.nh_coins)}\n"]
-    for p in POTIONS:
-        lines.append(f"{p.name}\n  └ {p.description} | {fmt_num(p.price)} монет")
+    try:
+        await cb.message.edit_text(
+            f"🧪 <b>Зелья</b>\n\n"
+            f"💰 Баланс: {fmt_num(user.nh_coins)}\n\n"
+            f"Выберите тип зелья:",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    await cb.answer()
 
-    await cb.message.edit_text(
-        "\n".join(lines),
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
+
+@router.callback_query(F.data.startswith("shop_pot_type:"))
+async def cb_shop_pot_type(cb: CallbackQuery, session: AsyncSession, user: User):
+    ptype = cb.data.split(":")[1]
+    tiers = MG_TIERS.get(ptype)
+    if not tiers:
+        await cb.answer("Неизвестный тип", show_alert=True)
+        return
+
+    label = _MG_TYPE_LABELS.get(ptype, "🧪 Зелья")
+    builder = InlineKeyboardBuilder()
+    lines   = [f"{label}\n", f"💰 Баланс: {fmt_num(user.nh_coins)}\n"]
+
+    for tier in tiers:
+        can = "✅" if user.nh_coins >= tier.price else "❌"
+        lines.append(f"  {can} {tier.name} — {tier.description} | {fmt_num(tier.price)}")
+        builder.row(InlineKeyboardButton(
+            text=f"{can} {tier.name} | {fmt_num(tier.price)}",
+            callback_data=f"buy_potion:{tier.potion_id}",
+        ))
+
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="shop_potions"))
+
+    try:
+        await cb.message.edit_text(
+            "\n".join(lines),
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    await cb.answer()
 
 
 @router.callback_query(F.data.startswith("buy_potion:"))
 async def cb_buy_potion(cb: CallbackQuery, session: AsyncSession, user: User):
     potion_id = cb.data.split(":")[1]
-    cfg = POTION_MAP.get(potion_id)
+    cfg = MG_TIER_MAP.get(potion_id)
     if not cfg:
         await cb.answer("Зелье не найдено", show_alert=True)
         return
     if user.nh_coins < cfg.price:
         await cb.answer(
             f"Недостаточно монет (нужно {fmt_num(cfg.price)})",
-            show_alert=True
+            show_alert=True,
         )
         return
 
@@ -156,13 +205,15 @@ async def cb_buy_potion(cb: CallbackQuery, session: AsyncSession, user: User):
     from app.services.potion_service import potion_service
     await potion_service.apply_potion(
         session, user.id,
-        cfg.effect_key, cfg.effect_value, cfg.duration_minutes
+        cfg.effect_key, cfg.effect_value, cfg.duration_minutes,
     )
     await session.flush()
     await cb.answer(
         f"✅ {cfg.name} применено!\n+{cfg.effect_value}% на {cfg.duration_minutes} мин"
     )
-    await cb_shop_potions(cb, session, user)
+    # Возвращаемся к тому же разделу
+    cb.data = f"shop_pot_type:{cfg.effect_key}"
+    await cb_shop_pot_type(cb, session, user)
 
 
 @router.callback_query(F.data == "shop_recruits")

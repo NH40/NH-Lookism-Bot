@@ -83,6 +83,16 @@ class PrestigeService:
         user.path_awakened = False
         user.squad_power_bonus = 0
 
+        # ── Гений медицины: сбрасываем уровни если нет доната ───────────
+        # reapply_all_titles ниже восстановит до 6 если есть ui_potion
+        if not getattr(user, "med_genius_donat", False):
+            user.mg_level_power     = 0
+            user.mg_level_training  = 0
+            user.mg_level_income    = 0
+            user.mg_level_luck      = 0
+            user.mg_level_influence = 0
+            user.mg_level_raid_drop = 0
+
         # ── Очки мастерства и пути — только при полном сбросе ────────────
         if not keep_progress:
             user.mastery_points = 0

@@ -1,0 +1,155 @@
+"""Чёрный рынок — эксклюзивный раздел для VVIP игроков (круговые донаты)."""
+from aiogram import Router, F
+from aiogram.types import CallbackQuery, InlineKeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.user import User
+from app.data.titles import CIRCULAR_DONATS, CIRCULAR_DONAT_MAP, CLAN_DONAT_ITEMS, MANAGER_USERNAME
+
+router = Router()
+
+
+async def _vvip_check(session, user: User) -> bool:
+    """VVIP = купил все 5 донатных сетов титулов."""
+    from app.services.title_service import title_service
+    from app.data.titles import DONAT_SETS
+    for s in DONAT_SETS:
+        if not await title_service.has_set(session, user.id, s.set_id):
+            return False
+    return True
+
+
+@router.callback_query(F.data == "black_market")
+async def cb_black_market(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not await _vvip_check(session, user):
+        await cb.answer("🔒 Только для VVIP (нужны все 5 донатных сетов)", show_alert=True)
+        return
+
+    from app.services.circular_donat_service import get_user_circles
+    circles_map = await get_user_circles(session, user.id)
+
+    builder = InlineKeyboardBuilder()
+    for d in CIRCULAR_DONATS:
+        n = circles_map.get(d.donat_id, 0)
+        suffix = f" [{n}/{d.max_circles}]" if n else ""
+        builder.row(InlineKeyboardButton(
+            text=f"{d.emoji} {d.name}{suffix} — {d.price_per_circle}₽/круг",
+            callback_data=f"bm_detail:{d.donat_id}",
+        ))
+    builder.row(InlineKeyboardButton(
+        text="🏛 Клановые привилегии", callback_data="bm_clan_donats"
+    ))
+    builder.row(InlineKeyboardButton(
+        text=f"💬 Купить у менеджера",
+        url=f"https://t.me/{MANAGER_USERNAME.lstrip('@')}",
+    ))
+    builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
+
+    # Суммарный пассивный доход от кругов
+    passive = getattr(user, "circ_passive_income", 0)
+    passive_line = f"\n💸 Пассивный доход: +{passive:,} NHCoin/час" if passive else ""
+
+    try:
+        await cb.message.edit_text(
+            f"🖤 <b>Чёрный рынок</b>\n"
+            f"<i>Эксклюзивный раздел для обладателей всех донатных сетов</i>"
+            f"{passive_line}\n\n"
+            f"🔄 <b>Круговые донаты</b> — покупай круги и получай перманентные баффы.\n"
+            f"Каждый новый круг суммируется с предыдущими.\n\n"
+            f"Выберите донат для просмотра:",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("bm_detail:"))
+async def cb_bm_detail(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not await _vvip_check(session, user):
+        await cb.answer("🔒 Только для VVIP", show_alert=True)
+        return
+
+    donat_id = cb.data.split(":")[1]
+    d = CIRCULAR_DONAT_MAP.get(donat_id)
+    if not d:
+        await cb.answer("Донат не найден", show_alert=True)
+        return
+
+    from app.services.circular_donat_service import get_user_circles
+    circles_map = await get_user_circles(session, user.id)
+    my_circles = circles_map.get(donat_id, 0)
+
+    lines = [
+        f"{d.emoji} <b>{d.name}</b>\n",
+        f"🔄 Ваши круги: <b>{my_circles}/{d.max_circles}</b>",
+        f"💰 Цена: {d.price_per_circle}₽ за круг | Всего при MAX: {d.price_per_circle * d.max_circles}₽\n",
+        f"🎁 <b>Бонус за каждый круг:</b>",
+        f"  {d.circle_bonus}\n",
+    ]
+
+    if d.special_bonuses:
+        lines.append("⭐ <b>Особые бонусы за круги:</b>")
+        for circle_n, bonus_desc in d.special_bonuses:
+            mark = "✅" if my_circles >= circle_n else "🔒"
+            lines.append(f"  {mark} Круг {circle_n}: {bonus_desc}")
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text=f"💬 Купить у {MANAGER_USERNAME}",
+        url=f"https://t.me/{MANAGER_USERNAME.lstrip('@')}",
+    ))
+    builder.row(InlineKeyboardButton(text="◀️ К чёрному рынку", callback_data="black_market"))
+
+    try:
+        await cb.message.edit_text(
+            "\n".join(lines),
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    await cb.answer()
+
+
+@router.callback_query(F.data == "bm_clan_donats")
+async def cb_bm_clan_donats(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not await _vvip_check(session, user):
+        await cb.answer("🔒 Только для VVIP", show_alert=True)
+        return
+
+    from app.constants.clan import CLAN_DONAT_PACKAGES, MAX_DONAT_CIRCLES
+
+    lines = [
+        "🏛 <b>Клановые донаты</b>\n",
+        "<i>Каждый пакет можно купить до 5 раз. Бонусы накапливаются.</i>\n",
+        "<b>Доступные пакеты:</b>",
+    ]
+    for pkg in CLAN_DONAT_PACKAGES:
+        bonuses = []
+        if pkg.income_pct:  bonuses.append(f"+{pkg.income_pct}% к доходу")
+        if pkg.ticket_pct:  bonuses.append(f"+{pkg.ticket_pct}% к тикетам")
+        if pkg.train_pct:   bonuses.append(f"+{pkg.train_pct}% к тренировке")
+        lines.append(f"\n{pkg.name} — <b>{pkg.price_rub}₽</b> (макс {MAX_DONAT_CIRCLES} кругов)")
+        lines.append(f"  {', '.join(bonuses)}")
+
+    lines.append(f"\n✍️ Для оформления напишите менеджеру")
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text=f"💬 Купить у {MANAGER_USERNAME}",
+        url=f"https://t.me/{MANAGER_USERNAME.lstrip('@')}",
+    ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="black_market"))
+
+    try:
+        await cb.message.edit_text(
+            "\n".join(lines),
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    await cb.answer()

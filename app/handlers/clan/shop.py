@@ -90,6 +90,7 @@ async def _show_upgrades(cb: CallbackQuery, clan: Clan):
 
 
 async def _show_donate(cb: CallbackQuery, clan: Clan):
+    from app.constants.clan import MAX_DONAT_CIRCLES
     lines = [
         "💎 <b>Донат для клана</b>\n",
         "Клан-донат — это постоянные бонусы для всего клана, "
@@ -101,7 +102,7 @@ async def _show_donate(cb: CallbackQuery, clan: Clan):
         if pkg.income_pct:  bonuses.append(f"+{pkg.income_pct}% к доходу")
         if pkg.ticket_pct:  bonuses.append(f"+{pkg.ticket_pct}% к тикетам")
         if pkg.train_pct:   bonuses.append(f"+{pkg.train_pct}% к тренировке")
-        lines.append(f"\n{pkg.name} — <b>{pkg.price_rub}₽</b>")
+        lines.append(f"\n{pkg.name} — <b>{pkg.price_rub}₽</b> (макс {MAX_DONAT_CIRCLES} кругов)")
         lines.append(f"  {', '.join(bonuses)}")
 
     active = []

@@ -170,15 +170,15 @@ class DonatSet:
 
 DONAT_SETS: list[DonatSet] = [
     DonatSet("strongest_0gen", "Сильнейший 0 поколения",
-        "Влияние +100%, +5% шанс тикета, 2 прокрутки тикета подряд, +2 доп. слота на каждый путь, макс. тикет 90%", 1500),
+        "Влияние +60%, +5% шанс тикета, 2 прокрутки тикета подряд, +2 доп. слота на каждый путь, макс. тикет 90%", 1700),
     DonatSet("genius_maker", "Создатель гениев",
         "Увеличение всех баффов гениев на 20%", 1150),
     DonatSet("monster", "Монстр",
-        "Боевая мощь +100%, атака 2 раза подряд, шанс сильнейшей карточки ×5", 1200),
+        "Боевая мощь +60%, атака 2 раза подряд, шанс сильнейшей карточки ×5", 1200),
     DonatSet("flow", "Поток",
-        "Уменьшение всех КД ещё на 15%", 500),
+        "Уменьшение всех КД ещё на 15%", 1600),
     DonatSet("ui_set", "UI",
-        "Авто-вербовка, авто-тренировка, авто-тикеты, авто-прокрутка, авто-зелья, +3 макс тикета", 1500),
+        "Авто-вербовка, авто-тренировка, авто-тикеты, авто-прокрутка, Гений медицины (макс), +3 макс тикета", 1500),
 ]
 
 DONAT_SET_MAP: dict[str, DonatSet] = {s.set_id: s for s in DONAT_SETS}
@@ -186,8 +186,8 @@ DONAT_SET_MAP: dict[str, DonatSet] = {s.set_id: s for s in DONAT_SETS}
 DONAT_TITLES: list[DonatTitle] = [
     # Сильнейший 0 поколения
     DonatTitle("fist_power",      "Кулак",        "strongest_0gen", "Боевая мощь +20%",                    "+20% боевая мощь",              350, "👊"),
-    DonatTitle("romantic_recruit","Романтик",     "strongest_0gen", "Количество вербовки +100%",            "+100% вербовка",                350, "💖"),
-    DonatTitle("great_influence", "Великий",      "strongest_0gen", "Влияние не падает ниже 100",           "Мин. влияние = 100",            100, "🛡"),
+    DonatTitle("romantic_recruit","Романтик",     "strongest_0gen", "Количество вербовки +40%",            "+40% вербовка",                 350, "💖"),
+    DonatTitle("great_influence", "Великий",      "strongest_0gen", "Влияние не падает ниже 3000",          "Мин. влияние = 3000",           100, "🛡"),
 
     # Создатель гениев
     DonatTitle("genius_training", "Гений тренировок",        "genius_maker", "Тренировки +70%",             "+70% тренировки",    50,  "🏋️"),
@@ -201,17 +201,19 @@ DONAT_TITLES: list[DonatTitle] = [
 
     # Монстр
     DonatTitle("monster_training","Гений тренировок (Монстр)","monster",     "Тренировки +100%",            "+100% тренировки",   150, "🏋️"),
-    DonatTitle("reverse_eyes",    "Обратные глаза",          "monster",      "КД атаки -30%",               "-30% КД атаки",      300, "👁"),
+    DonatTitle("reverse_eyes",    "Обратные глаза",          "monster",      "КД атаки -25%",               "-25% КД атаки",      300, "👁"),
     DonatTitle("selection",       "Отбор",                   "monster",      "+шанс сильных статистов",     "+шанс статистов",    350, "🎯"),
-    DonatTitle("manager_fav",     "Любимый перс менеджера",  "monster",      "Шанс тикетов +10%",           "+10% тикет",         400, "💎"),
+    DonatTitle("manager_fav",     "Любимый перс менеджера",  "monster",      "Шанс тикетов +5%",            "+5% тикет",          400, "💎"),
 
     # Поток
-    DonatTitle("concentration",   "Концентрация",            "flow",         "КД атаки -30%",               "-30% КД атаки",      300, "🎯"),
-    DonatTitle("focus",           "Фокус",                   "flow",         "КД вербовки/тренировки -20%", "-20% КД",            200, "🧘"),
-    
+    DonatTitle("concentration",   "Концентрация",            "flow",         "КД всего -10%",               "-10% все КД",        300, "🎯"),
+    DonatTitle("focus",           "Фокус",                   "flow",         "КД всего -20%",               "-20% все КД",        200, "🧘"),
+    DonatTitle("raid_cd",         "Рейдовый ускоритель",     "flow",         "КД всего -20%",               "-20% все КД",        600, "⏱️"),
+    DonatTitle("duel_cd",         "Карточный мастер",        "flow",         "КД дуэлей карточек -20%",     "-20% КД дуэлей",     500, "🃏"),
+
     # UI
     DonatTitle("ui_title",        "UI",                      "ui_set",       "Полная автоматизация + +3 тикета","Авто + +3 тикета",1000, "🤖"),
-    DonatTitle("ui_potion",       "Алхимик УИ",              "ui_set",       "Авто-покупка всех зелий по КД",  "Авто-зелья",       500,  "🧪"),
+    DonatTitle("ui_potion",       "Гений медицины (Фулл)",   "ui_set",       "Все авто-зелья навсегда — Гений медицины макс. уровень (все 6 зелий, ур.6)", "МГ макс. уровень", 500, "🩺"),
 
     # Сильнейший 0 поколения — расширение
     DonatTitle("rom_extra_skills", "Три пути",               "strongest_0gen", "+2 доп. слота на каждый путь — навыки всех путей доступны (покупка за 5× цену)", "+2 слота на путь", 500, "🌐"),
@@ -219,5 +221,119 @@ DONAT_TITLES: list[DonatTitle] = [
 ]
 
 DONAT_TITLE_MAP: dict[str, DonatTitle] = {t.title_id: t for t in DONAT_TITLES}
+
+
+# ── Круговые донаты (Black Market) ──────────────────────────────────────────
+
+@dataclass(frozen=True)
+class CircularDonat:
+    donat_id: str
+    name: str
+    emoji: str
+    price_per_circle: int
+    max_circles: int
+    circle_bonus: str              # бонус за каждый оплаченный круг
+    special_bonuses: tuple         # ((circle_n, description), ...)
+
+
+CIRCULAR_DONATS: list[CircularDonat] = [
+    CircularDonat(
+        "archangel", "Архангел", "👼",
+        price_per_circle=1000, max_circles=10,
+        circle_bonus="Боевая сила +30%, доход +50%, пассивный доход 500 NHCoin/час",
+        special_bonuses=(
+            (3,  "+10% к урону в рейдах"),
+            (5,  "Отражает 3% урона при атаке по вам"),
+            (10, "1 раз в день выдаётся 64 района"),
+        ),
+    ),
+    CircularDonat(
+        "clan_head", "Глава клана", "👑",
+        price_per_circle=1000, max_circles=5,
+        circle_bonus="Все члены клана +5% к силе, доходу, вербовке, влиянию. Лично: +10% сила, +5% влияние",
+        special_bonuses=(
+            (5, "При пополнении казны: шанс 3% вернуть от 5% до 10% кешбека"),
+        ),
+    ),
+    CircularDonat(
+        "korea_devil", "Дьявол из Кореи", "👹",
+        price_per_circle=1200, max_circles=6,
+        circle_bonus="Боевая сила +10%, влияние +10%, пассивный доход 300 NHCoin/час",
+        special_bonuses=(
+            (3, "Шанс 5%: мгновенно завершить рейд"),
+            (6, "Шанс 5%: награда за рейд удвоена"),
+        ),
+    ),
+    CircularDonat(
+        "mountain_lord", "Хозяин горы", "⛰️",
+        price_per_circle=1200, max_circles=4,
+        circle_bonus="Боевая сила +20%, влияние +10%",
+        special_bonuses=(
+            (2, "+2/4/6/8/12 районов при захвате города (зависит от размера)"),
+            (4, "Можно превысить лимит тикетов на 100%"),
+        ),
+    ),
+    CircularDonat(
+        "shadow", "Тень", "🌑",
+        price_per_circle=1200, max_circles=5,
+        circle_bonus="Повышение всех статов мастерства на 1%",
+        special_bonuses=(
+            (3, "Первая атака в бою +30% боевой мощи"),
+            (5, "Можно скрыть себя в топе игроков"),
+        ),
+    ),
+    CircularDonat(
+        "dragon", "Дракон", "🐉",
+        price_per_circle=1200, max_circles=6,
+        circle_bonus="Боевая сила +10%",
+        special_bonuses=(
+            (3, "+10% к защите (урон по вам уменьшается на 10%)"),
+            (6, "Спутник-дракон: +15% ко всем характеристикам в рейде на 1 час"),
+        ),
+    ),
+    CircularDonat(
+        "dungeon_lord", "Хозяин подземелий", "🏚️",
+        price_per_circle=800, max_circles=4,
+        circle_bonus="Пассивный доход 1000 NHCoin/час, +5% ко всем фрагментам, +5% шанс тренировки",
+        special_bonuses=(
+            (2, "+10% ко всем фрагментам"),
+            (4, "+10% ко всем фрагментам (итого +25%)"),
+        ),
+    ),
+    CircularDonat(
+        "emperor_circle", "Император", "🏛",
+        price_per_circle=1200, max_circles=10,
+        circle_bonus="Боевая сила +20%, влияние +10%, пассивный доход 400 NHCoin/час, вербовка +30%, стоимость у Тома Ли и Чон Гона -2%",
+        special_bonuses=(
+            (3,  "+5% ко всем следующим баффам этого доната"),
+            (5,  "+5% ко всем следующим баффам этого доната"),
+            (10, "+5% ко всем баффам этого доната"),
+        ),
+    ),
+]
+
+CIRCULAR_DONAT_MAP: dict[str, CircularDonat] = {d.donat_id: d for d in CIRCULAR_DONATS}
+
+
+# ── Клановые донаты ──────────────────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class ClanDonatItem:
+    item_id: str
+    name: str
+    emoji: str
+    description: str
+    price_rub: int
+
+
+CLAN_DONAT_ITEMS: list[ClanDonatItem] = [
+    ClanDonatItem("clan_wealth",  "Богатство клана",  "💰", "+10% доход всем участникам клана",                     500),
+    ClanDonatItem("clan_luck",    "Удача клана",       "🍀", "+5% шанс тикета всем участникам",                      400),
+    ClanDonatItem("clan_school",  "Школа клана",       "🏋️", "+10% охват тренировки всем участникам",                350),
+    ClanDonatItem("clan_war",     "Клан Войн",         "⚔️", "+10% доход + +10% тренировки всем",                    900),
+    ClanDonatItem("clan_premium", "Премиум клан",      "👑", "+15% доход + +5% шанс тикета + +10% тренировки всем", 1500),
+]
+
+CLAN_DONAT_ITEM_MAP: dict[str, ClanDonatItem] = {c.item_id: c for c in CLAN_DONAT_ITEMS}
 
 MANAGER_USERNAME = "@JDebobA"

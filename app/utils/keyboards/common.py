@@ -2,7 +2,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 
-def main_menu_kb() -> InlineKeyboardMarkup:
+def main_menu_kb(has_vvip: bool = False) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(text="⚔️ Атака",       callback_data="attack"),
@@ -31,6 +31,10 @@ def main_menu_kb() -> InlineKeyboardMarkup:
     builder.row(
         InlineKeyboardButton(text="📋 Задания", callback_data="daily_quests"),
     )
+    if has_vvip:
+        builder.row(
+            InlineKeyboardButton(text="🖤 Чёрный рынок", callback_data="black_market"),
+        )
     builder.row(
         InlineKeyboardButton(text="⚙️ Настройки",    callback_data="settings"),
     )

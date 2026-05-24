@@ -81,7 +81,8 @@ class User(Base):
     skill_path: Mapped[str | None] = mapped_column(String(16))
     skill_path_points: Mapped[int] = mapped_column(Integer, default=0)
     skill_path_bonus_multiplier: Mapped[float] = mapped_column(Float, default=1.0)
-    squad_power_bonus: Mapped[int] = mapped_column(Integer, default=0)  # % бонус к боевой мощи (путь Монстра)
+    squad_power_bonus: Mapped[int] = mapped_column(Integer, default=0)   # % бонус к боевой мощи (путь Монстра)
+    all_cd_reduction: Mapped[int] = mapped_column(Integer, default=0)    # % сокращение ВСЕХ КД (путь Тени)
 
     # ── Рейды ─────────────────────────────────────────────────────────────
     ui_fragments: Mapped[int] = mapped_column(Integer, default=0)
@@ -131,6 +132,45 @@ class User(Base):
     clan_donat_income_bonus: Mapped[int] = mapped_column(Integer, default=0)
     clan_donat_ticket_bonus: Mapped[int] = mapped_column(Integer, default=0)
     clan_donat_train_bonus: Mapped[int] = mapped_column(Integer, default=0)
+
+    # ── VVIP (клановый, денормализовано) ─────────────────────────────────────
+    clan_vvip_level: Mapped[int] = mapped_column(Integer, default=0)
+
+    # ── Гений медицины (авто-зелья, новая система) ───────────────────────────
+    med_genius_level: Mapped[int] = mapped_column(Integer, default=0)   # устарел, совместимость
+    med_genius_donat: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Уровень каждого зелья: 0=заблокировано, 1-6=открыто (+5% к эффекту за каждый уровень)
+    mg_level_power:     Mapped[int] = mapped_column(Integer, default=0)
+    mg_level_training:  Mapped[int] = mapped_column(Integer, default=0)
+    mg_level_income:    Mapped[int] = mapped_column(Integer, default=0)
+    mg_level_luck:      Mapped[int] = mapped_column(Integer, default=0)
+    mg_level_influence: Mapped[int] = mapped_column(Integer, default=0)
+    mg_level_raid_drop: Mapped[int] = mapped_column(Integer, default=0)
+    # Переключатели авто-зелий (вкл/выкл по желанию игрока)
+    mg_auto_power: Mapped[bool] = mapped_column(Boolean, default=True)
+    mg_auto_training: Mapped[bool] = mapped_column(Boolean, default=True)
+    mg_auto_income: Mapped[bool] = mapped_column(Boolean, default=True)
+    mg_auto_luck: Mapped[bool] = mapped_column(Boolean, default=True)
+    mg_auto_influence: Mapped[bool] = mapped_column(Boolean, default=True)
+    mg_auto_raid_drop: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # ── Пути: расширенные механики ────────────────────────────────────────────
+    win_streak: Mapped[int] = mapped_column(Integer, default=0)
+    path_unique_1: Mapped[bool] = mapped_column(Boolean, default=False)
+    path_unique_2: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # ── Круговые донаты ───────────────────────────────────────────────────────
+    circ_passive_income: Mapped[int] = mapped_column(BigInteger, default=0)  # NHCoin/час
+    circ_defense_bonus: Mapped[int] = mapped_column(Integer, default=0)      # % снижения урона
+    fragment_bonus_pct: Mapped[int] = mapped_column(Integer, default=0)      # % к дропу фрагментов
+    circ_raid_bonus_pct: Mapped[int] = mapped_column(Integer, default=0)     # % бонус в рейдах
+    circ_reflect_pct: Mapped[int] = mapped_column(Integer, default=0)        # % отражения урона
+    circ_ticket_overflow: Mapped[bool] = mapped_column(Boolean, default=False)   # превышать лимит тикетов ×2
+    circ_instant_raid_chance: Mapped[int] = mapped_column(Integer, default=0)    # % шанс мгновенного рейда
+    circ_double_raid_chance: Mapped[int] = mapped_column(Integer, default=0)     # % шанс удвоения рейда
+    circ_daily_districts: Mapped[int] = mapped_column(Integer, default=0)        # районов/день (Архангел)
+    circ_dragon_active: Mapped[bool] = mapped_column(Boolean, default=False)     # спутник-дракон
+    circ_clan_cashback: Mapped[bool] = mapped_column(Boolean, default=False)     # кешбек казны клана
 
     # ── Настройки ─────────────────────────────────────────────────────────
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True)

@@ -157,6 +157,7 @@ class ClanBaseService:
         user.clan_donat_income_bonus = 0
         user.clan_donat_ticket_bonus = 0
         user.clan_donat_train_bonus = 0
+        user.clan_vvip_level = 0          # сбрасываем VVIP при выходе из клана
         await business_service._recalc_income(session, user)
 
     async def _add_clan_bonuses_to_user(self, session: AsyncSession, clan: Clan, user: User) -> None:
@@ -167,4 +168,5 @@ class ClanBaseService:
         user.clan_donat_income_bonus = clan.donat_income_pct
         user.clan_donat_ticket_bonus = clan.donat_ticket_pct
         user.clan_donat_train_bonus = clan.donat_train_pct
+        user.clan_vvip_level = getattr(clan, "vvip_level", 0)  # синхронизируем VVIP при входе
         await business_service._recalc_income(session, user)

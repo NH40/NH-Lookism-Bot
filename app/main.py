@@ -10,7 +10,7 @@ from app.database import init_db
 from app.middlewares.db_session import DbSessionMiddleware
 from app.middlewares.user_loader import UserLoaderMiddleware
 from app.scheduler.setup import setup_scheduler
-from app.handlers import common, attack, business, raid, squad, skills, titles, shop, auction, settings as settings_handler, admin, guide
+from app.handlers import common, attack, business, raid, squad, skills, titles, shop, auction, settings as settings_handler, admin, guide, black_market
 from app.handlers import training
 from app.handlers.cards import router as cards_router
 from aiohttp import TCPConnector
@@ -73,6 +73,7 @@ async def main():
     dp.include_router(quests.router)
     dp.include_router(settings_handler.router)
     dp.include_router(guide.router)
+    dp.include_router(black_market.router)
 
     dp.include_router(admin.router)
 

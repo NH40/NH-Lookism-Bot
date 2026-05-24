@@ -1,3 +1,4 @@
+import random
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.models.clan import Clan
@@ -17,4 +18,15 @@ class ClanTreasuryService(ClanBaseService):
         user.nh_coins -= amount
         clan.treasury += amount
         await session.flush()
-        return {"ok": True}
+
+        # Круговой донат «Глава клана» круг 5: кешбэк 3% шанс вернуть 5-10% депозита
+        cashback = 0
+        cashback_pct = 0
+        if getattr(user, "circ_clan_cashback", False) and random.randint(1, 100) <= 3:
+            cashback_pct = random.randint(5, 10)
+            cashback = int(amount * cashback_pct / 100)
+            if cashback > 0:
+                user.nh_coins += cashback
+                await session.flush()
+
+        return {"ok": True, "cashback": cashback, "cashback_pct": cashback_pct}

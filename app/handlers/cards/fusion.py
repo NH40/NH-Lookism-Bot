@@ -11,6 +11,7 @@ from app.models.user import User
 from app.models.character import UserCharacter
 from app.models.card_deck import UserDeck
 from app.services.cards.fusion import fusion_service
+from app.services.quest_service import quest_service
 from app.utils.formatters import fmt_power
 from app.data.characters import RANK_EMOJI
 from app.constants.cards import LEVEL_LABELS, LEVEL_EMOJIS, FUSION_COST
@@ -141,6 +142,8 @@ async def cb_card_fuse_do(cb: CallbackQuery, session: AsyncSession, user: User):
         return
 
     result = await fusion_service.fuse_cards(session, user, uc.character_id, uc.level)
+    if result["ok"]:
+        await quest_service.add_progress(session, user, "card_fusion")
     await session.commit()
 
     if not result["ok"]:

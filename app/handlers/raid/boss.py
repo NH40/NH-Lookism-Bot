@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.services.raid_service import raid_service
 from app.services.cooldown_service import cooldown_service
+from app.services.quest_service import quest_service
 from app.utils.keyboards.common import back_kb
 from app.utils.formatters import fmt_num
 
@@ -80,6 +81,8 @@ async def cb_raid_start(cb: CallbackQuery, session: AsyncSession, user: User):
     if not result["ok"]:
         await cb.answer(result["reason"], show_alert=True)
         return
+
+    await quest_service.add_progress(session, user, "raid_start")
 
     reward_type = result.get("reward_type", "ui")
     if reward_type == "alchemy":

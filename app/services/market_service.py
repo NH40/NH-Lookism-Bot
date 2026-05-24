@@ -147,6 +147,10 @@ class MarketService:
         listing.is_sold = True
         listing.buyer_id = buyer.id
         listing.sold_at = datetime.now(timezone.utc)
+        if seller:
+            seller.market_sells = (seller.market_sells or 0) + 1
+            from app.services.quest_service import quest_service
+            await quest_service.add_progress(session, seller, "market_sell")
         await session.flush()
 
         return {

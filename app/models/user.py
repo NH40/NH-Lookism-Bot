@@ -119,6 +119,10 @@ class User(Base):
     coins_spent: Mapped[int] = mapped_column(BigInteger, default=0)
     auction_wins: Mapped[int] = mapped_column(Integer, default=0)
     settings_opened: Mapped[int] = mapped_column(Integer, default=0)
+    raid_boss_wins: Mapped[int] = mapped_column(Integer, default=0)           # убийства рейд-боссов
+    total_statists_recruited: Mapped[int] = mapped_column(BigInteger, default=0)  # статистов завербовано всего
+    daily_quests_completed: Mapped[int] = mapped_column(Integer, default=0)   # выполненных ежедневок
+    market_sells: Mapped[int] = mapped_column(Integer, default=0)             # продаж на бирже
 
     # ── Учитель/Ученик ────────────────────────────────────────────────────
     referred_by: Mapped[int | None] = mapped_column(Integer)

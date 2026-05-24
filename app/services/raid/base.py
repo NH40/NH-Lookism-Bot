@@ -149,6 +149,7 @@ class RaidService:
             raid.is_finished = True
             raid.fragments_earned = fragments
             total_fragments = distribute_reward(user, reward_type, fragments)
+            user.raid_boss_wins = (user.raid_boss_wins or 0) + 1
             cd_key = self.boss_cd_key(boss_id, user.id)
             speed_pct = await self._get_speed_pct(session, user)
             boss_cd = cooldown_service.apply_speed_reduction(boss["cd_hours"] * 3600, speed_pct)
@@ -246,6 +247,7 @@ class RaidService:
             raid.is_finished = True
             raid.fragments_earned = fragments
             total_fragments = distribute_reward(user, reward_type, fragments)
+            user.raid_boss_wins = (user.raid_boss_wins or 0) + 1
 
             cd_key = self.boss_cd_key(raid.boss_id, user.id)
             await cooldown_service.set_cooldown(cd_key, boss["cd_hours"] * 3600)
@@ -320,6 +322,7 @@ class RaidService:
         raid.is_finished = True
         raid.fragments_earned = fragments
         total_fragments = distribute_reward(user, reward_type, fragments)
+        user.raid_boss_wins = (user.raid_boss_wins or 0) + 1
 
         speed_pct = await self._get_speed_pct(session, user)
         boss_cd = cooldown_service.apply_speed_reduction(boss["cd_hours"] * 3600, speed_pct)

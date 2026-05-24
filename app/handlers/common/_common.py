@@ -115,8 +115,8 @@ async def _main_menu_text(session: AsyncSession, user: User) -> str:
     potions = await potion_service.get_active(session, user.id)
     now = datetime.now(timezone.utc)
     potion_lines = []
-    potion_emoji_map = {"power": "⚔️", "wealth": "💰", "influence": "⚡", "training": "🏋", "luck": "🍀"}
-    potion_name_map  = {"power": "Сила", "wealth": "Богатство", "influence": "Влияние", "training": "Тренировка", "luck": "Удача"}
+    potion_emoji_map = {"power": "⚔️", "income": "💰", "influence": "⚡", "training": "🏋", "luck": "🍀", "raid_drop": "💠"}
+    potion_name_map  = {"power": "Сила", "income": "Богатство", "influence": "Влияние", "training": "Тренировка", "luck": "Удача", "raid_drop": "Охотник"}
     for p in potions:
         remaining = max(0, int((p.expires_at - now).total_seconds()))
         m, s = divmod(remaining, 60)

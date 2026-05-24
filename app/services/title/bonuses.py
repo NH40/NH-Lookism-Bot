@@ -46,7 +46,7 @@ async def apply_title_bonus(
     elif title_id == "romantic_recruit":
         user.recruit_count_bonus += 40
     elif title_id == "great_influence":
-        pass
+        user.influence = max(3000, user.influence)
     elif title_id == "genius_training":
         user.train_bonus_percent += 70
     elif title_id == "genius_business":

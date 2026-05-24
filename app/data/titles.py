@@ -116,6 +116,66 @@ ACHIEVEMENTS: list[Achievement] = [
         "+30,000 NHCoin + +5% к доходу", "coins_and_income", 30_000,
         parent_id="auction_win_1"),
 
+    # ─── Рейды ───
+    Achievement("raid_boss_1", "Первая кровь",
+        "Победи рейд-босса 1 раз", "raid_boss_wins", 1,
+        "+3,000 NHCoin", "coins", 3_000),
+    Achievement("raid_boss_10", "Охотник на боссов",
+        "Победи рейд-боссов 10 раз", "raid_boss_wins", 10,
+        "+15,000 NHCoin + +3% к доходу", "coins_and_income_3", 15_000,
+        parent_id="raid_boss_1"),
+    Achievement("raid_boss_100", "Легенда рейдов",
+        "Победи рейд-боссов 100 раз", "raid_boss_wins", 100,
+        "+75,000 NHCoin + +7% к доходу", "coins_and_income_7", 75_000,
+        parent_id="raid_boss_10"),
+
+    # ─── Армия ───
+    Achievement("army_100k", "Полководец",
+        "Завербуй 100,000 статистов за всё время", "total_statists_recruited", 100_000,
+        "+20,000 NHCoin + +5% к доходу", "coins_and_income", 20_000),
+    Achievement("army_1m", "Империя теней",
+        "Завербуй 1,000,000 статистов за всё время", "total_statists_recruited", 1_000_000,
+        "+100,000 NHCoin + +10% к доходу", "coins_and_income_10", 100_000,
+        parent_id="army_100k"),
+
+    # ─── Путь / УИ / Гений медицины ───
+    Achievement("path_max", "Дорога познана",
+        "Улучши путь до максимального уровня (5)", "skill_path_level", 5,
+        "+10,000 NHCoin + +5% к доходу", "coins_and_income", 10_000),
+    Achievement("ui_master", "Мастер инстинкта",
+        "Достигни максимального уровня Ультра Инстинкта (4)", "ui_level_max", 4,
+        "+20,000 NHCoin + +5% к доходу", "coins_and_income", 20_000),
+    Achievement("med_genius_master", "Гений медицины (мастер)",
+        "Открой все зелья Гения Медицины до ур. 5+", "med_genius_max", 5,
+        "+20,000 NHCoin + +5% к доходу", "coins_and_income", 20_000),
+
+    # ─── Коллекция персонажей ───
+    Achievement("collect_rank_complete", "Архивариус",
+        "Собери всех персонажей одной редкости (хотя бы по одному каждого)", "any_rank_complete", 1,
+        "+15,000 NHCoin + +5% к доходу", "coins_and_income", 15_000),
+
+    # ─── Ежедневные задания ───
+    Achievement("quests_100", "Ответственный",
+        "Выполни 100 ежедневных заданий", "daily_quests_completed", 100,
+        "+8,000 NHCoin + +3% к доходу", "coins_and_income_3", 8_000),
+    Achievement("quests_500", "Дисциплинированный",
+        "Выполни 500 ежедневных заданий", "daily_quests_completed", 500,
+        "+30,000 NHCoin + +5% к доходу", "coins_and_income", 30_000,
+        parent_id="quests_100"),
+    Achievement("quests_1000", "Человек-машина",
+        "Выполни 1,000 ежедневных заданий", "daily_quests_completed", 1_000,
+        "+100,000 NHCoin + +7% к доходу", "coins_and_income_7", 100_000,
+        parent_id="quests_500"),
+
+    # ─── Биржа ───
+    Achievement("market_10", "Торговец",
+        "Продай товар на бирже 10 раз", "market_sells", 10,
+        "+10,000 NHCoin + +3% к доходу", "coins_and_income_3", 10_000),
+    Achievement("market_100", "Барыга",
+        "Продай товар на бирже 100 раз", "market_sells", 100,
+        "+50,000 NHCoin + +7% к доходу", "coins_and_income_7", 50_000,
+        parent_id="market_10"),
+
     # ─── Особые ───
     Achievement("future_masterpiece", "Будущий шедевр",
         "Накопи 100 очков мастерства (от Тома Ли)", "mastery_points", 100,
@@ -126,13 +186,13 @@ ACHIEVEMENTS: list[Achievement] = [
         parent_id="future_masterpiece"),
 
     # ─── Коллекция ───
-    # Порог: все несекретные достижения кроме самих all_achievements и absolute = 26
+    # Несекретных без self: 26 старых + 14 новых = 40
     Achievement("all_achievements", "Коллекционер",
-        "Собери все несекретные достижения", "achievements_count", 26,
+        "Собери все несекретные достижения", "achievements_count", 40,
         "+75,000 NHCoin + +7% к доходу", "coins_and_income_7", 75_000),
-    # Порог: all_achievements + 2 секретных + все остальные = 29
+    # Все (40 несекрет + 2 секрет + 1 all_achievements) = 43
     Achievement("absolute", "Абсолют",
-        "Собери абсолютно все достижения", "achievements_count_all", 29,
+        "Собери абсолютно все достижения", "achievements_count_all", 43,
         "+200,000 NHCoin + +15% к доходу", "coins_and_income_15", 200_000,
         parent_id="all_achievements"),
 

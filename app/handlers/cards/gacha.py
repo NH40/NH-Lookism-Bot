@@ -10,6 +10,7 @@ from collections import Counter
 from app.models.user import User
 from app.services.cards.gacha import gacha_service
 from app.services.cooldown_service import cooldown_service
+from app.services.quest_service import quest_service
 from app.utils.formatters import fmt_num
 from app.data.characters import RANK_CONFIG_MAP, RANK_EMOJI
 from app.database import AsyncSessionFactory
@@ -52,6 +53,8 @@ async def _pull_one_bg(chat_id: int, msg_id: int, user_db_id: int, lock_key: str
         async with AsyncSessionFactory() as s:
             u = await s.get(User, user_db_id)
             result = await gacha_service.pull(s, u)
+            if result["ok"]:
+                await quest_service.add_progress(s, u, "gacha_pull")
             await s.commit()
 
         if not result["ok"]:
@@ -120,6 +123,8 @@ async def _pull_10_bg(chat_id: int, msg_id: int, user_db_id: int, lock_key: str)
             u = await s.get(User, user_db_id)
             count = min(10, u.tickets)
             results = await gacha_service.pull_n(s, u, count)
+            if results:
+                await quest_service.add_progress(s, u, "gacha_pull", amount=count)
             await s.commit()
 
         if not results:

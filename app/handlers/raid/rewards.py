@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.services.raid_service import raid_service
 from app.services.cooldown_service import cooldown_service
+from app.services.quest_service import quest_service
 from app.services.skill_service import skill_service as _ss
 from app.constants.raid import (
     PATH_SPIN_CRAFT_COST,
@@ -31,6 +32,8 @@ async def cb_raid_claim(cb: CallbackQuery, session: AsyncSession, user: User):
     if not result["ok"]:
         await cb.answer(result["reason"], show_alert=True)
         return
+
+    await quest_service.add_progress(session, user, "raid_win")
 
     reward_type = result.get("reward_type")
     if reward_type == "alchemy":

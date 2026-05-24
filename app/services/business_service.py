@@ -139,7 +139,7 @@ class BusinessService:
             loss = cost * 3
             from app.repositories.title_repo import title_repo
             has_great = await title_repo.has_title(session, user.id, "great_influence")
-            min_influence = 100 if has_great else 10
+            min_influence = 3000 if has_great else 10
             user.influence = max(min_influence, user.influence - loss)
         elif user.business_path == "political":
             user.influence += cost * 5

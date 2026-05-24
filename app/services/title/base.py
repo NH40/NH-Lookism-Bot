@@ -245,6 +245,46 @@ class TitleService:
                 )
             )
             return (count or 0) >= val
+        elif key == "raid_boss_wins":
+            return (user.raid_boss_wins or 0) >= val
+        elif key == "total_statists_recruited":
+            return (user.total_statists_recruited or 0) >= val
+        elif key == "daily_quests_completed":
+            return (user.daily_quests_completed or 0) >= val
+        elif key == "market_sells":
+            return (user.market_sells or 0) >= val
+        elif key == "ui_level_max":
+            # достигается при ui_level >= val ИЛИ донатный УИ (уже максимальный)
+            return user.ui_is_donat or (user.ui_level or 0) >= val
+        elif key == "med_genius_max":
+            # все 6 зелий >= val (5) ИЛИ донатный Гений медицины
+            if user.med_genius_donat:
+                return True
+            mg_fields = [
+                "mg_level_power", "mg_level_training", "mg_level_income",
+                "mg_level_luck", "mg_level_influence", "mg_level_raid_drop",
+            ]
+            return all((getattr(user, f, 0) or 0) >= val for f in mg_fields)
+        elif key == "any_rank_complete":
+            # Проверяем есть ли хотя бы одна редкость, все персонажи которой собраны
+            from app.data.characters import CHARACTERS
+            from app.models.character import UserCharacter
+            from collections import defaultdict
+            # Группируем нужные имена по рангу
+            rank_names: dict[str, set] = defaultdict(set)
+            for c in CHARACTERS:
+                rank_names[c["rank"]].add(c["name"])
+            # Получаем все character_id пользователя
+            result = await session.execute(
+                select(UserCharacter.character_id).where(
+                    UserCharacter.user_id == user.id
+                )
+            )
+            owned = set(result.scalars().all())
+            for rank, names in rank_names.items():
+                if names.issubset(owned):
+                    return True
+            return False
         return False
 
     async def _grant_achievement_new(

@@ -97,6 +97,9 @@ class SquadService:
 
         await session.flush()
 
+        # Счётчик достижений
+        user.total_statists_recruited = (user.total_statists_recruited or 0) + len(recruited)
+
         # Пересчёт боевой мощи
         from app.repositories.squad_repo import squad_repo
         await squad_repo.update_user_combat_power(session, user)
@@ -153,6 +156,8 @@ class SquadService:
                 base_power=rank_cfg.base_power,
             )
             session.add(member)
+
+        user.total_statists_recruited = (user.total_statists_recruited or 0) + count
 
         await session.flush()
         from app.repositories.squad_repo import squad_repo

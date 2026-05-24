@@ -117,6 +117,7 @@ class PotionService:
         "influence": "⚡ Зелье влияния",
         "training":  "🏋 Зелье тренировки",
         "luck":      "🍀 Зелье удачи",
+        "raid_drop": "💠 Зелье охотника",
     }
 
     async def buy_missing(self, session: AsyncSession, user: "User") -> None:

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.services.cards.duel import duel_service
 from app.services.cooldown_service import cooldown_service
+from app.services.quest_service import quest_service
 from app.utils.formatters import fmt_power, fmt_ttl
 from app.data.characters import RANK_EMOJI
 from app.constants.cards import BOT_TIERS, LEVEL_LABELS
@@ -100,6 +101,8 @@ async def cb_duel_bot(cb: CallbackQuery, session: AsyncSession, user: User):
         pass
 
     result = await duel_service.duel_vs_bot(session, user, tier)
+    if result["ok"]:
+        await quest_service.add_progress(session, user, "card_duel")
     await session.commit()
 
     if not result["ok"]:

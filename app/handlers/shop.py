@@ -126,14 +126,27 @@ _MG_TYPE_LABELS: dict[str, str] = {
 
 @router.callback_query(F.data == "shop_potions")
 async def cb_shop_potions(cb: CallbackQuery, session: AsyncSession, user: User):
+    from app.services.potion_service import potion_service
+    from datetime import datetime, timezone
+
+    active_potions = await potion_service.get_active(session, user.id)
+    active_map = {p.potion_type: p for p in active_potions}
+    now = datetime.now(timezone.utc)
+
     builder = InlineKeyboardBuilder()
 
     for ptype, label in _MG_TYPE_LABELS.items():
         tiers = MG_TIERS[ptype]
-        # Показываем диапазон эффектов
         rng = f"+{tiers[0].effect_value}%–+{tiers[5].effect_value}%"
+        active = active_map.get(ptype)
+        if active:
+            remaining = max(0, int((active.expires_at - now).total_seconds()))
+            m = remaining // 60
+            active_str = f" 🟢{m}м"
+        else:
+            active_str = ""
         builder.row(InlineKeyboardButton(
-            text=f"{label} [{rng}]",
+            text=f"{label} [{rng}]{active_str}",
             callback_data=f"shop_pot_type:{ptype}",
         ))
 
@@ -152,23 +165,37 @@ async def cb_shop_potions(cb: CallbackQuery, session: AsyncSession, user: User):
     await cb.answer()
 
 
-@router.callback_query(F.data.startswith("shop_pot_type:"))
-async def cb_shop_pot_type(cb: CallbackQuery, session: AsyncSession, user: User):
-    ptype = cb.data.split(":")[1]
+async def _render_pot_type(
+    cb: CallbackQuery, session: AsyncSession, user: User, ptype: str
+) -> None:
+    """Отрисовывает страницу тира зелий без изменения cb.data."""
+    from app.services.potion_service import potion_service
+    from datetime import datetime, timezone
+
     tiers = MG_TIERS.get(ptype)
     if not tiers:
-        await cb.answer("Неизвестный тип", show_alert=True)
         return
 
     label = _MG_TYPE_LABELS.get(ptype, "🧪 Зелья")
     builder = InlineKeyboardBuilder()
     lines   = [f"{label}\n", f"💰 Баланс: {fmt_num(user.nh_coins)}\n"]
 
+    # Активное зелье данного типа
+    active_potions = await potion_service.get_active(session, user.id)
+    active = next((p for p in active_potions if p.potion_type == ptype), None)
+    if active:
+        now = datetime.now(timezone.utc)
+        remaining = max(0, int((active.expires_at - now).total_seconds()))
+        m, s = divmod(remaining, 60)
+        lines.append(f"🟢 <b>Активно:</b> +{active.bonus_value}% ещё {m}м {s}с\n")
+
     for tier in tiers:
         can = "✅" if user.nh_coins >= tier.price else "❌"
-        lines.append(f"  {can} {tier.name} — {tier.description} | {fmt_num(tier.price)}")
+        is_active = active and active.bonus_value == tier.effect_value
+        active_mark = " 🟢" if is_active else ""
+        lines.append(f"  {can} {tier.name} — {tier.description} | {fmt_num(tier.price)}{active_mark}")
         builder.row(InlineKeyboardButton(
-            text=f"{can} {tier.name} | {fmt_num(tier.price)}",
+            text=f"{can} {tier.name} | {fmt_num(tier.price)}{active_mark}",
             callback_data=f"buy_potion:{tier.potion_id}",
         ))
 
@@ -182,7 +209,19 @@ async def cb_shop_pot_type(cb: CallbackQuery, session: AsyncSession, user: User)
         )
     except Exception:
         pass
-    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("shop_pot_type:"))
+async def cb_shop_pot_type(cb: CallbackQuery, session: AsyncSession, user: User):
+    ptype = cb.data.split(":")[1]
+    if not MG_TIERS.get(ptype):
+        await cb.answer("Неизвестный тип", show_alert=True)
+        return
+    await _render_pot_type(cb, session, user, ptype)
+    try:
+        await cb.answer()
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("buy_potion:"))
@@ -208,12 +247,13 @@ async def cb_buy_potion(cb: CallbackQuery, session: AsyncSession, user: User):
         cfg.effect_key, cfg.effect_value, cfg.duration_minutes,
     )
     await session.flush()
+
     await cb.answer(
-        f"✅ {cfg.name} применено!\n+{cfg.effect_value}% на {cfg.duration_minutes} мин"
+        f"✅ {cfg.name} применено!\n+{cfg.effect_value}% на {cfg.duration_minutes} мин.",
+        show_alert=True,
     )
-    # Возвращаемся к тому же разделу
-    cb.data = f"shop_pot_type:{cfg.effect_key}"
-    await cb_shop_pot_type(cb, session, user)
+    # Обновляем экран через хелпер — без изменения frozen cb.data
+    await _render_pot_type(cb, session, user, cfg.effect_key)
 
 
 @router.callback_query(F.data == "shop_recruits")

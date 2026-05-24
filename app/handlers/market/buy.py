@@ -9,6 +9,7 @@ import html
 from app.models.user import User
 from app.models.market import MarketListing
 from app.services.market_service import market_service
+from app.services.quest_service import quest_service
 from app.constants.market import ITEM_TYPES
 from app.utils.formatters import fmt_num
 
@@ -179,6 +180,8 @@ async def cb_market_buy(cb: CallbackQuery, session: AsyncSession, user: User):
     if not result["ok"]:
         await cb.answer(result["reason"], show_alert=True)
         return
+
+    await quest_service.add_progress(session, user, "market_buy")
 
     label = market_service.get_item_label(result["item_type"])
     await cb.answer(

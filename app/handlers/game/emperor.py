@@ -202,6 +202,8 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
     result_lines.append(f"💪 Ваша мощь: {fmt_num(user_power)}")
     result_lines.append(f"👊 Мощь врага: {fmt_num(gang_power)}\n")
 
+    dropped_char: dict | None = None  # карточка для отправки фото
+
     if won:
         # Начисляем монеты
         coins_reward = random.randint(cfg.reward_coins_min, cfg.reward_coins_max)
@@ -212,7 +214,7 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
         # Шанс карточки
         got_card = random.randint(1, 100) <= cfg.drop_chance
         if got_card:
-            from app.data.characters import CHARACTERS
+            from app.data.characters import CHARACTERS, RANK_EMOJI
             candidates = [c for c in CHARACTERS if c["rank"] in cfg.drop_ranks]
             if candidates:
                 char = random.choice(candidates)
@@ -232,9 +234,9 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
                 session.add(new_char)
                 from app.repositories.squad_repo import squad_repo
                 await squad_repo.update_user_combat_power(session, user)
-                from app.data.characters import RANK_EMOJI
                 rank_emoji = RANK_EMOJI.get(char["rank"], "⭐")
                 result_lines.append(f"🃏 Дроп: {rank_emoji} <b>{char['name']}</b>")
+                dropped_char = char
 
         # Обновляем запись: +1 победа, ставим КД
         rec.defeat_count += 1
@@ -249,17 +251,37 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
         result_lines.append(f"💀 <b>ПОРАЖЕНИЕ</b>")
         result_lines.append(f"Группировка оказалась сильнее. Прокачайся и попробуй снова!")
 
+    text = "\n".join(result_lines)
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
         text="◀️ К группировкам", callback_data="emperor_gangs"
     ))
+    kb = builder.as_markup()
 
-    try:
-        await cb.message.edit_text(
-            "\n".join(result_lines),
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
+    # Если выпала карточка — пробуем отправить фото
+    if dropped_char:
+        from app.bot_instance import get_bot
+        from app.utils.card_sender import send_card_photo
+        bot = get_bot()
+        sent = await send_card_photo(
+            bot=bot,
+            chat_id=cb.message.chat.id,
+            char_name=dropped_char["name"],
+            caption=text,
+            reply_markup=kb,
         )
+        if sent:
+            # Удаляем предыдущее сообщение (меню атаки)
+            try:
+                await cb.message.delete()
+            except Exception:
+                pass
+            await cb.answer()
+            return
+
+    # Карточки нет или фото не нашлось — просто редактируем текст
+    try:
+        await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     except Exception:
         pass
     await cb.answer()

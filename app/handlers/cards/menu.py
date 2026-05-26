@@ -89,20 +89,32 @@ async def cb_deck_notix(cb: CallbackQuery):
     await cb.answer("Сначала получи тикет!", show_alert=True)
 
 
-@router.callback_query(F.data == "deck_rates")
-async def cb_deck_rates(cb: CallbackQuery, session: AsyncSession, user: User):
+def _build_rank_weights() -> tuple[dict[str, float], dict[str, list], float]:
+    """Вычисляет веса рангов и список персонажей. Используется в нескольких хендлерах."""
     rank_weights: dict[str, float] = defaultdict(float)
     rank_chars: dict[str, list] = defaultdict(list)
-
     for char in CHARACTERS:
         rank = char["rank"]
         cfg = RANK_CONFIG_MAP.get(rank)
-        w = cfg.weight if cfg else 1
+        w = cfg.weight if cfg else 1.0
         rank_weights[rank] += w
         rank_chars[rank].append(char)
+    total = sum(rank_weights.values())
+    return rank_weights, rank_chars, total
 
-    total_weight = sum(rank_weights.values())
+
+@router.callback_query(F.data == "deck_rates")
+async def cb_deck_rates(cb: CallbackQuery, session: AsyncSession, user: User):
+    rank_weights, rank_chars, total_weight = _build_rank_weights()
+
+    cap = getattr(user, "max_ticket_chance", 70)
+    ec = await potion_service.get_effective_ticket_chance(session, user)
+    ec = min(cap, ec + user.prestige_ticket_bonus
+             + getattr(user, "clan_ticket_bonus", 0)
+             + getattr(user, "clan_donat_ticket_bonus", 0))
+
     lines = ["📊 <b>Шансы выпадения</b>\n"]
+    builder = InlineKeyboardBuilder()
 
     for rank in RANK_ORDER:
         if rank not in rank_weights:
@@ -111,19 +123,16 @@ async def cb_deck_rates(cb: CallbackQuery, session: AsyncSession, user: User):
         emoji = RANK_EMOJI.get(rank, "❓")
         label = cfg.label if cfg else rank
         pct = rank_weights[rank] / total_weight * 100
-        names_preview = ", ".join(c["name"] for c in rank_chars[rank][:3])
-        if len(rank_chars[rank]) > 3:
-            names_preview += f" +{len(rank_chars[rank])-3}"
-        lines.append(f"{emoji} <b>{label}</b> — {pct:.2f}%\n  {names_preview}\n")
+        count = len(rank_chars[rank])
+        lines.append(f"{emoji} <b>{label}</b> — {pct:.2f}%  ({count} персонажей)")
+        builder.row(InlineKeyboardButton(
+            text=f"{emoji} {label} — {pct:.2f}%",
+            callback_data=f"deck_rates_rank:{rank}"
+        ))
 
-    cap = getattr(user, "max_ticket_chance", 70)
-    ec = await potion_service.get_effective_ticket_chance(session, user)
-    ec = min(cap, ec + user.prestige_ticket_bonus
-             + getattr(user, "clan_ticket_bonus", 0)
-             + getattr(user, "clan_donat_ticket_bonus", 0))
-    lines.append(f"{'─'*22}\n🍀 Твой шанс тикета: {ec}%")
+    lines.append(f"\n{'─'*22}\n🍀 Твой шанс тикета: {ec}%")
+    lines.append("Нажми на ранг — увидишь всех персонажей")
 
-    builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="◀️ К колоде", callback_data="deck"))
 
     text = "\n".join(lines)
@@ -136,3 +145,36 @@ async def cb_deck_rates(cb: CallbackQuery, session: AsyncSession, user: User):
         except Exception:
             pass
         await cb.message.answer(text, reply_markup=markup, parse_mode="HTML")
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("deck_rates_rank:"))
+async def cb_deck_rates_rank(cb: CallbackQuery):
+    rank = cb.data.split(":")[1]
+    rank_weights, rank_chars, total_weight = _build_rank_weights()
+
+    chars = rank_chars.get(rank, [])
+    cfg = RANK_CONFIG_MAP.get(rank)
+    emoji = RANK_EMOJI.get(rank, "❓")
+    label = cfg.label if cfg else rank
+    pct = rank_weights.get(rank, 0) / total_weight * 100 if total_weight else 0
+
+    lines = [f"{emoji} <b>{label}</b> — {pct:.2f}%\n"]
+    lines.append(f"Всего персонажей: <b>{len(chars)}</b>\n")
+
+    for i, char in enumerate(chars, 1):
+        lines.append(f"{i}. {char['name']}")
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="◀️ К шансам", callback_data="deck_rates"))
+
+    text = "\n".join(lines)
+    try:
+        await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    except Exception:
+        try:
+            await cb.message.delete()
+        except Exception:
+            pass
+        await cb.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    await cb.answer()

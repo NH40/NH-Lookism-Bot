@@ -117,7 +117,7 @@ async def cb_card_fuse_confirm(cb: CallbackQuery, session: AsyncSession, user: U
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"card_fuse_do:{uc_id}"),
-        InlineKeyboardButton(text="❌ Отмена", callback_data=f"card_act:{uc_id}"),
+        InlineKeyboardButton(text="❌ Отмена", callback_data="fusion_menu"),
     )
 
     await _safe_edit(

@@ -5,18 +5,11 @@ from app.config import settings
 engine = create_async_engine(
     settings.database_url,
     echo=settings.DEBUG,
-    pool_pre_ping=True,
+    pool_pre_ping=True,  # проверяет соединение перед каждым использованием
     pool_size=30,        # было 20; для 5000 игроков нужно больше
     max_overflow=20,     # было 10; позволяет пиковые нагрузки (до 50 соед.)
     pool_timeout=30,
     pool_recycle=1800,
-    connect_args={
-        # TCP keepalive — быстро освобождаем «мёртвые» соединения
-        "keepalives": 1,
-        "keepalives_idle": 60,
-        "keepalives_interval": 10,
-        "keepalives_count": 5,
-    },
 )
 AsyncSessionFactory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
  

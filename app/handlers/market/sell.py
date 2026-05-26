@@ -353,8 +353,9 @@ async def msg_market_amount(
         await message.answer(f"❌ У вас только {max_amount} шт. Введи меньше или равное:")
         return
 
-    await state.update_data(amount=amount)
+    # Сначала меняем state чтобы не обработать одно и то же сообщение дважды
     await state.set_state(MarketFSM.waiting_price)
+    await state.update_data(amount=amount)
 
     cancel_kb = InlineKeyboardBuilder()
     cancel_kb.row(InlineKeyboardButton(text="◀️ Отмена", callback_data="market_create_cancel"))
@@ -380,10 +381,13 @@ async def msg_market_price(
     amount = data.get("amount", 1)
     meta = data.get("meta", {})
 
+    # Очищаем state ДО создания листинга — иначе двойная отправка цены
+    # обходит лимит и создаёт дублирующийся лот (dupe-баг)
+    await state.clear()
+
     result = await market_service.create_listing(
         session, user, item_type, amount, price, meta
     )
-    await state.clear()
 
     if result["ok"]:
         label = market_service.get_item_label(item_type)

@@ -51,9 +51,20 @@ class MarketService:
         if price <= 0:
             return {"ok": False, "reason": "Цена должна быть больше 0"}
 
+        # Блокируем строку пользователя на время операции.
+        # Это предотвращает race condition: если два запроса
+        # одновременно загрузили юзера с 1М тикетов, оба пройдут
+        # проверку баланса и создадут дублирующий лот (ресурсы дюпаются).
+        locked_user = await session.scalar(
+            select(User).where(User.id == user.id).with_for_update()
+        )
+        if not locked_user:
+            return {"ok": False, "reason": "Пользователь не найден"}
+
+        # Проверяем лимит лотов уже под блокировкой
         count = await session.scalar(
             select(func.count(MarketListing.id)).where(
-                MarketListing.seller_id == user.id,
+                MarketListing.seller_id == locked_user.id,
                 MarketListing.is_sold == False,
                 MarketListing.is_cancelled == False,
             )
@@ -64,12 +75,12 @@ class MarketService:
         if meta is None:
             meta = {}
 
-        take_result = await self._take_resource(session, user, item_type, amount, meta)
+        take_result = await self._take_resource(session, locked_user, item_type, amount, meta)
         if not take_result["ok"]:
             return take_result
 
         listing = MarketListing(
-            seller_id=user.id,
+            seller_id=locked_user.id,
             item_type=item_type,
             item_amount=amount,
             price=price,
@@ -97,21 +108,31 @@ class MarketService:
     async def cancel_listing(
         self, session: AsyncSession, user: User, listing_id: int
     ) -> dict:
+        # Блокируем строку листинга чтобы нельзя было отменить один и тот же лот дважды
         result = await session.execute(
             select(MarketListing).where(
                 MarketListing.id == listing_id,
                 MarketListing.seller_id == user.id,
                 MarketListing.is_sold == False,
                 MarketListing.is_cancelled == False,
-            )
+            ).with_for_update()
         )
         listing = result.scalar_one_or_none()
         if not listing:
             return {"ok": False, "reason": "Товар не найден"}
 
         listing.is_cancelled = True
+
+        # Блокируем пользователя при возврате ресурсов
+        locked_user = await session.scalar(
+            select(User).where(User.id == user.id).with_for_update()
+        )
+        if not locked_user:
+            await session.flush()
+            return {"ok": True}
+
         meta = json.loads(listing.item_meta) if listing.item_meta else {}
-        await self._give_resource(session, user, listing.item_type, listing.item_amount, meta)
+        await self._give_resource(session, locked_user, listing.item_type, listing.item_amount, meta)
         await session.flush()
 
         return {"ok": True}
@@ -119,12 +140,14 @@ class MarketService:
     async def buy_listing(
         self, session: AsyncSession, buyer: User, listing_id: int
     ) -> dict:
+        # FOR UPDATE — блокируем лот, чтобы два одновременных запроса
+        # не смогли купить один и тот же товар
         result = await session.execute(
             select(MarketListing).where(
                 MarketListing.id == listing_id,
                 MarketListing.is_sold == False,
                 MarketListing.is_cancelled == False,
-            )
+            ).with_for_update()
         )
         listing = result.scalar_one_or_none()
         if not listing:

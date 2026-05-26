@@ -151,11 +151,12 @@ def _on_off(enabled: bool) -> str:
 
 @router.callback_query(F.data == "notifications_menu")
 async def cb_notifications_menu(cb: CallbackQuery, session: AsyncSession, user: User):
-    master = user.notifications_enabled
-    pvp = getattr(user, "notif_pvp", True)
-    auction = getattr(user, "notif_auction", True)
-    cities = getattr(user, "notif_cities", True)
-    clan_war = getattr(user, "notif_clan_war", True)
+    master    = user.notifications_enabled
+    pvp       = getattr(user, "notif_pvp",      True)
+    auction   = getattr(user, "notif_auction",  True)
+    cities    = getattr(user, "notif_cities",   True)
+    clan_war  = getattr(user, "notif_clan_war", True)
+    boss      = getattr(user, "notif_boss",     True)
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
@@ -182,6 +183,10 @@ async def cb_notifications_menu(cb: CallbackQuery, session: AsyncSession, user: 
             text=f"{_notif_icon(clan_war)} 🏯 Клановые войны: {_on_off(clan_war)}",
             callback_data="toggle_notif:clan_war"
         ))
+        builder.row(InlineKeyboardButton(
+            text=f"{_notif_icon(boss)} ⚔️ Боссы (спавн/финал): {_on_off(boss)}",
+            callback_data="toggle_notif:boss"
+        ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="settings"))
 
     lines = [
@@ -195,6 +200,7 @@ async def cb_notifications_menu(cb: CallbackQuery, session: AsyncSession, user: 
             f"🏆 Аукционы: <b>{_on_off(auction)}</b>",
             f"🏙 Прогресс городов: <b>{_on_off(cities)}</b>",
             f"🏯 Клановые войны: <b>{_on_off(clan_war)}</b>",
+            f"⚔️ Боссы: <b>{_on_off(boss)}</b>",
         ]
     else:
         lines.append(f"\n<i>Включи мастер-переключатель чтобы настроить категории</i>")
@@ -219,6 +225,8 @@ async def cb_toggle_notif(cb: CallbackQuery, session: AsyncSession, user: User):
         user.notif_cities = not getattr(user, "notif_cities", True)
     elif key == "clan_war":
         user.notif_clan_war = not getattr(user, "notif_clan_war", True)
+    elif key == "boss":
+        user.notif_boss = not getattr(user, "notif_boss", True)
     await session.flush()
     await cb_notifications_menu(cb, session, user)
 

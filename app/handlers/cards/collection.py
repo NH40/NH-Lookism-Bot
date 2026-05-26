@@ -237,6 +237,13 @@ async def cb_noop(cb: CallbackQuery):
 
 @router.callback_query(F.data.startswith("card_discard:"))
 async def cb_card_discard(cb: CallbackQuery, session: AsyncSession, user: User):
+    from app.services.cooldown_service import cooldown_service
+    # Лок: одна операция с картой за раз (discard/fusion/craft)
+    lock_key = cooldown_service.card_action_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("⏳ Подожди...", show_alert=False)
+        return
+
     uc_id = int(cb.data.split(":")[1])
     result = await fusion_service.discard_card(session, user, uc_id)
     await session.commit()

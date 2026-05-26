@@ -12,6 +12,7 @@ from app.config.scheduler_config import (
     CLAN_WAR_TICK_MINUTES,
     CLAN_AUCTION_TICK_MINUTES,
     CAMPAIGN_TICK_MINUTES,
+    BOSS_TICK_SECONDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ def setup_scheduler() -> AsyncIOScheduler:
         storage_fee_tick,
         investment_tick,
         campaign_tick,
+        boss_tick,
     )
 
     scheduler = AsyncIOScheduler()
@@ -150,5 +152,15 @@ def setup_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=30,
     )
 
-    logger.info("Scheduler configured with 13 jobs")
+    # ── Боссы: спавн и завершение ─────────────────────────────────────────────
+    scheduler.add_job(
+        boss_tick,
+        trigger=IntervalTrigger(seconds=BOSS_TICK_SECONDS),
+        id="boss_tick",
+        name="boss_tick",
+        max_instances=1,
+        misfire_grace_time=30,
+    )
+
+    logger.info("Scheduler configured with 14 jobs")
     return scheduler

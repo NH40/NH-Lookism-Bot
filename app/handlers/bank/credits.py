@@ -211,6 +211,14 @@ async def cb_credit_repay(cb: CallbackQuery, session: AsyncSession, user: User, 
 @router.callback_query(F.data.startswith("credit_repay_full:"))
 async def cb_credit_repay_full(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
     await state.clear()
+
+    # Лок: предотвращает двойное погашение при двойном нажатии
+    from app.services.cooldown_service import cooldown_service
+    lock_key = cooldown_service.credit_repay_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("⏳ Подожди...", show_alert=False)
+        return
+
     credit_id = int(cb.data.split(":")[1])
     from sqlalchemy import select
     r = await session.execute(
@@ -249,6 +257,13 @@ async def msg_repay_amount(message: Message, session: AsyncSession, user: User, 
         amount = int(message.text.strip().replace(" ", "").replace(",", ""))
     except ValueError:
         await message.answer("❌ Введите целое число.", reply_markup=back_kb("bank_credits"), parse_mode="HTML")
+        return
+
+    # Лок: предотвращает двойную выплату при параллельной отправке сообщений
+    from app.services.cooldown_service import cooldown_service
+    lock_key = cooldown_service.credit_repay_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await message.answer("⏳ Подождите...", reply_markup=back_kb("bank_credits"), parse_mode="HTML")
         return
 
     ok, err = await credits_service.repay_credit(session, user, credit_id, amount)

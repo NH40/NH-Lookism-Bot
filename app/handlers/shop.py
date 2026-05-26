@@ -77,6 +77,11 @@ async def cb_shop_craft(cb: CallbackQuery, session: AsyncSession, user: User):
 
 @router.callback_query(F.data == "craft_ticket_1")
 async def cb_craft_ticket_1(cb: CallbackQuery, session: AsyncSession, user: User):
+    from app.services.cooldown_service import cooldown_service
+    lock_key = cooldown_service.card_action_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("⏳ Подожди...", show_alert=False)
+        return
     result = await craft_service.craft_ticket(session, user)
     await session.commit()
     if not result["ok"]:
@@ -98,6 +103,11 @@ async def cb_craft_ticket_max(cb: CallbackQuery, session: AsyncSession, user: Us
     count = min(space, dust // TICKET_CRAFT_COST)
     if count <= 0:
         await cb.answer("Нельзя скрафтить", show_alert=True)
+        return
+    from app.services.cooldown_service import cooldown_service
+    lock_key = cooldown_service.card_action_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("⏳ Подожди...", show_alert=False)
         return
     result = await craft_service.craft_ticket_bulk(session, user, count)
     await session.commit()
@@ -236,6 +246,13 @@ async def cb_buy_potion(cb: CallbackQuery, session: AsyncSession, user: User):
             f"Недостаточно монет (нужно {fmt_num(cfg.price)})",
             show_alert=True,
         )
+        return
+
+    # Лок: предотвращает двойное нажатие → двойное списание монет
+    from app.services.cooldown_service import cooldown_service
+    lock_key = cooldown_service.potion_buy_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("⏳ Подожди...", show_alert=False)
         return
 
     user.nh_coins -= cfg.price

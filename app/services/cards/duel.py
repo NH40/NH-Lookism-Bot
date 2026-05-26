@@ -153,12 +153,14 @@ class DuelService:
 
     async def accept_challenge(self, session: AsyncSession, to_user: User) -> dict:
         key = cooldown_service.duel_challenge_key(to_user.id)
-        raw = await cooldown_service.redis.get(key)
+        # Атомарный GETDEL: если два параллельных accept придут одновременно,
+        # только один получит непустой ответ — второй увидит None
+        raw = await cooldown_service.redis.getdel(key)
         if not raw:
             return {"ok": False, "reason": "Вызов истёк или уже был принят"}
 
         data = json.loads(raw)
-        await cooldown_service.redis.delete(key)
+        # Удаление уже выполнено атомарно командой GETDEL — не повторяем
 
         from_user = await session.get(User, data["from_user_id"])
         if not from_user:

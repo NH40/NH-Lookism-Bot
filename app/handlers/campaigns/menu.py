@@ -668,15 +668,3 @@ async def cb_campaigns_collect(cb: CallbackQuery, session: AsyncSession, user: U
     await cb.answer("Результат получен!")
 
 
-# ── Боссы (заглушка) ──────────────────────────────────────────────────────────
-
-@router.callback_query(F.data == "bosses_menu")
-async def cb_bosses_menu(cb: CallbackQuery):
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
-    await cb.message.edit_text(
-        "⚔️ <b>Боссы</b>\n\n🔧 Раздел в разработке...\nСкоро здесь появятся эпические боссы!",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
-    await cb.answer()

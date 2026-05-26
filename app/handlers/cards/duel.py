@@ -94,6 +94,13 @@ async def cb_duel_bot(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer("Неизвестный тир", show_alert=True)
         return
 
+    # Лок: предотвращает TOCTOU между is_on_cooldown и set_cooldown
+    # (два параллельных запроса могут оба пройти проверку КД)
+    lock_key = cooldown_service.duel_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
+        await cb.answer("⏳ Подожди...", show_alert=False)
+        return
+
     await cb.answer()
     try:
         await cb.message.edit_text("⚔️ Дуэль начинается...")

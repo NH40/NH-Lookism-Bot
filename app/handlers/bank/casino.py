@@ -98,6 +98,17 @@ async def msg_casino_bet(message: Message, session: AsyncSession, user: User, st
         )
         return
 
+    # Redis-лок: предотвращает параллельные ставки с одного аккаунта
+    # (пользователь может отправить несколько сообщений очень быстро)
+    from app.services.cooldown_service import cooldown_service
+    lock_key = cooldown_service.casino_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await message.answer(
+            "⏳ Подождите, предыдущая ставка ещё обрабатывается.",
+            reply_markup=back_kb("bank_casino"),
+        )
+        return
+
     result = await casino_service.place_bet(session, user, resource, amount)
 
     if not result.get("ok"):

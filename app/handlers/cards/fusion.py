@@ -135,6 +135,13 @@ async def cb_card_fuse_confirm(cb: CallbackQuery, session: AsyncSession, user: U
 
 @router.callback_query(F.data.startswith("card_fuse_do:"))
 async def cb_card_fuse_do(cb: CallbackQuery, session: AsyncSession, user: User):
+    from app.services.cooldown_service import cooldown_service
+    # Лок: предотвращает двойное слияние при быстром двойном нажатии
+    lock_key = cooldown_service.card_action_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("⏳ Подожди...", show_alert=False)
+        return
+
     uc_id = int(cb.data.split(":")[1])
     uc = await session.get(UserCharacter, uc_id)
     if not uc or uc.user_id != user.id:

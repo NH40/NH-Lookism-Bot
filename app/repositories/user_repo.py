@@ -53,10 +53,12 @@ class UserRepo:
     ) -> tuple[User, bool]:
         user = await self.get_by_tg_id(session, tg_id)
         if user:
-            # Обновляем имя/username
-            user.full_name = full_name
-            user.username = username
-            await session.flush()
+            # Обновляем имя/username только если они изменились,
+            # иначе flush() на каждый запрос = лишний UPDATE для 5000 игроков
+            if user.full_name != full_name or user.username != username:
+                user.full_name = full_name
+                user.username = username
+                await session.flush()
             return user, False
         user = await self.create(session, tg_id, full_name, username)
         return user, True

@@ -21,19 +21,21 @@ class CooldownService:
         await self.redis.delete(key)
     
     async def get_speed_reduction(self, session, user_id: int) -> int:
-        """Возвращает % сокращения КД от мастерства скорости."""
+        """Возвращает % сокращения КД от мастерства скорости.
+
+        Использует переданную сессию (не создаёт новую), чтобы избежать
+        лишних соединений с БД при каждом вызове.
+        """
         from sqlalchemy import select
         from app.models.skill import UserMastery
-        from app.database import AsyncSessionFactory
         speed_levels = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
         try:
-            async with AsyncSessionFactory() as session:
-                r = await session.execute(
-                    select(UserMastery).where(UserMastery.user_id == user_id)
-                )
-                mastery = r.scalar_one_or_none()
-                if mastery:
-                    return speed_levels.get(mastery.speed, 0)
+            r = await session.execute(
+                select(UserMastery.speed).where(UserMastery.user_id == user_id)
+            )
+            speed = r.scalar_one_or_none()
+            if speed is not None:
+                return speed_levels.get(speed, 0)
         except Exception:
             pass
         return 0
@@ -131,6 +133,25 @@ class CooldownService:
     @staticmethod
     def campaign_collect_lock_key(campaign_id: int) -> str:
         return f"lock:campaign_collect:{campaign_id}"
+
+    # ── Новые локи (защита от race condition) ──────────────────────────────
+
+    @staticmethod
+    def casino_lock_key(user_id: int) -> str:
+        return f"lock:casino:{user_id}"
+
+    @staticmethod
+    def card_action_lock_key(user_id: int) -> str:
+        """Для discard, fusion, craft — одна операция с картой за раз."""
+        return f"lock:card_action:{user_id}"
+
+    @staticmethod
+    def potion_buy_lock_key(user_id: int) -> str:
+        return f"lock:potion_buy:{user_id}"
+
+    @staticmethod
+    def credit_repay_lock_key(user_id: int) -> str:
+        return f"lock:credit_repay:{user_id}"
 
     async def acquire_lock(self, key: str, ttl: int = 5) -> bool:
         """Returns True if lock acquired, False if already locked.

@@ -37,25 +37,42 @@ class InvestmentsService:
     async def create(
         self, session: AsyncSession, user: User, amount: int, duration_hours: int
     ) -> tuple[bool, str]:
+        """
+        Создать вклад.
+
+        !! SELECT FOR UPDATE блокирует строку пользователя — параллельный
+        запрос будет ждать и после разблокировки увидит актуальный счёт/лимит.
+        """
         if duration_hours not in DURATION_OPTIONS:
             return False, "❌ Неверный срок вклада."
         if amount < 1000:
             return False, "❌ Минимальный вклад: 1 000 NHCoin."
         if amount > MAX_DEPOSIT:
             return False, f"❌ Максимальный вклад: {MAX_DEPOSIT:,} NHCoin."
-        if user.nh_coins < amount:
+
+        # Блокируем строку пользователя — никакой второй запрос не войдёт
+        # в критическую секцию пока мы не закоммитим транзакцию.
+        locked_user = await session.scalar(
+            select(User).where(User.id == user.id).with_for_update()
+        )
+        if not locked_user:
+            return False, "❌ Пользователь не найден."
+
+        if locked_user.nh_coins < amount:
             return False, "❌ Недостаточно NHCoin."
 
-        active = await self.get_active(session, user.id)
+        # Перечитываем вклады под блокировкой
+        active = await self.get_active(session, locked_user.id)
         if len(active) >= MAX_INVESTMENTS:
             return False, f"❌ Максимум {MAX_INVESTMENTS} вклада одновременно."
 
         interest_pct = DURATION_OPTIONS[duration_hours]
         now = datetime.now(timezone.utc)
 
-        user.nh_coins -= amount
+        locked_user.nh_coins -= amount
+        user.nh_coins = locked_user.nh_coins  # синхронизируем внешний объект
         inv = Investment(
-            user_id=user.id,
+            user_id=locked_user.id,
             amount=amount,
             duration_hours=duration_hours,
             interest_pct=interest_pct,
@@ -74,13 +91,16 @@ class InvestmentsService:
         """
         Возвращает (ok, error_msg, payout).
         payout = amount + проценты.
+
+        !! SELECT FOR UPDATE блокирует строку вклада — двойная выплата невозможна.
         """
-        r = await session.execute(
-            select(Investment).where(
-                and_(Investment.id == investment_id, Investment.user_id == user.id)
-            )
+        # Блокируем конкретную строку вклада — параллельный запрос будет ждать.
+        # После разблокировки второй запрос увидит is_withdrawn=True и откажет.
+        inv = await session.scalar(
+            select(Investment)
+            .where(Investment.id == investment_id, Investment.user_id == user.id)
+            .with_for_update()
         )
-        inv = r.scalar_one_or_none()
         if not inv:
             return False, "❌ Вклад не найден.", 0
         if inv.is_withdrawn:

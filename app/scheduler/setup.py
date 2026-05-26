@@ -11,6 +11,7 @@ from app.config.scheduler_config import (
     REFERRAL_POWER_TICK_MINUTES,
     CLAN_WAR_TICK_MINUTES,
     CLAN_AUCTION_TICK_MINUTES,
+    CAMPAIGN_TICK_MINUTES,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,7 @@ def setup_scheduler() -> AsyncIOScheduler:
         crypto_price_tick,
         storage_fee_tick,
         investment_tick,
+        campaign_tick,
     )
 
     scheduler = AsyncIOScheduler()
@@ -138,5 +140,15 @@ def setup_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=10,
     )
 
-    logger.info("Scheduler configured with 12 jobs")
+    # ── Походы: завершение истёкших ───────────────────────────────────────────
+    scheduler.add_job(
+        campaign_tick,
+        trigger=IntervalTrigger(minutes=CAMPAIGN_TICK_MINUTES),
+        id="campaign_tick",
+        name="campaign_tick",
+        max_instances=1,
+        misfire_grace_time=30,
+    )
+
+    logger.info("Scheduler configured with 13 jobs")
     return scheduler

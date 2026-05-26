@@ -112,6 +112,26 @@ class CooldownService:
     def auction_bid_lock_key(user_id: int) -> str:
         return f"lock:auction_bid:{user_id}"
 
+    @staticmethod
+    def credit_lock_key(user_id: int) -> str:
+        return f"lock:credit:{user_id}"
+
+    @staticmethod
+    def invest_lock_key(user_id: int) -> str:
+        return f"lock:invest:{user_id}"
+
+    @staticmethod
+    def invest_withdraw_lock_key(invest_id: int) -> str:
+        return f"lock:invest_wd:{invest_id}"
+
+    @staticmethod
+    def campaign_launch_lock_key(user_id: int) -> str:
+        return f"lock:campaign_launch:{user_id}"
+
+    @staticmethod
+    def campaign_collect_lock_key(campaign_id: int) -> str:
+        return f"lock:campaign_collect:{campaign_id}"
+
     async def acquire_lock(self, key: str, ttl: int = 5) -> bool:
         """Returns True if lock acquired, False if already locked.
         Uses atomic SET NX EX — single round-trip, no race window."""

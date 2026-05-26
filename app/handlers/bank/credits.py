@@ -141,6 +141,15 @@ async def msg_credit_amount(message: Message, session: AsyncSession, user: User,
         await message.answer("❌ Введите целое число.", reply_markup=back_kb("bank_credits"), parse_mode="HTML")
         return
 
+    # Redis-лок: предотвращает параллельный вход в выдачу кредита.
+    # DB-уровень (SELECT FOR UPDATE) защищает как второй эшелон.
+    from app.services.cooldown_service import cooldown_service
+    lock_key = cooldown_service.credit_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
+        await message.answer("⏳ Подождите, предыдущий запрос ещё обрабатывается.",
+                             reply_markup=back_kb("bank_credits"), parse_mode="HTML")
+        return
+
     ok, err = await credits_service.take_credit(session, user, amount)
     if not ok:
         await message.answer(err, reply_markup=back_kb("bank_credits"), parse_mode="HTML")

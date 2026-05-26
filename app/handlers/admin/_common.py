@@ -51,23 +51,43 @@ class AdminFSM(StatesGroup):
     # Карточки (новый поток)
     waiting_card_qty = State()       # ввод количества при выдаче
     waiting_card_take_qty = State()  # ввод количества при удалении
+    # Бан
+    waiting_ban_reason = State()     # ввод причины бана
 
 
-async def _build_user_card_text(session: AsyncSession, found) -> tuple[str, bool]:
-    """Возвращает (текст карточки, donat_duel_cd). Использует кэш Redis."""
+async def _build_user_card_text(session: AsyncSession, found) -> tuple[str, bool, bool]:
+    """Возвращает (текст карточки, donat_duel_cd, is_banned). Использует кэш Redis."""
     cache_key = f"admin_card:{found.tg_id}"
     r = _redis()
     try:
         cached = await r.get(cache_key)
         if cached:
             data = json.loads(cached)
-            return data["text"], data["duel_cd"]
+            return data["text"], data["duel_cd"], data.get("is_banned", False)
     except Exception:
         pass
 
     from app.repositories.title_repo import title_repo
     titles_str = await title_repo.get_titles_display(session, found.id)
     duel_cd = getattr(found, "donat_duel_cd", False)
+    is_banned = getattr(found, "is_banned", False)
+
+    ban_str = ""
+    if is_banned:
+        from datetime import datetime, timezone
+        ban_until = getattr(found, "ban_until", None)
+        ban_reason = getattr(found, "ban_reason", None) or "—"
+        if ban_until is None:
+            ban_str = f"\n🚫 <b>ЗАБАНЕН навсегда</b>\nПричина: {html.escape(ban_reason)}"
+        else:
+            now = datetime.now(timezone.utc)
+            secs = max(0, int((ban_until - now).total_seconds()))
+            from app.utils.formatters import fmt_ttl as _fmt_ttl
+            ban_str = (
+                f"\n🚫 <b>ЗАБАНЕН</b> (осталось {_fmt_ttl(secs)})\n"
+                f"Причина: {html.escape(ban_reason)}"
+            )
+
     text = (
         f"👤 <b>{html.escape(found.full_name)}</b>\n"
         f"🆔 tg_id: <code>{found.tg_id}</code>\n"
@@ -76,16 +96,17 @@ async def _build_user_card_text(session: AsyncSession, found) -> tuple[str, bool
         f"⚔️ Мощь: {fmt_power(found.combat_power)}\n"
         f"💰 Монеты: {fmt_num(found.nh_coins)}\n"
         f"🎟 Тикеты: {found.tickets}/{found.max_tickets}\n"
-        f"🌟 Пробуждений: {found.prestige_level}\n"
+        f"🌟 Пробуждений: {found.prestige_level}"
+        f"{ban_str}\n"
         f"💎 Титулы:\n{titles_str}"
     )
     try:
         await r.setex(cache_key, _ADMIN_CARD_TTL, json.dumps(
-            {"text": text, "duel_cd": duel_cd}, ensure_ascii=False
+            {"text": text, "duel_cd": duel_cd, "is_banned": is_banned}, ensure_ascii=False
         ))
     except Exception:
         pass
-    return text, duel_cd
+    return text, duel_cd, is_banned
 
 
 async def invalidate_admin_card_cache(tg_id: int) -> None:
@@ -97,20 +118,20 @@ async def invalidate_admin_card_cache(tg_id: int) -> None:
 
 
 async def _show_user_card(message, session, found):
-    text, duel_cd = await _build_user_card_text(session, found)
+    text, duel_cd, is_banned = await _build_user_card_text(session, found)
     # Сбрасываем кэш сразу после отображения чтобы следующий запрос был свежим
     await invalidate_admin_card_cache(found.tg_id)
     try:
         await message.edit_text(
             text,
-            reply_markup=admin_user_kb(found.tg_id, donat_duel_cd=duel_cd),
+            reply_markup=admin_user_kb(found.tg_id, donat_duel_cd=duel_cd, is_banned=is_banned),
             parse_mode="HTML",
         )
     except Exception:
         try:
             await message.answer(
                 text,
-                reply_markup=admin_user_kb(found.tg_id, donat_duel_cd=duel_cd),
+                reply_markup=admin_user_kb(found.tg_id, donat_duel_cd=duel_cd, is_banned=is_banned),
                 parse_mode="HTML",
             )
         except Exception as e:

@@ -12,6 +12,7 @@ from app.scheduler.tasks.bank import (
     storage_fee_tick,
     investment_tick,
 )
+from app.scheduler.tasks.campaign import campaign_tick
 
 __all__ = [
     "income_tick",
@@ -28,4 +29,5 @@ __all__ = [
     "crypto_price_tick",
     "storage_fee_tick",
     "investment_tick",
+    "campaign_tick",
 ]

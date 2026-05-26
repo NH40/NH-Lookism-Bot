@@ -55,7 +55,7 @@ async def msg_admin_search(
         f"🎟 Тикеты: {found.tickets}/{found.max_tickets}\n"
         f"🌟 Пробуждений: {found.prestige_level}\n"
         f"💎 Титулы:\n{titles_str}",
-        reply_markup=admin_user_kb(found.tg_id),
+        reply_markup=admin_user_kb(found.tg_id, is_banned=getattr(found, "is_banned", False)),
         parse_mode="HTML",
     )
 

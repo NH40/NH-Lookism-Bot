@@ -49,16 +49,29 @@ class CreditsService:
         """
         Выдать кредит.
         Возвращает (ok, сообщение_об_ошибке_или_пустую_строку).
+
+        !! SELECT FOR UPDATE блокирует строку пользователя на время транзакции.
+        Параллельный запрос будет ждать завершения первого, после чего заново
+        прочитает актуальное количество кредитов — дубликаты невозможны.
         """
+        from sqlalchemy import select as sa_select
+        # Блокируем строку пользователя — никакой второй запрос не войдёт
+        # в критическую секцию пока мы не закоммитим транзакцию.
+        locked_user = await session.scalar(
+            sa_select(User).where(User.id == user.id).with_for_update()
+        )
+        if not locked_user:
+            return False, "❌ Пользователь не найден."
+
         now = datetime.now(timezone.utc)
 
-        # Проверка: не более MAX_CREDITS
-        active = await self.get_active_credits(session, user.id)
+        # Проверка: не более MAX_CREDITS (перечитываем под блокировкой)
+        active = await self.get_active_credits(session, locked_user.id)
         if len(active) >= MAX_CREDITS:
             return False, f"❌ Максимум {MAX_CREDITS} кредита одновременно."
 
         # Проверка суммы
-        max_amount = user.income_per_minute * CREDIT_INCOME_MINUTES  # доход × N минут
+        max_amount = locked_user.income_per_minute * CREDIT_INCOME_MINUTES
         if max_amount <= 0:
             return False, "❌ У вас нет дохода. Постройте бизнес, чтобы взять кредит."
         if amount < 1000:
@@ -73,7 +86,7 @@ class CreditsService:
 
         due = int(amount * REPAY_FACTOR)
         credit = BankCredit(
-            user_id=user.id,
+            user_id=locked_user.id,
             amount=amount,
             due_amount=due,
             paid_amount=0,
@@ -81,7 +94,9 @@ class CreditsService:
             delete_at=now + timedelta(hours=DELETE_HOURS),
         )
         session.add(credit)
-        user.nh_coins += amount
+        locked_user.nh_coins += amount
+        # Синхронизируем объект user, переданный снаружи
+        user.nh_coins = locked_user.nh_coins
         await session.flush()
         return True, ""
 

@@ -90,16 +90,14 @@ async def cb_deck_notix(cb: CallbackQuery):
 
 
 def _build_rank_weights() -> tuple[dict[str, float], dict[str, list], float]:
-    """Вычисляет веса рангов и список персонажей. Используется в нескольких хендлерах."""
-    rank_weights: dict[str, float] = defaultdict(float)
+    """Возвращает фиксированные шансы рангов (weight = % ранга) и список персонажей."""
+    rank_weights: dict[str, float] = {}
     rank_chars: dict[str, list] = defaultdict(list)
     for char in CHARACTERS:
-        rank = char["rank"]
-        cfg = RANK_CONFIG_MAP.get(rank)
-        w = cfg.weight if cfg else 1.0
-        rank_weights[rank] += w
-        rank_chars[rank].append(char)
-    total = sum(rank_weights.values())
+        rank_chars[char["rank"]].append(char)
+    for rank, cfg in RANK_CONFIG_MAP.items():
+        rank_weights[rank] = cfg.weight
+    total = sum(rank_weights.values())  # = 100.0
     return rank_weights, rank_chars, total
 
 

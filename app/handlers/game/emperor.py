@@ -87,7 +87,12 @@ async def cb_emperor_gangs(cb: CallbackQuery, session: AsyncSession, user: User)
     try:
         await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     except Exception:
-        pass
+        # Сообщение — фото (результат боя с карточкой) — удаляем и присылаем текст
+        try:
+            await cb.message.delete()
+        except Exception:
+            pass
+        await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
     await cb.answer()
 
 
@@ -211,11 +216,11 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
         result_lines.append(f"🏆 <b>ПОБЕДА!</b>")
         result_lines.append(f"💰 +{fmt_num(coins_reward)} монет")
 
-        # Шанс карточки
+        # Шанс карточки — только из состава группировки
         got_card = random.randint(1, 100) <= cfg.drop_chance
         if got_card:
             from app.data.characters import CHARACTERS, RANK_EMOJI
-            candidates = [c for c in CHARACTERS if c["rank"] in cfg.drop_ranks]
+            candidates = [c for c in CHARACTERS if c["name"] in cfg.members]
             if candidates:
                 char = random.choice(candidates)
                 from app.models.character import UserCharacter

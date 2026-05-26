@@ -176,6 +176,11 @@ class User(Base):
     circ_dragon_active: Mapped[bool] = mapped_column(Boolean, default=False)     # спутник-дракон
     circ_clan_cashback: Mapped[bool] = mapped_column(Boolean, default=False)     # кешбек казны клана
 
+    # ── Бан ───────────────────────────────────────────────────────────────
+    is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
+    ban_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ban_reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
     # ── Настройки ─────────────────────────────────────────────────────────
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     notif_pvp: Mapped[bool] = mapped_column(Boolean, default=True)

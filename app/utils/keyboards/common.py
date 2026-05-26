@@ -29,6 +29,10 @@ def main_menu_kb(has_vvip: bool = False) -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="🏯 Кланы", callback_data="clans_menu"),
     )
     builder.row(
+        InlineKeyboardButton(text="🗺 Походы",  callback_data="campaigns_menu"),
+        InlineKeyboardButton(text="⚔️ Боссы",   callback_data="bosses_menu"),
+    )
+    builder.row(
         InlineKeyboardButton(text="🏦 Банк",    callback_data="bank_menu"),
         InlineKeyboardButton(text="📋 Задания", callback_data="daily_quests"),
     )

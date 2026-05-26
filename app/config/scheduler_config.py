@@ -23,3 +23,6 @@ CLAN_WAR_TICK_MINUTES: int = 5
 
 # Тик аукционов кланов
 CLAN_AUCTION_TICK_MINUTES: int = 1
+
+# Тик завершения походов (проверяем каждые 2 минуты)
+CAMPAIGN_TICK_MINUTES: int = 2

@@ -21,7 +21,7 @@ def admin_main_kb():
     return builder.as_markup()
 
 
-def admin_user_kb(tg_id: int, donat_duel_cd: bool = False) -> InlineKeyboardMarkup:
+def admin_user_kb(tg_id: int, donat_duel_cd: bool = False, is_banned: bool = False) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
 
     # ── Титулы ──────────────────────────────────────────────────────────────
@@ -70,6 +70,18 @@ def admin_user_kb(tg_id: int, donat_duel_cd: bool = False) -> InlineKeyboardMark
         InlineKeyboardButton(text="🏗 Здания", callback_data=f"adm_clear_buildings:{tg_id}"),
         InlineKeyboardButton(text="🗑 Удалить аккаунт", callback_data=f"adm_delete_confirm:{tg_id}"),
     )
+
+    # ── Бан ──────────────────────────────────────────────────────────────────
+    ban_label = "✅ Разбанить" if is_banned else "🔨 Забанить"
+    if is_banned:
+        builder.row(
+            InlineKeyboardButton(text="🔨 Изм. бан", callback_data=f"adm_ban:{tg_id}"),
+            InlineKeyboardButton(text="✅ Разбанить", callback_data=f"adm_unban:{tg_id}"),
+        )
+    else:
+        builder.row(
+            InlineKeyboardButton(text="🔨 Забанить", callback_data=f"adm_ban:{tg_id}"),
+        )
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="admin_main"))
     return builder.as_markup()

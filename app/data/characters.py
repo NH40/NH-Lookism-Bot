@@ -8,20 +8,20 @@ class CharacterRankConfig:
     label: str
     base_power_min: int
     base_power_max: int
-    weight: float  # вес гачи — чем меньше, тем реже
+    weight: float  # фиксированный шанс ранга в % (сумма = 100%)
 
 
 # Порядок от слабейшего к сильнейшему
 CHARACTER_RANKS: list[CharacterRankConfig] = [
-    CharacterRankConfig("member",      "Член банды",            500,         1_000,       45.0),
-    CharacterRankConfig("boss",        "Глава группировки",     1_000,       2_000,       30.0),
-    CharacterRankConfig("king",        "Король",                2_000,       5_000,       12.0),
-    CharacterRankConfig("strong_king", "Сильный король",        6_000,       80_000,       7.0),
-    CharacterRankConfig("gen_zero",    "Нулевое поколение",     8_000,       65_000,       3.5),
-    CharacterRankConfig("new_legend",  "Новая легенда",         20_000,     100_000,       1.5),
-    CharacterRankConfig("legend",      "Легенда",              320_000,     990_000,       1),
-    CharacterRankConfig("peak",        "Вершина",            1_900_000,  12_000_000,       0.5),
-    CharacterRankConfig("absolute",    "Абсолют",            4_000_000,  40_000_000,       0.1),
+    CharacterRankConfig("member",      "Член банды",            500,         1_000,       40.00),
+    CharacterRankConfig("boss",        "Глава группировки",     1_000,       2_000,       20.00),
+    CharacterRankConfig("king",        "Король",                2_000,       5_000,       20.00),
+    CharacterRankConfig("strong_king", "Сильный король",        6_000,       80_000,       7.50),
+    CharacterRankConfig("gen_zero",    "Нулевое поколение",     8_000,       65_000,       7.50),
+    CharacterRankConfig("new_legend",  "Новая легенда",         20_000,     100_000,       3.00),
+    CharacterRankConfig("legend",      "Легенда",              320_000,     990_000,       1.40),
+    CharacterRankConfig("peak",        "Вершина",            1_900_000,  12_000_000,       0.54),
+    CharacterRankConfig("absolute",    "Абсолют",            4_000_000,  40_000_000,       0.05),
     CharacterRankConfig("perfection",  "Совершенство",      75_000_000, 100_000_000,       0.01),
 ]
 
@@ -350,7 +350,7 @@ CHARACTERS: list[dict] = [
     {"name": "Менеджер (Fair)",              "rank": "absolute", "power": -5_000_000,
      "desc": "Решил что ты слишком хорошо живёшь. Покупайте донаты >:)"},
     {"name": "Никита (Despair)",             "rank": "absolute", "power": 40_000_000,
-     "desc": "Сектор гаснет при его появлении. 10 миллиардов боевой мощи. Абсолютная власть клана Кусанаги."},
+     "desc": "Сектор гаснет при его появлении. 200 миллиардов боевой мощи. Абсолютная власть клана Кусанаги. Топ 1, 5 патчей подряд"},
     {"name": "Архангел (WWIP)",              "rank": "absolute", "power": 40_000_000,
      "desc": "Первый VVIP. Главный и легендарный донатер. Джокер что участвовал в войне!"},
     {"name": "Some Thing (STYLIST)",         "rank": "absolute", "power": 38_600_000,
@@ -365,13 +365,19 @@ CHARACTERS: list[dict] = [
      "desc": "Клан который построил коммунизм в мире капитала. Победители клановой войны нулевого поколения. Легендарный состав: @Marise3772, @Archangel_17, Org135, Конь Hasbulla |-|, @beknu1ov, @Absolutewater1, @kuba5555555, @adhvnsss"},
 ]
 
-# Суммарный вес для гачи
-TOTAL_WEIGHT: float = sum(
-    RANK_CONFIG_MAP[c["rank"]].weight for c in CHARACTERS
-)
+# Суммарный вес (для совместимости) — теперь 100.0, т.к. weight = % ранга
+TOTAL_WEIGHT: float = sum(cfg.weight for cfg in CHARACTER_RANKS)
+
+# Кэш: rank → список персонажей этого ранга
+_RANK_CHARS: dict[str, list] = {}
+for _c in CHARACTERS:
+    _RANK_CHARS.setdefault(_c["rank"], []).append(_c)
 
 
 def get_random_character() -> dict:
-    """Взвешенный случайный выбор персонажа для гачи."""
-    weights = [RANK_CONFIG_MAP[c["rank"]].weight for c in CHARACTERS]
-    return random.choices(CHARACTERS, weights=weights, k=1)[0]
+    """Выбор персонажа: сначала ранг по фиксированному %-шансу, затем равномерно внутри ранга."""
+    ranks = [cfg.rank for cfg in CHARACTER_RANKS]
+    weights = [cfg.weight for cfg in CHARACTER_RANKS]
+    chosen_rank = random.choices(ranks, weights=weights, k=1)[0]
+    candidates = _RANK_CHARS.get(chosen_rank) or CHARACTERS
+    return random.choice(candidates)

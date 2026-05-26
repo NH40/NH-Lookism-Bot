@@ -163,6 +163,14 @@ async def msg_invest_amount(message: Message, session: AsyncSession, user: User,
         await message.answer("❌ Введите целое число.", reply_markup=back_kb("bank_investments"), parse_mode="HTML")
         return
 
+    # Redis-лок: предотвращает параллельное создание вклада.
+    from app.services.cooldown_service import cooldown_service
+    lock_key = cooldown_service.invest_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
+        await message.answer("⏳ Подождите, предыдущий запрос ещё обрабатывается.",
+                             reply_markup=back_kb("bank_investments"), parse_mode="HTML")
+        return
+
     ok, err = await investments_service.create(session, user, amount, hours)
     if not ok:
         await message.answer(err, reply_markup=back_kb("bank_investments"), parse_mode="HTML")
@@ -185,6 +193,14 @@ async def msg_invest_amount(message: Message, session: AsyncSession, user: User,
 @router.callback_query(F.data.startswith("invest_withdraw:"))
 async def cb_invest_withdraw(cb: CallbackQuery, session: AsyncSession, user: User):
     inv_id = int(cb.data.split(":")[1])
+
+    # Redis-лок по ID вклада: предотвращает двойной вывод.
+    from app.services.cooldown_service import cooldown_service
+    lock_key = cooldown_service.invest_withdraw_lock_key(inv_id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
+        await cb.answer("⏳ Подождите...", show_alert=False)
+        return
+
     ok, err, payout = await investments_service.withdraw(session, user, inv_id)
     if not ok:
         try:

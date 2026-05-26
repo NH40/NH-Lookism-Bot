@@ -26,6 +26,10 @@ def setup_scheduler() -> AsyncIOScheduler:
         clan_auction_tick,
         referral_power_tick,
         daily_tick,
+        bank_credit_tick,
+        crypto_price_tick,
+        storage_fee_tick,
+        investment_tick,
     )
 
     scheduler = AsyncIOScheduler()
@@ -94,5 +98,45 @@ def setup_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=300,
     )
 
-    logger.info("Scheduler configured with 8 jobs")
+    # ── Банк: кредиты (каждую минуту) ────────────────────────────────────────
+    scheduler.add_job(
+        bank_credit_tick,
+        trigger=IntervalTrigger(minutes=1),
+        id="bank_credit_tick",
+        name="bank_credit_tick",
+        max_instances=1,
+        misfire_grace_time=10,
+    )
+
+    # ── Банк: крипто-курсы (каждые 5 минут) ──────────────────────────────────
+    scheduler.add_job(
+        crypto_price_tick,
+        trigger=IntervalTrigger(minutes=5),
+        id="crypto_price_tick",
+        name="crypto_price_tick",
+        max_instances=1,
+        misfire_grace_time=30,
+    )
+
+    # ── Банк: плата за хранилище (каждую минуту) ──────────────────────────────
+    scheduler.add_job(
+        storage_fee_tick,
+        trigger=IntervalTrigger(minutes=1),
+        id="storage_fee_tick",
+        name="storage_fee_tick",
+        max_instances=1,
+        misfire_grace_time=10,
+    )
+
+    # ── Банк: созревание вкладов (каждую минуту) ──────────────────────────────
+    scheduler.add_job(
+        investment_tick,
+        trigger=IntervalTrigger(minutes=1),
+        id="investment_tick",
+        name="investment_tick",
+        max_instances=1,
+        misfire_grace_time=10,
+    )
+
+    logger.info("Scheduler configured with 12 jobs")
     return scheduler

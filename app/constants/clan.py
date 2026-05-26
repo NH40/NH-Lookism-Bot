@@ -62,17 +62,18 @@ CLAN_SHOP_CATEGORIES = {
 CLAN_SHOP_ITEMS: list[ClanShopItem] = [
 
     # ── Тикеты ────────────────────────────────────────────────────────────────
-    ClanShopItem("tickets_1_all",  "🎟 1 тикет всем",   "Выдать 1 тикет всем",   3_750_000,   "tickets", "tickets", 1),
-    ClanShopItem("tickets_3_all",  "🎟 3 тикета всем",  "Выдать 3 тикета всем",  10_000_000,   "tickets", "tickets", 3),
-    ClanShopItem("tickets_5_all",  "🎟 5 тикетов всем", "Выдать 5 тикетов всем", 15_000_000,   "tickets", "tickets", 5),
-    ClanShopItem("tickets_10_all", "🎟 10 тикетов всем","Выдать 10 тикетов всем",25_000_000, "tickets", "tickets", 10),
+    ClanShopItem("tickets_1_all",  "🎟 1 тикет всем",   "Выдать 1 тикет всем",   15_000_000,   "tickets", "tickets", 1),
+    ClanShopItem("tickets_3_all",  "🎟 3 тикета всем",  "Выдать 3 тикета всем",  40_000_000,   "tickets", "tickets", 3),
+    ClanShopItem("tickets_5_all",  "🎟 5 тикетов всем", "Выдать 5 тикетов всем", 55_000_000,   "tickets", "tickets", 5),
+    ClanShopItem("tickets_10_all", "🎟 10 тикетов всем","Выдать 10 тикетов всем",100_000_000, "tickets", "tickets", 10),
 
-    # ── Зелья ─────────────────────────────────────────────────────────────────
-    ClanShopItem("potion_combat_all",    "⚔️ Зелье силы всем",       "Боевая мощь +30% на 30 мин всем",     125_000, "potions", "potion", "potion_combat"),
-    ClanShopItem("potion_income_all",    "💰 Зелье богатства всем",  "Доход +50% на 60 мин всем",           500_000,   "potions", "potion", "potion_income"),
-    ClanShopItem("potion_influence_all", "⚡ Зелье влияния всем",    "Влияние +40% на 45 мин всем",         90_000,   "potions", "potion", "potion_influence"),
-    ClanShopItem("potion_training_all",  "🏋 Зелье тренировки всем", "Охват тренировки +25% на 60 мин всем",65_000,  "potions", "potion", "potion_training"),
-    ClanShopItem("potion_luck_all",      "🍀 Зелье удачи всем",      "Шанс тикета +20% на 30 мин всем",     60_000,   "potions", "potion", "potion_luck"),
+    # ── Зелья (тир 2 новой системы MG_TIERS, для всех участников клана) ─────────
+    ClanShopItem("potion_combat_all",    "⚔️ Зелье силы всем",       "Боевая мощь +50% на 30 мин всем",       200_000, "potions", "potion", "potion_combat"),
+    ClanShopItem("potion_income_all",    "💰 Зелье богатства всем",  "Доход +70% на 60 мин всем",             600_000, "potions", "potion", "potion_income"),
+    ClanShopItem("potion_influence_all", "⚡ Зелье влияния всем",    "Влияние +60% на 45 мин всем",           160_000, "potions", "potion", "potion_influence"),
+    ClanShopItem("potion_training_all",  "🏋 Зелье тренировки всем", "Охват тренировки +38% на 60 мин всем",  130_000, "potions", "potion", "potion_training"),
+    ClanShopItem("potion_luck_all",      "🍀 Зелье удачи всем",      "Шанс тикета +9% на 30 мин всем",        100_000, "potions", "potion", "potion_luck"),
+    ClanShopItem("potion_raid_all",      "💠 Зелье охотника всем",   "Дроп рейдов +25% на 60 мин всем",       350_000, "potions", "potion", "potion_raid_drop"),
 
     # ── Статисты ──────────────────────────────────────────────────────────────
     ClanShopItem("squad_s_all",   "🟥 100×S всем",    "100 статистов S всем",    900_000,   "squad", "squad", {"rank": "S",   "amount": 100}),
@@ -107,6 +108,7 @@ CLAN_SHOP_MAP: dict[str, ClanShopItem] = {i.item_id: i for i in CLAN_SHOP_ITEMS}
 
 # ── Аукционные призы ───────────────────────────────────────────────────────────
 CLAN_AUCTION_REWARDS = {
+    # Обычный аукцион — зелья тира 1–2
     "common": [
         {"type": "coins",   "amount": 4_000_000,  "label": "💰 4M NHCoin"},
         {"type": "coins",   "amount": 7_000_000,  "label": "💰 7M NHCoin"},
@@ -114,9 +116,12 @@ CLAN_AUCTION_REWARDS = {
         {"type": "tickets", "amount": 8,           "label": "🎟 8 тикетов"},
         {"type": "squad",   "rank": "SSS", "amount": 200, "label": "🔷 200×SSS статистов"},
         {"type": "squad",   "rank": "SR",  "amount": 75,  "label": "🌟 75×SR статистов"},
-        {"type": "potion",  "potion_id": "potion_combat",  "label": "⚔️ Зелье силы"},
-        {"type": "potion",  "potion_id": "potion_income",  "label": "💰 Зелье богатства"},
+        {"type": "potion",  "potion_id": "mg_power_2",    "label": "⚔️ Зелье силы II (+50%, 30 мин)"},
+        {"type": "potion",  "potion_id": "mg_income_2",   "label": "💰 Зелье богатства II (+70%, 60 мин)"},
+        {"type": "potion",  "potion_id": "mg_train_2",    "label": "🏋 Зелье тренировки II (+38%, 60 мин)"},
+        {"type": "potion",  "potion_id": "mg_luck_2",     "label": "🍀 Зелье удачи II (+9%, 30 мин)"},
     ],
+    # Редкий аукцион — зелья тира 3–4
     "rare": [
         {"type": "coins",          "amount": 20_000_000,  "label": "💰 20M NHCoin"},
         {"type": "coins",          "amount": 35_000_000,  "label": "💰 35M NHCoin"},
@@ -126,8 +131,13 @@ CLAN_AUCTION_REWARDS = {
         {"type": "squad",          "rank": "UR",  "amount": 30,  "label": "💎 30×UR статистов"},
         {"type": "character",      "rank": "gen_zero",    "label": "🟧 Персонаж Gen Zero"},
         {"type": "character",      "rank": "strong_king", "label": "🟨 Персонаж Strong King"},
-        {"type": "mastery_points", "amount": 15,          "label": "🏅 20 очков мастерства"},
+        {"type": "mastery_points", "amount": 15,          "label": "🏅 15 очков мастерства"},
+        {"type": "potion",  "potion_id": "mg_power_4",    "label": "⚔️ Зелье силы IV (+100%, 30 мин)"},
+        {"type": "potion",  "potion_id": "mg_income_4",   "label": "💰 Зелье богатства IV (+140%, 60 мин)"},
+        {"type": "potion",  "potion_id": "mg_infl_4",     "label": "⚡ Зелье влияния IV (+115%, 45 мин)"},
+        {"type": "potion",  "potion_id": "mg_raid_3",     "label": "💠 Зелье охотника III (+38%, 60 мин)"},
     ],
+    # Эпический аукцион — зелья тира 5–6
     "epic": [
         {"type": "coins",          "amount": 100_000_000, "label": "💰 100M NHCoin"},
         {"type": "coins",          "amount": 150_000_000, "label": "💰 150M NHCoin"},
@@ -136,7 +146,12 @@ CLAN_AUCTION_REWARDS = {
         {"type": "squad",          "rank": "MP",  "amount": 10,  "label": "🔱 10×MP статистов"},
         {"type": "character",      "rank": "new_legend",  "label": "🟥 Персонаж New Legend"},
         {"type": "character",      "rank": "gen_zero",    "label": "🟧 Персонаж Gen Zero"},
-        {"type": "mastery_points", "amount": 40,         "label": "🏅 40 очков мастерства"},
+        {"type": "mastery_points", "amount": 40,          "label": "🏅 40 очков мастерства"},
+        {"type": "potion",  "potion_id": "mg_power_6",    "label": "⚔️ Зелье силы VI (+150%, 30 мин)"},
+        {"type": "potion",  "potion_id": "mg_income_6",   "label": "💰 Зелье богатства VI (+200%, 60 мин)"},
+        {"type": "potion",  "potion_id": "mg_train_6",    "label": "🏋 Зелье тренировки VI (+130%, 60 мин)"},
+        {"type": "potion",  "potion_id": "mg_raid_5",     "label": "💠 Зелье охотника V (+62%, 60 мин)"},
+        {"type": "potion",  "potion_id": "mg_luck_6",     "label": "🍀 Зелье удачи VI (+25%, 30 мин)"},
     ],
 }
 

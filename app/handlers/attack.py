@@ -32,30 +32,25 @@ async def build_attack_menu(session, user):
         from app.handlers.game.fist import build_fist_menu
         return await build_fist_menu(session, user)
     elif user.phase == "emperor":
-        from aiogram.utils.keyboard import InlineKeyboardBuilder
-        from aiogram.types import InlineKeyboardButton
-        from app.utils.formatters import fmt_num
-        builder = InlineKeyboardBuilder()
-        if user.prestige_level < 10:
-            builder.row(InlineKeyboardButton(
-                text="🌟 Пробудиться", callback_data="do_prestige"
-            ))
-        builder.row(InlineKeyboardButton(
-            text="◀️ Главное меню", callback_data="main_menu"
-        ))
-        return (
-            f"🏛 <b>Фаза Императора</b>\n\n"
-            f"🌟 Пробуждений: {user.prestige_level}/10\n\n"
-            f"Каждое пробуждение даёт:\n"
-            f"  +5% мощь | +5% бизнес | +1% тикет\n\n"
-            f"❗ После пробуждения прогресс сбрасывается",
-            builder.as_markup()
-        )
+        from app.handlers.game.emperor import _build_gang_list
+        return await _build_gang_list(session, user)
     return "⚔️ Атака недоступна", back_kb("main_menu")
 
 
 @router.callback_query(F.data == "attack")
 async def cb_attack(cb: CallbackQuery, session: AsyncSession, user: User):
+    # Проверка кредитной блокировки
+    from app.services.bank.credits_service import credits_service
+    block_msg = await credits_service.block_message(session, user.id)
+    if block_msg:
+        from app.utils.keyboards.common import back_kb
+        try:
+            await cb.message.edit_text(block_msg, reply_markup=back_kb("bank_credits"), parse_mode="HTML")
+        except Exception:
+            pass
+        await cb.answer()
+        return
+
     text, kb = await build_attack_menu(session, user)
     try:
         await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
@@ -215,8 +210,10 @@ from app.handlers.game.gang import router as gang_router
 from app.handlers.game.king import router as king_router
 from app.handlers.game.fist import router as fist_router
 from app.handlers.game.king_bots import router as king_bots_router
+from app.handlers.game.emperor import router as emperor_router
 
 router.include_router(gang_router)
 router.include_router(king_router)
 router.include_router(fist_router)
 router.include_router(king_bots_router)
+router.include_router(emperor_router)

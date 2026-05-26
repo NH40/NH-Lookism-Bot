@@ -25,6 +25,18 @@ router = Router()
 
 @router.callback_query(F.data == "raid_menu")
 async def cb_raid_menu(cb: CallbackQuery, session: AsyncSession, user: User):
+    # Проверка кредитной блокировки
+    from app.services.bank.credits_service import credits_service
+    block_msg = await credits_service.block_message(session, user.id)
+    if block_msg:
+        from app.utils.keyboards.common import back_kb
+        try:
+            await cb.message.edit_text(block_msg, reply_markup=back_kb("bank_credits"), parse_mode="HTML")
+        except Exception:
+            pass
+        await cb.answer()
+        return
+
     active = await raid_service.get_active_raid(session, user.id)
 
     builder = InlineKeyboardBuilder()

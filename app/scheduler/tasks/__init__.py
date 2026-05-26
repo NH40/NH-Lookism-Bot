@@ -6,6 +6,12 @@ from app.scheduler.tasks.clan import clan_war_tick, clan_auction_tick
 from app.scheduler.tasks.referral import referral_power_tick
 from app.scheduler.tasks.notifications import _send_notifications, _get_bot
 from app.scheduler.tasks.daily import daily_tick
+from app.scheduler.tasks.bank import (
+    bank_credit_tick,
+    crypto_price_tick,
+    storage_fee_tick,
+    investment_tick,
+)
 
 __all__ = [
     "income_tick",
@@ -18,4 +24,8 @@ __all__ = [
     "_send_notifications",
     "_get_bot",
     "daily_tick",
+    "bank_credit_tick",
+    "crypto_price_tick",
+    "storage_fee_tick",
+    "investment_tick",
 ]

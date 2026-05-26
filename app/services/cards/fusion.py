@@ -6,7 +6,7 @@ from app.models.user import User
 from app.models.character import UserCharacter
 from app.models.card_deck import UserDeck
 from app.data.characters import CHARACTERS
-from app.constants.cards import LEVEL_MULTIPLIERS, FUSION_COST, DUST_PER_LEVEL, calc_dust
+from app.constants.cards import LEVEL_MULTIPLIERS, FUSION_COST, DUST_PER_LEVEL, calc_dust, CARD_MAX_LEVEL
 
 
 def effective_power(base_power: int, level: int) -> int:
@@ -67,8 +67,8 @@ class FusionService:
           - 3 × Ур.2 → 1 × Ур.3
         Карточки из активной колоды не потребляются.
         """
-        if current_level >= 3:
-            return {"ok": False, "reason": "Уровень 3 — максимум. Выше некуда."}
+        if current_level >= CARD_MAX_LEVEL:
+            return {"ok": False, "reason": f"Уровень {CARD_MAX_LEVEL} — максимум. Выше некуда."}
 
         cost = FUSION_COST.get(current_level)
         if cost is None:

@@ -1,0 +1,240 @@
+from dataclasses import dataclass, field
+
+GANG_COOLDOWN_HOURS = 1
+GANG_STRENGTH_GROWTH = 0.20  # +20% мощи за каждую победу
+
+
+@dataclass(frozen=True)
+class EmperorGangConfig:
+    gang_id: str
+    name: str
+    emoji: str
+    desc: str
+    base_power: int          # Базовая мощь группировки
+    members: list[str]       # Имена персонажей из CHARACTERS
+    reward_coins_min: int
+    reward_coins_max: int
+    drop_chance: int         # % шанс выпадения карточки (0-100)
+    drop_ranks: list[str]    # Ранги для дропа карточки
+
+
+EMPEROR_GANGS: list[EmperorGangConfig] = [
+    EmperorGangConfig(
+        gang_id="yamazaki",
+        name="Ямадзаки",
+        emoji="⚔️",
+        desc="Легендарный клан воинов. Во главе — сам Шинген.",
+        base_power=15_810_000,
+        members=[
+            "Shingen (Prime)",
+            "Shingen (TUI Lethargic)",
+            "Shingen (Lethargic)",
+            "Shintaro (UI)",
+            "Shintaro (Muramasa)",
+            "Hiroaki (Kojima)",
+            "Shigeaki (Kojima)",
+            "Gun (TUI)",
+            "Gun (Mastery)",
+            "Gun (Base)",
+        ],
+        reward_coins_min=800_000,
+        reward_coins_max=20_000_000,
+        drop_chance=55,
+        drop_ranks=["gen_zero", "new_legend", "legend", "peak"],
+    ),
+    EmperorGangConfig(
+        gang_id="gapryong_fist",
+        name="Кулак Гапрёна",
+        emoji="👊",
+        desc="Соратники великого Гапрёна — каждый из них легенда.",
+        base_power=28_000_000,
+        members=[
+            "Gapryong (Overcoming)",
+            "Gapryong (Prime)",
+            "Old Gapryong (Base)",
+            "Old Gapryong (Overcoming)",
+            "Baekho (Prime)",
+            "Mujin (Prime)",
+            "Jinyoung (Path)",
+            "Jinyoung (Old)",
+            "Jinyoung (Prime)",
+            "Tom (Rage mode)",
+            "Tom (Wildness)",
+            "Tom (Base)",
+            "Elite (Prime)",
+            "Elite (Old)",
+            "Gentleman (Prime)",
+            "Choi (Lighting)",
+            "Jaesu (Prime)",
+            "Beolgu (Prime)",
+            "Gwang (Prime)",
+            "Bakgu (NOH)"
+        ],
+        reward_coins_min=200_000,
+        reward_coins_max=25_000_000,
+        drop_chance=50,
+        drop_ranks=["gen_zero", "new_legend", "legend", "peak"],
+    ),
+    EmperorGangConfig(
+        gang_id="nhn",
+        name="NHN",
+        emoji="🏢",
+        desc="Корпорация тьмы: Элита, Джеймс, Ган, Гу и Кристал.",
+        base_power=6_900_000,
+        members=[
+            "Elite (Prime)",
+            "Elite (Old)",
+            "Gun (TUI)",
+            "Gun (Base)",
+            "Gun (Mastery)",
+            "James (2 Mastery)",
+            "James (3 Mastery)",
+            "Go (Katana)",
+            "Goo (Weapon)",
+            "Goo (Hwarang)",
+            "Tom (Base)",
+            "Tom (Wildness)",
+            "Jinyoung (Old)",
+            "Crystal",
+        ],
+        reward_coins_min=600_000,
+        reward_coins_max=14_500_000,
+        drop_chance=55,
+        drop_ranks=["gen_zero", "new_legend", "legend", "peak"],
+    ),
+    EmperorGangConfig(
+        gang_id="dg",
+        name="DG",
+        emoji="🔱",
+        desc="Гитаэ, Джеймс, Джей и Чансу — вершина второго поколения.",
+        base_power=26_000_000,
+        members=[
+            "Gitae (Path)",
+            "Gitae (Base)",
+            "James (Prime)",
+            "James (2 Mastery)",
+            "James (3 Mastery)",
+            "Goo (50 styles)",
+            "Changsu (4 Mastery)",
+            "J (Police)",
+            "Jaegyeon (King incheon)"
+        ],
+        reward_coins_min=500_000,
+        reward_coins_max=15_200_000,
+        drop_chance=50,
+        drop_ranks=["strong_king", "gen_zero", "new_legend", "legend", "peak"],
+    ),
+    EmperorGangConfig(
+        gang_id="kings",
+        name="Короли",
+        emoji="👑",
+        desc="Джинран, Сянджи и все остальные короли первого поколения.",
+        base_power=1_000_000,
+        members=[
+            "Jinrang (Overcoming)",
+            "Jinrang (Conviction)",
+            "Jinrang (Base)",
+            "Seongji (3 Mastery)",
+            "Seongji (2 Mastery)",
+            "Yujae (3 Mastery)",
+            "Yujae (Dark society)",
+            "Yugang (Legend incheon)",
+            "Jaegyeon (3 Mastery)",
+            "Jaegyeon (King incheon)",
+            "Jinchang (Prime)",
+            "Gongseob (One gen)",
+            "Gongseob (One step)",
+            "Taesoo (Ultimate fist)",
+            "BJ Showby (Bucheon)",
+            "Junyuk (Uijeongbu)",
+            "Jaemin (Daejeon)",
+            "Dalyoung (King busan)"
+        ],
+        reward_coins_min=50_000,
+        reward_coins_max=800_000,
+        drop_chance=45,
+        drop_ranks=["king", "strong_king", "gen_zero"],
+    ),
+    EmperorGangConfig(
+        gang_id="seoul",
+        name="Сеул",
+        emoji="🌆",
+        desc="Даниэль, Йохан, Зак, Васко, Сину, Джейк, Мандук и другие.",
+        base_power=600_000,
+        members=[
+            "Big Danuel (UI)",
+            "Johan (PB copy + Path)",
+            "Zack (Mastery)",
+            "Vasco (Hero)",
+            "Sinu (Current)",
+            "Jake (Awaking)",
+            "Mandeok (Mastery)",
+        ],
+        reward_coins_min=150_000,
+        reward_coins_max=500_000,
+        drop_chance=45,
+        drop_ranks=["king", "strong_king", "gen_zero", "new_legend"],
+    ),
+    EmperorGangConfig(
+        gang_id="ares",
+        name="Арес",
+        emoji="🔥",
+        desc="Менеджер Ким, София, Джинчоль, Джэсу, Бёлгу, Гван, Хансу.",
+        base_power=12_600_000,
+        members=[
+            "Meneger Kim (Path)",
+            "Sophia (Path)",
+            "Jincheol (Path)",
+            "Jaesu (Prime)",
+            "Beolgu (Prime)",
+            "Gwang (Prime)",
+            "Hansu (0%)",
+        ],
+        reward_coins_min=250_000,
+        reward_coins_max=800_000,
+        drop_chance=50,
+        drop_ranks=["gen_zero", "new_legend", "legend"],
+    ),
+    EmperorGangConfig(
+        gang_id="white_tiger",
+        name="Белый тигр",
+        emoji="🐯",
+        desc="Йохан, Менеджер Ким и Том Ли — тройка смертников.",
+        base_power=12_000_000,
+        members=[
+            "Johan (Path)",
+            "Johan (PB copy + Path)",
+            "Johan (PB copy)",
+            "Johan (Eye drops)",
+            "Meneger Kim (Path)",
+            "Tom (Rage mode)",
+            "Tom (Wildness)",
+            "Tom (Base)",
+        ],
+        reward_coins_min=180_000,
+        reward_coins_max=600_000,
+        drop_chance=50,
+        drop_ranks=["gen_zero", "new_legend", "legend"],
+    ),
+    EmperorGangConfig(
+        gang_id="goo_friends",
+        name="Тайные друзья Гу",
+        emoji="🗡️",
+        desc="Гу, Самуэль, Теджин и Логан — верные союзники.",
+        base_power=800_000,
+        members=[
+            "Goo (Hwarang)",
+            "Samuel (Hormones)",
+            "Taejin (Kudo)",
+            "Logan (Hostel B)",
+        ],
+        reward_coins_min=100_000,
+        reward_coins_max=400_000,
+        drop_chance=45,
+        drop_ranks=["king", "strong_king", "gen_zero", "new_legend"],
+    ),
+]
+
+EMPEROR_GANG_MAP: dict[str, EmperorGangConfig] = {
+    g.gang_id: g for g in EMPEROR_GANGS
+}

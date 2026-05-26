@@ -13,9 +13,12 @@ from app.models.character import UserCharacter
 from app.models.card_deck import UserDeck
 from app.services.cooldown_service import cooldown_service
 from app.data.characters import CHARACTERS
-from app.constants.cards import LEVEL_MULTIPLIERS, BOT_TIERS, DUEL_BOT_CD_BASE
+from app.constants.cards import (
+    LEVEL_MULTIPLIERS, BOT_TIERS, DUEL_BOT_CD_BASE,
+    DUEL_CHALLENGE_TTL, DUEL_DONAT_CD_REDUCTION,
+)
 
-CHALLENGE_TTL = 90  # секунд на принятие PvP-вызова
+CHALLENGE_TTL = DUEL_CHALLENGE_TTL  # псевдоним для обратной совместимости
 
 
 # ── Хелперы ──────────────────────────────────────────────────────────────────
@@ -100,7 +103,7 @@ class DuelService:
         speed_levels = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
         raw_speed = speed_levels.get(mastery.speed if mastery else 0, 0)
         speed_pct = int(raw_speed * getattr(user, "skill_path_bonus_multiplier", 1.0))
-        donat_pct = 20 if getattr(user, "donat_duel_cd", False) else 0
+        donat_pct = DUEL_DONAT_CD_REDUCTION if getattr(user, "donat_duel_cd", False) else 0
         cd_seconds = cooldown_service.apply_speed_reduction(
             DUEL_BOT_CD_BASE, speed_pct, extra_pct=donat_pct
         )

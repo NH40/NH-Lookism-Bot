@@ -176,6 +176,10 @@ class AdminBackupMixin:
             clan.max_members = 5
             await clan_service.recalc_power(session, clan)
 
+        # ── Сброс всех кредитов банка (патч очищает долги) ───────────────────────
+        from app.services.bank.credits_service import credits_service as bank_credits
+        await bank_credits.wipe_all_credits(session)
+
         # ── Версия ────────────────────────────────────────────────────────────────
         from app.models.game_version import GameVersion
         gv = GameVersion(version=version, patch_notes=f"Патч {version}")

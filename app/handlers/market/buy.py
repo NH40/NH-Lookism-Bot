@@ -83,8 +83,13 @@ async def cb_market_browse(cb: CallbackQuery, session: AsyncSession, user: User)
         meta = json.loads(listing.item_meta) if listing.item_meta else {}
         rank_str = f"[{meta.get('rank')}] " if meta.get("rank") else ""
         char_str = f"{meta.get('char_id')} " if meta.get("char_id") else ""
+        level_str = ""
+        if meta.get("level") is not None and listing.item_type == "character":
+            from app.constants.cards import LEVEL_LABELS
+            lvl = meta["level"]
+            level_str = f"[{LEVEL_LABELS.get(lvl, 'Ур.' + str(lvl))}] "
         builder.row(InlineKeyboardButton(
-            text=f"{rank_str}{char_str}x{listing.item_amount} — {fmt_num(listing.price)} | {seller_name}",
+            text=f"{rank_str}{level_str}{char_str}x{listing.item_amount} — {fmt_num(listing.price)} | {seller_name}",
             callback_data=f"market_item:{listing.id}"
         ))
 
@@ -140,6 +145,10 @@ async def cb_market_item(cb: CallbackQuery, session: AsyncSession, user: User):
         meta_str += f"\nРанг: <b>{meta['rank']}</b>"
     if meta.get("char_id"):
         meta_str += f"\nПерсонаж: <b>{html.escape(str(meta['char_id']))}</b>"
+    if listing.item_type == "character" and meta.get("level") is not None:
+        from app.constants.cards import LEVEL_LABELS
+        lvl_lbl = LEVEL_LABELS.get(meta['level'], f"Ур.{meta['level']}")
+        meta_str += f"\nУровень: <b>{lvl_lbl}</b>"
     if meta.get("power"):
         meta_str += f"\nМощь: <b>{fmt_num(meta['power'])}</b>"
 

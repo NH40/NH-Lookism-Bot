@@ -99,9 +99,17 @@ BOT_TIERS: dict[str, dict] = {
     },
 }
 
+# Максимальный уровень карточки
+CARD_MAX_LEVEL: int = 3
+
 # КД дуэли с ботом (секунды) — сокращается мастерством скорости
-DUEL_BOT_CD_BASE = 15 * 60  # 15 минут
+DUEL_BOT_CD_BASE: int = 15 * 60  # 15 минут
+# Снижение КД дуэлей за донат-титул «Карточный мастер» (%)
+DUEL_DONAT_CD_REDUCTION: int = 20
+
+# Время жизни PvP-вызова в Redis (секунды)
+DUEL_CHALLENGE_TTL: int = 90
 
 # Размер колоды для дуэли
-DUEL_DECK_SIZE = 5
-DUEL_RANDOM_SIZE = 5  # +5 случайных из остатка коллекции
+DUEL_DECK_SIZE: int = 5
+DUEL_RANDOM_SIZE: int = 5  # +5 случайных из остатка коллекции

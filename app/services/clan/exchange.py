@@ -61,6 +61,14 @@ class ClanExchangeService(ClanBaseService):
             from_user.path_fragments = (from_user.path_fragments or 0) - amount
             to_user.path_fragments = (to_user.path_fragments or 0) + amount
 
+        elif resource_type == "card_dust":
+            if amount <= 0:
+                return {"ok": False, "reason": "Количество должно быть больше 0"}
+            if (from_user.card_dust or 0) < amount:
+                return {"ok": False, "reason": f"Недостаточно пыли карт (есть {from_user.card_dust or 0})"}
+            from_user.card_dust = (from_user.card_dust or 0) - amount
+            to_user.card_dust = (to_user.card_dust or 0) + amount
+
         elif resource_type == "path_points":
             if amount <= 0:
                 return {"ok": False, "reason": "Количество должно быть больше 0"}

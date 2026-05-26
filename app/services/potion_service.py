@@ -6,13 +6,17 @@ from app.models.user import User
 
 
 class PotionService:
-    
+
+    # ── Клановые зелья (для всех участников клана) ────────────────────────────
+    # Привязаны к тиру 2 новой системы MG_TIERS.
+    # Ключи — старые ID для обратной совместимости с кланами.
     CLAN_POTION_CONFIG = {
-        "potion_combat":    {"potion_type": "power",    "bonus_value": 30, "duration_minutes": 30},
-        "potion_income":    {"potion_type": "income",   "bonus_value": 50, "duration_minutes": 60},
-        "potion_influence": {"potion_type": "influence","bonus_value": 40, "duration_minutes": 45},
-        "potion_training":  {"potion_type": "training", "bonus_value": 25, "duration_minutes": 60},
-        "potion_luck":      {"potion_type": "luck",     "bonus_value": 20, "duration_minutes": 30},
+        "potion_combat":    {"potion_type": "power",     "bonus_value": 50,  "duration_minutes": 30},  # MG Тир 2
+        "potion_income":    {"potion_type": "income",    "bonus_value": 70,  "duration_minutes": 60},  # MG Тир 2
+        "potion_influence": {"potion_type": "influence", "bonus_value": 60,  "duration_minutes": 45},  # MG Тир 2
+        "potion_training":  {"potion_type": "training",  "bonus_value": 38,  "duration_minutes": 60},  # MG Тир 2
+        "potion_luck":      {"potion_type": "luck",      "bonus_value": 9,   "duration_minutes": 30},  # MG Тир 2
+        "potion_raid_drop": {"potion_type": "raid_drop", "bonus_value": 25,  "duration_minutes": 60},  # MG Тир 2
     }
 
     async def get_active(self, session: AsyncSession, user_id: int) -> list[ActivePotion]:
@@ -63,7 +67,26 @@ class PotionService:
     async def activate(
         self, session: AsyncSession, user: User, potion_id: str
     ) -> None:
-        """Активирует клановое зелье по его item.value из магазина."""
+        """
+        Активирует зелье по ID.
+        Поддерживает два формата:
+          - Старые клановые ID: "potion_combat", "potion_income" и т.д. → CLAN_POTION_CONFIG
+          - Новые тировые ID:   "mg_power_2", "mg_income_3" и т.д. → MG_TIER_MAP
+        """
+        # 1) Проверяем новую тировую систему
+        from app.data.shop import MG_TIER_MAP
+        mg_cfg = MG_TIER_MAP.get(potion_id)
+        if mg_cfg:
+            await self.apply_potion(
+                session,
+                user_id=user.id,
+                potion_type=mg_cfg.effect_key,
+                bonus_value=mg_cfg.effect_value,
+                duration_minutes=mg_cfg.duration_minutes,
+            )
+            return
+
+        # 2) Старый клановый формат
         cfg = self.CLAN_POTION_CONFIG.get(potion_id)
         if not cfg:
             return
@@ -120,18 +143,32 @@ class PotionService:
         "raid_drop": "💠 Зелье охотника",
     }
 
+    # Читаемые описания бонуса для уведомлений
+    _TYPE_UNIT = {
+        "power":     "% мощь",
+        "income":    "% доход",
+        "influence": "% влияние",
+        "training":  "% тренировка",
+        "luck":      "% шанс тикета",
+        "raid_drop": "% дроп рейда",
+    }
+
     async def buy_missing(self, session: AsyncSession, user: "User") -> None:
-        """Покупает все зелья, которые не активны, если хватает монет."""
-        from app.data.shop import POTIONS
+        """
+        Авто-покупает зелья тира 1 (MG_TIERS), если они не активны и хватает монет.
+        Используется Ультра Инстинктом для пользователей без Гения медицины.
+        """
+        from app.data.shop import MG_TIERS
         active = await self.get_active(session, user.id)
         active_types = {p.potion_type for p in active}
-        for cfg in POTIONS:
-            if cfg.effect_key in active_types:
+        for ptype, tiers in MG_TIERS.items():
+            if ptype in active_types:
                 continue
+            cfg = tiers[0]  # тир 1
             if user.nh_coins < cfg.price:
                 continue
             user.nh_coins -= cfg.price
-            user.coins_spent += cfg.price
+            user.coins_spent = getattr(user, "coins_spent", 0) + cfg.price
             await self.apply_potion(
                 session, user.id,
                 cfg.effect_key, cfg.effect_value, cfg.duration_minutes,

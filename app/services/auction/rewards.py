@@ -14,8 +14,19 @@ async def _generate_reward(tier: int) -> str:
         return json.dumps({"tickets": amount})
 
     elif cfg["reward_type"] == "potion":
-        from app.data.shop import POTIONS
-        potion = random.choice(POTIONS)
+        # Используем новую тировую систему MG_TIERS (тир 1–3 для обычного аукциона)
+        from app.data.shop import MG_TIERS
+        import itertools
+        # Собираем зелья тира 1–2 из всех типов
+        pool = list(itertools.chain(
+            MG_TIERS["power"][:2],
+            MG_TIERS["income"][:2],
+            MG_TIERS["training"][:2],
+            MG_TIERS["luck"][:2],
+            MG_TIERS["influence"][:2],
+            MG_TIERS["raid_drop"][:2],
+        ))
+        potion = random.choice(pool)
         return json.dumps({"potion_id": potion.potion_id, "name": potion.name})
 
     elif cfg["reward_type"] == "fragments":
@@ -63,14 +74,11 @@ async def _deliver_reward(
     if lot.reward_type == "tickets":
         user.tickets += data["tickets"]
     elif lot.reward_type == "potion":
-        from app.data.shop import POTION_MAP
-        cfg = POTION_MAP.get(data["potion_id"])
-        if cfg:
-            from app.services.potion_service import potion_service
-            await potion_service.apply_potion(
-                session, user.id,
-                cfg.effect_key, cfg.effect_value, cfg.duration_minutes
-            )
+        # Единый путь через potion_service.activate — поддерживает и старые, и новые ID
+        from app.services.potion_service import potion_service
+        potion_id = data.get("potion_id", "")
+        if potion_id:
+            await potion_service.activate(session, user, potion_id)
     elif lot.reward_type in ("character", "absolute"):
         from app.models.character import UserCharacter
         char = UserCharacter(

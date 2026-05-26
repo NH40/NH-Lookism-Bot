@@ -13,6 +13,7 @@ from app.scheduler.setup import setup_scheduler
 from app.handlers import common, attack, business, raid, squad, skills, titles, shop, auction, settings as settings_handler, admin, guide, black_market
 from app.handlers import training
 from app.handlers.cards import router as cards_router
+from app.handlers.bank import router as bank_router
 from aiohttp import TCPConnector
 from app.middlewares.network_error import NetworkErrorMiddleware
 from app.middlewares.rate_limit import RateLimitMiddleware
@@ -71,6 +72,7 @@ async def main():
     dp.include_router(market.router)
     dp.include_router(clan_router)
     dp.include_router(quests.router)
+    dp.include_router(bank_router)
     dp.include_router(settings_handler.router)
     dp.include_router(guide.router)
     dp.include_router(black_market.router)

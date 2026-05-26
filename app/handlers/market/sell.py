@@ -175,6 +175,8 @@ async def cb_market_create_type(
     balance_str = ""
     if item_type == "tickets":
         balance_str = f"У вас: <b>{user.tickets}</b> тикетов"
+    elif item_type == "card_dust":
+        balance_str = f"У вас: <b>{user.card_dust or 0}</b> пыли карт"
     elif item_type == "path_points":
         balance_str = f"У вас: <b>{user.skill_path_points}</b> очков пути"
     elif item_type == "mastery_points":
@@ -263,11 +265,14 @@ async def cb_market_char_rank(
 
     emoji = RANK_EMOJI.get(rank, "⭐")
     builder = InlineKeyboardBuilder()
+    from app.constants.cards import LEVEL_LABELS
     for char_id, char_list in char_map.items():
         count = len(char_list)
         avg_power = int(sum(c.power for c in char_list) / count)
+        avg_level = int(sum(c.level for c in char_list) / count)
+        lvl_lbl = LEVEL_LABELS.get(avg_level, f"Ур.{avg_level}")
         builder.row(InlineKeyboardButton(
-            text=f"{emoji} {char_id} x{count} | 💪 {fmt_num(avg_power)}",
+            text=f"{emoji} {char_id} x{count} | {lvl_lbl} | 💪 {fmt_num(avg_power)}",
             callback_data=f"market_char_select:{char_id}:{rank}"
         ))
 
@@ -309,6 +314,11 @@ async def cb_market_char_select(
 
     count = len(chars)
     avg_power = int(sum(c.power for c in chars) / count)
+    avg_base_power = int(sum(c.base_power for c in chars) / count)
+    avg_level = int(sum(c.level for c in chars) / count)
+
+    from app.constants.cards import LEVEL_LABELS
+    lvl_lbl = LEVEL_LABELS.get(avg_level, f"Ур.{avg_level}")
 
     await state.update_data(
         item_type="character",
@@ -316,6 +326,8 @@ async def cb_market_char_select(
             "char_id": char_id,
             "rank": rank,
             "power": avg_power,
+            "base_power": avg_base_power,
+            "level": avg_level,
         },
         max_amount=count,
     )
@@ -326,6 +338,7 @@ async def cb_market_char_select(
     try:
         await cb.message.edit_text(
             f"⭐ <b>{html.escape(char_id)}</b> [{rank}]\n"
+            f"📊 Средний уровень: {lvl_lbl}\n"
             f"💪 Средняя мощь: {fmt_num(avg_power)}\n"
             f"У вас: <b>{count}</b> шт.\n\n"
             f"Введи количество для продажи (макс {count}):",

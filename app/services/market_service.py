@@ -218,6 +218,12 @@ class MarketService:
                 return {"ok": False, "reason": f"Недостаточно фрагментов Пути (есть {cur})"}
             user.path_fragments = cur - amount
 
+        elif item_type == "card_dust":
+            cur = user.card_dust or 0
+            if cur < amount:
+                return {"ok": False, "reason": f"Недостаточно пыли карт (есть {cur})"}
+            user.card_dust = cur - amount
+
         elif item_type == "squad_member":
             from app.models.squad_member import SquadMember
             rank = meta.get("rank") if meta else None
@@ -254,7 +260,11 @@ class MarketService:
             if len(chars) < amount:
                 return {"ok": False, "reason": f"Недостаточно персонажей (есть {len(chars)})"}
             avg_power = int(sum(c.power for c in chars) / len(chars)) if chars else 0
+            avg_base_power = int(sum(c.base_power for c in chars) / len(chars)) if chars else 0
+            avg_level = int(sum(c.level for c in chars) / len(chars)) if chars else 0
             meta["power"] = avg_power
+            meta["base_power"] = avg_base_power
+            meta["level"] = avg_level
             for c in chars:
                 await session.delete(c)
             from app.repositories.squad_repo import squad_repo
@@ -285,6 +295,9 @@ class MarketService:
         elif item_type == "path_fragments":
             user.path_fragments = (user.path_fragments or 0) + amount
 
+        elif item_type == "card_dust":
+            user.card_dust = (user.card_dust or 0) + amount
+
         elif item_type == "squad_member":
             from app.models.squad_member import SquadMember
             rank = meta.get("rank", "C")
@@ -302,6 +315,8 @@ class MarketService:
             from app.models.character import UserCharacter
             char_id = meta.get("char_id")
             power = meta.get("power", 0)
+            base_power = meta.get("base_power", power)
+            level = meta.get("level", 0)
             rank = meta.get("rank", "C")
             if char_id:
                 for _ in range(amount):
@@ -310,6 +325,8 @@ class MarketService:
                         character_id=char_id,
                         rank=rank,
                         power=power,
+                        base_power=base_power,
+                        level=level,
                     ))
             from app.repositories.squad_repo import squad_repo
             await squad_repo.update_user_combat_power(session, user)

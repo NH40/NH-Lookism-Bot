@@ -22,6 +22,7 @@ class ExchangeFSM(StatesGroup):
 RESOURCES = [
     ("coins",             "💰 NHCoin"),
     ("tickets",           "🎟 Тикеты"),
+    ("card_dust",         "🌫 Пыль карт"),
     ("mastery_points",    "⭐ Очки мастерства"),
     ("ui_fragments",      "🔮 Фрагменты УИ"),
     ("alchemy_fragments", "🧪 Фрагменты алхимии"),
@@ -34,6 +35,7 @@ RESOURCES = [
 RESOURCE_FIELDS = {
     "coins":             "nh_coins",
     "tickets":           "tickets",
+    "card_dust":         "card_dust",
     "mastery_points":    "mastery_points",
     "ui_fragments":      "ui_fragments",
     "alchemy_fragments": "alchemy_fragments",
@@ -274,6 +276,7 @@ async def cb_clan_exch_char_rank(cb: CallbackQuery, session: AsyncSession, user:
             UserCharacter.character_id,
             func.count(UserCharacter.id).label("cnt"),
             func.sum(UserCharacter.power).label("total_power"),
+            func.avg(UserCharacter.level).label("avg_level"),
         )
         .where(UserCharacter.user_id == user.id, UserCharacter.rank == rank)
         .group_by(UserCharacter.character_id)
@@ -296,14 +299,17 @@ async def cb_clan_exch_char_rank(cb: CallbackQuery, session: AsyncSession, user:
     cfg = RANK_CONFIG_MAP.get(rank)
     rank_label = cfg.label if cfg else rank
 
+    from app.constants.cards import LEVEL_LABELS
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
         text=f"📦 Передать всю категорию — {total_count} шт.",
         callback_data=f"clan_exch_char_all:{target_id}:{rank}",
     ))
     for idx, row in enumerate(rows):
+        avg_lvl = int(row.avg_level or 0)
+        lvl_lbl = LEVEL_LABELS.get(avg_lvl, f"Ур.{avg_lvl}")
         builder.row(InlineKeyboardButton(
-            text=f"{emoji} {row.character_id} × {row.cnt} | {fmt_num(row.total_power)} мощи",
+            text=f"{emoji} {row.character_id} × {row.cnt} | {lvl_lbl} | {fmt_num(row.total_power)} мощи",
             callback_data=f"clan_exch_char_name:{target_id}:{idx}",
         ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"clan_exch_res:{target_id}:character"))

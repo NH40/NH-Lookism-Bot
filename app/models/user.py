@@ -176,6 +176,9 @@ class User(Base):
     circ_dragon_active: Mapped[bool] = mapped_column(Boolean, default=False)     # спутник-дракон
     circ_clan_cashback: Mapped[bool] = mapped_column(Boolean, default=False)     # кешбек казны клана
 
+    # ── Донат-валюта (NHDonate) ──────────────────────────────────────────────
+    nh_donate: Mapped[int] = mapped_column(Integer, default=0)  # 1 NHDonate = 1 рубль
+
     # ── Бан ───────────────────────────────────────────────────────────────
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
     ban_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

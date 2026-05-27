@@ -57,6 +57,13 @@ async def cb_adm_ban(cb: CallbackQuery, session: AsyncSession, user: User):
     if not is_admin(user.tg_id):
         return
     tg_id = int(cb.data.split(":")[1])
+
+    # Администраторов банить нельзя
+    from app.config import settings as _cfg
+    if tg_id in _cfg.admin_ids_list:
+        await cb.answer("❌ Нельзя забанить администратора", show_alert=True)
+        return
+
     found = await admin_service.find_user(session, str(tg_id))
     if not found:
         await cb.answer("Игрок не найден", show_alert=True)
@@ -163,6 +170,12 @@ async def msg_ban_reason(
     found = await admin_service.find_user(session, str(tg_id))
     if not found:
         await message.answer("❌ Игрок не найден")
+        return
+
+    # Администраторов банить нельзя
+    from app.config import settings as _cfg
+    if tg_id in _cfg.admin_ids_list:
+        await message.answer("❌ Нельзя забанить администратора")
         return
 
     # Применяем бан

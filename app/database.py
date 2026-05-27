@@ -24,6 +24,6 @@ async def get_session() -> AsyncSession:
  
  
 async def init_db():
-    from app.models import user, city, building, character, squad_member, title, potion, skill, referral, auction, game_version, market, king_bot, daily_quest, clan, card_deck, circular_donat, bank, emperor_gang, campaign, boss, boss_attack  # noqa
+    from app.models import user, city, building, character, squad_member, title, potion, skill, referral, auction, game_version, market, king_bot, daily_quest, clan, card_deck, circular_donat, bank, emperor_gang, campaign, boss, boss_attack, payment  # noqa
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

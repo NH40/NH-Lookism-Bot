@@ -41,7 +41,8 @@ def main_menu_kb(has_vvip: bool = False) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="🖤 Чёрный рынок", callback_data="black_market"),
         )
     builder.row(
-        InlineKeyboardButton(text="⚙️ Настройки",    callback_data="settings"),
+        InlineKeyboardButton(text="💳 Донат",        callback_data="donate_menu"),
+        InlineKeyboardButton(text="⚙️ Настройки",   callback_data="settings"),
     )
     return builder.as_markup()
 

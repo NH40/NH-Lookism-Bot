@@ -10,7 +10,7 @@ from app.database import init_db
 from app.middlewares.db_session import DbSessionMiddleware
 from app.middlewares.user_loader import UserLoaderMiddleware
 from app.scheduler.setup import setup_scheduler
-from app.handlers import common, attack, business, raid, squad, skills, titles, shop, auction, settings as settings_handler, admin, guide, black_market
+from app.handlers import common, attack, business, raid, squad, skills, titles, shop, auction, settings as settings_handler, admin, guide, black_market, donate
 from app.handlers.campaigns import router as campaigns_router
 from app.handlers.bosses import router as bosses_router
 from app.handlers import training
@@ -59,6 +59,9 @@ async def main():
     dp.message.middleware(RateLimitMiddleware())
     dp.callback_query.middleware(RateLimitMiddleware())
 
+    # pre_checkout_query — нужен DbSession для записи (UserLoader не нужен, ответ быстрый)
+    dp.pre_checkout_query.middleware(DbSessionMiddleware())
+
     dp.include_router(common.router)
     dp.include_router(attack.router)
     
@@ -80,6 +83,7 @@ async def main():
     dp.include_router(settings_handler.router)
     dp.include_router(guide.router)
     dp.include_router(black_market.router)
+    dp.include_router(donate.router)
 
     dp.include_router(admin.router)
 

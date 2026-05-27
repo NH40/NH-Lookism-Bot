@@ -82,10 +82,12 @@ async def cb_bm_detail(cb: CallbackQuery, session: AsyncSession, user: User):
     circles_map = await get_user_circles(session, user.id)
     my_circles = circles_map.get(donat_id, 0)
 
+    nh_donate = user.nh_donate or 0
     lines = [
         f"{d.emoji} <b>{d.name}</b>\n",
         f"🔄 Ваши круги: <b>{my_circles}/{d.max_circles}</b>",
-        f"💰 Цена: {d.price_per_circle}₽ за круг | Всего при MAX: {d.price_per_circle * d.max_circles}₽\n",
+        f"💰 Цена круга: <b>{d.price_per_circle} NHDonate</b> | MAX: {d.price_per_circle * d.max_circles} NHD\n",
+        f"🪙 Ваш баланс NHDonate: <b>{nh_donate:,}</b>\n",
         f"🎁 <b>Бонус за каждый круг:</b>",
         f"  {d.circle_bonus}\n",
     ]
@@ -97,9 +99,16 @@ async def cb_bm_detail(cb: CallbackQuery, session: AsyncSession, user: User):
             lines.append(f"  {mark} Круг {circle_n}: {bonus_desc}")
 
     builder = InlineKeyboardBuilder()
+
+    if my_circles < d.max_circles:
+        can_afford = "✅" if nh_donate >= d.price_per_circle else "❌"
+        builder.row(InlineKeyboardButton(
+            text=f"{can_afford} Купить круг {my_circles + 1} — {d.price_per_circle} NHDonate",
+            callback_data=f"bm_buy_circle:{donat_id}",
+        ))
+
     builder.row(InlineKeyboardButton(
-        text=f"💬 Купить у {MANAGER_USERNAME}",
-        url=f"https://t.me/{MANAGER_USERNAME.lstrip('@')}",
+        text="💳 Пополнить NHDonate", callback_data="donate_topup"
     ))
     builder.row(InlineKeyboardButton(text="◀️ К чёрному рынку", callback_data="black_market"))
 
@@ -112,6 +121,54 @@ async def cb_bm_detail(cb: CallbackQuery, session: AsyncSession, user: User):
     except Exception:
         pass
     await cb.answer()
+
+
+@router.callback_query(F.data.startswith("bm_buy_circle:"))
+async def cb_bm_buy_circle(cb: CallbackQuery, session: AsyncSession, user: User):
+    """Покупка 1 круга кругового доната за NHDonate."""
+    if not await _vvip_check(session, user):
+        await cb.answer("🔒 Только для VVIP", show_alert=True)
+        return
+
+    donat_id = cb.data.split(":")[1]
+    d = CIRCULAR_DONAT_MAP.get(donat_id)
+    if not d:
+        await cb.answer("Донат не найден", show_alert=True)
+        return
+
+    nh_donate = user.nh_donate or 0
+    if nh_donate < d.price_per_circle:
+        await cb.answer(
+            f"❌ Недостаточно NHDonate!\n"
+            f"Нужно: {d.price_per_circle} · У вас: {nh_donate}\n\n"
+            f"Пополните баланс через /donate",
+            show_alert=True,
+        )
+        return
+
+    # Антидабл-лок
+    from app.services.cooldown_service import cooldown_service
+    lock_key = f"bm_buy_circle:{user.id}:{donat_id}"
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("⏳ Подождите...", show_alert=False)
+        return
+
+    from app.services.circular_donat_service import add_circle
+    result = await add_circle(session, user, donat_id)
+    if not result["ok"]:
+        await cb.answer(f"❌ {result['reason']}", show_alert=True)
+        return
+
+    user.nh_donate = nh_donate - d.price_per_circle
+    await session.commit()
+
+    await cb.answer(
+        f"✅ {d.emoji} {d.name}: круг {result['circles']}/{d.max_circles} куплен!\n"
+        f"Остаток NHDonate: {user.nh_donate}",
+        show_alert=True,
+    )
+    # Перерисовываем страницу доната
+    await cb_bm_detail(cb, session, user)
 
 
 @router.callback_query(F.data == "bm_clan_donats")

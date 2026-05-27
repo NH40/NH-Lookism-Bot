@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     REDIS_DB: int = 0
     DEBUG: bool = False
     ADMIN_IDS: str = ""
+    YOOKASSA_PAYMENT_TOKEN: str = ""  # Получить в @BotFather → Payments → ЮKassa
 
     @property
     def database_url(self) -> str:

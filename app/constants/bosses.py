@@ -151,7 +151,7 @@ BOSSES: list[BossConfig] = [
         desc="Хозяин ситуации. Берёт деньги даже в бою.",
         special_desc=(
             f"💸 <b>Слив монет</b>: каждый удар стоит {'/'.join(str(x) for x in MANAGER_DRAIN_OPTIONS)}% ваших NHCoin.\n"
-            f"При <10% HP — один раз восстанавливает все HP.\n"
+            f"При &lt;10% HP — один раз восстанавливает все HP.\n"
             f"Победа: +1M монет всем. Поражение: –10M монет всем."
         ),
         phrases=MANAGER_PHRASES,

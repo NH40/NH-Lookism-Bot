@@ -172,6 +172,12 @@ CARD_IMAGE_MAP: dict[str, str] = {
     "Quan'de Manchesten (100M)":    "images/card/absolute/QuandeManchester_100M.png",
     "Malosolny Ogurchik (Emperor)": "images/card/absolute/MolosolnyOgurchik_Emperor.png",
     "Табаско (Unlucky)":            "images/card/absolute/Tabasko_Unlucky.png",
+    "Arian (Absolute)":             "images/card/absolute/Ariam_Absolute.png",
+
+    # ── perfection ────────────────────────────────────────────────────────────
+    "Братья (СЧ и НХ)":            "images/card/perfection/Brother.png",
+    "Менеджер (Жмот (Prime))":      "images/card/perfection/Meneger_Prime.png",
+    "Communists (Clan)":            "images/card/perfection/Communists_Clan.png",
 }
 
 # ── Кэш file_id (персистентный через JSON) ────────────────────────────────────

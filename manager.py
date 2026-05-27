@@ -184,6 +184,70 @@ async def add_king_cities():
             print(f"✅ Добавлено {total} king-городов")
 
 
+async def spawn_boss(boss_id: str | None = None):
+    """Вызывает глобального босса немедленно."""
+    from app.database import AsyncSessionFactory, init_db
+    from app.repositories.boss_repo import boss_repo
+    from app.services.boss_service import boss_service
+    from app.constants.bosses import BOSS_MAP, BOSS_ROTATION
+
+    await init_db()
+
+    # Проверяем boss_id
+    if boss_id and boss_id not in BOSS_MAP:
+        print(f"❌ Неизвестный boss_id: '{boss_id}'")
+        print(f"   Доступные: {', '.join(BOSS_ROTATION)}")
+        return
+
+    async with AsyncSessionFactory() as session:
+        async with session.begin():
+            current = await boss_repo.get_current_boss(session)
+            if current:
+                cfg = BOSS_MAP.get(current.boss_id)
+                print(f"❌ Уже есть активный босс: {cfg.emoji} {cfg.name} (id={current.boss_id})")
+                print(f"   Сначала дождись конца или убей его.")
+                return
+
+            # Если указан конкретный boss_id — подменяем ротацию через last_boss
+            if boss_id:
+                # Ставим "предыдущим" босса, который идёт ДО нужного в ротации
+                idx = BOSS_ROTATION.index(boss_id)
+                fake_last = BOSS_ROTATION[(idx - 1) % len(BOSS_ROTATION)]
+
+                # Временно патчим get_last_boss через прямой вызов create_boss
+                from datetime import datetime, timedelta, timezone
+                from app.constants.bosses import BOSS_DURATION_HOURS
+
+                cfg = BOSS_MAP[boss_id]
+                now = datetime.now(timezone.utc)
+                expires_at = now + timedelta(hours=BOSS_DURATION_HOURS)
+
+                if boss_id == "nikita":
+                    state = {"despair_scale": 0.0, "nikita_base": cfg.base_hp, "heal_count": 0}
+                elif boss_id == "archangel":
+                    state = {"shield_hp": 0, "debuff_attacks": 0}
+                elif boss_id == "manager":
+                    state = {"healed": False}
+                else:
+                    state = {}
+
+                boss = await boss_repo.create_boss(
+                    session=session,
+                    boss_id=boss_id,
+                    hp=cfg.base_hp,
+                    started_at=now,
+                    expires_at=expires_at,
+                    state=state,
+                )
+            else:
+                boss = await boss_service.spawn_boss(session)
+
+    cfg = BOSS_MAP[boss.boss_id]
+    print(f"✅ Босс вызван: {cfg.emoji} {cfg.name} (boss_id={boss.boss_id})")
+    print(f"   HP: {cfg.base_hp:,}")
+    print(f"   Активен до: {boss.expires_at.strftime('%H:%M UTC')}")
+
+
 async def auto_backup_loop():
     """Авто-бэкап каждые 6 часов."""
     print("🔄 Запущен авто-бэкап каждые 6 часов")
@@ -205,6 +269,8 @@ Lookism Battle Planet — Manager
   set_clan_leader <clan> <tg>   Сменить лидера клана
   add_king_cities               Добавить 10 king-городов каждого типа в каждый сектор
   autobackup                    Авто-бэкап (для Docker)
+  spawnboss                     Вызвать следующего босса по ротации
+  spawnboss <boss_id>           Вызвать конкретного босса (nikita/archangel/manager/brothers)
     """)
 
 
@@ -228,5 +294,8 @@ if __name__ == "__main__":
         asyncio.run(add_king_cities())
     elif args[0] == "autobackup":
         asyncio.run(auto_backup_loop())
+    elif args[0] == "spawnboss":
+        boss_id = args[1] if len(args) > 1 else None
+        asyncio.run(spawn_boss(boss_id))
     else:
         print_help()

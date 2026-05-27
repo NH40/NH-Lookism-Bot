@@ -179,6 +179,12 @@ class User(Base):
     # ── Донат-валюта (NHDonate) ──────────────────────────────────────────────
     nh_donate: Mapped[int] = mapped_column(Integer, default=0)  # 1 NHDonate = 1 рубль
 
+    # ── Бонус влияния от донатного сета (strongest_0gen) ─────────────────────
+    # Хранит АДДИТИВНУЮ прибавку к influence, добавленную сет-бонусом.
+    # При reapply_all_titles вычитается и пересчитывается, чтобы не множился
+    # экспоненциально при каждом вызове.
+    influence_donat_bonus: Mapped[int] = mapped_column(BigInteger, default=0)
+
     # ── Бан ───────────────────────────────────────────────────────────────
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
     ban_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

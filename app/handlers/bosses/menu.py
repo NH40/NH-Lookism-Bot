@@ -2,9 +2,10 @@
 Хэндлеры системы Боссов.
 """
 from datetime import datetime, timezone
+from pathlib import Path
 
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, InlineKeyboardButton
+from aiogram.types import CallbackQuery, InlineKeyboardButton, FSInputFile
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +21,23 @@ from app.utils.formatters import fmt_num, fmt_ttl
 
 router = Router()
 
+# ── Изображения боссов ────────────────────────────────────────────────────────
+
+BOSS_IMAGE_MAP: dict[str, str] = {
+    "nikita":    "images/boss/Nikita.png",
+    "archangel": "images/boss/Arhangel.png",
+    "manager":   "images/boss/Meneger.png",
+    "brothers":  "images/boss/Brother.png",
+}
+
+
+def _boss_photo(boss_id: str) -> FSInputFile | None:
+    """Возвращает FSInputFile для изображения босса или None."""
+    path = BOSS_IMAGE_MAP.get(boss_id)
+    if path and Path(path).exists():
+        return FSInputFile(path)
+    return None
+
 
 # ── Вспомогательные ───────────────────────────────────────────────────────────
 
@@ -31,8 +49,8 @@ def _progress_bar_str(current: int, maximum: int) -> str:
 
 async def _boss_main_screen(
     session: AsyncSession, user: User
-) -> tuple[str, any]:
-    """Возвращает (текст, клавиатура) для главного экрана боссов."""
+) -> tuple[str, any, str | None]:
+    """Возвращает (текст, клавиатура, boss_id | None) для главного экрана боссов."""
     from app.repositories.boss_repo import boss_repo
     from app.services.cooldown_service import cooldown_service
 
@@ -57,7 +75,7 @@ async def _boss_main_screen(
             f"Включи уведомления, чтобы не пропустить появление!"
         )
         builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
-        return text, builder.as_markup()
+        return text, builder.as_markup(), None
 
     # ── Активный босс ─────────────────────────────────────────────────────────
     cfg = BOSS_MAP.get(boss.boss_id)
@@ -134,22 +152,46 @@ async def _boss_main_screen(
     ))
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
 
-    return text, builder.as_markup()
+    return text, builder.as_markup(), boss.boss_id
+
+
+# ── Вспомогательная отправка экрана босса ────────────────────────────────────
+
+async def _send_boss_screen(
+    cb: CallbackQuery,
+    session: AsyncSession,
+    user: User,
+) -> None:
+    """
+    Удаляет текущее сообщение и отправляет экран босса:
+    - с фото (если есть изображение для активного босса)
+    - или текстом (если босс неактивен / нет картинки)
+    """
+    text, kb, boss_id = await _boss_main_screen(session, user)
+    photo = _boss_photo(boss_id) if boss_id else None
+
+    # Удаляем старое сообщение
+    try:
+        await cb.message.delete()
+    except Exception:
+        pass
+
+    if photo:
+        await cb.message.answer_photo(
+            photo,
+            caption=text,
+            reply_markup=kb,
+            parse_mode="HTML",
+        )
+    else:
+        await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
 
 
 # ── Главный экран ─────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "bosses_menu")
 async def cb_bosses_menu(cb: CallbackQuery, session: AsyncSession, user: User):
-    text, kb = await _boss_main_screen(session, user)
-    try:
-        await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-    except Exception:
-        try:
-            await cb.message.delete()
-        except Exception:
-            pass
-        await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
+    await _send_boss_screen(cb, session, user)
     await cb.answer()
 
 
@@ -187,12 +229,8 @@ async def cb_boss_attack(cb: CallbackQuery, session: AsyncSession, user: User):
     boss = await boss_service.get_current_boss(session)
     if not boss or boss.id != boss_record_id:
         await cb.answer("Босс уже не активен!", show_alert=True)
-        # Обновляем экран
-        text, kb = await _boss_main_screen(session, user)
-        try:
-            await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-        except Exception:
-            pass
+        await _send_boss_screen(cb, session, user)
+        await cb.answer()
         return
 
     # Выполняем атаку
@@ -248,10 +286,12 @@ async def cb_boss_attack(cb: CallbackQuery, session: AsyncSession, user: User):
     ))
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
 
+    # Удаляем фото-сообщение (экран босса) и отправляем текст результата
     try:
-        await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+        await cb.message.delete()
     except Exception:
         pass
+    await cb.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
     await cb.answer(f"Удар нанесён! -{fmt_hp(result['damage'])}")
 
 
@@ -302,5 +342,11 @@ async def cb_boss_top(cb: CallbackQuery, session: AsyncSession, user: User):
             "\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML"
         )
     except Exception:
-        pass
+        try:
+            await cb.message.delete()
+        except Exception:
+            pass
+        await cb.message.answer(
+            "\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML"
+        )
     await cb.answer()

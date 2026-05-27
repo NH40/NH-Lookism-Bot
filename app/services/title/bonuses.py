@@ -37,6 +37,13 @@ def reset_donat_bonuses(user: User) -> None:
         if getattr(user, _field, 0) >= 6:
             setattr(user, _field, 5)
 
+    # Откатываем аддитивный бонус влияния от сета strongest_0gen.
+    # Используем getattr для совместимости с объектами без этого поля.
+    prev_bonus = getattr(user, "influence_donat_bonus", 0) or 0
+    if prev_bonus > 0:
+        user.influence = max(100, user.influence - prev_bonus)
+        user.influence_donat_bonus = 0
+
 
 async def apply_title_bonus(
     session: AsyncSession, user: User, title_id: str
@@ -107,7 +114,13 @@ async def apply_title_bonus(
 def apply_set_bonus(user: User, set_id: str) -> None:
     if set_id == "strongest_0gen":
         from app.config.game_balance import EXTRA_SKILL_SLOTS_WITH_TITLE
-        user.influence = int(user.influence * 1.6)
+        # Аддитивный бонус +60% к текущему базовому влиянию.
+        # Сохраняем прибавку в influence_donat_bonus, чтобы reset_donat_bonuses
+        # мог точно её вычесть — иначе каждый reapply_all_titles множил бы
+        # значение на 1.6 ещё раз (экспоненциальный рост).
+        influence_add = int(user.influence * 0.6)
+        user.influence += influence_add
+        user.influence_donat_bonus = influence_add
         user.extra_path_skill_slots = EXTRA_SKILL_SLOTS_WITH_TITLE
         user.max_ticket_chance = 90
         user.ticket_chance = min(getattr(user, "max_ticket_chance", 70), user.ticket_chance + 5)

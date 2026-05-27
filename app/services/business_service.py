@@ -194,6 +194,11 @@ class BusinessService:
 
         effective_income = int(base * (1 + total_bonus / 100) * user.district_multiplier)
         effective_final = int(effective_income * (1 + potion_bonus / 100))
+
+        # Пассивный доход от круговых донатов (NHCoin/час → /мин для отображения)
+        circ_passive = getattr(user, "circ_passive_income", 0) or 0
+        circ_per_min = circ_passive // 60  # как считает income_tick
+
         return {
             "base_income": base,
             "final_income": effective_final,
@@ -204,6 +209,8 @@ class BusinessService:
             "clan_donat_income_bonus": clan_donat_bonus,
             "district_multiplier": user.district_multiplier,
             "skills_bonus": user.income_bonus_percent,
+            "circ_passive_income": circ_passive,      # /час
+            "circ_passive_per_min": circ_per_min,     # /мин (как реально зачисляется)
         }
 
 

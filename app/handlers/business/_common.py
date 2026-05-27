@@ -65,6 +65,15 @@ async def _show_business_main(
     elif user.business_path == "political":
         influence_note = "\n✅ Политика: +влияние за постройку"
 
+    circ_passive = info.get("circ_passive_income", 0)
+    circ_line = ""
+    if circ_passive:
+        circ_per_min = info.get("circ_passive_per_min", 0)
+        circ_line = (
+            f"\n💸 Пассивный доход: {fmt_num(circ_passive)}/час"
+            + (f" (~{fmt_num(circ_per_min)}/мин)" if circ_per_min else "")
+        )
+
     try:
         await cb.message.edit_text(
             f"🏢 <b>Бизнес</b>\n\n"
@@ -74,7 +83,8 @@ async def _show_business_main(
             f"{'─'*22}\n"
             f"💰 Базовый доход: {fmt_num(info['base_income'])}/мин\n"
             f"📈 Итого: {fmt_num(info['final_income'])}/мин"
-            + bonus_str,
+            + bonus_str
+            + circ_line,
             reply_markup=builder.as_markup(),
             parse_mode="HTML",
         )

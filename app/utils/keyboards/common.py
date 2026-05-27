@@ -42,6 +42,8 @@ def main_menu_kb(has_vvip: bool = False) -> InlineKeyboardMarkup:
         )
     builder.row(
         InlineKeyboardButton(text="💳 Донат",        callback_data="donate_menu"),
+    )
+    builder.row(
         InlineKeyboardButton(text="⚙️ Настройки",   callback_data="settings"),
     )
     return builder.as_markup()

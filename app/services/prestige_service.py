@@ -55,6 +55,10 @@ class PrestigeService:
         user.nh_coins = 0
         user.influence = DEFAULT_INFLUENCE
         user.combat_power = 0
+        # Сбрасываем накопленный бонус от учителя; связь referred_by сохраняется,
+        # шедулер пересчитает бонус от новой мощи учителя.
+        from app.config.game_balance import REFERRAL_STUDENT_POWER_BONUS
+        user.teacher_power_bonus = REFERRAL_STUDENT_POWER_BONUS if user.referred_by else 0
         user.business_path = None
         user.income_per_minute = 0
         user.income_bonus_percent = 0

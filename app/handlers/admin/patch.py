@@ -127,51 +127,99 @@ async def cb_admin_patch_confirm(cb: CallbackQuery, session: AsyncSession, user:
         return
     version = cb.data.split(":", 1)[1]
 
+    await cb.answer("⏳ Применяю патч...")
+
+    import asyncio
     from app.models.user import User as UserModel
     from app.models.clan import Clan, ClanMember
-
     from app.config.game_balance import (
         PATCH_TOP_PLAYER_REWARDS, PATCH_TOP_CLAN_REWARDS,
         PATCH_TOP_PLAYERS_COUNT, PATCH_TOP_CLANS_COUNT,
     )
+
+    # Собираем все данные ДО сброса и ДО закрытия сессии
     top_r = await session.execute(
-        select(UserModel).order_by(UserModel.combat_power.desc()).limit(PATCH_TOP_PLAYERS_COUNT)
+        select(UserModel.tg_id, UserModel.combat_power)
+        .order_by(UserModel.combat_power.desc())
+        .limit(PATCH_TOP_PLAYERS_COUNT)
     )
-    top_players = top_r.scalars().all()
-    top_rewards = PATCH_TOP_PLAYER_REWARDS
+    top_player_tg_ids = [row[0] for row in top_r.all()]
 
     top_clans_r = await session.execute(
         select(Clan).order_by(Clan.combat_power.desc()).limit(PATCH_TOP_CLANS_COUNT)
     )
     top_clans = top_clans_r.scalars().all()
-    clan_rewards = PATCH_TOP_CLAN_REWARDS
+
+    # Загружаем tg_id участников топ-кланов одним запросом на клан
+    clan_broadcast: list[tuple[int, str, int, list[int]]] = []
+    for i, clan in enumerate(top_clans):
+        tickets = PATCH_TOP_CLAN_REWARDS.get(i, 3)
+        member_tg_r = await session.execute(
+            select(UserModel.tg_id)
+            .join(ClanMember, ClanMember.user_id == UserModel.id)
+            .where(ClanMember.clan_id == clan.id)
+        )
+        clan_broadcast.append((i + 1, clan.name, tickets, [r[0] for r in member_tg_r.all()]))
+
+    # Список tg_id для общей рассылки
+    broadcast_r = await session.execute(
+        select(UserModel.tg_id).where(UserModel.notifications_enabled == True)
+    )
+    broadcast_tg_ids: list[int] = [r[0] for r in broadcast_r.all()]
 
     count = await admin_service.patch_reset_progress(session, version)
     bot = cb.bot
 
-    # Рассылка всем
-    users_r = await session.execute(
-        select(UserModel).where(UserModel.notifications_enabled == True)
+    # Сразу показываем результат — не ждём рассылки
+    try:
+        await cb.message.edit_text(
+            f"✅ <b>Патч {version} применён!</b>\n\n"
+            f"Сброшено: {count} игроков\n"
+            f"🏆 Топ-{PATCH_TOP_PLAYERS_COUNT} игроков получат тикеты\n"
+            f"🏯 Топ-{PATCH_TOP_CLANS_COUNT} кланов получат тикеты, казны обнулены\n"
+            f"📨 Рассылка идёт в фоне...",
+            reply_markup=back_kb("admin_main"),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+    # Вся рассылка в фоне, чтобы не блокировать обработчик
+    asyncio.create_task(_broadcast_patch(
+        bot, version,
+        broadcast_tg_ids, top_player_tg_ids, PATCH_TOP_PLAYER_REWARDS,
+        clan_broadcast,
+    ))
+
+
+async def _broadcast_patch(
+    bot,
+    version: str,
+    broadcast_tg_ids: list[int],
+    top_player_tg_ids: list[int],
+    top_rewards: dict,
+    clan_broadcast: list[tuple[int, str, int, list[int]]],
+) -> None:
+    import asyncio
+
+    patch_text = (
+        f"🔧 <b>Патч {version} применён!</b>\n\n"
+        f"Прогресс всех игроков сброшен.\n"
+        f"Донаты и пробуждения сохранены.\n\n"
+        f"Удачи в новом старте! 💪"
     )
-    for u in users_r.scalars().all():
+    for tg_id in broadcast_tg_ids:
         try:
-            await bot.send_message(
-                u.tg_id,
-                f"🔧 <b>Патч {version} применён!</b>\n\n"
-                f"Прогресс всех игроков сброшен.\n"
-                f"Донаты и пробуждения сохранены.\n\n"
-                f"Удачи в новом старте! 💪",
-                parse_mode="HTML",
-            )
+            await bot.send_message(tg_id, patch_text, parse_mode="HTML")
         except Exception:
             pass
+        await asyncio.sleep(0.05)  # ~20 msg/sec, не превышаем лимит Telegram
 
-    # Уведомляем топ-10 игроков
-    for i, u in enumerate(top_players):
+    for i, tg_id in enumerate(top_player_tg_ids):
         tickets = top_rewards.get(i, 3)
         try:
             await bot.send_message(
-                u.tg_id,
+                tg_id,
                 f"🏆 <b>Награда за топ-{i+1} перед патчем!</b>\n\n"
                 f"Вы заняли <b>#{i+1} место</b> по боевой мощи.\n"
                 f"🎟 Получено: <b>+{tickets} тикетов</b>",
@@ -180,41 +228,19 @@ async def cb_admin_patch_confirm(cb: CallbackQuery, session: AsyncSession, user:
         except Exception:
             pass
 
-    # Уведомляем топ-5 кланов
-    for i, clan in enumerate(top_clans):
-        tickets = clan_rewards.get(i, 3)
-        members_r = await session.execute(
-            select(ClanMember).where(ClanMember.clan_id == clan.id)
-        )
-        for member in members_r.scalars().all():
-            member_user = await session.scalar(
-                select(UserModel).where(UserModel.id == member.user_id)
-            )
-            if not member_user:
-                continue
+    for place, clan_name, tickets, member_tg_ids in clan_broadcast:
+        for tg_id in member_tg_ids:
             try:
                 await bot.send_message(
-                    member_user.tg_id,
-                    f"🏯 <b>Награда клану {html.escape(clan.name)} за топ-{i+1}!</b>\n\n"
-                    f"Ваш клан занял <b>#{i+1} место</b> по боевой мощи.\n"
+                    tg_id,
+                    f"🏯 <b>Награда клану {html.escape(clan_name)} за топ-{place}!</b>\n\n"
+                    f"Ваш клан занял <b>#{place} место</b> по боевой мощи.\n"
                     f"🎟 Получено: <b>+{tickets} тикетов</b>\n"
                     f"🏦 Казна клана обнулена.",
                     parse_mode="HTML",
                 )
             except Exception:
                 pass
-
-    try:
-        await cb.message.edit_text(
-            f"✅ <b>Патч {version} применён!</b>\n\n"
-            f"Сброшено: {count} игроков\n"
-            f"🏆 Топ-10 игроков получили тикеты\n"
-            f"🏯 Топ-5 кланов получили тикеты, казны обнулены",
-            reply_markup=back_kb("admin_main"),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
 
 
 @router.callback_query(F.data == "admin_backup")

@@ -43,6 +43,8 @@ def setup_scheduler() -> AsyncIOScheduler:
         trigger=IntervalTrigger(minutes=INCOME_TICK_MINUTES),
         id="income_tick",
         name="income_tick",
+        max_instances=1,
+        misfire_grace_time=30,
     )
     scheduler.add_job(
         ultra_instinct_tick,

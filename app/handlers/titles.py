@@ -1,4 +1,5 @@
 from aiogram import Router, F
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -107,11 +108,15 @@ async def cb_check_achievements(cb: CallbackQuery, session: AsyncSession, user: 
     if total_coins:
         lines.append(f"\n💰 Итого монет: +{fmt_num(total_coins)}")
 
-    await cb.message.edit_text(
-        "\n".join(lines),
-        reply_markup=back_kb("achievements_menu"),
-        parse_mode="HTML",
-    )
+    try:
+        await cb.message.edit_text(
+            "\n".join(lines),
+            reply_markup=back_kb("achievements_menu"),
+            parse_mode="HTML",
+        )
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e):
+            raise
 
 
 # ── ДОНАТНЫЕ СЕТЫ ───────────────────────────────────────────────────────────

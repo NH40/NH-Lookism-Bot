@@ -73,6 +73,7 @@ CARD_IMAGE_MAP: dict[str, str] = {
     "Jihan (Prime)":       "images/card/boss/Jihan_Prime.png",
     "Jibeom (Prime)":      "images/card/boss/Jibeom_Prime.png",
     "Xiaolung (Staff)":    "images/card/boss/Xiaolung_Staff.png",
+    "Mitsuki":             "images/card/boss/Mitsuki.png",
 
     # ── king ──────────────────────────────────────────────────────────────────
     "Dalyoung (King busan)":  "images/card/king/Dalyoung_KingBusan.png",
@@ -161,6 +162,8 @@ CARD_IMAGE_MAP: dict[str, str] = {
     "Beolgu (Prime)":            "images/card/gen_zero/Beolgu_Prime.png",
     "Gwang (Prime)":             "images/card/gen_zero/Gwang_Prime.png",
     "Bakgu (NOH)":               "images/card/gen_zero/Bakgu_NON.png",  # filename typo: NON → NOH
+    "Somi (Mom Gun)":            "images/card/gen_zero/Somi _GunMom.png",
+    "Ms'Kim":                    "images/card/gen_zero/Ms'Kim.png",
 
     # ── absolute ──────────────────────────────────────────────────────────────
     "Kuropatkaa (Hopeful)":         "images/card/absolute/Kuropatkaa_Hopeful.png",

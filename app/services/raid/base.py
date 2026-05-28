@@ -34,16 +34,24 @@ class RaidService:
         return clan["bosses"].get(boss_id)
 
     async def get_boss_cd_info(self, user_id: int, boss_id: str) -> dict:
-        cd_key = self.boss_cd_key(boss_id, user_id)
-        on_cd = await cooldown_service.is_on_cooldown(cd_key)
-        ttl = await cooldown_service.get_ttl(cd_key) if on_cd else 0
-        return {"on_cd": on_cd, "ttl": ttl}
+        ttl = await cooldown_service.get_ttl(self.boss_cd_key(boss_id, user_id))
+        return {"on_cd": ttl > 0, "ttl": ttl}
 
     async def get_attack_cd_info(self, raid_id: int, user_id: int) -> dict:
-        cd_key = self.attack_cd_key(raid_id, user_id)
-        on_cd = await cooldown_service.is_on_cooldown(cd_key)
-        ttl = await cooldown_service.get_ttl(cd_key) if on_cd else 0
-        return {"on_cd": on_cd, "ttl": ttl}
+        ttl = await cooldown_service.get_ttl(self.attack_cd_key(raid_id, user_id))
+        return {"on_cd": ttl > 0, "ttl": ttl}
+
+    async def get_bosses_cd_info_batch(self, user_id: int, boss_ids: list[str]) -> dict[str, dict]:
+        """Batch-fetch CD info for multiple bosses in one Redis pipeline."""
+        keys = [self.boss_cd_key(bid, user_id) for bid in boss_ids]
+        async with cooldown_service.redis.pipeline(transaction=False) as pipe:
+            for key in keys:
+                pipe.ttl(key)
+            ttls = await pipe.execute()
+        return {
+            bid: {"on_cd": ttl > 0, "ttl": max(0, ttl)}
+            for bid, ttl in zip(boss_ids, ttls)
+        }
 
     async def get_user_power_for_boss(
         self, session: AsyncSession, user: User, damage_source: str, divisor: int = 2
@@ -86,12 +94,12 @@ class RaidService:
             return {"ok": False, "reason": "Босс не найден"}
 
         cd_key = self.boss_cd_key(boss_id, user.id)
-        if await cooldown_service.is_on_cooldown(cd_key):
-            ttl = await cooldown_service.get_ttl(cd_key)
+        boss_cd_ttl = await cooldown_service.get_ttl(cd_key)
+        if boss_cd_ttl > 0:
             return {
                 "ok": False,
-                "reason": f"Босс восстанавливается: {cooldown_service.format_ttl(ttl)}",
-                "cd": ttl,
+                "reason": f"Босс восстанавливается: {cooldown_service.format_ttl(boss_cd_ttl)}",
+                "cd": boss_cd_ttl,
             }
 
         existing = await session.execute(
@@ -205,12 +213,12 @@ class RaidService:
             return {"ok": False, "reason": "Время рейда истекло! Забери награду."}
 
         attack_cd_key = self.attack_cd_key(raid_id, user.id)
-        if await cooldown_service.is_on_cooldown(attack_cd_key):
-            ttl = await cooldown_service.get_ttl(attack_cd_key)
+        attack_ttl = await cooldown_service.get_ttl(attack_cd_key)
+        if attack_ttl > 0:
             return {
                 "ok": False,
-                "reason": f"Следующая атака через: {cooldown_service.format_ttl(ttl)}",
-                "cd": ttl,
+                "reason": f"Следующая атака через: {cooldown_service.format_ttl(attack_ttl)}",
+                "cd": attack_ttl,
             }
 
         boss = self.get_boss(raid.clan_id, raid.boss_id)
@@ -263,6 +271,7 @@ class RaidService:
                 "total_fragments": total_fragments,
                 "reward_type": reward_type,
                 "boss_name": boss["name"],
+                "boss_id": raid.boss_id,
                 "remaining": 0,
                 "doubled": doubled,
             }
@@ -339,6 +348,7 @@ class RaidService:
             "damage": raid.damage_dealt,
             "attack_count": raid.attack_count,
             "boss_name": boss["name"],
+            "boss_id": raid.boss_id,
             "doubled": doubled,
         }
 
@@ -477,11 +487,10 @@ class RaidService:
         from sqlalchemy import select as sa_select
         from app.models.skill import UserMastery
         speed_levels = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
-        r = await session.execute(
-            sa_select(UserMastery).where(UserMastery.user_id == user.id)
+        speed = await session.scalar(
+            sa_select(UserMastery.speed).where(UserMastery.user_id == user.id)
         )
-        mastery = r.scalar_one_or_none()
-        raw = speed_levels.get(mastery.speed if mastery else 0, 0)
+        raw = speed_levels.get(speed or 0, 0)
         return int(raw * user.skill_path_bonus_multiplier)
 
     def _apply_ui_level(self, user: User, level: int) -> None:

@@ -27,25 +27,30 @@ async def ultra_instinct_tick():
             )
         )).scalars())
 
-    for user_id in user_ids:
-        try:
-            async with AsyncSessionFactory() as session:
-                async with session.begin():
-                    user = await session.get(User, user_id)
-                    if not user:
-                        continue
-                    if user.ui_auto_ticket:
-                        await deck_service.try_get_ticket(session, user)
-                    if user.ui_auto_pull and user.tickets > 0:
-                        await deck_service.pull_all(session, user)
-                    if user.ui_auto_recruit:
-                        await _ui_recruit(session, user)
-                    if user.ui_auto_train:
-                        await squad_service.train(session, user)
-                    # Гений медицины: авто-зелья
-                    await _med_genius_auto_potion(session, user)
-        except Exception as e:
-            logger.error(f"ui_tick error for user {user_id}: {e}")
+    if not user_ids:
+        return
+
+    # Одна сессия на всех пользователей; savepoint изолирует ошибки.
+    async with AsyncSessionFactory() as session:
+        async with session.begin():
+            for user_id in user_ids:
+                try:
+                    async with session.begin_nested():
+                        user = await session.get(User, user_id)
+                        if not user:
+                            continue
+                        if user.ui_auto_ticket:
+                            await deck_service.try_get_ticket(session, user)
+                        if user.ui_auto_pull and user.tickets > 0:
+                            await deck_service.pull_all(session, user)
+                        if user.ui_auto_recruit:
+                            await _ui_recruit(session, user)
+                        if user.ui_auto_train:
+                            await squad_service.train(session, user)
+                        # Гений медицины: авто-зелья
+                        await _med_genius_auto_potion(session, user)
+                except Exception as e:
+                    logger.error(f"ui_tick error for user {user_id}: {e}")
 
 
 async def _ui_recruit(session: AsyncSession, user):

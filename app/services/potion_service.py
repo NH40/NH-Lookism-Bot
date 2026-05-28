@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from app.models.potion import ActivePotion
 from app.models.user import User
 
@@ -131,8 +131,15 @@ class PotionService:
         return sum(p.bonus_value for p in potions if p.potion_type == "income")
 
     async def get_raid_drop_bonus(self, session: AsyncSession, user_id: int) -> int:
-        potions = await self.get_active(session, user_id)
-        return sum(p.bonus_value for p in potions if p.potion_type == "raid_drop")
+        now = datetime.now(timezone.utc)
+        result = await session.scalar(
+            select(func.sum(ActivePotion.bonus_value)).where(
+                ActivePotion.user_id == user_id,
+                ActivePotion.potion_type == "raid_drop",
+                ActivePotion.expires_at > now,
+            )
+        )
+        return result or 0
 
     _TYPE_LABEL = {
         "power":     "⚔️ Зелье силы",

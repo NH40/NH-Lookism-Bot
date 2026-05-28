@@ -10,6 +10,7 @@ from app.services.raid_service import raid_service
 from app.services.cooldown_service import cooldown_service
 from app.utils.keyboards.common import back_kb
 from app.utils.formatters import fmt_num
+from app.handlers.raid.boss import _raid_boss_photo, _send_or_edit_raid_photo
 
 router = Router()
 
@@ -78,16 +79,16 @@ async def cb_raid_status(cb: CallbackQuery, session: AsyncSession, user: User):
     if remaining > 0 and not attack_cd["on_cd"]:
         extra_line = "\n\n⚔️ Атакуй снова чтобы накопить больше урона!"
 
-    await cb.message.edit_text(
+    status_text = (
         f"⚔️ <b>Активный рейд — {boss_name}</b>\n\n"
         f"❤️ HP босса: {fmt_num(boss_hp)}\n"
         f"💥 Нанесённый урон: <b>{fmt_num(raid.damage_dealt)}</b> ({damage_pct:.1f}%)\n"
         f"{hp_bar}\n"
         f"🗡 Атак совершено: <b>{raid.attack_count}</b>\n\n"
-        + status_line + extra_line,
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
+        + status_line + extra_line
     )
+    photo = _raid_boss_photo(raid.boss_id)
+    await _send_or_edit_raid_photo(cb, photo, status_text, builder.as_markup())
 
 
 # ── Атака на босса ────────────────────────────────────────────────────────────
@@ -115,17 +116,17 @@ async def cb_raid_attack(cb: CallbackQuery, session: AsyncSession, user: User):
             f"{frag_emoji} Получено: +{result['fragments']}",
             show_alert=True
         )
-        await cb.message.edit_text(
+        victory_text = (
             f"🎉 <b>Босс {result['boss_name']} повержен!</b>\n\n"
             f"💥 Суммарный урон: <b>{fmt_num(result['total_damage'])}</b>\n"
             f"🗡 Атак совершено: <b>{result['attack_count']}</b>\n\n"
             f"{frag_emoji} Получено {frag_name}: <b>+{result['fragments']}</b>\n"
             f"📊 Всего: <b>{result['total_fragments']}</b>"
             + doubled_line + "\n\n"
-            f"Используй фрагменты в <b>Рейды → Крафт</b>!",
-            reply_markup=back_kb("raid_menu"),
-            parse_mode="HTML",
+            f"Используй фрагменты в <b>Рейды → Крафт</b>!"
         )
+        photo = _raid_boss_photo(result.get("boss_id", ""))
+        await _send_or_edit_raid_photo(cb, photo, victory_text, back_kb("raid_menu"))
     else:
         await cb.answer(
             f"⚔️ +{fmt_num(result['damage'])} урона!\n"

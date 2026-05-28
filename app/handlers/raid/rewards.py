@@ -18,6 +18,7 @@ from app.constants.raid import (
 )
 from app.utils.keyboards.common import back_kb
 from app.utils.formatters import fmt_num
+from app.handlers.raid.boss import _raid_boss_photo, _send_or_edit_raid_photo
 
 router = Router()
 
@@ -44,17 +45,17 @@ async def cb_raid_claim(cb: CallbackQuery, session: AsyncSession, user: User):
         frag_emoji, frag_name = "🔮", "фрагментов УИ"
 
     doubled_line = "\n🌀 <b>Удача! Награда удвоена!</b>" if result.get("doubled") else ""
-    await cb.message.edit_text(
+    claim_text = (
         f"🎉 <b>Рейд завершён!</b>\n\n"
         f"👹 Босс: {result['boss_name']}\n"
         f"💥 Нанесённый урон: <b>{fmt_num(result['damage'])}</b>\n\n"
         f"{frag_emoji} Получено {frag_name}: <b>+{result['fragments']}</b>\n"
         f"📊 Всего: <b>{result['total_fragments']}</b>"
         + doubled_line + "\n\n"
-        f"Используй фрагменты в <b>Рейды → Крафт</b>!",
-        reply_markup=back_kb("raid_menu"),
-        parse_mode="HTML",
+        f"Используй фрагменты в <b>Рейды → Крафт</b>!"
     )
+    photo = _raid_boss_photo(result.get("boss_id", ""))
+    await _send_or_edit_raid_photo(cb, photo, claim_text, back_kb("raid_menu"))
 
 
 # ── Крафт УИ — подменю ────────────────────────────────────────────────────────

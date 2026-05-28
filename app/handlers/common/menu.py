@@ -52,14 +52,16 @@ async def cb_main_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     from app.services.title_service import title_service
     from app.data.titles import DONAT_SETS as _DS
     has_vvip = all([await title_service.has_set(session, user.id, s.set_id) for s in _DS])
+    kb = main_menu_kb(has_vvip=has_vvip)
     try:
-        await cb.message.edit_text(
-            text,
-            reply_markup=main_menu_kb(has_vvip=has_vvip),
-            parse_mode="HTML",
-        )
+        await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     except Exception:
-        pass
+        # Текущее сообщение может быть фото (боссы, рейды и т.д.) — удаляем и отправляем текст
+        try:
+            await cb.message.delete()
+        except Exception:
+            pass
+        await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
     await cb.answer()
 
 

@@ -17,6 +17,7 @@ from app.constants.raid import (
     UI_LEVEL_PERKS,
 )
 from app.utils.formatters import fmt_num
+from app.handlers.raid.boss import _send_or_edit_raid_photo
 
 router = Router()
 
@@ -30,10 +31,7 @@ async def cb_raid_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     block_msg = await credits_service.block_message(session, user.id)
     if block_msg:
         from app.utils.keyboards.common import back_kb
-        try:
-            await cb.message.edit_text(block_msg, reply_markup=back_kb("bank_credits"), parse_mode="HTML")
-        except Exception:
-            pass
+        await _send_or_edit_raid_photo(cb, None, block_msg, back_kb("bank_credits"))
         await cb.answer()
         return
 
@@ -82,17 +80,16 @@ async def cb_raid_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     else:
         mg_str = f" 🔒 ({user.alchemy_fragments}/30 🧪)"
 
-    await cb.message.edit_text(
+    menu_text = (
         f"⚔️ <b>Рейды</b>\n\n"
         f"🔮 Фрагменты УИ: <b>{user.ui_fragments}</b>\n"
         f"🧪 Фрагменты алхимии: <b>{user.alchemy_fragments}</b>\n"
         f"🔷 Фрагменты Пути: <b>{path_frags}</b>{path_str}\n"
         f"👁 УИ: {ui_str}{donat_str}\n"
         f"🩺 Гений медицины:{mg_str}\n\n"
-        f"Выбери цель для рейда:",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
+        f"Выбери цель для рейда:"
     )
+    await _send_or_edit_raid_photo(cb, None, menu_text, builder.as_markup())
 
 
 # ── Выбор клана ─────────────────────────────────────────────────────────────
@@ -105,9 +102,12 @@ async def cb_raid_clan(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer("Клан не найден", show_alert=True)
         return
 
+    boss_ids = list(clan["bosses"].keys())
+    cd_infos = await raid_service.get_bosses_cd_info_batch(user.id, boss_ids)
+
     builder = InlineKeyboardBuilder()
     for boss_id, boss in clan["bosses"].items():
-        cd_info = await raid_service.get_boss_cd_info(user.id, boss_id)
+        cd_info = cd_infos[boss_id]
         if cd_info["on_cd"]:
             ttl_str = cooldown_service.format_ttl(cd_info["ttl"])
             builder.row(InlineKeyboardButton(
@@ -128,14 +128,13 @@ async def cb_raid_clan(cb: CallbackQuery, session: AsyncSession, user: User):
         for boss in clan["bosses"].values()
     )
 
-    await cb.message.edit_text(
+    clan_text = (
         f"{clan['emoji']} <b>{clan['name']}</b>\n\n"
         f"{clan['description']}\n\n"
         f"{bosses_desc}\n\n"
-        f"Выбери босса для рейда:",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
+        f"Выбери босса для рейда:"
     )
+    await _send_or_edit_raid_photo(cb, None, clan_text, builder.as_markup())
 
 
 # ── Крафт — главное меню ──────────────────────────────────────────────────────
@@ -159,7 +158,7 @@ async def cb_raid_craft(cb: CallbackQuery, session: AsyncSession, user: User):
     builder.row(InlineKeyboardButton(text="🔷 Крафт Пути",        callback_data="craft_path_menu"))
     builder.row(InlineKeyboardButton(text="◀️ Назад",             callback_data="raid_menu"))
 
-    await cb.message.edit_text(
+    craft_text = (
         f"🔨 <b>Крафт</b>\n\n"
         f"🔮 Фрагменты УИ: <b>{user.ui_fragments}</b>\n"
         f"🧪 Фрагменты алхимии: <b>{user.alchemy_fragments}</b>\n"
@@ -167,10 +166,9 @@ async def cb_raid_craft(cb: CallbackQuery, session: AsyncSession, user: User):
         f"👁 УИ: <b>{ui_str}</b>\n"
         f"🩺 Гений медицины: <b>{mg_str}</b>\n"
         f"🔷 Уровень пути: <b>{path_level}/{PATH_LEVEL_MAX}</b>\n\n"
-        f"Выбери раздел крафта:",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
+        f"Выбери раздел крафта:"
     )
+    await _send_or_edit_raid_photo(cb, None, craft_text, builder.as_markup())
 
 
 @router.callback_query(F.data == "noop_raid")

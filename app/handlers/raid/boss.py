@@ -1,5 +1,7 @@
+from pathlib import Path
+
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, InlineKeyboardButton
+from aiogram.types import CallbackQuery, InlineKeyboardButton, FSInputFile, InputMediaPhoto
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +13,56 @@ from app.utils.keyboards.common import back_kb
 from app.utils.formatters import fmt_num
 
 router = Router()
+
+# ── Изображения рейд-боссов ───────────────────────────────────────────────────
+
+RAID_IMAGE_MAP: dict[str, str] = {
+    "gun":     "images/raid/gun.png",
+    "shingen": "images/raid/shingen.png",
+    "jinnen":  "images/raid/jinnen.png",
+    "gauren":  "images/raid/gauren.png",
+}
+
+
+def _raid_boss_photo(boss_id: str) -> FSInputFile | None:
+    """Возвращает FSInputFile для изображения рейд-босса или None."""
+    path = RAID_IMAGE_MAP.get(boss_id)
+    if path and Path(path).exists():
+        return FSInputFile(path)
+    return None
+
+
+async def _send_or_edit_raid_photo(cb: CallbackQuery, photo, text: str, keyboard) -> None:
+    """
+    Обновляет сообщение с изображением босса:
+    - Если текущее сообщение уже фото → edit_media (обновление на месте).
+    - Иначе → удаляем старое и отправляем новое фото.
+    - Если картинки нет → пробуем edit_text, при ошибке — delete + answer.
+    """
+    if photo:
+        if cb.message.photo:
+            try:
+                await cb.message.edit_media(
+                    InputMediaPhoto(media=photo, caption=text, parse_mode="HTML"),
+                    reply_markup=keyboard,
+                )
+                return
+            except Exception:
+                pass
+        try:
+            await cb.message.delete()
+        except Exception:
+            pass
+        await cb.message.answer_photo(photo, caption=text, reply_markup=keyboard, parse_mode="HTML")
+    else:
+        try:
+            await cb.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+        except Exception:
+            try:
+                await cb.message.delete()
+            except Exception:
+                pass
+            await cb.message.answer(text, reply_markup=keyboard, parse_mode="HTML")
 
 
 # ── Информация о боссе ───────────────────────────────────────────────────────
@@ -50,7 +102,9 @@ async def cb_raid_boss(cb: CallbackQuery, session: AsyncSession, user: User):
         text="◀️ Назад", callback_data=f"raid_clan:{clan_id}"
     ))
 
-    await cb.message.edit_text(
+    boss_id_key = boss.get("id", "")
+    photo = _raid_boss_photo(boss_id_key)
+    text = (
         f"{boss['emoji']} <b>{boss['name']}</b>\n\n"
         f"📖 {boss['description']}\n\n"
         f"💪 Ваша мощь ({source_name}): <b>{fmt_num(power)}</b>\n"
@@ -59,10 +113,9 @@ async def cb_raid_boss(cb: CallbackQuery, session: AsyncSession, user: User):
         f"⏳ КД после рейда: {boss['cd_hours']} часов\n"
         f"{reward_line}\n\n"
         f"После начала рейда у тебя есть 1 час\n"
-        f"чтобы нанести максимум урона!",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
+        f"чтобы нанести максимум урона!"
     )
+    await _send_or_edit_raid_photo(cb, photo, text, builder.as_markup())
 
 
 # ── Старт рейда ──────────────────────────────────────────────────────────────
@@ -95,16 +148,15 @@ async def cb_raid_start(cb: CallbackQuery, session: AsyncSession, user: User):
     # Круговой донат «Корейский дьявол»: мгновенный рейд
     if result.get("instant"):
         doubled_line = "\n🌀 <b>Удача! Награда удвоена!</b>" if result.get("doubled") else ""
-        await cb.message.edit_text(
+        instant_text = (
             f"⚡ <b>Мгновенный рейд!</b>\n\n"
             f"👹 Босс: {result['boss_name']}\n"
             f"💥 Нанесённый урон: <b>{fmt_num(result['damage'])}</b>\n\n"
             f"{frag_emoji} Получено {frag_name}: <b>+{result['fragments']}</b>\n"
             f"📊 Всего: <b>{result['total_fragments']}</b>"
-            + doubled_line,
-            reply_markup=back_kb("raid_menu"),
-            parse_mode="HTML",
+            + doubled_line
         )
+        await _send_or_edit_raid_photo(cb, None, instant_text, back_kb("raid_menu"))
         return
 
     ends_at = result["ends_at"]
@@ -114,14 +166,13 @@ async def cb_raid_start(cb: CallbackQuery, session: AsyncSession, user: User):
         frag_line = "чтобы получить фрагменты Пути!"
     else:
         frag_line = "чтобы получить фрагменты УИ!"
-    await cb.message.edit_text(
+    start_text = (
         f"⚔️ <b>Рейд начался!</b>\n\n"
         f"👹 Босс: {result['boss_name']}\n"
         f"💥 Нанесённый урон: <b>{fmt_num(result['damage'])}</b>\n\n"
         f"⏱ Рейд завершится через: <b>{result['duration_hours']} час</b>\n"
         f"🕐 Время окончания: {ends_at.strftime('%H:%M')}\n\n"
         f"По истечении времени вернись сюда\n"
-        f"{frag_line}",
-        reply_markup=back_kb("raid_menu"),
-        parse_mode="HTML",
+        f"{frag_line}"
     )
+    await _send_or_edit_raid_photo(cb, None, start_text, back_kb("raid_menu"))

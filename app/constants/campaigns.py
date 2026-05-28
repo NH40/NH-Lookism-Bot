@@ -57,15 +57,15 @@ class CampaignResourceConfig:
     label: str
     emoji: str
     # Базовая награда за 1 статиста за 1 час при успехе и reward_mult=1.0
-    base_per_statist_per_hour: int
+    base_per_statist_per_hour: float
 
 
 CAMPAIGN_RESOURCES: list[CampaignResourceConfig] = [
-    CampaignResourceConfig("nh_coins",         "NHCoin",              "💰", 300),
-    CampaignResourceConfig("card_dust",        "Пыль",                "💎",   3),
-    CampaignResourceConfig("ui_fragments",     "Фрагменты УИ",        "🔮",   1),
-    CampaignResourceConfig("alchemy_fragments","Фрагменты алхимии",   "🧪",   1),
-    CampaignResourceConfig("path_fragments",   "Фрагменты Пути",      "⚡",   1),
+    CampaignResourceConfig("nh_coins",         "NHCoin",              "💰", 25),
+    CampaignResourceConfig("card_dust",        "Пыль",                "💎",   0.005),
+    CampaignResourceConfig("ui_fragments",     "Фрагменты УИ",        "🔮",   0.001),
+    CampaignResourceConfig("alchemy_fragments","Фрагменты алхимии",   "🧪",   0.001),
+    CampaignResourceConfig("path_fragments",   "Фрагменты Пути",      "⚡",   0.001),
 ]
 
 CAMPAIGN_RESOURCE_MAP: dict[str, CampaignResourceConfig] = {

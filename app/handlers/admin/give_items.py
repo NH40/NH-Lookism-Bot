@@ -240,8 +240,6 @@ async def cb_adm_card_take_rank(cb: CallbackQuery, session: AsyncSession, user: 
         await cb.answer("У игрока нет карточек", show_alert=True)
         return
     from app.data.characters import RANK_EMOJI, RANK_CONFIG_MAP
-    from app.constants.cards import RANK_ORDER  # определим ниже
-    # Сортировка по приоритету
     rank_order = ["perfection","absolute","peak","legend","new_legend","gen_zero","strong_king","king","boss","member"]
     rank_counts = {r: c for r, c in rows}
     builder = InlineKeyboardBuilder()

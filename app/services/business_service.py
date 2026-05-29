@@ -196,9 +196,10 @@ class BusinessService:
         effective_final = int(effective_income * (1 + potion_bonus / 100))
 
         # Пассивный доход от круговых донатов (NHCoin/час → /мин для отображения)
-        # Бафы зелий дохода применяются так же, как в income_tick
+        # Применяем те же % баффы что и в income_tick: навыки + пробуждение + клан + зелье
         circ_passive = getattr(user, "circ_passive_income", 0) or 0
-        circ_per_min = max(0, int((circ_passive / 60) * (1 + potion_bonus / 100)))
+        circ_total_bonus = total_bonus + potion_bonus
+        circ_per_min = max(0, int((circ_passive / 60) * (1 + circ_total_bonus / 100)))
 
         return {
             "base_income": base,

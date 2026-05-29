@@ -68,11 +68,18 @@ async def _show_business_main(
     circ_passive = info.get("circ_passive_income", 0)
     circ_line = ""
     if circ_passive:
-        circ_per_min = info.get("circ_passive_per_min", 0)
-        circ_line = (
-            f"\n💸 Пассивный доход: {fmt_num(circ_passive)}/час"
-            + (f" (~{fmt_num(circ_per_min)}/мин)" if circ_per_min else "")
-        )
+        circ_per_min  = info.get("circ_passive_per_min", 0)
+        total_bonus   = info.get("total_bonus_percent", 0)
+        potion_bonus  = info.get("potion_bonus", 0)
+        circ_all_pct  = total_bonus + potion_bonus
+        base_per_min  = max(0, circ_passive // 60)
+        if circ_all_pct and circ_per_min != base_per_min:
+            circ_line = (
+                f"\n💸 Пассивный доход: +{fmt_num(circ_per_min)}/мин"
+                f" (с баффами +{circ_all_pct}%, базово {fmt_num(base_per_min)}/мин)"
+            )
+        else:
+            circ_line = f"\n💸 Пассивный доход: +{fmt_num(circ_per_min or base_per_min)}/мин"
 
     try:
         await cb.message.edit_text(

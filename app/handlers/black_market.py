@@ -46,9 +46,23 @@ async def cb_black_market(cb: CallbackQuery, session: AsyncSession, user: User):
     ))
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
 
-    # Суммарный пассивный доход от кругов
+    # Суммарный пассивный доход от кругов (со всеми % баффами дохода)
     passive = getattr(user, "circ_passive_income", 0)
-    passive_line = f"\n💸 Пассивный доход: +{passive:,} NHCoin/час" if passive else ""
+    passive_line = ""
+    if passive:
+        from app.services.business_service import business_service as _bs
+        from app.utils.formatters import fmt_num as _fn
+        info = await _bs.get_income_breakdown(session, user)
+        base_per_min = max(0, passive // 60)
+        eff_per_min  = info.get("circ_passive_per_min", base_per_min)
+        all_pct      = info.get("total_bonus_percent", 0) + info.get("potion_bonus", 0)
+        if all_pct and eff_per_min != base_per_min:
+            passive_line = (
+                f"\n💸 Пассивный доход: +{_fn(eff_per_min)}/мин"
+                f" (с баффами +{all_pct}%, базово {_fn(base_per_min)}/мин)"
+            )
+        else:
+            passive_line = f"\n💸 Пассивный доход: +{_fn(eff_per_min)}/мин"
 
     try:
         await cb.message.edit_text(

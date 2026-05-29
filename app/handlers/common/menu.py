@@ -117,6 +117,17 @@ async def cb_profile(cb: CallbackQuery, session: AsyncSession, user: User):
         + (f" → {fmt_num(info['final_income'])}/мин" if info['final_income'] != info['base_income'] else "")
         + (f" (+{info['total_bonus_percent']}%)" if info['total_bonus_percent'] else "")
         + (f"\n  💎 Клан-донат: +{info['clan_donat_income_bonus']}% к доходу" if info.get('clan_donat_income_bonus') else "")
+        + (
+            (
+                f"\n  💸 Пассивный: +{fmt_num(info['circ_passive_per_min'])}/мин"
+                + (
+                    f" (🧪 +{info['potion_bonus']}%)"
+                    if info.get('potion_bonus') and info['circ_passive_per_min'] != max(0, (info['circ_passive_income'] or 0) // 60)
+                    else ""
+                )
+            )
+            if info.get('circ_passive_income') else ""
+        )
         + f"\n\n━━━ ⚔️ Боевые ━━━\n"
         f"Мощь: {fmt_num(user.combat_power)}\n"
         f"Влияние: {fmt_num(user.influence)}\n\n"

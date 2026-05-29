@@ -59,6 +59,10 @@ async def income_tick():
                     User.circ_passive_income,
                     User.referred_by,
                     User.teacher_income_share,
+                    User.income_bonus_percent,
+                    User.prestige_income_bonus,
+                    User.clan_income_bonus,
+                    User.clan_donat_income_bonus,
                 ).where(
                     or_(User.income_per_minute > 0, User.circ_passive_income > 0)
                 )
@@ -108,10 +112,13 @@ async def income_tick():
                             earned += total
 
                 # Пассивный доход от круговых донатов: NHCoin/час → /60 за тик
-                # Бафы дохода (зелья) применяются так же, как к income_per_minute
+                # Применяем все % баффы дохода: навыки, пробуждение, клан, зелье
                 circ = u.circ_passive_income or 0
                 if circ > 0:
-                    per_tick = max(0, int((circ / 60) * (1 + potion_bonus / 100)))
+                    skills_bonus = (u.income_bonus_percent or 0) + (u.prestige_income_bonus or 0)
+                    clan_bonus   = (u.clan_income_bonus or 0) + (u.clan_donat_income_bonus or 0)
+                    circ_total_bonus = skills_bonus + clan_bonus + potion_bonus
+                    per_tick = max(0, int((circ / 60) * (1 + circ_total_bonus / 100)))
                     if per_tick > 0:
                         earned += per_tick
 

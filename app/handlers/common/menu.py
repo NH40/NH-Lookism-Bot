@@ -122,7 +122,7 @@ async def cb_profile(cb: CallbackQuery, session: AsyncSession, user: User):
                 f"\n  💸 Пассивный: +{fmt_num(info['circ_passive_per_min'])}/мин"
                 + (
                     f" (🧪 +{info['potion_bonus']}%)"
-                    if info.get('potion_bonus') and info['circ_passive_per_min'] != max(0, (info['circ_passive_income'] or 0) // 60)
+                    if info.get('potion_bonus') and info['circ_passive_per_min'] != (info['circ_passive_income'] or 0)
                     else ""
                 )
             )

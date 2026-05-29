@@ -53,7 +53,7 @@ async def cb_black_market(cb: CallbackQuery, session: AsyncSession, user: User):
         from app.services.business_service import business_service as _bs
         from app.utils.formatters import fmt_num as _fn
         info = await _bs.get_income_breakdown(session, user)
-        base_per_min = max(0, passive // 60)
+        base_per_min = passive  # уже в NHCoin/мин
         eff_per_min  = info.get("circ_passive_per_min", base_per_min)
         all_pct      = info.get("total_bonus_percent", 0) + info.get("potion_bonus", 0)
         if all_pct and eff_per_min != base_per_min:

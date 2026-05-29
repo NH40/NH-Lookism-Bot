@@ -95,7 +95,7 @@ class DuelService:
         b_power = bot_team_power_val(bot_cards)
         won = u_power >= b_power
 
-        # КД с учётом мастерства скорости + донат-бонуса
+        # КД с учётом мастерства скорости + донат-бонуса + all_cd_reduction (сет потока)
         from app.models.skill import UserMastery
         mastery = await session.scalar(
             select(UserMastery).where(UserMastery.user_id == user.id)
@@ -104,8 +104,9 @@ class DuelService:
         raw_speed = speed_levels.get(mastery.speed if mastery else 0, 0)
         speed_pct = int(raw_speed * getattr(user, "skill_path_bonus_multiplier", 1.0))
         donat_pct = DUEL_DONAT_CD_REDUCTION if getattr(user, "donat_duel_cd", False) else 0
+        flow_pct = getattr(user, "all_cd_reduction", 0) or 0
         cd_seconds = cooldown_service.apply_speed_reduction(
-            DUEL_BOT_CD_BASE, speed_pct, extra_pct=donat_pct
+            DUEL_BOT_CD_BASE, speed_pct, extra_pct=donat_pct + flow_pct
         )
         await cooldown_service.set_cooldown(cd_key, cd_seconds)
 
@@ -125,6 +126,7 @@ class DuelService:
             "cd_seconds": cd_seconds,
             "speed_pct": speed_pct,
             "donat_pct": donat_pct,
+            "flow_pct": flow_pct,
         }
 
     async def send_challenge(

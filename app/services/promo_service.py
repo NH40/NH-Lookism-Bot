@@ -149,7 +149,8 @@ class PromoService:
 
     def _apply_reward(self, user: User, reward_type: str, amount: int) -> None:
         if reward_type == "tickets":
-            user.tickets += amount
+            from app.config.game_balance import ticket_hard_cap
+            user.tickets = min(user.tickets + amount, ticket_hard_cap(user))
         elif reward_type == "coins":
             user.nh_coins += amount
         elif reward_type == "ui_fragments":

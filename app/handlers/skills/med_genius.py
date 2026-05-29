@@ -139,6 +139,10 @@ async def cb_med_genius(cb: CallbackQuery, session: AsyncSession, user: User):
             text="⚙️ Вкл/Выкл авто-зелий",
             callback_data="mg_toggles",
         ))
+        builder.row(InlineKeyboardButton(
+            text="💊 Купить зелье",
+            callback_data="mg_buy_menu",
+        ))
     if not donat:
         builder.row(InlineKeyboardButton(
             text="🔨 Открыть уровни (Крафт)",
@@ -222,3 +226,141 @@ async def cb_mg_toggle(cb: CallbackQuery, session: AsyncSession, user: User):
 async def cb_mg_toggle_power(cb: CallbackQuery, session: AsyncSession, user: User):
     cb.data = "mg_toggle:power"
     await cb_mg_toggle(cb, session, user)
+
+
+# ── Ручная покупка зелий ─────────────────────────────────────────────────────
+
+@router.callback_query(F.data == "mg_buy_menu")
+async def cb_mg_buy_menu(cb: CallbackQuery, session: AsyncSession, user: User):
+    """Список типов зелий с кнопкой выбора уровня."""
+    from app.models.potion import ActivePotion
+    from app.data.shop import MG_TIERS
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    from sqlalchemy import select as _select
+    active_r = await session.execute(
+        _select(ActivePotion).where(
+            ActivePotion.user_id == user.id,
+            ActivePotion.expires_at > now,
+        )
+    )
+    active_types = {p.potion_type for p in active_r.scalars().all()}
+
+    builder = InlineKeyboardBuilder()
+    lines = ["💊 <b>Купить зелье</b>\n", "Выберите тип зелья:\n"]
+
+    for p in MG_POTIONS:
+        max_lvl = MG_MAX_LEVEL if is_donat(user) else getattr(user, p["level_field"], 0)
+        if max_lvl == 0:
+            continue
+        active_mark = " ✅" if p["type"] in active_types else ""
+        builder.row(InlineKeyboardButton(
+            text=f"{p['name']}{active_mark}",
+            callback_data=f"mg_buy:{p['type']}",
+        ))
+        lines.append(f"  {p['name']} [макс Ур.{max_lvl}]{active_mark}")
+
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="med_genius"))
+
+    try:
+        await cb.message.edit_text(
+            "\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("mg_buy:"))
+async def cb_mg_buy_select(cb: CallbackQuery, session: AsyncSession, user: User):
+    """Выбор уровня зелья."""
+    from app.data.shop import MG_TIERS
+    potion_type = cb.data.split(":")[1]
+    cfg = MG_POTION_MAP.get(potion_type)
+    if not cfg:
+        await cb.answer("Неизвестный тип зелья", show_alert=True)
+        return
+
+    max_lvl = MG_MAX_LEVEL if is_donat(user) else getattr(user, cfg["level_field"], 0)
+    if max_lvl == 0:
+        await cb.answer("Этот тип зелья ещё не открыт", show_alert=True)
+        return
+
+    tiers = MG_TIERS[potion_type]
+    builder = InlineKeyboardBuilder()
+    lines = [f"💊 <b>{cfg['name']}</b>\n", "Выберите уровень:\n"]
+
+    for lvl in range(1, max_lvl + 1):
+        tier = tiers[lvl - 1]
+        affordable = "✅" if user.nh_coins >= tier.price else "❌"
+        lines.append(
+            f"  {affordable} Ур.{lvl}: +{tier.effect_value}% | "
+            f"{tier.duration_minutes} мин | {tier.price:,} монет"
+        )
+        builder.row(InlineKeyboardButton(
+            text=f"Ур.{lvl}: +{tier.effect_value}% — {tier.price:,} монет",
+            callback_data=f"mg_buy_do:{potion_type}:{lvl}",
+        ))
+
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="mg_buy_menu"))
+
+    try:
+        await cb.message.edit_text(
+            "\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("mg_buy_do:"))
+async def cb_mg_buy_do(cb: CallbackQuery, session: AsyncSession, user: User):
+    """Купить зелье выбранного уровня."""
+    from app.data.shop import MG_TIERS
+    from app.services.potion_service import potion_service as _ps
+
+    parts = cb.data.split(":")
+    if len(parts) != 3:
+        await cb.answer("Ошибка параметров", show_alert=True)
+        return
+
+    potion_type, lvl_str = parts[1], parts[2]
+    try:
+        lvl = int(lvl_str)
+    except ValueError:
+        await cb.answer("Ошибка уровня", show_alert=True)
+        return
+
+    cfg = MG_POTION_MAP.get(potion_type)
+    if not cfg:
+        await cb.answer("Неизвестный тип зелья", show_alert=True)
+        return
+
+    max_lvl = MG_MAX_LEVEL if is_donat(user) else getattr(user, cfg["level_field"], 0)
+    if lvl < 1 or lvl > max_lvl:
+        await cb.answer("Этот уровень недоступен", show_alert=True)
+        return
+
+    tier = MG_TIERS[potion_type][lvl - 1]
+
+    if user.nh_coins < tier.price:
+        await cb.answer(
+            f"❌ Нужно {tier.price:,} монет, у вас {user.nh_coins:,}",
+            show_alert=True,
+        )
+        return
+
+    user.nh_coins -= tier.price
+    user.coins_spent = getattr(user, "coins_spent", 0) + tier.price
+    await _ps.apply_potion(
+        session, user.id,
+        tier.effect_key, tier.effect_value, tier.duration_minutes,
+    )
+    await session.commit()
+
+    await cb.answer(
+        f"✅ {tier.name} куплено!\n+{tier.effect_value}% на {tier.duration_minutes} мин",
+        show_alert=True,
+    )
+    await cb_mg_buy_select(cb, session, user)

@@ -13,7 +13,7 @@ class CharacterRankConfig:
 
 # Порядок от слабейшего к сильнейшему
 CHARACTER_RANKS: list[CharacterRankConfig] = [
-    CharacterRankConfig("member",      "Член банды",            500,         1_000,       40.00),
+    CharacterRankConfig("member",      "Член банды",            500,         1_000,       40.045),
     CharacterRankConfig("boss",        "Глава группировки",     1_000,       2_000,       20.00),
     CharacterRankConfig("king",        "Король",                2_000,       5_000,       20.00),
     CharacterRankConfig("strong_king", "Сильный король",        6_000,       80_000,       7.50),
@@ -21,8 +21,8 @@ CHARACTER_RANKS: list[CharacterRankConfig] = [
     CharacterRankConfig("new_legend",  "Новая легенда",         20_000,     100_000,       3.00),
     CharacterRankConfig("legend",      "Легенда",              320_000,     990_000,       1.40),
     CharacterRankConfig("peak",        "Вершина",            1_900_000,  12_000_000,       0.54),
-    CharacterRankConfig("absolute",    "Абсолют",            4_000_000,  40_000_000,       0.05),
-    CharacterRankConfig("perfection",  "Совершенство",      75_000_000, 100_000_000,       0.01),
+    CharacterRankConfig("absolute",    "Абсолют",            4_000_000,  40_000_000,       0.01),
+    CharacterRankConfig("perfection",  "Совершенство",      75_000_000, 100_000_000,       0.005),
 ]
 
 RANK_CONFIG_MAP: dict[str, CharacterRankConfig] = {

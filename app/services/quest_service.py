@@ -228,7 +228,8 @@ class QuestService:
         quest.is_claimed = True
         user.nh_coins += cfg.reward_coins
         if cfg.reward_tickets > 0:
-            user.tickets += cfg.reward_tickets
+            from app.config.game_balance import ticket_hard_cap
+            user.tickets = min(user.tickets + cfg.reward_tickets, ticket_hard_cap(user))
         user.daily_quests_completed = (user.daily_quests_completed or 0) + 1
 
         await session.flush()

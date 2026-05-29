@@ -152,8 +152,9 @@ async def msg_bulk_tickets(
     from app.models.user import User as UserModel
     users_r = await session.execute(select(UserModel))
     users = users_r.scalars().all()
+    from app.config.game_balance import ticket_hard_cap
     for u in users:
-        u.tickets += count
+        u.tickets = min(u.tickets + count, ticket_hard_cap(u))
     await session.flush()
     await message.answer(
         f"✅ Выдано {count} тикетов {len(users)} игрокам!",

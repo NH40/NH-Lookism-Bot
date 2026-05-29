@@ -42,7 +42,8 @@ async def cb_duel_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     speed_pct = int(raw_speed * getattr(user, "skill_path_bonus_multiplier", 1.0))
     from app.constants.cards import DUEL_BOT_CD_BASE, DUEL_DONAT_CD_REDUCTION
     donat_pct = DUEL_DONAT_CD_REDUCTION if getattr(user, "donat_duel_cd", False) else 0
-    total_cd_reduction = speed_pct + donat_pct
+    flow_pct = getattr(user, "all_cd_reduction", 0) or 0
+    total_cd_reduction = speed_pct + donat_pct + flow_pct
     effective_cd = max(10, int(DUEL_BOT_CD_BASE * (1 - total_cd_reduction / 100)))
     effective_cd_str = fmt_ttl(effective_cd)
 
@@ -51,6 +52,8 @@ async def cb_duel_menu(cb: CallbackQuery, session: AsyncSession, user: User):
         cd_bonus_lines.append(f"  ⚡ Мастерство скорости: -{speed_pct}%")
     if donat_pct:
         cd_bonus_lines.append(f"  💎 Донат ускорение: -{donat_pct}%")
+    if flow_pct:
+        cd_bonus_lines.append(f"  🌊 Сет Потока: -{flow_pct}%")
     cd_bonus_str = ("\n" + "\n".join(cd_bonus_lines)) if cd_bonus_lines else ""
 
     builder = InlineKeyboardBuilder()
@@ -158,6 +161,8 @@ async def cb_duel_bot(cb: CallbackQuery, session: AsyncSession, user: User):
         cd_parts.append(f"⚡ мастерство -{result['speed_pct']}%")
     if result.get("donat_pct"):
         cd_parts.append(f"💎 донат -{result['donat_pct']}%")
+    if result.get("flow_pct"):
+        cd_parts.append(f"🌊 поток -{result['flow_pct']}%")
     cd_bonus = f" ({', '.join(cd_parts)})" if cd_parts else ""
     lines.append(f"⏳ КД: {fmt_ttl(result['cd_seconds'])}{cd_bonus}")
 

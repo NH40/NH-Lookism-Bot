@@ -140,6 +140,7 @@ def apply_set_bonus(user: User, set_id: str) -> None:
             user.extra_attack_count = 1
     elif set_id == "flow":
         user.ticket_cd_reduction += 15
+        user.all_cd_reduction += 15
     elif set_id == "ui_set":
         user.ultra_instinct = True
 

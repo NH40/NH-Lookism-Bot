@@ -127,6 +127,7 @@ async def _boss_main_screen(
     text = (
         f"⚔️ <b>Боссы</b>\n\n"
         f"{cfg.emoji} <b>{cfg.name}</b>\n"
+        f"<i>{cfg.desc}</i>\n\n"
         f"{hp_line}"
         f"{extra_str}\n"
         f"⏳ До конца: <b>{fmt_ttl(time_left)}</b>\n\n"

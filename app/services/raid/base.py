@@ -509,7 +509,8 @@ class RaidService:
         user.ui_auto_train = True
         user.ui_auto_ticket = True
         user.ui_auto_pull = True
-        user.max_tickets = 999999
+        from app.config.game_balance import TUI_MAX_TICKETS
+        user.max_tickets = TUI_MAX_TICKETS
 
     def reset_game_ui(self, user: User) -> None:
         if not user.ui_is_donat:

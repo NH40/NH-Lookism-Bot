@@ -21,6 +21,17 @@ DEFAULT_MAX_TICKETS: int = 3
 DEFAULT_TICKET_CHANCE: int = 25
 # Максимальное число тикетов при Ultra Instinct (TUI)
 TUI_MAX_TICKETS: int = 500
+# Жёсткий лимит накопления тикетов для всех игроков
+TICKET_HARD_CAP: int = 500
+# Лимит с донатом «Хозяин горы» круг 4 (circ_ticket_overflow)
+TICKET_HARD_CAP_OVERFLOW: int = 1000
+
+
+def ticket_hard_cap(user) -> int:
+    """500 без доната Хозяина горы, 1000 с ним."""
+    if getattr(user, "circ_ticket_overflow", False):
+        return TICKET_HARD_CAP_OVERFLOW
+    return TICKET_HARD_CAP
 
 # ── Влияние ───────────────────────────────────────────────────────────────────
 # Начальное влияние после сброса/пробуждения

@@ -21,11 +21,11 @@ CRYPTO_CONFIG: dict[str, dict] = {
         "base_price":  100_00,   # 100.00 NHCoin (micro)
         "min_price":   50_00,    # нижний предел
         "max_price":   5_000_00, # верхний предел
-        # Параметры тика: (min_pct, max_pct, up_prob)
-        "tick_up_prob":   85,    # % шанс роста
+        # Умеренный рост: 62% шанс роста, симметричные ±3%
+        "tick_up_prob":   62,
         "tick_min_pct":   0,
-        "tick_max_pct":   5,
-        "tick_drop_pct":  2,     # максимальный процент падения
+        "tick_max_pct":   3,
+        "tick_drop_pct":  3,
     },
     "CriptoCH": {
         "emoji":       "🔴",
@@ -34,10 +34,12 @@ CRYPTO_CONFIG: dict[str, dict] = {
         "base_price":  50_00,
         "min_price":   1_00,
         "max_price":   10_000_00,
-        "tick_up_prob":   50,
+        # 55% вверх / 45% вниз компенсирует мультипликативный дрейф вниз —
+        # ожидаемый log-доход ≈ 0, цена реально скачет вверх-вниз
+        "tick_up_prob":   55,
         "tick_min_pct":   0,
-        "tick_max_pct":   40,
-        "tick_drop_pct":  40,
+        "tick_max_pct":   30,
+        "tick_drop_pct":  25,
     },
     "CriptoVVIP": {
         "emoji":       "🔵",

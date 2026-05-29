@@ -335,8 +335,8 @@ class BossService:
                 u = users_map.get(r["user_id"])
                 if not u:
                     continue
-                # Тикеты (для боссов игнорируем ограничение max_tickets)
-                u.tickets += r["tickets"]
+                from app.config.game_balance import ticket_hard_cap
+                u.tickets = min(u.tickets + r["tickets"], ticket_hard_cap(u))
 
                 # Менеджер: бонус/штраф монетами
                 if boss.boss_id == "manager":

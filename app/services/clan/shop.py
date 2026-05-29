@@ -28,8 +28,9 @@ class ClanShopService(ClanBaseService):
         users = (await session.execute(select(User).where(User.id.in_(user_ids)))).scalars().all()
 
         if item.item_type == "tickets":
+            from app.config.game_balance import ticket_hard_cap
             for u in users:
-                u.tickets += item.value
+                u.tickets = min(u.tickets + item.value, ticket_hard_cap(u))
 
         elif item.item_type == "potion":
             from app.services.potion_service import potion_service

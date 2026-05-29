@@ -103,7 +103,7 @@ BOT_TIERS: dict[str, dict] = {
 CARD_MAX_LEVEL: int = 3
 
 # КД дуэли с ботом (секунды) — сокращается мастерством скорости
-DUEL_BOT_CD_BASE: int = 15 * 60  # 15 минут
+DUEL_BOT_CD_BASE: int = 10 * 60  # 10 минут
 # Снижение КД дуэлей за донат-титул «Карточный мастер» (%)
 DUEL_DONAT_CD_REDUCTION: int = 20
 

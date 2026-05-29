@@ -91,9 +91,9 @@ async def income_tick():
 
             for u in users:
                 earned = 0
+                potion_bonus = income_bonuses.get(u.id, 0)
 
                 if u.income_per_minute > 0:
-                    potion_bonus = income_bonuses.get(u.id, 0)
                     total = int(u.income_per_minute * (1 + potion_bonus / 100))
 
                     if total > 0:
@@ -108,9 +108,10 @@ async def income_tick():
                             earned += total
 
                 # Пассивный доход от круговых донатов: NHCoin/час → /60 за тик
+                # Бафы дохода (зелья) применяются так же, как к income_per_minute
                 circ = u.circ_passive_income or 0
                 if circ > 0:
-                    per_tick = circ // 60
+                    per_tick = max(0, int((circ / 60) * (1 + potion_bonus / 100)))
                     if per_tick > 0:
                         earned += per_tick
 

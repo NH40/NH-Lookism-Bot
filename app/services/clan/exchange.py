@@ -26,8 +26,13 @@ class ClanExchangeService(ClanBaseService):
                 return {"ok": False, "reason": "Количество должно быть больше 0"}
             if from_user.tickets < amount:
                 return {"ok": False, "reason": f"Недостаточно тикетов (есть {from_user.tickets})"}
-            from_user.tickets -= amount
-            to_user.tickets += amount
+            from app.config.game_balance import ticket_hard_cap
+            cap = ticket_hard_cap(to_user)
+            if to_user.tickets >= cap:
+                return {"ok": False, "reason": f"У получателя хранилище полно ({to_user.tickets}/{cap})"}
+            actual = min(amount, cap - to_user.tickets)
+            from_user.tickets -= actual
+            to_user.tickets += actual
 
         elif resource_type == "mastery_points":
             if amount <= 0:

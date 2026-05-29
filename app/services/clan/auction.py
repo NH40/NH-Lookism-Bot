@@ -90,7 +90,8 @@ class ClanAuctionService(ClanBaseService):
         if rtype == "coins":
             winner.nh_coins += reward.get("amount", 0)
         elif rtype == "tickets":
-            winner.tickets += reward.get("amount", 0)
+            from app.config.game_balance import ticket_hard_cap
+            winner.tickets = min(winner.tickets + reward.get("amount", 0), ticket_hard_cap(winner))
         elif rtype == "path_fragments":
             winner.path_fragments = (winner.path_fragments or 0) + reward.get("amount", 0)
         elif rtype == "mastery_points":

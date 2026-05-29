@@ -278,7 +278,8 @@ class MarketService:
         item_type: str, amount: int, meta: dict
     ) -> None:
         if item_type == "tickets":
-            user.tickets += amount
+            from app.config.game_balance import ticket_hard_cap
+            user.tickets = min(user.tickets + amount, ticket_hard_cap(user))
 
         elif item_type == "path_points":
             user.skill_path_points += amount

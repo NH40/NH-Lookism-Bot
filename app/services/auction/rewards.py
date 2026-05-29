@@ -72,7 +72,8 @@ async def _deliver_reward(
 ) -> None:
     data = json.loads(lot.reward_data)
     if lot.reward_type == "tickets":
-        user.tickets += data["tickets"]
+        from app.config.game_balance import ticket_hard_cap
+        user.tickets = min(user.tickets + data["tickets"], ticket_hard_cap(user))
     elif lot.reward_type == "potion":
         # Единый путь через potion_service.activate — поддерживает и старые, и новые ID
         from app.services.potion_service import potion_service

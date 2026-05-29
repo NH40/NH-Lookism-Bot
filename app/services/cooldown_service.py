@@ -107,6 +107,10 @@ class CooldownService:
         return f"duel:challenge:{to_user_id}"
 
     @staticmethod
+    def duel_pvp_key(user_id: int) -> str:
+        return f"cd:duel_pvp:{user_id}"
+
+    @staticmethod
     def raid_lock_key(user_id: int) -> str:
         return f"lock:raid:{user_id}"
 

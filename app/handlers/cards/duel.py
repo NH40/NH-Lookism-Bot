@@ -31,6 +31,8 @@ async def cb_duel_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     from sqlalchemy import select as sa_select
     ttl = await cooldown_service.get_ttl(cooldown_service.duel_bot_key(user.id))
     cd_str = f"⏳ {fmt_ttl(ttl)}" if ttl > 0 else "✅ Готов"
+    pvp_ttl = await cooldown_service.get_ttl(cooldown_service.duel_pvp_key(user.id))
+    pvp_cd_str = f"⏳ {fmt_ttl(pvp_ttl)}" if pvp_ttl > 0 else "✅ Готов"
     dust = getattr(user, "card_dust", 0)
 
     # Расчёт текущего КД-бонуса
@@ -40,7 +42,7 @@ async def cb_duel_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     speed_levels = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
     raw_speed = speed_levels.get(mastery.speed if mastery else 0, 0)
     speed_pct = int(raw_speed * getattr(user, "skill_path_bonus_multiplier", 1.0))
-    from app.constants.cards import DUEL_BOT_CD_BASE, DUEL_DONAT_CD_REDUCTION
+    from app.constants.cards import DUEL_BOT_CD_BASE, DUEL_PVP_CD_BASE, DUEL_DONAT_CD_REDUCTION
     donat_pct = DUEL_DONAT_CD_REDUCTION if getattr(user, "donat_duel_cd", False) else 0
     flow_pct = getattr(user, "all_cd_reduction", 0) or 0
     total_cd_reduction = speed_pct + donat_pct + flow_pct
@@ -63,13 +65,15 @@ async def cb_duel_menu(cb: CallbackQuery, session: AsyncSession, user: User):
             text=f"{cfg['emoji']} {cfg['name']}{cd_mark}",
             callback_data=f"duel_bot:{tier_id}",
         ))
-    builder.row(InlineKeyboardButton(text="⚔️ Против игрока", callback_data="duel_pvp"))
+    pvp_mark = " ⏳" if pvp_ttl > 0 else ""
+    builder.row(InlineKeyboardButton(text=f"⚔️ Против игрока{pvp_mark}", callback_data="duel_pvp"))
     builder.row(InlineKeyboardButton(text="◀️ К колоде", callback_data="deck"))
 
     text = (
         f"⚔️ <b>Дуэли</b>\n\n"
         f"💎 Пыль: {fmt_power(dust)}\n"
         f"🤖 КД бота: {cd_str}\n"
+        f"👤 КД PvP: {pvp_cd_str}\n"
         f"⏱ Базовый КД: {fmt_ttl(DUEL_BOT_CD_BASE)} → {effective_cd_str}"
         f"{cd_bonus_str}\n\n"
         f"Команда = 5 из колоды + 5 случайных\n"
@@ -186,6 +190,10 @@ async def cb_duel_bot(cb: CallbackQuery, session: AsyncSession, user: User):
 
 @router.callback_query(F.data == "duel_pvp")
 async def cb_duel_pvp(cb: CallbackQuery, user: User, state: FSMContext):
+    pvp_ttl = await cooldown_service.get_ttl(cooldown_service.duel_pvp_key(user.id))
+    if pvp_ttl > 0:
+        await cb.answer(f"⏳ КД PvP-дуэли: {fmt_ttl(pvp_ttl)}", show_alert=True)
+        return
     await state.set_state(DuelFSM.waiting_opponent)
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="duel_menu"))

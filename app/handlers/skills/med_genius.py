@@ -126,19 +126,18 @@ async def cb_med_genius(cb: CallbackQuery, session: AsyncSession, user: User):
     lines.append("<b>Авто-зелья:</b>")
     has_any = False
     for p in MG_POTIONS:
-        lvl = potion_level(user, p["type"])
-        if lvl == 0:
+        max_lvl = MG_MAX_LEVEL if donat else getattr(user, p["level_field"], 0)
+        if max_lvl == 0:
             lines.append(f"  🔒 {p['name']} — не открыто")
         else:
             has_any = True
-            enabled = getattr(user, p["toggle_field"], True)
-            status  = "✅" if enabled else "❌"
+            enabled  = getattr(user, p["toggle_field"], True)
+            status   = "✅" if enabled else "❌"
             pref_lvl = getattr(user, p["pref_field"], 0)
-            auto_lvl = pref_lvl if pref_lvl > 0 else lvl
-            tier    = MG_TIERS[p["type"]][auto_lvl - 1]
-            pref_str = f" (авто: Ур.{auto_lvl})" if pref_lvl > 0 and pref_lvl != lvl else ""
+            auto_lvl = pref_lvl if pref_lvl > 0 else max_lvl
+            tier     = MG_TIERS[p["type"]][auto_lvl - 1]
             lines.append(
-                f"  {status} {p['name']} [макс Ур.{lvl}{pref_str}] — "
+                f"  {status} {p['name']} [авто Ур.{auto_lvl} / макс Ур.{max_lvl}] — "
                 f"+{tier.effect_value}% | {fmt_num(tier.price)} монет"
             )
 
@@ -237,38 +236,27 @@ async def cb_mg_toggle_power(cb: CallbackQuery, session: AsyncSession, user: Use
     await cb_mg_toggle(cb, session, user)
 
 
-# ── Ручная покупка зелий ─────────────────────────────────────────────────────
+# ── Выбор уровня авто-покупки зелий ──────────────────────────────────────────
 
 @router.callback_query(F.data == "mg_buy_menu")
 async def cb_mg_buy_menu(cb: CallbackQuery, session: AsyncSession, user: User):
-    """Список типов зелий с кнопкой выбора уровня."""
-    from app.models.potion import ActivePotion
+    """Список типов зелий — выбор авто-уровня."""
     from app.data.shop import MG_TIERS
-    from datetime import datetime, timezone
-
-    now = datetime.now(timezone.utc)
-    from sqlalchemy import select as _select
-    active_r = await session.execute(
-        _select(ActivePotion).where(
-            ActivePotion.user_id == user.id,
-            ActivePotion.expires_at > now,
-        )
-    )
-    active_types = {p.potion_type for p in active_r.scalars().all()}
 
     builder = InlineKeyboardBuilder()
-    lines = ["💊 <b>Купить зелье</b>\n", "Выберите тип зелья:\n"]
+    lines = ["🔢 <b>Уровень авто-зелья</b>\n", "Выберите зелье для настройки авто-уровня:\n"]
 
     for p in MG_POTIONS:
         max_lvl = MG_MAX_LEVEL if is_donat(user) else getattr(user, p["level_field"], 0)
         if max_lvl == 0:
             continue
-        active_mark = " ✅" if p["type"] in active_types else ""
+        pref_lvl = getattr(user, p["pref_field"], 0)
+        cur_auto = pref_lvl if pref_lvl > 0 else max_lvl
         builder.row(InlineKeyboardButton(
-            text=f"{p['name']}{active_mark}",
+            text=f"{p['name']} [авто: Ур.{cur_auto}]",
             callback_data=f"mg_buy:{p['type']}",
         ))
-        lines.append(f"  {p['name']} [макс Ур.{max_lvl}]{active_mark}")
+        lines.append(f"  {p['name']} — авто Ур.{cur_auto} из макс Ур.{max_lvl}")
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="med_genius"))
 
@@ -283,7 +271,7 @@ async def cb_mg_buy_menu(cb: CallbackQuery, session: AsyncSession, user: User):
 
 @router.callback_query(F.data.startswith("mg_buy:"))
 async def cb_mg_buy_select(cb: CallbackQuery, session: AsyncSession, user: User):
-    """Выбор уровня зелья."""
+    """Выбор уровня авто-покупки для конкретного зелья."""
     from app.data.shop import MG_TIERS
     potion_type = cb.data.split(":")[1]
     cfg = MG_POTION_MAP.get(potion_type)
@@ -297,18 +285,25 @@ async def cb_mg_buy_select(cb: CallbackQuery, session: AsyncSession, user: User)
         return
 
     tiers = MG_TIERS[potion_type]
+    pref_lvl = getattr(user, cfg["pref_field"], 0)
+    cur_auto = pref_lvl if pref_lvl > 0 else max_lvl
+
     builder = InlineKeyboardBuilder()
-    lines = [f"💊 <b>{cfg['name']}</b>\n", "Выберите уровень:\n"]
+    lines = [
+        f"🔢 <b>{cfg['name']}</b>\n",
+        f"Текущий авто-уровень: <b>Ур.{cur_auto}</b>\n",
+        "Выберите уровень авто-покупки:\n",
+    ]
 
     for lvl in range(1, max_lvl + 1):
         tier = tiers[lvl - 1]
-        affordable = "✅" if user.nh_coins >= tier.price else "❌"
+        mark = " ◀ текущий" if lvl == cur_auto else ""
         lines.append(
-            f"  {affordable} Ур.{lvl}: +{tier.effect_value}% | "
-            f"{tier.duration_minutes} мин | {tier.price:,} монет"
+            f"  Ур.{lvl}: +{tier.effect_value}% | "
+            f"{tier.duration_minutes} мин | {tier.price:,} монет{mark}"
         )
         builder.row(InlineKeyboardButton(
-            text=f"Ур.{lvl}: +{tier.effect_value}% — {tier.price:,} монет",
+            text=f"✓ Ур.{lvl}: +{tier.effect_value}%  {tier.price:,} монет",
             callback_data=f"mg_buy_do:{potion_type}:{lvl}",
         ))
 
@@ -325,10 +320,7 @@ async def cb_mg_buy_select(cb: CallbackQuery, session: AsyncSession, user: User)
 
 @router.callback_query(F.data.startswith("mg_buy_do:"))
 async def cb_mg_buy_do(cb: CallbackQuery, session: AsyncSession, user: User):
-    """Купить зелье выбранного уровня."""
-    from app.data.shop import MG_TIERS
-    from app.services.potion_service import potion_service as _ps
-
+    """Сохранить выбранный уровень как авто-уровень (без немедленной покупки)."""
     parts = cb.data.split(":")
     if len(parts) != 3:
         await cb.answer("Ошибка параметров", show_alert=True)
@@ -351,30 +343,16 @@ async def cb_mg_buy_do(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer("Этот уровень недоступен", show_alert=True)
         return
 
-    tier = MG_TIERS[potion_type][lvl - 1]
-
-    if user.nh_coins < tier.price:
-        await cb.answer(
-            f"❌ Нужно {tier.price:,} монет, у вас {user.nh_coins:,}",
-            show_alert=True,
-        )
-        return
-
-    user.nh_coins -= tier.price
-    user.coins_spent = getattr(user, "coins_spent", 0) + tier.price
-    # Сохраняем preferred level для авто-покупки
     pref_field = cfg.get("pref_field")
     if pref_field and hasattr(user, pref_field):
         setattr(user, pref_field, lvl)
-    await _ps.apply_potion(
-        session, user.id,
-        tier.effect_key, tier.effect_value, tier.duration_minutes,
-    )
     await session.commit()
 
+    from app.data.shop import MG_TIERS
+    tier = MG_TIERS[potion_type][lvl - 1]
     await cb.answer(
-        f"✅ {tier.name} куплено!\n+{tier.effect_value}% на {tier.duration_minutes} мин\n"
-        f"Авто-покупка установлена на Ур.{lvl}",
+        f"✅ Авто-уровень установлен: Ур.{lvl}\n"
+        f"+{tier.effect_value}% | {tier.duration_minutes} мин | {tier.price:,} монет",
         show_alert=True,
     )
     await cb_mg_buy_select(cb, session, user)

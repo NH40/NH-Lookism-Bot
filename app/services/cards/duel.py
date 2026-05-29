@@ -14,7 +14,7 @@ from app.models.card_deck import UserDeck
 from app.services.cooldown_service import cooldown_service
 from app.data.characters import CHARACTERS
 from app.constants.cards import (
-    LEVEL_MULTIPLIERS, BOT_TIERS, DUEL_BOT_CD_BASE,
+    LEVEL_MULTIPLIERS, BOT_TIERS, DUEL_BOT_CD_BASE, DUEL_PVP_CD_BASE,
     DUEL_CHALLENGE_TTL, DUEL_DONAT_CD_REDUCTION,
 )
 
@@ -135,6 +135,12 @@ class DuelService:
         if from_user.id == to_user.id:
             return {"ok": False, "reason": "Нельзя вызвать самого себя"}
 
+        # КД PvP-дуэли у инициатора
+        pvp_cd_key = cooldown_service.duel_pvp_key(from_user.id)
+        if await cooldown_service.is_on_cooldown(pvp_cd_key):
+            ttl = await cooldown_service.get_ttl(pvp_cd_key)
+            return {"ok": False, "reason": f"⏳ КД PvP-дуэли: {cooldown_service.format_ttl(ttl)}"}
+
         has_cards = await session.scalar(
             select(UserCharacter.id).where(UserCharacter.user_id == from_user.id).limit(1)
         )
@@ -184,6 +190,16 @@ class DuelService:
         dust_reward = random.randint(50, 120)
         winner.card_dust = getattr(winner, "card_dust", 0) + dust_reward
         await session.flush()
+
+        # Устанавливаем КД PvP обоим участникам с учётом их all_cd_reduction
+        for participant in (from_user, to_user):
+            flow_pct = getattr(participant, "all_cd_reduction", 0) or 0
+            cd_secs = cooldown_service.apply_speed_reduction(
+                DUEL_PVP_CD_BASE, 0, extra_pct=flow_pct
+            )
+            await cooldown_service.set_cooldown(
+                cooldown_service.duel_pvp_key(participant.id), cd_secs
+            )
 
         return {
             "ok": True,

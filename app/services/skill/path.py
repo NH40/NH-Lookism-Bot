@@ -137,6 +137,9 @@ async def _apply_path_skill(session: AsyncSession, user: User, skill) -> None:
     for field, value in skill.effect.items():
         if isinstance(value, bool):
             setattr(user, field, value)
+            # При покупке скрытности сразу включаем toggle
+            if field == "path_unique_2" and value is True:
+                user.shadow_stealth_active = True
         elif isinstance(value, float):
             current = getattr(user, field, 1.0)
             setattr(user, field, current * value)

@@ -157,11 +157,19 @@ class User(Base):
     mg_auto_luck: Mapped[bool] = mapped_column(Boolean, default=True)
     mg_auto_influence: Mapped[bool] = mapped_column(Boolean, default=True)
     mg_auto_raid_drop: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Предпочитаемый уровень авто-покупки (0 = использовать максимальный доступный)
+    mg_pref_power:     Mapped[int] = mapped_column(Integer, default=0)
+    mg_pref_training:  Mapped[int] = mapped_column(Integer, default=0)
+    mg_pref_income:    Mapped[int] = mapped_column(Integer, default=0)
+    mg_pref_luck:      Mapped[int] = mapped_column(Integer, default=0)
+    mg_pref_influence: Mapped[int] = mapped_column(Integer, default=0)
+    mg_pref_raid_drop: Mapped[int] = mapped_column(Integer, default=0)
 
     # ── Пути: расширенные механики ────────────────────────────────────────────
     win_streak: Mapped[int] = mapped_column(Integer, default=0)
     path_unique_1: Mapped[bool] = mapped_column(Boolean, default=False)
     path_unique_2: Mapped[bool] = mapped_column(Boolean, default=False)
+    shadow_stealth_active: Mapped[bool] = mapped_column(Boolean, default=False)  # toggle скрытности (path_unique_2)
 
     # ── Круговые донаты ───────────────────────────────────────────────────────
     circ_passive_income: Mapped[int] = mapped_column(BigInteger, default=0)  # NHCoin/час

@@ -99,6 +99,15 @@ async def cb_path_menu(cb: CallbackQuery, session: AsyncSession, user: User):
                 )
     builder.adjust(1)
 
+    # Кнопка скрытности для пути Тень
+    if user.skill_path == "shadow" and getattr(user, "path_unique_2", False):
+        stealth_on = getattr(user, "shadow_stealth_active", False)
+        stealth_label = "🫥 Скрытность: ВКЛ ✅" if stealth_on else "👁 Скрытность: ВЫКЛ ❌"
+        builder.row(InlineKeyboardButton(
+            text=stealth_label,
+            callback_data="shadow_stealth_toggle"
+        ))
+
     slots_full = extra_count >= slots
     merge_icon = "🔒" if slots_full else "🌐"
     builder.row(InlineKeyboardButton(
@@ -283,3 +292,16 @@ async def cb_buy_path_skill(cb: CallbackQuery, session: AsyncSession, user: User
         await cb_path_menu(cb, session, user)
     else:
         await cb.answer(result["reason"], show_alert=True)
+
+
+@router.callback_query(F.data == "shadow_stealth_toggle")
+async def cb_shadow_stealth_toggle(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not getattr(user, "path_unique_2", False):
+        await cb.answer("Навык «Скрытность» не куплен", show_alert=True)
+        return
+    current = getattr(user, "shadow_stealth_active", False)
+    user.shadow_stealth_active = not current
+    await session.commit()
+    state = "включена 🫥" if not current else "выключена 👁"
+    await cb.answer(f"Скрытность {state}", show_alert=True)
+    await cb_path_menu(cb, session, user)

@@ -77,9 +77,10 @@ async def _med_genius_auto_potion(session: AsyncSession, user):
     active_set = {p.potion_type for p in active}
 
     for potion_cfg in MG_POTIONS:
-        ptype       = potion_cfg["type"]
+        ptype        = potion_cfg["type"]
         level_field  = potion_cfg["level_field"]
         toggle_field = potion_cfg["toggle_field"]
+        pref_field   = potion_cfg.get("pref_field", "")
 
         mg_lvl = 6 if donat else getattr(user, level_field, 0)
         if mg_lvl == 0:
@@ -88,6 +89,11 @@ async def _med_genius_auto_potion(session: AsyncSession, user):
             continue
         if ptype in active_set:
             continue
+
+        # Предпочитаемый уровень авто-покупки (если задан и не превышает доступный)
+        pref_lvl = getattr(user, pref_field, 0) if pref_field else 0
+        if pref_lvl and pref_lvl <= mg_lvl:
+            mg_lvl = pref_lvl
 
         tier = MG_TIERS[ptype][mg_lvl - 1]
         if user.nh_coins < tier.price:

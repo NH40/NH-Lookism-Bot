@@ -140,17 +140,17 @@ PATH_SKILLS: dict[str, list[PathSkill]] = {
     "shadow": [
         # ── Тень: путь скрытности, скорости и манипуляций ─────────────────────
         # Уровень 0
-        PathSkill("shd_cd_1",     "Бесшумный шаг",     "🌑", "-15% КД всех действий — ты двигаешься незаметно",        "shadow", 3,  {"all_cd_reduction": 15},         0),
-        PathSkill("shd_power_1",  "Удар из тени",       "🗡",  "+10% боевая мощь — первый удар всегда неожиданный",      "shadow", 4,  {"squad_power_bonus": 10},        0),
+        PathSkill("shd_cd_1",     "Бесшумный шаг",     "🌑", "-10% КД всех действий — ты двигаешься незаметно",        "shadow", 3,  {"all_cd_reduction": 10},         0),
+        PathSkill("shd_power_1",  "Удар из тени",       "🗡",  "+7% боевая мощь — первый удар всегда неожиданный",      "shadow", 4,  {"squad_power_bonus": 7},         0),
         # Уровень 1
-        PathSkill("shd_ticket_1", "Случайная удача",    "🎲", "+5% шанс тикета — хаос работает в твою пользу",          "shadow", 5,  {"ticket_chance": 5},             1),
-        PathSkill("shd_cd_2",     "Теневая скорость",   "⚡", "-20% КД атаки — ты быстрее чем кажешься",                "shadow", 6,  {"all_cd_reduction": 20},         1),
+        PathSkill("shd_ticket_1", "Случайная удача",    "🎲", "+3% шанс тикета — хаос работает в твою пользу",          "shadow", 5,  {"ticket_chance": 3},             1),
+        PathSkill("shd_cd_2",     "Теневая скорость",   "⚡", "-15% КД атаки — ты быстрее чем кажешься",                "shadow", 6,  {"all_cd_reduction": 15},         1),
         # Уровень 2
-        PathSkill("shd_power_2",  "Ночной охотник",     "🌙", "+20% боевая мощь — в темноте ты непобедим",              "shadow", 8,  {"squad_power_bonus": 20},        2),
-        PathSkill("shd_income_1", "Теневой рэкет",      "💸", "+15% доход — нелегальный бизнес всегда доходнее",        "shadow", 7,  {"income_bonus_percent": 15},     2),
+        PathSkill("shd_power_2",  "Ночной охотник",     "🌙", "+15% боевая мощь — в темноте ты непобедим",              "shadow", 8,  {"squad_power_bonus": 15},        2),
+        PathSkill("shd_income_1", "Теневой рэкет",      "💸", "+10% доход — нелегальный бизнес всегда доходнее",        "shadow", 7,  {"income_bonus_percent": 10},     2),
         # Уровень 3
-        PathSkill("shd_first_atk","Первый удар",        "💥", "Первая атака в бою +30% мощи — бей первым, бей жёстко",  "shadow", 10, {"path_unique_1": True},          3),
-        PathSkill("shd_cd_3",     "Поток теней",        "🌊", "-15% ещё КД всего — скорость твой конёк",               "shadow", 11, {"all_cd_reduction": 15},         3),
+        PathSkill("shd_first_atk","Первый удар",        "💥", "Первая атака в бою +20% мощи — бей первым, бей жёстко",  "shadow", 10, {"path_unique_1": True},          3),
+        PathSkill("shd_cd_3",     "Поток теней",        "🌊", "-10% ещё КД всего — скорость твой конёк",               "shadow", 11, {"all_cd_reduction": 10},         3),
         # Уровень 4
         PathSkill("shd_invisible","Скрытность",         "🫥", "Скрыть себя в топе — никто не знает чего ты достиг",    "shadow", 14, {"path_unique_2": True},          4),
         PathSkill("shd_streak",   "Серийный убийца",    "🔪", "+1 доп. атака — добивай пока враг не успел опомниться", "shadow", 15, {"extra_attack_count": 1},        4),
@@ -166,11 +166,11 @@ PATH_SYNERGIES: dict[tuple[str, str], dict] = {
     ("businessman", "shadow"):    {"name": "Теневой капитал",         "emoji": "🌑", "effect": {"income_bonus_percent": 10},     "desc": "+10% доход — деньги не пахнут"},
     ("romantic",    "monster"):   {"name": "Страсть к власти",        "emoji": "🔥", "effect": {"train_bonus_percent": 10},     "desc": "+10% охват тренировки"},
     ("romantic",    "businessman"):{"name": "Богатый покровитель",    "emoji": "💝", "effect": {"ticket_chance": 5},            "desc": "+5% шанс тикета"},
-    ("romantic",    "shadow"):    {"name": "Роковое влечение",        "emoji": "🌹", "effect": {"ticket_chance": 8},            "desc": "+8% шанс тикета — опасная привлекательность"},
+    ("romantic",    "shadow"):    {"name": "Роковое влечение",        "emoji": "🌹", "effect": {"ticket_chance": 5},            "desc": "+5% шанс тикета — опасная привлекательность"},
     ("monster",     "businessman"):{"name": "Рэкетир",                "emoji": "😤", "effect": {"income_bonus_percent": 5},     "desc": "+5% доход"},
     ("monster",     "romantic"):  {"name": "Одержимость силой",       "emoji": "👹", "effect": {"train_bonus_percent": 5},      "desc": "+5% охват тренировки"},
-    ("monster",     "shadow"):    {"name": "Ночная ярость",           "emoji": "🌑", "effect": {"squad_power_bonus": 10},       "desc": "+10% боевая мощь — удвоенная жестокость"},
-    ("shadow",      "businessman"):{"name": "Серый кардинал",         "emoji": "🃏", "effect": {"income_bonus_percent": 8},     "desc": "+8% доход — управляй из тени"},
-    ("shadow",      "romantic"):  {"name": "Теневой обаятель",        "emoji": "💫", "effect": {"recruit_count_bonus": 20},     "desc": "+20% вербовка — умеешь убеждать незаметно"},
-    ("shadow",      "monster"):   {"name": "Призрак войны",           "emoji": "⚔️", "effect": {"squad_power_bonus": 15},       "desc": "+15% боевая мощь — быстрый и смертоносный"},
+    ("monster",     "shadow"):    {"name": "Ночная ярость",           "emoji": "🌑", "effect": {"squad_power_bonus": 7},        "desc": "+7% боевая мощь — удвоенная жестокость"},
+    ("shadow",      "businessman"):{"name": "Серый кардинал",         "emoji": "🃏", "effect": {"income_bonus_percent": 5},     "desc": "+5% доход — управляй из тени"},
+    ("shadow",      "romantic"):  {"name": "Теневой обаятель",        "emoji": "💫", "effect": {"recruit_count_bonus": 12},     "desc": "+12% вербовка — умеешь убеждать незаметно"},
+    ("shadow",      "monster"):   {"name": "Призрак войны",           "emoji": "⚔️", "effect": {"squad_power_bonus": 8},        "desc": "+8% боевая мощь — быстрый и смертоносный"},
 }

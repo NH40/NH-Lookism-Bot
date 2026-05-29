@@ -17,53 +17,52 @@ CRYPTO_CONFIG: dict[str, dict] = {
     "CriptoNH": {
         "emoji":       "🟢",
         "name":        "CriptoNH",
-        "desc":        "Самая стабильная монета. Растёт медленно, падает редко.",
+        "desc":        "Самая стабильная монета. Растёт медленно, падает часто.",
         "base_price":  100_00,   # 100.00 NHCoin (micro)
         "min_price":   50_00,    # нижний предел
         "max_price":   5_000_00, # верхний предел
-        # Умеренный рост: 62% шанс роста, симметричные ±3%
-        "tick_up_prob":   62,
+        # Рост скромный, падение ощутимое
+        "tick_up_prob":   45,
         "tick_min_pct":   0,
-        "tick_max_pct":   3,
-        "tick_drop_pct":  3,
+        "tick_max_pct":   2,
+        "tick_drop_pct":  10,
     },
     "CriptoCH": {
         "emoji":       "🔴",
         "name":        "CriptoCH",
-        "desc":        "Самая нестабильная монета. Может дать огромный профит или убыток.",
+        "desc":        "Самая нестабильная монета. Огромный риск, огромные потери.",
         "base_price":  50_00,
         "min_price":   1_00,
         "max_price":   10_000_00,
-        # 55% вверх / 45% вниз компенсирует мультипликативный дрейф вниз —
-        # ожидаемый log-доход ≈ 0, цена реально скачет вверх-вниз
-        "tick_up_prob":   55,
+        # Сильно нестабильная: редко растёт, сильно падает
+        "tick_up_prob":   42,
         "tick_min_pct":   0,
-        "tick_max_pct":   30,
-        "tick_drop_pct":  25,
+        "tick_max_pct":   15,
+        "tick_drop_pct":  45,
     },
     "CriptoVVIP": {
         "emoji":       "🔵",
         "name":        "CriptoVVIP",
-        "desc":        "Средняя волатильность. Балансирует между ростом и падением.",
+        "desc":        "Средняя волатильность. Падает заметно сильнее чем растёт.",
         "base_price":  500_00,
         "min_price":   100_00,
         "max_price":   50_000_00,
-        "tick_up_prob":   60,
+        "tick_up_prob":   45,
         "tick_min_pct":   0,
-        "tick_max_pct":   20,
-        "tick_drop_pct":  15,
+        "tick_max_pct":   10,
+        "tick_drop_pct":  30,
     },
     "CriptoWWIP": {
         "emoji":       "🟡",
         "name":        "CriptoWWIP",
-        "desc":        "Самая дорогая монета. Колебания небольшие, но ощутимые.",
+        "desc":        "Самая дорогая монета. Редкий рост, ощутимые просадки.",
         "base_price":  5_000_00,
         "min_price":   1_000_00,
         "max_price":   500_000_00,
-        "tick_up_prob":   55,
+        "tick_up_prob":   42,
         "tick_min_pct":   0,
-        "tick_max_pct":   8,
-        "tick_drop_pct":  8,
+        "tick_max_pct":   4,
+        "tick_drop_pct":  20,
     },
 }
 

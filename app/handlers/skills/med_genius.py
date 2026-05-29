@@ -35,36 +35,42 @@ MG_POTIONS: list[dict] = [
         "name":         "⚔️ Зелье силы",
         "level_field":  "mg_level_power",
         "toggle_field": "mg_auto_power",
+        "pref_field":   "mg_pref_power",
     },
     {
         "type":         "training",
         "name":         "🏋 Зелье тренировки",
         "level_field":  "mg_level_training",
         "toggle_field": "mg_auto_training",
+        "pref_field":   "mg_pref_training",
     },
     {
         "type":         "income",
         "name":         "💰 Зелье богатства",
         "level_field":  "mg_level_income",
         "toggle_field": "mg_auto_income",
+        "pref_field":   "mg_pref_income",
     },
     {
         "type":         "luck",
         "name":         "🍀 Зелье удачи",
         "level_field":  "mg_level_luck",
         "toggle_field": "mg_auto_luck",
+        "pref_field":   "mg_pref_luck",
     },
     {
         "type":         "influence",
         "name":         "⚡ Зелье влияния",
         "level_field":  "mg_level_influence",
         "toggle_field": "mg_auto_influence",
+        "pref_field":   "mg_pref_influence",
     },
     {
         "type":         "raid_drop",
         "name":         "💠 Зелье охотника",
         "level_field":  "mg_level_raid_drop",
         "toggle_field": "mg_auto_raid_drop",
+        "pref_field":   "mg_pref_raid_drop",
     },
 ]
 MG_POTION_MAP: dict[str, dict] = {p["type"]: p for p in MG_POTIONS}
@@ -127,9 +133,12 @@ async def cb_med_genius(cb: CallbackQuery, session: AsyncSession, user: User):
             has_any = True
             enabled = getattr(user, p["toggle_field"], True)
             status  = "✅" if enabled else "❌"
-            tier    = MG_TIERS[p["type"]][lvl - 1]
+            pref_lvl = getattr(user, p["pref_field"], 0)
+            auto_lvl = pref_lvl if pref_lvl > 0 else lvl
+            tier    = MG_TIERS[p["type"]][auto_lvl - 1]
+            pref_str = f" (авто: Ур.{auto_lvl})" if pref_lvl > 0 and pref_lvl != lvl else ""
             lines.append(
-                f"  {status} {p['name']} [Ур.{lvl}] — "
+                f"  {status} {p['name']} [макс Ур.{lvl}{pref_str}] — "
                 f"+{tier.effect_value}% | {fmt_num(tier.price)} монет"
             )
 
@@ -140,7 +149,7 @@ async def cb_med_genius(cb: CallbackQuery, session: AsyncSession, user: User):
             callback_data="mg_toggles",
         ))
         builder.row(InlineKeyboardButton(
-            text="💊 Купить зелье",
+            text="🔢 Уровень зелья",
             callback_data="mg_buy_menu",
         ))
     if not donat:
@@ -353,6 +362,10 @@ async def cb_mg_buy_do(cb: CallbackQuery, session: AsyncSession, user: User):
 
     user.nh_coins -= tier.price
     user.coins_spent = getattr(user, "coins_spent", 0) + tier.price
+    # Сохраняем preferred level для авто-покупки
+    pref_field = cfg.get("pref_field")
+    if pref_field and hasattr(user, pref_field):
+        setattr(user, pref_field, lvl)
     await _ps.apply_potion(
         session, user.id,
         tier.effect_key, tier.effect_value, tier.duration_minutes,
@@ -360,7 +373,8 @@ async def cb_mg_buy_do(cb: CallbackQuery, session: AsyncSession, user: User):
     await session.commit()
 
     await cb.answer(
-        f"✅ {tier.name} куплено!\n+{tier.effect_value}% на {tier.duration_minutes} мин",
+        f"✅ {tier.name} куплено!\n+{tier.effect_value}% на {tier.duration_minutes} мин\n"
+        f"Авто-покупка установлена на Ур.{lvl}",
         show_alert=True,
     )
     await cb_mg_buy_select(cb, session, user)

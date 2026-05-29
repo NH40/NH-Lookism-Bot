@@ -4,8 +4,8 @@ from app.models.user import User
 from app.services.potion_service import potion_service
 from app.repositories.user_repo import user_repo
 
-# Shadow path: «Первый удар» — первая атака в бою дает +30% к мощи
-_SHADOW_FIRST_ATTACK_BONUS = 0.30
+# Shadow path: «Первый удар» — первая атака в бою дает +20% к мощи
+_SHADOW_FIRST_ATTACK_BONUS = 0.20
 
 
 async def get_effective_power(session: AsyncSession, user: User) -> int:
@@ -35,7 +35,7 @@ async def roll_crit(session: AsyncSession, user: User) -> tuple[int, bool]:
 def _apply_shadow_first_attack(user: User, power: int) -> tuple[int, bool]:
     """
     Тень: «Первый удар» (path_unique_1=True).
-    Первая атака в каждой атакующей сессии (double_attack_used=False) даёт +30% к мощи.
+    Первая атака в каждой атакующей сессии (double_attack_used=False) даёт +20% к мощи.
     Возвращает (power, first_attack_bonus_applied).
     """
     if getattr(user, "path_unique_1", False) and not getattr(user, "double_attack_used", False):

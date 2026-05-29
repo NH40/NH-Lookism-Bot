@@ -22,10 +22,10 @@ async def _get_top_cached(session: AsyncSession) -> list:
     raw = await r.get("cache:top10")
     if raw:
         return [SimpleNamespace(**d) for d in json.loads(raw)]
-    # path_unique_2 = скрытность (Тень): скрыть из топа
+    # shadow_stealth_active = скрытность включена (навык Тени): скрыть из топа
     result = await session.execute(
         select(User.full_name, User.combat_power, User.phase, User.ultra_instinct)
-        .where(User.path_unique_2.is_(False))
+        .where(User.shadow_stealth_active.is_(False))
         .order_by(User.combat_power.desc())
         .limit(10)
     )
@@ -46,13 +46,13 @@ async def _get_players_page_cached(session: AsyncSession, page: int) -> tuple[li
     cached_page = await r.get(page_key)
     if cached_count and cached_page:
         return [SimpleNamespace(**d) for d in json.loads(cached_page)], int(cached_count)
-    # path_unique_2 = скрытность: скрыть из общего списка
+    # shadow_stealth_active = скрытность включена: скрыть из общего списка
     total = await session.scalar(
-        select(func.count(User.id)).where(User.path_unique_2.is_(False))
+        select(func.count(User.id)).where(User.shadow_stealth_active.is_(False))
     ) or 0
     result = await session.execute(
         select(User.id, User.full_name, User.combat_power, User.phase, User.ultra_instinct)
-        .where(User.path_unique_2.is_(False))
+        .where(User.shadow_stealth_active.is_(False))
         .order_by(User.combat_power.desc())
         .offset(page * PAGE_SIZE)
         .limit(PAGE_SIZE)

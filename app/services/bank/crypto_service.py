@@ -24,7 +24,7 @@ CRYPTO_CONFIG: dict[str, dict] = {
         # Рост скромный, падение ощутимое
         "tick_up_prob":   45,
         "tick_min_pct":   0,
-        "tick_max_pct":   2,
+        "tick_max_pct":   10,
         "tick_drop_pct":  10,
     },
     "CriptoCH": {
@@ -37,7 +37,7 @@ CRYPTO_CONFIG: dict[str, dict] = {
         # Сильно нестабильная: редко растёт, сильно падает
         "tick_up_prob":   42,
         "tick_min_pct":   0,
-        "tick_max_pct":   15,
+        "tick_max_pct":   45,
         "tick_drop_pct":  45,
     },
     "CriptoVVIP": {

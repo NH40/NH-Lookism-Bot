@@ -15,7 +15,7 @@ from app.services.cooldown_service import cooldown_service
 from app.data.characters import CHARACTERS
 from app.constants.cards import (
     LEVEL_MULTIPLIERS, BOT_TIERS, DUEL_BOT_CD_BASE, DUEL_PVP_CD_BASE,
-    DUEL_CHALLENGE_TTL, DUEL_DONAT_CD_REDUCTION,
+    DUEL_MIN_CD, DUEL_CHALLENGE_TTL, DUEL_DONAT_CD_REDUCTION,
 )
 
 CHALLENGE_TTL = DUEL_CHALLENGE_TTL  # псевдоним для обратной совместимости
@@ -105,9 +105,9 @@ class DuelService:
         speed_pct = int(raw_speed * getattr(user, "skill_path_bonus_multiplier", 1.0))
         donat_pct = DUEL_DONAT_CD_REDUCTION if getattr(user, "donat_duel_cd", False) else 0
         flow_pct = getattr(user, "all_cd_reduction", 0) or 0
-        cd_seconds = cooldown_service.apply_speed_reduction(
+        cd_seconds = max(DUEL_MIN_CD, cooldown_service.apply_speed_reduction(
             DUEL_BOT_CD_BASE, speed_pct, extra_pct=donat_pct + flow_pct
-        )
+        ))
         await cooldown_service.set_cooldown(cd_key, cd_seconds)
 
         tier_cfg = BOT_TIERS.get(tier, BOT_TIERS["gen2"])
@@ -194,9 +194,9 @@ class DuelService:
         # Устанавливаем КД PvP обоим участникам с учётом их all_cd_reduction
         for participant in (from_user, to_user):
             flow_pct = getattr(participant, "all_cd_reduction", 0) or 0
-            cd_secs = cooldown_service.apply_speed_reduction(
+            cd_secs = max(DUEL_MIN_CD, cooldown_service.apply_speed_reduction(
                 DUEL_PVP_CD_BASE, 0, extra_pct=flow_pct
-            )
+            ))
             await cooldown_service.set_cooldown(
                 cooldown_service.duel_pvp_key(participant.id), cd_secs
             )

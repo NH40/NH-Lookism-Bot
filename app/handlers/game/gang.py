@@ -180,7 +180,15 @@ async def cb_choose_city(cb: CallbackQuery, session: AsyncSession, user: User):
 
 @router.callback_query(F.data == "do_attack")
 async def cb_do_attack(cb: CallbackQuery, session: AsyncSession, user: User):
-    result = await game_service.gang_attack_bot(session, user)
+    lock_key = cooldown_service.attack_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
+        await cb.answer("⏳ Атака уже обрабатывается", show_alert=True)
+        return
+
+    try:
+        result = await game_service.gang_attack_bot(session, user)
+    finally:
+        await cooldown_service.release_lock(lock_key)
 
     if result.get("promoted"):
         await cb.message.edit_text(

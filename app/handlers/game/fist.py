@@ -63,7 +63,16 @@ async def build_fist_menu(session, user):
 @router.callback_query(F.data.startswith("fist_bot:"))
 async def cb_fist_bot(cb: CallbackQuery, session: AsyncSession, user: User):
     bot_id = int(cb.data.split(":")[1])
-    result = await game_service.fist_attack_bot(session, user, bot_id)
+
+    lock_key = cooldown_service.attack_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
+        await cb.answer("⏳ Атака уже обрабатывается", show_alert=True)
+        return
+
+    try:
+        result = await game_service.fist_attack_bot(session, user, bot_id)
+    finally:
+        await cooldown_service.release_lock(lock_key)
 
     if result.get("promoted"):
         await cb.message.edit_text(
@@ -151,7 +160,16 @@ async def cb_fist_pvp_list(cb: CallbackQuery, session: AsyncSession, user: User)
 @router.callback_query(F.data.startswith("fist_pvp:"))
 async def cb_fist_pvp(cb: CallbackQuery, session: AsyncSession, user: User):
     defender_id = int(cb.data.split(":")[1])
-    result = await game_service.fist_pvp_attack(session, user, defender_id)
+
+    lock_key = cooldown_service.attack_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
+        await cb.answer("⏳ Атака уже обрабатывается", show_alert=True)
+        return
+
+    try:
+        result = await game_service.fist_pvp_attack(session, user, defender_id)
+    finally:
+        await cooldown_service.release_lock(lock_key)
 
     if result.get("promoted"):
         await cb.message.edit_text(

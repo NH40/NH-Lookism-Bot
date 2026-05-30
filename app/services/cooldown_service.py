@@ -141,6 +141,19 @@ class CooldownService:
     # ── Новые локи (защита от race condition) ──────────────────────────────
 
     @staticmethod
+    def attack_lock_key(user_id: int) -> str:
+        """Shared lock for gang/king/fist attacks (they share the same cd key)."""
+        return f"lock:attack:{user_id}"
+
+    @staticmethod
+    def boss_attack_lock_key(user_id: int) -> str:
+        return f"lock:boss_attack:{user_id}"
+
+    @staticmethod
+    def emperor_attack_lock_key(user_id: int) -> str:
+        return f"lock:emperor_attack:{user_id}"
+
+    @staticmethod
     def casino_lock_key(user_id: int) -> str:
         return f"lock:casino:{user_id}"
 
@@ -162,6 +175,9 @@ class CooldownService:
         Uses atomic SET NX EX — single round-trip, no race window."""
         result = await self.redis.set(key, "1", nx=True, ex=ttl)
         return result is not None
+
+    async def release_lock(self, key: str) -> None:
+        await self.redis.delete(key)
 
     def format_ttl(self, seconds: int) -> str:
         if seconds <= 0:

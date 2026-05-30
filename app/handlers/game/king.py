@@ -390,7 +390,15 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer("Все районы твои — нечего атаковать!", show_alert=True)
         return
 
-    result = await game_service.king_attack(session, user, city_id)
+    lock_key = cooldown_service.attack_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
+        await cb.answer("⏳ Атака уже обрабатывается", show_alert=True)
+        return
+
+    try:
+        result = await game_service.king_attack(session, user, city_id)
+    finally:
+        await cooldown_service.release_lock(lock_key)
 
     if result.get("promoted"):
         await cb.message.edit_text(

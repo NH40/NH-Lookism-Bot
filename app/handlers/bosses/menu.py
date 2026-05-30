@@ -219,81 +219,89 @@ async def cb_boss_attack(cb: CallbackQuery, session: AsyncSession, user: User):
 
     from app.services.cooldown_service import cooldown_service
 
-    # Проверяем КД
-    cd_key = f"boss:attack:{user.id}"
-    ttl = await cooldown_service.get_ttl(cd_key)
-    if ttl > 0:
-        await cb.answer(f"⏳ КД: {fmt_ttl(ttl)}", show_alert=True)
+    lock_key = cooldown_service.boss_attack_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=15):
+        await cb.answer("⏳ Атака уже обрабатывается", show_alert=True)
         return
 
-    # Проверяем, что босс ещё активен и совпадает с кнопкой
-    boss = await boss_service.get_current_boss(session)
-    if not boss or boss.id != boss_record_id:
-        await cb.answer("Босс уже не активен!", show_alert=True)
-        await _send_boss_screen(cb, session, user)
-        await cb.answer()
-        return
-
-    # Выполняем атаку
-    result = await boss_service.attack(session, user, boss)
-
-    if not result["ok"]:
-        await cb.answer(result["reason"], show_alert=True)
-        return
-
-    # Устанавливаем КД (с учётом cd_multiplier от Архангела)
-    base_cd = get_boss_attack_cd(user)
-    final_cd = int(base_cd * result["cd_multiplier"])
-    await cooldown_service.set_cooldown(cd_key, final_cd)
-
-    cfg = BOSS_MAP.get(boss.boss_id)
-    boss_defeated = result["boss_defeated"]
-
-    # Строим сообщение результата атаки
-    lines = [
-        f"⚔️ <b>Удар по {cfg.emoji} {cfg.name}!</b>\n",
-        f"💥 Урон: <b>{fmt_hp(result['damage'])}</b>",
-    ]
-
-    if result["special_effects"]:
-        lines.append("")
-        lines.extend(result["special_effects"])
-
-    lines.append("")
-    lines.append(f"<i>«{result['phrase']}»</i>")
-    lines.append("")
-
-    if boss_defeated:
-        lines.append(f"🏆 <b>БОСС ПОВЕРЖЕН!</b> Награды будут начислены!")
-    else:
-        hp_now = result["boss_hp"]
-        hp_max = result["boss_max_hp"]
-        if boss.boss_id == "brothers" and hp_now < 0:
-            lines.append(f"❤️ HP братьев: <b>{fmt_hp(hp_now)}</b> ← отрицательный!")
-        else:
-            lines.append(f"❤️ HP: <b>{fmt_hp(hp_now)}</b> / {fmt_hp(hp_max)}")
-            lines.append(_progress_bar_str(max(0, hp_now), hp_max))
-
-    if result["cd_multiplier"] > 1.0:
-        lines.append(f"\n⏳ КД удвоен Архангелом: <b>{fmt_ttl(final_cd)}</b>")
-    else:
-        lines.append(f"\n⏳ Следующая атака через: <b>{fmt_ttl(final_cd)}</b>")
-
-    text = "\n".join(lines)
-
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(
-        text="🔄 К боссу", callback_data="bosses_menu"
-    ))
-    builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
-
-    # Удаляем фото-сообщение (экран босса) и отправляем текст результата
     try:
-        await cb.message.delete()
-    except Exception:
-        pass
-    await cb.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    await cb.answer(f"Удар нанесён! -{fmt_hp(result['damage'])}")
+        # Проверяем КД
+        cd_key = f"boss:attack:{user.id}"
+        ttl = await cooldown_service.get_ttl(cd_key)
+        if ttl > 0:
+            await cb.answer(f"⏳ КД: {fmt_ttl(ttl)}", show_alert=True)
+            return
+
+        # Проверяем, что босс ещё активен и совпадает с кнопкой
+        boss = await boss_service.get_current_boss(session)
+        if not boss or boss.id != boss_record_id:
+            await cb.answer("Босс уже не активен!", show_alert=True)
+            await _send_boss_screen(cb, session, user)
+            await cb.answer()
+            return
+
+        # Выполняем атаку
+        result = await boss_service.attack(session, user, boss)
+
+        if not result["ok"]:
+            await cb.answer(result["reason"], show_alert=True)
+            return
+
+        # Устанавливаем КД (с учётом cd_multiplier от Архангела)
+        base_cd = get_boss_attack_cd(user)
+        final_cd = int(base_cd * result["cd_multiplier"])
+        await cooldown_service.set_cooldown(cd_key, final_cd)
+
+        cfg = BOSS_MAP.get(boss.boss_id)
+        boss_defeated = result["boss_defeated"]
+
+        # Строим сообщение результата атаки
+        lines = [
+            f"⚔️ <b>Удар по {cfg.emoji} {cfg.name}!</b>\n",
+            f"💥 Урон: <b>{fmt_hp(result['damage'])}</b>",
+        ]
+
+        if result["special_effects"]:
+            lines.append("")
+            lines.extend(result["special_effects"])
+
+        lines.append("")
+        lines.append(f"<i>«{result['phrase']}»</i>")
+        lines.append("")
+
+        if boss_defeated:
+            lines.append(f"🏆 <b>БОСС ПОВЕРЖЕН!</b> Награды будут начислены!")
+        else:
+            hp_now = result["boss_hp"]
+            hp_max = result["boss_max_hp"]
+            if boss.boss_id == "brothers" and hp_now < 0:
+                lines.append(f"❤️ HP братьев: <b>{fmt_hp(hp_now)}</b> ← отрицательный!")
+            else:
+                lines.append(f"❤️ HP: <b>{fmt_hp(hp_now)}</b> / {fmt_hp(hp_max)}")
+                lines.append(_progress_bar_str(max(0, hp_now), hp_max))
+
+        if result["cd_multiplier"] > 1.0:
+            lines.append(f"\n⏳ КД удвоен Архангелом: <b>{fmt_ttl(final_cd)}</b>")
+        else:
+            lines.append(f"\n⏳ Следующая атака через: <b>{fmt_ttl(final_cd)}</b>")
+
+        text = "\n".join(lines)
+
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(
+            text="🔄 К боссу", callback_data="bosses_menu"
+        ))
+        builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
+
+        try:
+            await cb.message.delete()
+        except Exception:
+            pass
+        await cb.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+        await cb.answer(f"Удар нанесён! -{fmt_hp(result['damage'])}")
+
+    finally:
+        await cooldown_service.release_lock(lock_key)
 
 
 # ── Топ атакующих ─────────────────────────────────────────────────────────────

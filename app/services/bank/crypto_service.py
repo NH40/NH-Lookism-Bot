@@ -37,8 +37,8 @@ CRYPTO_CONFIG: dict[str, dict] = {
         # Сильно нестабильная: редко растёт, сильно падает
         "tick_up_prob":   42,
         "tick_min_pct":   0,
-        "tick_max_pct":   45,
-        "tick_drop_pct":  45,
+        "tick_max_pct":   150,
+        "tick_drop_pct":  150,
     },
     "CriptoVVIP": {
         "emoji":       "🔵",

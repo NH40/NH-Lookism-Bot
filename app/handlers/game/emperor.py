@@ -177,116 +177,126 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
         await cb.answer("Группировка не найдена", show_alert=True)
         return
 
-    now = datetime.now(timezone.utc)
+    from app.services.cooldown_service import cooldown_service
 
-    # Получаем или создаём запись
-    rec = await _get_record(session, user.id, gang_id)
-    if not rec:
-        rec = EmperorGangRecord(user_id=user.id, gang_id=gang_id, defeat_count=0)
-        session.add(rec)
-        await session.flush()
-
-    # Проверяем КД
-    if rec.cooldown_until and rec.cooldown_until > now:
-        secs = int((rec.cooldown_until - now).total_seconds())
-        await cb.answer(f"⏳ КД: {fmt_ttl(secs)}", show_alert=True)
+    lock_key = cooldown_service.emperor_attack_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=15):
+        await cb.answer("⏳ Атака уже обрабатывается", show_alert=True)
         return
 
-    gang_power = _gang_power(cfg, rec.defeat_count)
+    try:
+        now = datetime.now(timezone.utc)
 
-    # Боевая мощь с учётом зелий
-    from app.services.combat_service import get_effective_power
-    user_power = await get_effective_power(session, user)
+        # Получаем или создаём запись
+        rec = await _get_record(session, user.id, gang_id)
+        if not rec:
+            rec = EmperorGangRecord(user_id=user.id, gang_id=gang_id, defeat_count=0)
+            session.add(rec)
+            await session.flush()
 
-    # Шанс победы: ratio-based, минимум 10%, максимум 90%
-    ratio = user_power / gang_power
-    win_chance = min(90, max(10, int(ratio * 60)))
-    won = random.randint(1, 100) <= win_chance
-
-    result_lines = [f"{cfg.emoji} <b>Бой: {cfg.name}</b>\n"]
-    result_lines.append(f"💪 Ваша мощь: {fmt_num(user_power)}")
-    result_lines.append(f"👊 Мощь врага: {fmt_num(gang_power)}\n")
-
-    dropped_char: dict | None = None  # карточка для отправки фото
-
-    if won:
-        # Начисляем монеты
-        coins_reward = random.randint(cfg.reward_coins_min, cfg.reward_coins_max)
-        user.nh_coins += coins_reward
-        result_lines.append(f"🏆 <b>ПОБЕДА!</b>")
-        result_lines.append(f"💰 +{fmt_num(coins_reward)} монет")
-
-        # Шанс карточки — только из состава группировки
-        got_card = random.randint(1, 100) <= cfg.drop_chance
-        if got_card:
-            from app.data.characters import CHARACTERS, RANK_EMOJI
-            candidates = [c for c in CHARACTERS if c["name"] in cfg.members]
-            if candidates:
-                char = random.choice(candidates)
-                from app.models.character import UserCharacter
-                from app.constants.cards import LEVEL_MULTIPLIERS
-                level = 0
-                base_power = char["power"]
-                power_val = int(base_power * LEVEL_MULTIPLIERS[level])
-                new_char = UserCharacter(
-                    user_id=user.id,
-                    character_id=char["name"],
-                    rank=char["rank"],
-                    base_power=base_power,
-                    power=power_val,
-                    level=level,
-                )
-                session.add(new_char)
-                from app.repositories.squad_repo import squad_repo
-                await squad_repo.update_user_combat_power(session, user)
-                rank_emoji = RANK_EMOJI.get(char["rank"], "⭐")
-                result_lines.append(f"🃏 Дроп: {rank_emoji} <b>{char['name']}</b>")
-                dropped_char = char
-
-        # Обновляем запись: +1 победа, ставим КД
-        rec.defeat_count += 1
-        rec.cooldown_until = now + timedelta(hours=GANG_COOLDOWN_HOURS)
-        new_power = _gang_power(cfg, rec.defeat_count)
-        result_lines.append(f"\n💹 Группировка усилилась до {fmt_num(new_power)} (+20%)")
-        result_lines.append(f"⏳ КД: {GANG_COOLDOWN_HOURS} час")
-
-        await session.flush()
-
-    else:
-        result_lines.append(f"💀 <b>ПОРАЖЕНИЕ</b>")
-        result_lines.append(f"Группировка оказалась сильнее. Прокачайся и попробуй снова!")
-
-    text = "\n".join(result_lines)
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(
-        text="◀️ К группировкам", callback_data="emperor_gangs"
-    ))
-    kb = builder.as_markup()
-
-    # Если выпала карточка — пробуем отправить фото
-    if dropped_char:
-        from app.bot_instance import get_bot
-        from app.utils.card_sender import send_card_photo
-        bot = get_bot()
-        sent = await send_card_photo(
-            bot=bot,
-            chat_id=cb.message.chat.id,
-            char_name=dropped_char["name"],
-            caption=text,
-            reply_markup=kb,
-        )
-        if sent:
-            # Удаляем предыдущее сообщение (меню атаки)
-            try:
-                await cb.message.delete()
-            except Exception:
-                pass
-            await cb.answer()
+        # Проверяем КД
+        if rec.cooldown_until and rec.cooldown_until > now:
+            secs = int((rec.cooldown_until - now).total_seconds())
+            await cb.answer(f"⏳ КД: {fmt_ttl(secs)}", show_alert=True)
             return
 
-    # Карточки нет или фото не нашлось — просто редактируем текст
-    try:
-        await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-    except Exception:
-        pass
-    await cb.answer()
+        gang_power = _gang_power(cfg, rec.defeat_count)
+
+        # Боевая мощь с учётом зелий
+        from app.services.combat_service import get_effective_power
+        user_power = await get_effective_power(session, user)
+
+        # Шанс победы: ratio-based, минимум 10%, максимум 90%
+        ratio = user_power / gang_power
+        win_chance = min(90, max(10, int(ratio * 60)))
+        won = random.randint(1, 100) <= win_chance
+
+        result_lines = [f"{cfg.emoji} <b>Бой: {cfg.name}</b>\n"]
+        result_lines.append(f"💪 Ваша мощь: {fmt_num(user_power)}")
+        result_lines.append(f"👊 Мощь врага: {fmt_num(gang_power)}\n")
+
+        dropped_char: dict | None = None  # карточка для отправки фото
+
+        if won:
+            # Начисляем монеты
+            coins_reward = random.randint(cfg.reward_coins_min, cfg.reward_coins_max)
+            user.nh_coins += coins_reward
+            result_lines.append(f"🏆 <b>ПОБЕДА!</b>")
+            result_lines.append(f"💰 +{fmt_num(coins_reward)} монет")
+
+            # Шанс карточки — только из состава группировки
+            got_card = random.randint(1, 100) <= cfg.drop_chance
+            if got_card:
+                from app.data.characters import CHARACTERS, RANK_EMOJI
+                candidates = [c for c in CHARACTERS if c["name"] in cfg.members]
+                if candidates:
+                    char = random.choice(candidates)
+                    from app.models.character import UserCharacter
+                    from app.constants.cards import LEVEL_MULTIPLIERS
+                    level = 0
+                    base_power = char["power"]
+                    power_val = int(base_power * LEVEL_MULTIPLIERS[level])
+                    new_char = UserCharacter(
+                        user_id=user.id,
+                        character_id=char["name"],
+                        rank=char["rank"],
+                        base_power=base_power,
+                        power=power_val,
+                        level=level,
+                    )
+                    session.add(new_char)
+                    from app.repositories.squad_repo import squad_repo
+                    await squad_repo.update_user_combat_power(session, user)
+                    rank_emoji = RANK_EMOJI.get(char["rank"], "⭐")
+                    result_lines.append(f"🃏 Дроп: {rank_emoji} <b>{char['name']}</b>")
+                    dropped_char = char
+
+            # Обновляем запись: +1 победа, ставим КД
+            rec.defeat_count += 1
+            rec.cooldown_until = now + timedelta(hours=GANG_COOLDOWN_HOURS)
+            new_power = _gang_power(cfg, rec.defeat_count)
+            result_lines.append(f"\n💹 Группировка усилилась до {fmt_num(new_power)} (+20%)")
+            result_lines.append(f"⏳ КД: {GANG_COOLDOWN_HOURS} час")
+
+            await session.flush()
+
+        else:
+            result_lines.append(f"💀 <b>ПОРАЖЕНИЕ</b>")
+            result_lines.append(f"Группировка оказалась сильнее. Прокачайся и попробуй снова!")
+
+        text = "\n".join(result_lines)
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(
+            text="◀️ К группировкам", callback_data="emperor_gangs"
+        ))
+        kb = builder.as_markup()
+
+        # Если выпала карточка — пробуем отправить фото
+        if dropped_char:
+            from app.bot_instance import get_bot
+            from app.utils.card_sender import send_card_photo
+            bot = get_bot()
+            sent = await send_card_photo(
+                bot=bot,
+                chat_id=cb.message.chat.id,
+                char_name=dropped_char["name"],
+                caption=text,
+                reply_markup=kb,
+            )
+            if sent:
+                try:
+                    await cb.message.delete()
+                except Exception:
+                    pass
+                await cb.answer()
+                return
+
+        # Карточки нет или фото не нашлось — просто редактируем текст
+        try:
+            await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+        except Exception:
+            pass
+        await cb.answer()
+
+    finally:
+        await cooldown_service.release_lock(lock_key)

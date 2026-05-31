@@ -14,7 +14,7 @@ MANAGER_KIM_POINTS_MIN = 1
 MANAGER_KIM_POINTS_MAX = 3
 
 # ── Гений войны: стоимость каждого уровня в очках войны ──────────────────────
-WAR_GENIUS_LEVEL_COSTS = [100, 300, 1000, 2000, 5000]
+WAR_GENIUS_LEVEL_COSTS = [50, 150, 500, 1000, 1500]
 
 # Какой босс открывается на каждом уровне Гения войны (авто-рейд)
 WAR_GENIUS_BOSS_MAP = {

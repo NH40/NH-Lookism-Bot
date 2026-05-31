@@ -87,6 +87,23 @@ class PrestigeService:
         user.double_ticket = False
         user.path_awakened = False
         user.squad_power_bonus = 0
+        user.all_cd_reduction = 0
+        user.recruit_discount_percent = 0
+        user.win_streak = 0
+        user.truce_until = None
+        user.truce_cd_until = None
+
+        # ── Гений войны и бизнеса — прогрессионные, всегда сбрасываются ─
+        user.war_points = 0
+        user.war_genius_level = 0
+        user.business_fragments = 0
+        user.bonus_business_districts = 0
+        user.business_genius_level = 0
+
+        # ── Клановые бонусы от апгрейдов (не донат) ─────────────────────
+        user.clan_income_bonus = 0
+        user.clan_ticket_bonus = 0
+        user.clan_train_bonus = 0
 
         # ── Гений медицины: сбрасываем уровни если нет доната ───────────
         # reapply_all_titles ниже восстановит до 6 если есть ui_potion

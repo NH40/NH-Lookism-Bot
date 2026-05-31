@@ -202,14 +202,10 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
 
         gang_power = _gang_power(cfg, rec.defeat_count)
 
-        # Боевая мощь с учётом зелий
-        from app.services.combat_service import get_effective_power
-        user_power = await get_effective_power(session, user)
-
-        # Шанс победы: ratio-based, минимум 10%, максимум 90%
-        ratio = user_power / gang_power
-        win_chance = min(90, max(10, int(ratio * 60)))
-        won = random.randint(1, 100) <= win_chance
+        from app.services.combat_service import fight_district
+        fight = await fight_district(session, user, gang_power)
+        won = fight["win"]
+        user_power = fight["user_power"]
 
         result_lines = [f"{cfg.emoji} <b>Бой: {cfg.name}</b>\n"]
         result_lines.append(f"💪 Ваша мощь: {fmt_num(user_power)}")
@@ -287,6 +283,34 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
         else:
             result_lines.append(f"💀 <b>ПОРАЖЕНИЕ</b>")
             result_lines.append(f"Группировка оказалась сильнее. Прокачайся и попробуй снова!")
+
+            # КД после поражения — те же расчёты что и после победы
+            base_cd_seconds = GANG_COOLDOWN_HOURS * 3600
+            from app.models.skill import UserMastery
+            from sqlalchemy import select as _sa_select
+            mastery = await session.scalar(
+                _sa_select(UserMastery).where(UserMastery.user_id == user.id)
+            )
+            speed_pct = 0
+            if mastery:
+                raw = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(mastery.speed, 0)
+                speed_pct = int(raw * getattr(user, "skill_path_bonus_multiplier", 1.0))
+            from app.repositories.title_repo import title_repo as _title_repo
+            title_ids = set(await _title_repo.get_user_titles(session, user.id))
+            if {"concentration", "focus"}.issubset(title_ids):
+                speed_pct = min(80, speed_pct + 15)
+            if "reverse_eyes" in title_ids:
+                speed_pct = min(80, speed_pct + 30)
+            if "concentration" in title_ids:
+                speed_pct = min(80, speed_pct + 30)
+            effective_cd = max(600, int(base_cd_seconds * (1 - speed_pct / 100)))
+            rec.cooldown_until = now + timedelta(seconds=effective_cd)
+            cd_line = f"⏳ КД: {fmt_ttl(effective_cd)}"
+            if speed_pct:
+                cd_line += f" (скорость -{speed_pct}%)"
+            result_lines.append(cd_line)
+
+            await session.flush()
 
         text = "\n".join(result_lines)
         builder = InlineKeyboardBuilder()

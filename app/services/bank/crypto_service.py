@@ -14,7 +14,7 @@ from app.models.user import User
 logger = logging.getLogger(__name__)
 
 # Комиссия биржи при продаже крипты (% от выручки, целое число)
-SELL_COMMISSION_PCT = 5
+SELL_COMMISSION_PCT = 15
 
 # ─── Конфиг монет ─────────────────────────────────────────────────────────────
 # liquidity        — виртуальная глубина рынка (NHCoin); чем выше — тем меньше
@@ -32,11 +32,11 @@ CRYPTO_CONFIG: dict[str, dict] = {
         "base_price":       100_00,
         "min_price":        50_00,
         "max_price":        5_000_00,
-        "liquidity":        200_000,    # NHCoin
-        "max_trade_impact": 5.0,        # %
-        "reversion_speed":  0.025,
-        "maker_strength":   0.6,
-        "noise_pct":        1.0,
+        "liquidity":        800_000,
+        "max_trade_impact": 3.0,
+        "reversion_speed":  0.060,
+        "maker_strength":   0.8,
+        "noise_pct":        0.5,
     },
     "CriptoCH": {
         "emoji":            "🔴",
@@ -45,11 +45,11 @@ CRYPTO_CONFIG: dict[str, dict] = {
         "base_price":       50_00,
         "min_price":        1_00,
         "max_price":        10_000_00,
-        "liquidity":        150_000,    # NHCoin (увеличено ×5 — сложнее манипулировать)
-        "max_trade_impact": 10.0,       # снижено с 20% → сложнее памп-дамп
-        "reversion_speed":  0.030,      # быстрее возврат к базе
-        "maker_strength":   0.5,
-        "noise_pct":        5.0,
+        "liquidity":        500_000,
+        "max_trade_impact": 6.0,
+        "reversion_speed":  0.070,
+        "maker_strength":   0.7,
+        "noise_pct":        3.0,
     },
     "CriptoVVIP": {
         "emoji":            "🔵",
@@ -58,11 +58,11 @@ CRYPTO_CONFIG: dict[str, dict] = {
         "base_price":       500_00,
         "min_price":        100_00,
         "max_price":        50_000_00,
-        "liquidity":        800_000,
-        "max_trade_impact": 8.0,
-        "reversion_speed":  0.020,
-        "maker_strength":   0.5,
-        "noise_pct":        2.0,
+        "liquidity":        3_000_000,
+        "max_trade_impact": 4.0,
+        "reversion_speed":  0.060,
+        "maker_strength":   0.7,
+        "noise_pct":        1.0,
     },
     "CriptoWWIP": {
         "emoji":            "🟡",
@@ -71,11 +71,11 @@ CRYPTO_CONFIG: dict[str, dict] = {
         "base_price":       5_000_00,
         "min_price":        1_000_00,
         "max_price":        500_000_00,
-        "liquidity":        4_000_000,
-        "max_trade_impact": 3.0,
-        "reversion_speed":  0.030,
-        "maker_strength":   0.7,
-        "noise_pct":        0.5,
+        "liquidity":        15_000_000,
+        "max_trade_impact": 2.0,
+        "reversion_speed":  0.080,
+        "maker_strength":   0.9,
+        "noise_pct":        0.3,
     },
 }
 

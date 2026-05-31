@@ -108,7 +108,6 @@ def _apply_one_donat(user: User, donat_id: str, circles: int) -> None:
             user.circ_ticket_overflow = True
 
     elif donat_id == "shadow":
-        user.squad_power_bonus += 1 * circles
         user.all_cd_reduction += 1 * circles
         if circles >= 3:
             user.path_unique_1 = True

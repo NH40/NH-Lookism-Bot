@@ -15,6 +15,9 @@ from app.constants.raid import (
     PATH_LEVEL_BONUSES,
     UI_CRAFT_COST,
     UI_LEVEL_PERKS,
+    BUSINESS_DISTRICT_COST,
+    BUSINESS_INCOME_BOOST_COST,
+    BUSINESS_DISTRICTS_MAX,
 )
 from app.utils.formatters import fmt_num
 from app.handlers.raid.boss import _send_or_edit_raid_photo
@@ -72,6 +75,7 @@ async def cb_raid_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     donat_str = " (донат 🔱)" if user.ui_is_donat else ""
     path_frags = getattr(user, "path_fragments", 0)
     path_str = f" ({path_frags}/{PATH_SPIN_CRAFT_COST} для крутки)" if path_frags < PATH_SPIN_CRAFT_COST else " ✅ готово к крутке"
+    biz_frags = getattr(user, "business_fragments", 0)
     from app.handlers.skills.med_genius import any_unlocked, _unlocked_count, MG_POTIONS, is_donat as _mg_is_donat
     if _mg_is_donat(user):
         mg_str = " ✅ Донат (все Ур.6)"
@@ -85,6 +89,7 @@ async def cb_raid_menu(cb: CallbackQuery, session: AsyncSession, user: User):
         f"🔮 Фрагменты УИ: <b>{user.ui_fragments}</b>\n"
         f"🧪 Фрагменты алхимии: <b>{user.alchemy_fragments}</b>\n"
         f"🔷 Фрагменты Пути: <b>{path_frags}</b>{path_str}\n"
+        f"🏢 Бизнес-фрагменты: <b>{biz_frags}</b>\n"
         f"👁 УИ: {ui_str}{donat_str}\n"
         f"🩺 Гений медицины:{mg_str}\n\n"
         f"Выбери цель для рейда:"
@@ -152,20 +157,26 @@ async def cb_raid_craft(cb: CallbackQuery, session: AsyncSession, user: User):
     else:
         mg_str = f"🔒 ({user.alchemy_fragments}/30 🧪)"
 
+    biz_frags = getattr(user, "business_fragments", 0)
+    bonus_districts = getattr(user, "bonus_business_districts", 0)
+
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="👁 Крафт УИ",          callback_data="craft_ui_menu"))
     builder.row(InlineKeyboardButton(text="🩺 Гений медицины",    callback_data="craft_mg_menu"))
     builder.row(InlineKeyboardButton(text="🔷 Крафт Пути",        callback_data="craft_path_menu"))
+    builder.row(InlineKeyboardButton(text="🏢 Бизнес-крафт",      callback_data="craft_biz_menu"))
     builder.row(InlineKeyboardButton(text="◀️ Назад",             callback_data="raid_menu"))
 
     craft_text = (
         f"🔨 <b>Крафт</b>\n\n"
         f"🔮 Фрагменты УИ: <b>{user.ui_fragments}</b>\n"
         f"🧪 Фрагменты алхимии: <b>{user.alchemy_fragments}</b>\n"
-        f"🔷 Фрагменты Пути: <b>{path_frags}</b>\n\n"
+        f"🔷 Фрагменты Пути: <b>{path_frags}</b>\n"
+        f"🏢 Бизнес-фрагменты: <b>{biz_frags}</b>\n\n"
         f"👁 УИ: <b>{ui_str}</b>\n"
         f"🩺 Гений медицины: <b>{mg_str}</b>\n"
-        f"🔷 Уровень пути: <b>{path_level}/{PATH_LEVEL_MAX}</b>\n\n"
+        f"🔷 Уровень пути: <b>{path_level}/{PATH_LEVEL_MAX}</b>\n"
+        f"🏘 Бонусных районов: <b>{bonus_districts}/{BUSINESS_DISTRICTS_MAX}</b>\n\n"
         f"Выбери раздел крафта:"
     )
     await _send_or_edit_raid_photo(cb, None, craft_text, builder.as_markup())

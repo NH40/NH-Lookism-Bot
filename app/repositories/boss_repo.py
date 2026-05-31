@@ -50,18 +50,21 @@ class BossRepo:
         )
 
     async def get_pending_spawn(self, session: AsyncSession) -> ActiveBoss | None:
-        """Последний завершённый босс, у которого next_spawn_at уже наступил."""
+        """Самый последний завершённый босс, у которого next_spawn_at уже наступил.
+
+        Важно: проверяем ТОЛЬКО самую последнюю запись, чтобы старые боссы
+        с устаревшим next_spawn_at не вызывали немедленный спавн следующего.
+        """
         now = datetime.now(timezone.utc)
-        return await session.scalar(
+        last = await session.scalar(
             select(ActiveBoss)
-            .where(
-                ActiveBoss.status != "active",
-                ActiveBoss.next_spawn_at != None,
-                ActiveBoss.next_spawn_at <= now,
-            )
+            .where(ActiveBoss.status != "active")
             .order_by(desc(ActiveBoss.id))
             .limit(1)
         )
+        if last and last.next_spawn_at and last.next_spawn_at <= now:
+            return last
+        return None
 
     async def create_boss(
         self,

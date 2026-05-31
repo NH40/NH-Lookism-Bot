@@ -1,6 +1,7 @@
 """
-Крипто-ферма: 4 монеты с разной волатильностью.
+Крипто-ферма: 4 монеты с живым рынком (маркет-мейкер).
 Цена хранится в «микро» (×100) для точных расчётов.
+Каждая сделка двигает цену по формуле убывающего влияния.
 """
 import random
 import logging
@@ -12,57 +13,66 @@ from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
-# ─── Константы монет ──────────────────────────────────────────────────────────
+# ─── Конфиг монет ─────────────────────────────────────────────────────────────
+# liquidity        — виртуальная глубина рынка (NHCoin); чем выше — тем меньше
+#                    одна сделка двигает цену
+# max_trade_impact — потолок влияния одной сделки на цену (%)
+# reversion_speed  — скорость возврата к базовой цене за тик (доля отклонения)
+# maker_strength   — сила маркет-мейкера (0..1); насколько агрессивно бот
+#                    противодействует дисбалансу спроса/предложения
+# noise_pct        — случайный шум ±% за тик (имитирует естественные колебания)
 CRYPTO_CONFIG: dict[str, dict] = {
     "CriptoNH": {
-        "emoji":       "🟢",
-        "name":        "CriptoNH",
-        "desc":        "Самая стабильная монета. Растёт медленно, падает часто.",
-        "base_price":  100_00,   # 100.00 NHCoin (micro)
-        "min_price":   50_00,    # нижний предел
-        "max_price":   5_000_00, # верхний предел
-        # Рост скромный, падение ощутимое
-        "tick_up_prob":   45,
-        "tick_min_pct":   0,
-        "tick_max_pct":   10,
-        "tick_drop_pct":  10,
+        "emoji":            "🟢",
+        "name":             "CriptoNH",
+        "desc":             "Самая стабильная монета. Медленно реагирует на рынок.",
+        "base_price":       100_00,
+        "min_price":        50_00,
+        "max_price":        5_000_00,
+        "liquidity":        200_000,    # NHCoin
+        "max_trade_impact": 5.0,        # %
+        "reversion_speed":  0.025,
+        "maker_strength":   0.6,
+        "noise_pct":        1.0,
     },
     "CriptoCH": {
-        "emoji":       "🔴",
-        "name":        "CriptoCH",
-        "desc":        "Самая нестабильная монета. Огромный риск, огромные потери.",
-        "base_price":  50_00,
-        "min_price":   1_00,
-        "max_price":   10_000_00,
-        # Сильно нестабильная: редко растёт, сильно падает
-        "tick_up_prob":   42,
-        "tick_min_pct":   0,
-        "tick_max_pct":   150,
-        "tick_drop_pct":  150,
+        "emoji":            "🔴",
+        "name":             "CriptoCH",
+        "desc":             "Самая нестабильная монета. Сильно реагирует на каждую сделку.",
+        "base_price":       50_00,
+        "min_price":        1_00,
+        "max_price":        10_000_00,
+        "liquidity":        30_000,     # NHCoin (малая глубина → большие движения)
+        "max_trade_impact": 20.0,
+        "reversion_speed":  0.010,      # возвращается медленнее — остаётся дикой
+        "maker_strength":   0.3,
+        "noise_pct":        5.0,
     },
     "CriptoVVIP": {
-        "emoji":       "🔵",
-        "name":        "CriptoVVIP",
-        "desc":        "Средняя волатильность. Падает заметно сильнее чем растёт.",
-        "base_price":  500_00,
-        "min_price":   100_00,
-        "max_price":   50_000_00,
-        "tick_up_prob":   45,
-        "tick_min_pct":   0,
-        "tick_max_pct":   10,
-        "tick_drop_pct":  30,
+        "emoji":            "🔵",
+        "name":             "CriptoVVIP",
+        "desc":             "Средняя волатильность. Нужны крупные сделки чтобы сдвинуть цену.",
+        "base_price":       500_00,
+        "min_price":        100_00,
+        "max_price":        50_000_00,
+        "liquidity":        800_000,
+        "max_trade_impact": 8.0,
+        "reversion_speed":  0.020,
+        "maker_strength":   0.5,
+        "noise_pct":        2.0,
     },
     "CriptoWWIP": {
-        "emoji":       "🟡",
-        "name":        "CriptoWWIP",
-        "desc":        "Самая дорогая монета. Редкий рост, ощутимые просадки.",
-        "base_price":  5_000_00,
-        "min_price":   1_000_00,
-        "max_price":   500_000_00,
-        "tick_up_prob":   42,
-        "tick_min_pct":   0,
-        "tick_max_pct":   4,
-        "tick_drop_pct":  20,
+        "emoji":            "🟡",
+        "name":             "CriptoWWIP",
+        "desc":             "Самая дорогая монета. Устойчива к манипуляциям, медленный рост.",
+        "base_price":       5_000_00,
+        "min_price":        1_000_00,
+        "max_price":        500_000_00,
+        "liquidity":        4_000_000,
+        "max_trade_impact": 3.0,
+        "reversion_speed":  0.030,
+        "maker_strength":   0.7,
+        "noise_pct":        0.5,
     },
 }
 
@@ -74,7 +84,6 @@ class CryptoService:
     # ── Инициализация цен ─────────────────────────────────────────────────────
 
     async def ensure_prices(self, session: AsyncSession) -> None:
-        """Создать строки цен для монет, если их нет."""
         for currency, cfg in CRYPTO_CONFIG.items():
             r = await session.execute(
                 select(CryptoPrice).where(CryptoPrice.currency == currency)
@@ -83,6 +92,8 @@ class CryptoService:
                 session.add(CryptoPrice(
                     currency=currency,
                     price_micro=cfg["base_price"],
+                    buy_volume_micro=0,
+                    sell_volume_micro=0,
                 ))
         await session.flush()
 
@@ -93,35 +104,98 @@ class CryptoService:
         rows = r.scalars().all()
         return {row.currency: row for row in rows}
 
-    # ── Тик: обновить цены ────────────────────────────────────────────────────
+    # ── Влияние сделки на цену ────────────────────────────────────────────────
+
+    def _apply_price_impact(
+        self,
+        price_row: CryptoPrice,
+        trade_value_nhcoins: int,
+        is_buy: bool,
+        cfg: dict,
+    ) -> float:
+        """
+        Двигает price_row.price_micro и обновляет объём периода.
+        Возвращает фактическое изменение цены в процентах (+ рост, - падение).
+        """
+        liquidity = cfg["liquidity"]
+        max_impact = cfg["max_trade_impact"] / 100.0
+
+        # Убывающее влияние: чем крупнее сделка относительно рынка — тем меньше %
+        raw_impact = trade_value_nhcoins / (liquidity + trade_value_nhcoins)
+        impact = min(raw_impact, max_impact)
+
+        current = price_row.price_micro
+        if is_buy:
+            new_price = int(current * (1.0 + impact))
+            price_row.buy_volume_micro += trade_value_nhcoins
+        else:
+            new_price = int(current * (1.0 - impact))
+            price_row.sell_volume_micro += trade_value_nhcoins
+
+        new_price = max(cfg["min_price"], min(cfg["max_price"], new_price))
+        price_row.price_micro = new_price
+        price_row.updated_at = datetime.now(timezone.utc)
+
+        delta_pct = (new_price - current) / current * 100
+        return delta_pct
+
+    # ── Тик маркет-мейкера ────────────────────────────────────────────────────
 
     async def price_tick(self, session: AsyncSession) -> None:
-        """Вызывается из планировщика каждые 5 минут."""
+        """Вызывается из планировщика каждые 5 минут.
+
+        За каждый тик:
+        1. Маркет-мейкер противодействует дисбалансу покупок/продаж.
+        2. Мягкий возврат цены к базовому уровню (mean reversion).
+        3. Случайный шум (эффект «живого» рынка).
+        4. Сброс накопленных объёмов периода.
+        """
         prices = await self.get_all_prices(session)
 
         for currency, cfg in CRYPTO_CONFIG.items():
             if currency not in prices:
-                # инициализация
                 session.add(CryptoPrice(
-                    currency=currency, price_micro=cfg["base_price"]
+                    currency=currency,
+                    price_micro=cfg["base_price"],
+                    buy_volume_micro=0,
+                    sell_volume_micro=0,
                 ))
                 continue
 
-            price_row = prices[currency]
-            current = price_row.price_micro
-            going_up = random.randint(1, 100) <= cfg["tick_up_prob"]
+            row = prices[currency]
+            price = row.price_micro
+            base  = cfg["base_price"]
 
-            if going_up:
-                pct = random.randint(cfg["tick_min_pct"], cfg["tick_max_pct"])
-                new = int(current * (1 + pct / 100))
-            else:
-                pct = random.randint(0, cfg["tick_drop_pct"])
-                new = int(current * (1 - pct / 100))
+            buy_vol  = row.buy_volume_micro  or 0
+            sell_vol = row.sell_volume_micro or 0
+            total_vol = buy_vol + sell_vol
+
+            # 1. Маркет-мейкер: компенсирует дисбаланс спроса
+            if total_vol > 0:
+                net_pressure = buy_vol - sell_vol
+                liquidity = cfg["liquidity"]
+                pressure_ratio = net_pressure / (liquidity + abs(net_pressure))
+                maker_adj = -pressure_ratio * cfg["maker_strength"]
+                price = int(price * (1.0 + maker_adj))
+
+            # 2. Mean reversion к базовой цене
+            deviation = (price - base) / base
+            reversion = -deviation * cfg["reversion_speed"]
+            price = int(price * (1.0 + reversion))
+
+            # 3. Случайный шум
+            noise_range = cfg["noise_pct"] / 100.0
+            noise = random.uniform(-noise_range, noise_range)
+            price = int(price * (1.0 + noise))
 
             # Ограничиваем диапазоном
-            new = max(cfg["min_price"], min(cfg["max_price"], new))
-            price_row.price_micro = new
-            price_row.updated_at = datetime.now(timezone.utc)
+            price = max(cfg["min_price"], min(cfg["max_price"], price))
+            row.price_micro = price
+            row.updated_at = datetime.now(timezone.utc)
+
+            # 4. Сброс объёмов периода
+            row.buy_volume_micro  = 0
+            row.sell_volume_micro = 0
 
         await session.flush()
 
@@ -162,28 +236,36 @@ class CryptoService:
 
     async def buy(
         self, session: AsyncSession, user: User, currency: str, units: int
-    ) -> tuple[bool, str]:
+    ) -> tuple[bool, str, float]:
+        """
+        Возвращает (ok, error_msg, price_delta_pct).
+        price_delta_pct — насколько % сдвинулась цена после сделки.
+        """
         if currency not in CRYPTO_CONFIG:
-            return False, "❌ Неизвестная валюта."
+            return False, "❌ Неизвестная валюта.", 0.0
         if units <= 0:
-            return False, "❌ Количество должно быть > 0."
+            return False, "❌ Количество должно быть > 0.", 0.0
 
         prices = await self.get_all_prices(session)
         if currency not in prices:
             await self.ensure_prices(session)
             prices = await self.get_all_prices(session)
 
-        price_micro = prices[currency].price_micro
+        cfg = CRYPTO_CONFIG[currency]
+        price_row = prices[currency]
+        price_micro = price_row.price_micro
         total_cost = (price_micro * units) // 100  # NHCoin
 
         if user.nh_coins < total_cost:
-            return False, f"❌ Нужно {total_cost:,} NHCoin, у вас {user.nh_coins:,}."
+            return False, f"❌ Нужно {total_cost:,} NHCoin, у вас {user.nh_coins:,}.", 0.0
 
         user.nh_coins -= total_cost
 
+        # Влияние на цену
+        delta_pct = self._apply_price_impact(price_row, total_cost, is_buy=True, cfg=cfg)
+
         holding = await self.get_holding(session, user.id, currency)
         if holding:
-            # Пересчёт средней цены
             total_spent = holding.avg_buy_price_micro * holding.amount + price_micro * units
             holding.amount += units
             holding.avg_buy_price_micro = total_spent // holding.amount
@@ -197,33 +279,43 @@ class CryptoService:
             session.add(holding)
 
         await session.flush()
-        return True, ""
+        return True, "", delta_pct
 
     # ── Продать крипту ────────────────────────────────────────────────────────
 
     async def sell(
         self, session: AsyncSession, user: User, currency: str, units: int
-    ) -> tuple[bool, str]:
+    ) -> tuple[bool, str, float, int]:
+        """
+        Возвращает (ok, error_msg, price_delta_pct, revenue_nhcoins).
+        revenue_nhcoins — фактическая выручка по цене до сделки.
+        """
         if currency not in CRYPTO_CONFIG:
-            return False, "❌ Неизвестная валюта."
+            return False, "❌ Неизвестная валюта.", 0.0, 0
 
         holding = await self.get_holding(session, user.id, currency)
         if not holding or holding.amount < units:
-            return False, f"❌ Недостаточно {currency}."
+            return False, f"❌ Недостаточно {currency}.", 0.0, 0
         if units <= 0:
-            return False, "❌ Количество должно быть > 0."
+            return False, "❌ Количество должно быть > 0.", 0.0, 0
 
         prices = await self.get_all_prices(session)
-        price_micro = prices[currency].price_micro
+        cfg = CRYPTO_CONFIG[currency]
+        price_row = prices[currency]
+        price_micro = price_row.price_micro
         revenue = (price_micro * units) // 100
 
         user.nh_coins += revenue
+
+        # Влияние на цену
+        delta_pct = self._apply_price_impact(price_row, revenue, is_buy=False, cfg=cfg)
+
         holding.amount -= units
         if holding.amount == 0:
             await session.delete(holding)
 
         await session.flush()
-        return True, ""
+        return True, "", delta_pct, revenue
 
 
 crypto_service = CryptoService()

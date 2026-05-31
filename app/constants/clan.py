@@ -67,13 +67,49 @@ CLAN_SHOP_ITEMS: list[ClanShopItem] = [
     ClanShopItem("tickets_5_all",  "🎟 5 тикетов всем", "Выдать 5 тикетов всем", 55_000_000,   "tickets", "tickets", 5),
     ClanShopItem("tickets_10_all", "🎟 10 тикетов всем","Выдать 10 тикетов всем",100_000_000, "tickets", "tickets", 10),
 
-    # ── Зелья (тир 2 новой системы MG_TIERS, для всех участников клана) ─────────
-    ClanShopItem("potion_combat_all",    "⚔️ Зелье силы всем",       "Боевая мощь +50% на 30 мин всем",       200_000, "potions", "potion", "potion_combat"),
-    ClanShopItem("potion_income_all",    "💰 Зелье богатства всем",  "Доход +70% на 60 мин всем",             600_000, "potions", "potion", "potion_income"),
-    ClanShopItem("potion_influence_all", "⚡ Зелье влияния всем",    "Влияние +60% на 45 мин всем",           160_000, "potions", "potion", "potion_influence"),
-    ClanShopItem("potion_training_all",  "🏋 Зелье тренировки всем", "Охват тренировки +38% на 60 мин всем",  130_000, "potions", "potion", "potion_training"),
-    ClanShopItem("potion_luck_all",      "🍀 Зелье удачи всем",      "Шанс тикета +9% на 30 мин всем",        100_000, "potions", "potion", "potion_luck"),
-    ClanShopItem("potion_raid_all",      "💠 Зелье охотника всем",   "Дроп рейдов +25% на 60 мин всем",       350_000, "potions", "potion", "potion_raid_drop"),
+    # ── Зелья (все тиры I–VI из MG_TIERS, для всех участников клана) ───────────
+    # Цена = индивидуальная цена × 5
+    ClanShopItem("cpotion_mg_power_1",   "⚔️ Зелье силы I всем",        "Мощь +30%, 30 мин всем",          100_000, "potions", "potion", "mg_power_1"),
+    ClanShopItem("cpotion_mg_power_2",   "⚔️ Зелье силы II всем",       "Мощь +50%, 30 мин всем",          300_000, "potions", "potion", "mg_power_2"),
+    ClanShopItem("cpotion_mg_power_3",   "⚔️ Зелье силы III всем",      "Мощь +75%, 30 мин всем",          900_000, "potions", "potion", "mg_power_3"),
+    ClanShopItem("cpotion_mg_power_4",   "⚔️ Зелье силы IV всем",       "Мощь +100%, 30 мин всем",       2_700_000, "potions", "potion", "mg_power_4"),
+    ClanShopItem("cpotion_mg_power_5",   "⚔️ Зелье силы V всем",        "Мощь +125%, 30 мин всем",       8_000_000, "potions", "potion", "mg_power_5"),
+    ClanShopItem("cpotion_mg_power_6",   "⚔️ Зелье силы VI всем",       "Мощь +150%, 30 мин всем",      25_000_000, "potions", "potion", "mg_power_6"),
+
+    ClanShopItem("cpotion_mg_train_1",   "🏋 Зелье тренировки I всем",  "Тренировка +25%, 60 мин всем",    75_000, "potions", "potion", "mg_train_1"),
+    ClanShopItem("cpotion_mg_train_2",   "🏋 Зелье тренировки II всем", "Тренировка +38%, 60 мин всем",   225_000, "potions", "potion", "mg_train_2"),
+    ClanShopItem("cpotion_mg_train_3",   "🏋 Зелье тренировки III всем","Тренировка +55%, 60 мин всем",   675_000, "potions", "potion", "mg_train_3"),
+    ClanShopItem("cpotion_mg_train_4",   "🏋 Зелье тренировки IV всем", "Тренировка +75%, 60 мин всем", 2_000_000, "potions", "potion", "mg_train_4"),
+    ClanShopItem("cpotion_mg_train_5",   "🏋 Зелье тренировки V всем",  "Тренировка +100%, 60 мин всем",6_000_000, "potions", "potion", "mg_train_5"),
+    ClanShopItem("cpotion_mg_train_6",   "🏋 Зелье тренировки VI всем", "Тренировка +130%, 60 мин всем",18_000_000,"potions", "potion", "mg_train_6"),
+
+    ClanShopItem("cpotion_mg_income_1",  "💰 Зелье богатства I всем",   "Доход +40%, 60 мин всем",        100_000, "potions", "potion", "mg_income_1"),
+    ClanShopItem("cpotion_mg_income_2",  "💰 Зелье богатства II всем",  "Доход +70%, 60 мин всем",        300_000, "potions", "potion", "mg_income_2"),
+    ClanShopItem("cpotion_mg_income_3",  "💰 Зелье богатства III всем", "Доход +105%, 60 мин всем",       900_000, "potions", "potion", "mg_income_3"),
+    ClanShopItem("cpotion_mg_income_4",  "💰 Зелье богатства IV всем",  "Доход +140%, 60 мин всем",     2_700_000, "potions", "potion", "mg_income_4"),
+    ClanShopItem("cpotion_mg_income_5",  "💰 Зелье богатства V всем",   "Доход +170%, 60 мин всем",     8_000_000, "potions", "potion", "mg_income_5"),
+    ClanShopItem("cpotion_mg_income_6",  "💰 Зелье богатства VI всем",  "Доход +200%, 60 мин всем",    25_000_000, "potions", "potion", "mg_income_6"),
+
+    ClanShopItem("cpotion_mg_luck_1",    "🍀 Зелье удачи I всем",       "Шанс тикета +5%, 30 мин всем",    60_000, "potions", "potion", "mg_luck_1"),
+    ClanShopItem("cpotion_mg_luck_2",    "🍀 Зелье удачи II всем",      "Шанс тикета +9%, 30 мин всем",   180_000, "potions", "potion", "mg_luck_2"),
+    ClanShopItem("cpotion_mg_luck_3",    "🍀 Зелье удачи III всем",     "Шанс тикета +13%, 30 мин всем",  550_000, "potions", "potion", "mg_luck_3"),
+    ClanShopItem("cpotion_mg_luck_4",    "🍀 Зелье удачи IV всем",      "Шанс тикета +17%, 30 мин всем",1_650_000, "potions", "potion", "mg_luck_4"),
+    ClanShopItem("cpotion_mg_luck_5",    "🍀 Зелье удачи V всем",       "Шанс тикета +21%, 30 мин всем",4_950_000, "potions", "potion", "mg_luck_5"),
+    ClanShopItem("cpotion_mg_luck_6",    "🍀 Зелье удачи VI всем",      "Шанс тикета +25%, 30 мин всем",15_000_000,"potions", "potion", "mg_luck_6"),
+
+    ClanShopItem("cpotion_mg_infl_1",    "⚡ Зелье влияния I всем",     "Влияние +40%, 45 мин всем",       90_000, "potions", "potion", "mg_infl_1"),
+    ClanShopItem("cpotion_mg_infl_2",    "⚡ Зелье влияния II всем",    "Влияние +60%, 45 мин всем",      270_000, "potions", "potion", "mg_infl_2"),
+    ClanShopItem("cpotion_mg_infl_3",    "⚡ Зелье влияния III всем",   "Влияние +85%, 45 мин всем",      800_000, "potions", "potion", "mg_infl_3"),
+    ClanShopItem("cpotion_mg_infl_4",    "⚡ Зелье влияния IV всем",    "Влияние +115%, 45 мин всем",   2_400_000, "potions", "potion", "mg_infl_4"),
+    ClanShopItem("cpotion_mg_infl_5",    "⚡ Зелье влияния V всем",     "Влияние +150%, 45 мин всем",   7_250_000, "potions", "potion", "mg_infl_5"),
+    ClanShopItem("cpotion_mg_infl_6",    "⚡ Зелье влияния VI всем",    "Влияние +200%, 45 мин всем",  21_750_000, "potions", "potion", "mg_infl_6"),
+
+    ClanShopItem("cpotion_mg_raid_1",    "💠 Зелье охотника I всем",    "Дроп +15%, 60 мин всем",         200_000, "potions", "potion", "mg_raid_1"),
+    ClanShopItem("cpotion_mg_raid_2",    "💠 Зелье охотника II всем",   "Дроп +25%, 60 мин всем",         600_000, "potions", "potion", "mg_raid_2"),
+    ClanShopItem("cpotion_mg_raid_3",    "💠 Зелье охотника III всем",  "Дроп +38%, 60 мин всем",       1_800_000, "potions", "potion", "mg_raid_3"),
+    ClanShopItem("cpotion_mg_raid_4",    "💠 Зелье охотника IV всем",   "Дроп +50%, 60 мин всем",       5_400_000, "potions", "potion", "mg_raid_4"),
+    ClanShopItem("cpotion_mg_raid_5",    "💠 Зелье охотника V всем",    "Дроп +62%, 60 мин всем",      16_200_000, "potions", "potion", "mg_raid_5"),
+    ClanShopItem("cpotion_mg_raid_6",    "💠 Зелье охотника VI всем",   "Дроп +75%, 60 мин всем",      48_500_000, "potions", "potion", "mg_raid_6"),
 
     # ── Статисты ──────────────────────────────────────────────────────────────
     ClanShopItem("squad_s_all",   "🟥 100×S всем",    "100 статистов S всем",    900_000,   "squad", "squad", {"rank": "S",   "amount": 100}),

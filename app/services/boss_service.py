@@ -338,15 +338,11 @@ class BossService:
                 from app.config.game_balance import ticket_hard_cap
                 u.tickets = min(u.tickets + r["tickets"], ticket_hard_cap(u))
 
-                # Менеджер: бонус/штраф монетами
-                if boss.boss_id == "manager":
-                    if defeated:
-                        u.nh_coins += MANAGER_WIN_BONUS
-                        r["coins_delta"] = MANAGER_WIN_BONUS
-                    else:
-                        penalty = min(u.nh_coins, MANAGER_FAIL_PENALTY)
-                        u.nh_coins = max(0, u.nh_coins - penalty)
-                        r["coins_delta"] = -penalty
+                # Менеджер: бонус при победе; штраф при провале не начисляется —
+                # монеты снимаются только у того, кто атаковал (во время боя).
+                if boss.boss_id == "manager" and defeated:
+                    u.nh_coins += MANAGER_WIN_BONUS
+                    r["coins_delta"] = MANAGER_WIN_BONUS
 
             await session.flush()
 

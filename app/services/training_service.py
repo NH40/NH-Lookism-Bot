@@ -8,6 +8,7 @@ from sqlalchemy import select
 from app.constants.training import (
     TOM_LEE_COST, TOM_LEE_CD_SECONDS, TOM_LEE_POINTS_MIN, TOM_LEE_POINTS_MAX,
     JEON_GON_COST, JEON_GON_CD_SECONDS, JEON_GON_POINTS_MIN, JEON_GON_POINTS_MAX,
+    MANAGER_KIM_COST, MANAGER_KIM_CD_SECONDS, MANAGER_KIM_POINTS_MIN, MANAGER_KIM_POINTS_MAX,
     TRAINERS,
 )
 
@@ -110,6 +111,47 @@ class TrainingService:
             "total_points": user.skill_path_points,
             "cost": JEON_GON_COST,
             "type": "path",
+        }
+
+
+    async def train_with_manager_kim(self, session: AsyncSession, user: User) -> dict:
+        cd_key = self.trainer_cd_key(user.id, "manager_kim")
+
+        if await cooldown_service.is_on_cooldown(cd_key):
+            ttl = await cooldown_service.get_ttl(cd_key)
+            return {
+                "ok": False,
+                "reason": f"Менеджер Ким занят: {cooldown_service.format_ttl(ttl)}",
+                "cd": ttl,
+            }
+
+        if user.nh_coins < MANAGER_KIM_COST:
+            return {
+                "ok": False,
+                "reason": f"Недостаточно NHCoin (нужно {MANAGER_KIM_COST:,})",
+            }
+
+        user.nh_coins -= MANAGER_KIM_COST
+        user.coins_spent += MANAGER_KIM_COST
+
+        points = random.randint(MANAGER_KIM_POINTS_MIN, MANAGER_KIM_POINTS_MAX)
+        user.war_points = getattr(user, "war_points", 0) + points
+
+        mastery_r = await session.execute(select(UserMastery).where(UserMastery.user_id == user.id))
+        mastery = mastery_r.scalar_one_or_none()
+        raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(mastery.speed if mastery else 0, 0)
+        speed_pct = int(raw_speed * user.skill_path_bonus_multiplier)
+        cd = cooldown_service.apply_speed_reduction(MANAGER_KIM_CD_SECONDS, speed_pct)
+        await cooldown_service.set_cooldown(cd_key, cd)
+
+        await session.flush()
+
+        return {
+            "ok": True,
+            "points": points,
+            "total_points": user.war_points,
+            "cost": MANAGER_KIM_COST,
+            "type": "war",
         }
 
 

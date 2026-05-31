@@ -33,6 +33,10 @@ async def _show_business_main(
     info = await business_service.get_income_breakdown(session, user)
     path_info = PATH_INFO.get(user.business_path, {})
 
+    biz_genius = getattr(user, "business_genius_level", 0)
+    biz_frags = getattr(user, "business_fragments", 0)
+    bonus_districts = getattr(user, "bonus_business_districts", 0)
+
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
         text="🏗 Построить здание", callback_data="biz_build"
@@ -41,10 +45,15 @@ async def _show_business_main(
         text="🏢 Мои здания", callback_data="biz_my_buildings"
     ))
     builder.row(InlineKeyboardButton(
+        text=f"🎖 Гений бизнеса [Ур.{biz_genius}/5]", callback_data="biz_genius_menu"
+    ))
+    builder.row(InlineKeyboardButton(
         text="◀️ Главное меню", callback_data="main_menu"
     ))
 
     bonuses = []
+    if info.get('biz_genius_bonus'):
+        bonuses.append(f"  🎖 Гений бизнеса: +{info['biz_genius_bonus']}%")
     if info.get('skills_bonus'):
         bonuses.append(f"  📊 Навыки/Титул: +{info['skills_bonus']}%")
     if info['prestige_bonus']:
@@ -81,12 +90,21 @@ async def _show_business_main(
         else:
             circ_line = f"\n💸 Пассивный доход: +{fmt_num(circ_per_min or base_per_min)}/мин"
 
+    from app.constants.raid import BIZ_GENIUS_LEVEL_LABELS
+    genius_label = BIZ_GENIUS_LEVEL_LABELS.get(biz_genius, "Базовый уровень") if biz_genius > 0 else "🔒 Не открыт"
+    genius_line = f"🎖 Гений бизнеса: <b>Ур.{biz_genius}/5</b> — {genius_label}"
+    expansion_line = f"🏘 Бонусных районов: <b>{bonus_districts}/50</b>" if bonus_districts else ""
+    frags_line = f"🏢 Бизнес-фрагменты: <b>{biz_frags}</b>"
+
     try:
         await cb.message.edit_text(
             f"🏢 <b>Бизнес</b>\n\n"
             f"📍 Путь: {path_info.get('color','')} "
             f"{path_info.get('emoji','')} {path_info.get('name','')}"
             f"{influence_note}\n"
+            f"{genius_line}\n"
+            + (expansion_line + "\n" if expansion_line else "")
+            + f"{frags_line}\n"
             f"{'─'*22}\n"
             f"💰 Базовый доход: {fmt_num(info['base_income'])}/мин\n"
             f"📈 Итого: {fmt_num(info['final_income'])}/мин"

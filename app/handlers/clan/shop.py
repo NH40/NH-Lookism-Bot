@@ -126,12 +126,25 @@ async def _show_donate(cb: CallbackQuery, clan: Clan):
         pass
 
 
+_POTION_TYPE_GROUPS = [
+    ("power",     "⚔️ Зелья силы"),
+    ("train",     "🏋 Зелья тренировки"),
+    ("income",    "💰 Зелья богатства"),
+    ("luck",      "🍀 Зелья удачи"),
+    ("infl",      "⚡ Зелья влияния"),
+    ("raid",      "💠 Зелья охотника"),
+]
+
+
 async def _show_category(cb: CallbackQuery, clan: Clan, cat_id: str):
     if cat_id == "upgrades":
         await _show_upgrades(cb, clan)
         return
     if cat_id == "donate":
         await _show_donate(cb, clan)
+        return
+    if cat_id == "potions":
+        await _show_potion_types(cb, clan)
         return
 
     cat_name = CLAN_SHOP_CATEGORIES.get(cat_id, cat_id)
@@ -158,6 +171,28 @@ async def _show_category(cb: CallbackQuery, clan: Clan, cat_id: str):
         pass
 
 
+async def _show_potion_types(cb: CallbackQuery, clan: Clan):
+    """Показывает категории зелий (по типу) для кланового магазина."""
+    builder = InlineKeyboardBuilder()
+    for type_key, type_label in _POTION_TYPE_GROUPS:
+        builder.row(InlineKeyboardButton(
+            text=type_label,
+            callback_data=f"clan_potion_type:{type_key}",
+        ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clan_shop"))
+    try:
+        await cb.message.edit_text(
+            f"🧪 <b>Зелья клана</b>\n\n"
+            f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin\n\n"
+            f"Выбери тип зелья (6 уровней):\n"
+            f"<i>Применяются ко всем участникам клана</i>",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
 @router.callback_query(F.data.startswith("clan_shop_cat:"))
 async def cb_clan_shop_cat(cb: CallbackQuery, session: AsyncSession, user: User):
     cat_id = cb.data.split(":")[1]
@@ -166,6 +201,42 @@ async def cb_clan_shop_cat(cb: CallbackQuery, session: AsyncSession, user: User)
         await cb.answer("Вы не в клане", show_alert=True)
         return
     await _show_category(cb, clan, cat_id)
+
+
+@router.callback_query(F.data.startswith("clan_potion_type:"))
+async def cb_clan_potion_type(cb: CallbackQuery, session: AsyncSession, user: User):
+    type_key = cb.data.split(":")[1]
+    clan = await clan_service.get_user_clan(session, user.id)
+    if not clan:
+        await cb.answer("Вы не в клане", show_alert=True)
+        return
+
+    type_label = dict(_POTION_TYPE_GROUPS).get(type_key, type_key)
+    # Фильтруем предметы кланового магазина по суффиксу типа в value (MG potion_id)
+    items = [
+        i for i in CLAN_SHOP_ITEMS
+        if i.category == "potions" and f"mg_{type_key}_" in str(i.value)
+    ]
+
+    builder = InlineKeyboardBuilder()
+    for item in items:
+        can = "✅" if clan.treasury >= item.price else "❌"
+        builder.row(InlineKeyboardButton(
+            text=f"{can} {item.name} — {fmt_num(item.price)}",
+            callback_data=f"clan_buy:{item.item_id}",
+        ))
+    builder.row(InlineKeyboardButton(text="◀️ К типам зелий", callback_data="clan_shop_cat:potions"))
+
+    try:
+        await cb.message.edit_text(
+            f"🧪 <b>{type_label}</b>\n\n"
+            f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin\n\n"
+            f"Выбери уровень:",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("clan_buy:"))

@@ -21,6 +21,7 @@ RAID_IMAGE_MAP: dict[str, str] = {
     "shingen": "images/raid/shingen.png",
     "jinnen":  "images/raid/jinnen.png",
     "gauren":  "images/raid/gauren.png",
+    "elite":   "images/raid/elite.png",
 }
 
 
@@ -90,6 +91,8 @@ async def cb_raid_boss(cb: CallbackQuery, session: AsyncSession, user: User):
         reward_line = "🧪 Награда: фрагменты алхимии (макс 25)"
     elif reward_type == "path":
         reward_line = "🔷 Награда: фрагменты Пути (макс 20)"
+    elif reward_type == "business":
+        reward_line = "🏢 Награда: бизнес-фрагменты (макс 15)"
     else:
         reward_line = "🔮 Награда: фрагменты УИ"
 
@@ -142,6 +145,8 @@ async def cb_raid_start(cb: CallbackQuery, session: AsyncSession, user: User):
         frag_emoji, frag_name = "🧪", "фрагменты алхимии"
     elif reward_type == "path":
         frag_emoji, frag_name = "🔷", "фрагменты Пути"
+    elif reward_type == "business":
+        frag_emoji, frag_name = "🏢", "бизнес-фрагменты"
     else:
         frag_emoji, frag_name = "🔮", "фрагменты УИ"
 
@@ -164,6 +169,8 @@ async def cb_raid_start(cb: CallbackQuery, session: AsyncSession, user: User):
         frag_line = "чтобы получить фрагменты алхимии!"
     elif reward_type == "path":
         frag_line = "чтобы получить фрагменты Пути!"
+    elif reward_type == "business":
+        frag_line = "чтобы получить бизнес-фрагменты!"
     else:
         frag_line = "чтобы получить фрагменты УИ!"
     start_text = (

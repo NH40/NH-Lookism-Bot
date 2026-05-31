@@ -7,6 +7,14 @@ from app.services.potion_service import potion_service
 
 class BusinessService:
 
+    @staticmethod
+    def _biz_genius_bonus(user: User) -> int:
+        from app.constants.raid import BIZ_GENIUS_INCOME_BONUS
+        lvl = getattr(user, "business_genius_level", 0)
+        if lvl <= 0:
+            return 0
+        return BIZ_GENIUS_INCOME_BONUS[min(lvl, len(BIZ_GENIUS_INCOME_BONUS)) - 1]
+
     async def _recalc_income(self, session: AsyncSession, user: User) -> None:
         result = await session.execute(
             select(
@@ -19,7 +27,8 @@ class BusinessService:
         )
         base_income = result.scalar() or 0
         clan_bonus = getattr(user, 'clan_income_bonus', 0) + getattr(user, 'clan_donat_income_bonus', 0)
-        total_bonus = user.income_bonus_percent + user.prestige_income_bonus + clan_bonus
+        biz_genius_bonus = self._biz_genius_bonus(user)
+        total_bonus = user.income_bonus_percent + user.prestige_income_bonus + clan_bonus + biz_genius_bonus
         effective_income = int(
             base_income * (1 + total_bonus / 100) * user.district_multiplier
         )
@@ -99,6 +108,7 @@ class BusinessService:
         else:
             from app.repositories.city_repo import city_repo
             district_count = await city_repo.get_total_districts(session, user.id)
+            district_count += getattr(user, "bonus_business_districts", 0)
 
         # Занятые районы — только активные здания с count > 0
         used_in_city = await session.scalar(
@@ -189,8 +199,9 @@ class BusinessService:
         clan_upgrade_bonus = getattr(user, 'clan_income_bonus', 0)
         clan_donat_bonus = getattr(user, 'clan_donat_income_bonus', 0)
         clan_bonus = clan_upgrade_bonus + clan_donat_bonus
+        biz_genius_bonus = self._biz_genius_bonus(user)
         other_bonus = user.income_bonus_percent + user.prestige_income_bonus
-        total_bonus = other_bonus + clan_bonus
+        total_bonus = other_bonus + clan_bonus + biz_genius_bonus
 
         effective_income = int(base * (1 + total_bonus / 100) * user.district_multiplier)
         effective_final = int(effective_income * (1 + potion_bonus / 100))
@@ -211,6 +222,7 @@ class BusinessService:
             "clan_donat_income_bonus": clan_donat_bonus,
             "district_multiplier": user.district_multiplier,
             "skills_bonus": user.income_bonus_percent,
+            "biz_genius_bonus": biz_genius_bonus,
             "circ_passive_income": circ_passive,      # /час
             "circ_passive_per_min": circ_per_min,     # /мин (как реально зачисляется)
         }

@@ -108,6 +108,8 @@ async def cb_raid_attack(cb: CallbackQuery, session: AsyncSession, user: User):
             frag_emoji, frag_name = "🧪", "фрагментов алхимии"
         elif rt == "path":
             frag_emoji, frag_name = "🔷", "фрагментов Пути"
+        elif rt == "business":
+            frag_emoji, frag_name = "🏢", "бизнес-фрагментов"
         else:
             frag_emoji, frag_name = "🔮", "фрагментов УИ"
         doubled_line = "\n🌀 <b>Удача! Награда удвоена!</b>" if result.get("doubled") else ""

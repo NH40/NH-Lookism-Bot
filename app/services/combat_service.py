@@ -4,8 +4,8 @@ from app.models.user import User
 from app.services.potion_service import potion_service
 from app.repositories.user_repo import user_repo
 
-# Shadow path: «Первый удар» — первая атака в бою дает +20% к мощи
-_SHADOW_FIRST_ATTACK_BONUS = 0.20
+# Shadow path: «Первый удар» — первая атака в бою дает +10% к мощи
+_SHADOW_FIRST_ATTACK_BONUS = 0.10
 
 
 async def get_effective_power(session: AsyncSession, user: User) -> int:

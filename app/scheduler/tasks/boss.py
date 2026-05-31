@@ -6,6 +6,7 @@ import logging
 from datetime import datetime, timezone
 
 from app.database import AsyncSessionFactory
+from app.constants.bosses import BOSS_SPAWN_HOURS
 
 logger = logging.getLogger(__name__)
 
@@ -166,11 +167,20 @@ async def _notify_boss_result(result: dict) -> None:
                         pass
 
             # Глобальное уведомление (всем с нотификациями о боссах)
+            next_spawn_at = result.get("next_spawn_at")
+            if next_spawn_at:
+                from datetime import datetime as _dt, timezone as _tz
+                secs_to_next = max(0, int((next_spawn_at - _dt.now(_tz.utc)).total_seconds()))
+                hours, rem = divmod(secs_to_next, 3600)
+                mins = rem // 60
+                next_spawn_str = f"{hours} ч {mins} мин" if hours else f"{mins} мин"
+            else:
+                next_spawn_str = f"{BOSS_SPAWN_HOURS} ч"
             global_text = (
                 f"{outcome_icon} <b>{emoji} {name} — {outcome_text}</b>"
                 f"{phrase_line}\n\n"
                 f"👥 Участников: <b>{result['participant_count']}</b>\n"
-                f"⏰ Следующий босс появится через <b>6 часов</b>"
+                f"⏰ Следующий босс появится через <b>{next_spawn_str}</b>"
             )
             all_result = await session.execute(
                 select(User.tg_id).where(

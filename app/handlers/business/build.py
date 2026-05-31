@@ -9,7 +9,7 @@ from app.services.business_service import business_service
 from app.repositories.building_repo import building_repo
 from app.repositories.city_repo import city_repo
 from app.utils.formatters import fmt_num
-from app.data.buildings import BUILDINGS_BY_ID, BUILDINGS_BY_PATH
+from app.data.buildings import BUILDINGS_BY_ID, BUILDINGS_BY_PATH, BUILDINGS
 from ._common import PATH_INFO, _show_business_main
 from .buildings import _show_city_buildings
 
@@ -24,13 +24,19 @@ async def cb_biz_build(
         await cb.answer("Сначала выберите путь", show_alert=True)
         return
 
-    buildings = BUILDINGS_BY_PATH.get(user.business_path, [])
+    biz_genius = getattr(user, "business_genius_level", 0)
+    all_path_buildings = BUILDINGS_BY_PATH.get(user.business_path, [])
+    # Разделяем: доступные и заблокированные
+    available_buildings = [b for b in all_path_buildings if b.min_biz_genius <= biz_genius]
+    locked_buildings = [b for b in all_path_buildings if b.min_biz_genius > biz_genius]
+
     used = await building_repo.get_used_districts(session, user.id)
     total = await city_repo.get_total_districts(session, user.id)
+    total += getattr(user, "bonus_business_districts", 0)
     free = max(0, total - used)
 
     builder = InlineKeyboardBuilder()
-    for b in buildings:
+    for b in available_buildings:
         discount = user.building_discount_percent
         cost = max(1, int(b.district_cost * (1 - discount / 100)))
         can = "✅" if free >= cost else "❌"
@@ -39,16 +45,35 @@ async def cb_biz_build(
                  f"💰 {fmt_num(b.base_income)}/мин | 🏘 {cost}р.",
             callback_data=f"biz_select_building:{b.id}"
         ))
+
+    # Показываем следующие заблокированные здания как превью
+    if locked_buildings:
+        next_locked_genius = min(b.min_biz_genius for b in locked_buildings)
+        for b in locked_buildings:
+            if b.min_biz_genius == next_locked_genius:
+                builder.row(InlineKeyboardButton(
+                    text=f"🔒 {b.emoji} {b.name} | 💰 {fmt_num(b.base_income)}/мин"
+                         f" | Гений бизнеса Ур.{b.min_biz_genius}",
+                    callback_data="noop_biz"
+                ))
+
+    builder.row(InlineKeyboardButton(
+        text="🎖 Гений бизнеса", callback_data="biz_genius_menu"
+    ))
     builder.row(InlineKeyboardButton(
         text="◀️ Назад", callback_data="business"
     ))
 
     path_info = PATH_INFO.get(user.business_path, {})
+    from app.constants.raid import BIZ_GENIUS_INCOME_BONUS
+    genius_bonus = BIZ_GENIUS_INCOME_BONUS[biz_genius - 1] if biz_genius > 0 else 0
     try:
         await cb.message.edit_text(
             f"🏗 <b>Строительство</b>\n\n"
             f"Путь: {path_info.get('emoji','')} {path_info.get('name','')}\n"
-            f"🏘 Свободно районов: {free}/{total}\n\n"
+            f"🏘 Свободно районов: {free}/{total}\n"
+            f"🎖 Гений бизнеса: <b>Ур.{biz_genius}/5</b>"
+            + (f" (+{genius_bonus}% доход)" if genius_bonus else "") + "\n\n"
             f"Выбери здание:",
             reply_markup=builder.as_markup(),
             parse_mode="HTML",
@@ -66,7 +91,9 @@ async def cb_biz_build_city(
         await cb.answer("Сначала выберите путь", show_alert=True)
         return
 
-    buildings = BUILDINGS_BY_PATH.get(user.business_path, [])
+    biz_genius = getattr(user, "business_genius_level", 0)
+    all_path_buildings = BUILDINGS_BY_PATH.get(user.business_path, [])
+    buildings = [b for b in all_path_buildings if b.min_biz_genius <= biz_genius]
 
     districts_in_city = await session.scalar(
         select(func.count(District.id)).where(
@@ -212,3 +239,8 @@ async def cb_biz_build_in(
         await _show_business_main(cb, session, user)
     else:
         await cb.answer(result["reason"], show_alert=True)
+
+
+@router.callback_query(F.data == "noop_biz")
+async def cb_noop_biz(cb: CallbackQuery):
+    await cb.answer("🔒 Требуется Гений бизнеса", show_alert=False)

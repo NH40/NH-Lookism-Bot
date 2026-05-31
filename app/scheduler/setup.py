@@ -34,6 +34,7 @@ def setup_scheduler() -> AsyncIOScheduler:
         investment_tick,
         campaign_tick,
         boss_tick,
+        war_genius_tick,
     )
 
     scheduler = AsyncIOScheduler()
@@ -164,5 +165,15 @@ def setup_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=30,
     )
 
-    logger.info("Scheduler configured with 14 jobs")
+    # ── Гений войны: авто-атака рейдов ───────────────────────────────────────
+    scheduler.add_job(
+        war_genius_tick,
+        trigger=IntervalTrigger(minutes=1),
+        id="war_genius_tick",
+        name="war_genius_tick",
+        max_instances=1,
+        misfire_grace_time=30,
+    )
+
+    logger.info("Scheduler configured with 15 jobs")
     return scheduler

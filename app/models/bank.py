@@ -45,6 +45,9 @@ class CryptoPrice(Base):
     currency: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
     # price хранится в "микро-NHCoin" (×100) чтобы точно считать дроби
     price_micro: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    # Объёмы покупок/продаж за текущий период (сбрасываются каждым тиком)
+    buy_volume_micro: Mapped[int] = mapped_column(BigInteger, default=0)
+    sell_volume_micro: Mapped[int] = mapped_column(BigInteger, default=0)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

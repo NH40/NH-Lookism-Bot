@@ -30,16 +30,38 @@ async def _crypto_text(session: AsyncSession, user_id: int) -> str:
     lines = ["₿ <b>Крипто-ферма</b>\n", "📊 Текущий курс (NHCoin за 1 монету):\n"]
     for cur, cfg in CRYPTO_CONFIG.items():
         price_row = prices.get(cur)
-        price_disp = crypto_service.micro_to_display(price_row.price_micro) if price_row else "—"
+        if not price_row:
+            lines.append(f"{cfg['emoji']} <b>{cur}</b> — —")
+            continue
+
+        price_disp = crypto_service.micro_to_display(price_row.price_micro)
+        base = cfg["base_price"]
+        deviation_pct = (price_row.price_micro - base) / base * 100
+        if deviation_pct >= 1:
+            trend = f" 📈+{deviation_pct:.1f}%"
+        elif deviation_pct <= -1:
+            trend = f" 📉{deviation_pct:.1f}%"
+        else:
+            trend = ""
+
+        buy_vol  = price_row.buy_volume_micro  or 0
+        sell_vol = price_row.sell_volume_micro or 0
+        if buy_vol > sell_vol * 1.2:
+            sentiment = " 🟢"
+        elif sell_vol > buy_vol * 1.2:
+            sentiment = " 🔴"
+        else:
+            sentiment = ""
+
         holding = holdings.get(cur)
-        hold_str = f"  У вас: {holding.amount}" if holding and holding.amount > 0 else ""
+        hold_str = f"\n    У вас: {holding.amount}" if holding and holding.amount > 0 else ""
         avg_str = ""
         if holding and holding.amount > 0:
             avg = crypto_service.micro_to_display(holding.avg_buy_price_micro)
             avg_str = f" (ср. покупка: {avg})"
-        lines.append(f"{cfg['emoji']} <b>{cur}</b> — {price_disp} NHCoin{hold_str}{avg_str}")
+        lines.append(f"{cfg['emoji']} <b>{cur}</b> — {price_disp} NHCoin{trend}{sentiment}{hold_str}{avg_str}")
 
-    lines.append("\n<i>Курс обновляется каждые 5 минут.</i>")
+    lines.append("\n<i>Цена формируется игроками. Тик маркет-мейкера каждые 5 мин.</i>")
     return "\n".join(lines)
 
 
@@ -114,7 +136,7 @@ async def msg_crypto_buy(message: Message, session: AsyncSession, user: User, st
         await message.answer("❌ Введите целое число.", reply_markup=back_kb("bank_crypto"), parse_mode="HTML")
         return
 
-    ok, err = await crypto_service.buy(session, user, currency, units)
+    ok, err, delta_pct = await crypto_service.buy(session, user, currency, units)
     if not ok:
         await message.answer(err, reply_markup=back_kb("bank_crypto"), parse_mode="HTML")
         return
@@ -123,9 +145,11 @@ async def msg_crypto_buy(message: Message, session: AsyncSession, user: User, st
     price_micro = prices[currency].price_micro
     total = (price_micro * units) // 100
     cfg = CRYPTO_CONFIG[currency]
+    delta_str = f"📈 Ваша покупка подняла курс на {delta_pct:+.2f}%\n" if abs(delta_pct) >= 0.01 else ""
     await message.answer(
         f"✅ Куплено <b>{units} {cfg['emoji']}{currency}</b>\n"
         f"Потрачено: {fmt_num(total)} NHCoin\n"
+        f"{delta_str}"
         f"Остаток: {fmt_num(user.nh_coins)} NHCoin",
         reply_markup=back_kb("bank_crypto"),
         parse_mode="HTML",
@@ -185,19 +209,18 @@ async def cb_crypto_sell_all(cb: CallbackQuery, session: AsyncSession, user: Use
         await cb.answer("❌ Нечего продавать.", show_alert=True)
         return
     units = holding.amount
-    ok, err = await crypto_service.sell(session, user, currency, units)
+    ok, err, delta_pct, revenue = await crypto_service.sell(session, user, currency, units)
     if not ok:
         await cb.answer(err, show_alert=True)
         return
 
-    prices = await crypto_service.get_all_prices(session)
-    price_micro = prices[currency].price_micro if currency in prices else CRYPTO_CONFIG[currency]["base_price"]
-    revenue = (price_micro * units) // 100
     cfg = CRYPTO_CONFIG[currency]
+    delta_str = f"📉 Ваша продажа опустила курс на {delta_pct:.2f}%\n" if abs(delta_pct) >= 0.01 else ""
     try:
         await cb.message.edit_text(
             f"✅ Продано <b>{units} {cfg['emoji']}{currency}</b>\n"
-            f"Получено: {fmt_num(revenue)} NHCoin",
+            f"Получено: {fmt_num(revenue)} NHCoin\n"
+            f"{delta_str}",
             reply_markup=back_kb("bank_crypto"),
             parse_mode="HTML",
         )
@@ -218,18 +241,17 @@ async def msg_crypto_sell(message: Message, session: AsyncSession, user: User, s
         await message.answer("❌ Введите целое число.", reply_markup=back_kb("bank_crypto"), parse_mode="HTML")
         return
 
-    ok, err = await crypto_service.sell(session, user, currency, units)
+    ok, err, delta_pct, revenue = await crypto_service.sell(session, user, currency, units)
     if not ok:
         await message.answer(err, reply_markup=back_kb("bank_crypto"), parse_mode="HTML")
         return
 
-    prices = await crypto_service.get_all_prices(session)
-    price_micro = prices[currency].price_micro if currency in prices else CRYPTO_CONFIG[currency]["base_price"]
-    revenue = (price_micro * units) // 100
     cfg = CRYPTO_CONFIG[currency]
+    delta_str = f"📉 Ваша продажа опустила курс на {delta_pct:.2f}%\n" if abs(delta_pct) >= 0.01 else ""
     await message.answer(
         f"✅ Продано <b>{units} {cfg['emoji']}{currency}</b>\n"
         f"Получено: {fmt_num(revenue)} NHCoin\n"
+        f"{delta_str}"
         f"Баланс: {fmt_num(user.nh_coins)} NHCoin",
         reply_markup=back_kb("bank_crypto"),
         parse_mode="HTML",

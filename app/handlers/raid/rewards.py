@@ -15,6 +15,11 @@ from app.constants.raid import (
     PATH_LEVEL_BONUSES,
     UI_CRAFT_COST,
     UI_LEVEL_PERKS,
+    BIZ_GENIUS_COSTS,
+    BIZ_GENIUS_INCOME_BONUS,
+    BIZ_GENIUS_LEVEL_LABELS,
+    BUSINESS_DISTRICT_COST,
+    BUSINESS_DISTRICTS_MAX,
 )
 from app.utils.keyboards.common import back_kb
 from app.utils.formatters import fmt_num
@@ -41,6 +46,8 @@ async def cb_raid_claim(cb: CallbackQuery, session: AsyncSession, user: User):
         frag_emoji, frag_name = "🧪", "фрагментов алхимии"
     elif reward_type == "path":
         frag_emoji, frag_name = "🔷", "фрагментов Пути"
+    elif reward_type == "business":
+        frag_emoji, frag_name = "🏢", "бизнес-фрагментов"
     else:
         frag_emoji, frag_name = "🔮", "фрагментов УИ"
 
@@ -319,3 +326,173 @@ async def cb_craft_path_spin(cb: CallbackQuery, session: AsyncSession, user: Use
         text += f"\n\n✨ Синергия активирована: {synergy['emoji']} {synergy['name']}!"
     await cb.answer(text, show_alert=True)
     await cb_craft_path_menu(cb, session, user)
+
+
+# ── Гений бизнеса (Бизнес-крафт) ────────────────────────────────────────────
+
+async def _biz_genius_page(cb: CallbackQuery, session: AsyncSession, user: User, back: str = "raid_craft"):
+    """Общая функция отображения страницы Гения бизнеса."""
+    biz_frags = getattr(user, "business_fragments", 0)
+    biz_genius = getattr(user, "business_genius_level", 0)
+    bonus_districts = getattr(user, "bonus_business_districts", 0)
+
+    builder = InlineKeyboardBuilder()
+
+    # ── Прокачка уровня Гения бизнеса ────────────────────────────────────────
+    if biz_genius < 5:
+        cost = BIZ_GENIUS_COSTS[biz_genius]
+        can = "✅" if biz_frags >= cost else "❌"
+        lbl = BIZ_GENIUS_LEVEL_LABELS.get(biz_genius + 1, "")
+        builder.row(InlineKeyboardButton(
+            text=f"{can} Ур.{biz_genius + 1}: {lbl} — {cost} 🏢",
+            callback_data="biz_genius_upgrade"
+        ))
+    else:
+        builder.row(InlineKeyboardButton(
+            text="👑 Гений бизнеса — МАКСИМУМ (Ур.5)",
+            callback_data="noop_raid"
+        ))
+
+    # ── Бизнес-экспансия: бонусные районы ────────────────────────────────────
+    if bonus_districts < BUSINESS_DISTRICTS_MAX:
+        can_d = "✅" if biz_frags >= BUSINESS_DISTRICT_COST else "❌"
+        builder.row(InlineKeyboardButton(
+            text=f"{can_d} +1 бонусный район — {BUSINESS_DISTRICT_COST} 🏢"
+                 f" [{bonus_districts}/{BUSINESS_DISTRICTS_MAX}]",
+            callback_data="craft_biz_district"
+        ))
+        if biz_frags >= BUSINESS_DISTRICT_COST * 5 and bonus_districts + 5 <= BUSINESS_DISTRICTS_MAX:
+            builder.row(InlineKeyboardButton(
+                text=f"✅ +5 районов — {BUSINESS_DISTRICT_COST * 5} 🏢",
+                callback_data="craft_biz_district_5"
+            ))
+    else:
+        builder.row(InlineKeyboardButton(
+            text=f"✅ Бизнес-экспансия — максимум ({BUSINESS_DISTRICTS_MAX}/50)",
+            callback_data="noop_raid"
+        ))
+
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=back))
+
+    # ── Текст ─────────────────────────────────────────────────────────────────
+    lines = [
+        "🎖 <b>Гений бизнеса</b>",
+        f"<i>Фрагменты — у Элиты (Нулевое поколение)</i>",
+        "",
+        f"🏢 Бизнес-фрагменты: <b>{biz_frags}</b>",
+        f"🎖 Уровень: <b>{biz_genius}/5</b>",
+        "",
+        "<b>── Уровни Гения бизнеса ──</b>",
+        "<i>Каждый уровень открывает новые здания и даёт бонус к доходу</i>",
+        "",
+    ]
+    for lvl in range(1, 6):
+        cost = BIZ_GENIUS_COSTS[lvl - 1]
+        bonus = BIZ_GENIUS_INCOME_BONUS[lvl - 1]
+        lbl = BIZ_GENIUS_LEVEL_LABELS.get(lvl, "")
+        if biz_genius >= lvl:
+            lines.append(f"✅ Ур.{lvl}: {lbl} — +{bonus}% доход")
+        elif biz_genius + 1 == lvl:
+            lines.append(f"🔓 Ур.{lvl}: {lbl} — {cost} 🏢 | +{bonus}% доход")
+        else:
+            lines.append(f"🔒 Ур.{lvl}: {lbl} — {cost} 🏢 | +{bonus}% доход")
+
+    lines += [
+        "",
+        "<b>── Бизнес-экспансия ──</b>",
+        f"<i>Бонусные районы для строительства без захвата городов</i>",
+        f"🏘 Куплено: <b>{bonus_districts}/{BUSINESS_DISTRICTS_MAX}</b> | Цена: {BUSINESS_DISTRICT_COST} 🏢/р.",
+    ]
+
+    try:
+        await cb.message.edit_text(
+            "\n".join(lines),
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    await cb.answer()
+
+
+@router.callback_query(F.data == "craft_biz_menu")
+async def cb_craft_biz_menu(cb: CallbackQuery, session: AsyncSession, user: User):
+    await _biz_genius_page(cb, session, user, back="raid_craft")
+
+
+@router.callback_query(F.data == "biz_genius_menu")
+async def cb_biz_genius_menu(cb: CallbackQuery, session: AsyncSession, user: User):
+    await _biz_genius_page(cb, session, user, back="business")
+
+
+@router.callback_query(F.data == "biz_genius_upgrade")
+async def cb_biz_genius_upgrade(cb: CallbackQuery, session: AsyncSession, user: User):
+    biz_genius = getattr(user, "business_genius_level", 0)
+    biz_frags = getattr(user, "business_fragments", 0)
+
+    if biz_genius >= 5:
+        await cb.answer("Максимальный уровень достигнут!", show_alert=True)
+        return
+
+    cost = BIZ_GENIUS_COSTS[biz_genius]
+    if biz_frags < cost:
+        await cb.answer(f"Нужно {cost} 🏢 фрагментов", show_alert=True)
+        return
+
+    user.business_fragments = biz_frags - cost
+    user.business_genius_level = biz_genius + 1
+    new_lvl = user.business_genius_level
+    lbl = BIZ_GENIUS_LEVEL_LABELS.get(new_lvl, "")
+    bonus = BIZ_GENIUS_INCOME_BONUS[new_lvl - 1]
+
+    # Пересчитываем доход (добавился genius bonus)
+    from app.services.business_service import business_service
+    await business_service._recalc_income(session, user)
+    await session.flush()
+
+    await cb.answer(
+        f"🎖 Гений бизнеса Ур.{new_lvl} открыт!\n"
+        f"{lbl}\n"
+        f"+{bonus}% ко всему доходу!\n"
+        f"Новые здания доступны в Бизнесе!",
+        show_alert=True
+    )
+    # Определяем куда вернуться (по тексту кнопки «Назад» в message нет надёжного способа,
+    # поэтому всегда возвращаем в raid_craft; из бизнеса вызывается отдельный callback)
+    await _biz_genius_page(cb, session, user, back="raid_craft")
+
+
+@router.callback_query(F.data == "craft_biz_district")
+async def cb_craft_biz_district(cb: CallbackQuery, session: AsyncSession, user: User):
+    biz_frags = getattr(user, "business_fragments", 0)
+    bonus_districts = getattr(user, "bonus_business_districts", 0)
+    if bonus_districts >= BUSINESS_DISTRICTS_MAX:
+        await cb.answer("Достигнут максимум бонусных районов!", show_alert=True)
+        return
+    if biz_frags < BUSINESS_DISTRICT_COST:
+        await cb.answer(f"Нужно {BUSINESS_DISTRICT_COST} 🏢 фрагментов", show_alert=True)
+        return
+    user.business_fragments = biz_frags - BUSINESS_DISTRICT_COST
+    user.bonus_business_districts = bonus_districts + 1
+    await session.flush()
+    await cb.answer(f"✅ +1 бонусный район! Всего: {user.bonus_business_districts}", show_alert=True)
+    await _biz_genius_page(cb, session, user, back="raid_craft")
+
+
+@router.callback_query(F.data == "craft_biz_district_5")
+async def cb_craft_biz_district_5(cb: CallbackQuery, session: AsyncSession, user: User):
+    cost5 = BUSINESS_DISTRICT_COST * 5
+    biz_frags = getattr(user, "business_fragments", 0)
+    bonus_districts = getattr(user, "bonus_business_districts", 0)
+    if biz_frags < cost5:
+        await cb.answer(f"Нужно {cost5} 🏢 фрагментов", show_alert=True)
+        return
+    add = min(5, BUSINESS_DISTRICTS_MAX - bonus_districts)
+    if add <= 0:
+        await cb.answer("Достигнут максимум!", show_alert=True)
+        return
+    user.business_fragments = biz_frags - (add * BUSINESS_DISTRICT_COST)
+    user.bonus_business_districts = bonus_districts + add
+    await session.flush()
+    await cb.answer(f"✅ +{add} районов! Всего: {user.bonus_business_districts}", show_alert=True)
+    await _biz_genius_page(cb, session, user, back="raid_craft")

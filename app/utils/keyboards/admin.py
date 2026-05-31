@@ -18,6 +18,9 @@ def admin_main_kb():
         InlineKeyboardButton(text="📢 Рассылка", callback_data="admin_broadcast"),
         InlineKeyboardButton(text="👥 Все игроки", callback_data="admin_bulk"),
     )
+    builder.row(
+        InlineKeyboardButton(text="👁 Реальный топ (вкл. скрытых)", callback_data="admin_real_top"),
+    )
     return builder.as_markup()
 
 

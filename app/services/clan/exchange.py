@@ -144,6 +144,20 @@ class ClanExchangeService(ClanBaseService):
 
     # ── Персонажи ───────────────────────────────────────────────────────────
 
+    async def _remove_from_deck(self, session, user_id: int, char_ids: list[int]) -> None:
+        """Удаляет карточки из активной колоды перед передачей."""
+        from app.models.card_deck import UserDeck
+        if not char_ids:
+            return
+        rows = (await session.execute(
+            select(UserDeck).where(
+                UserDeck.user_id == user_id,
+                UserDeck.char_id.in_(char_ids),
+            )
+        )).scalars().all()
+        for row in rows:
+            await session.delete(row)
+
     async def _exchange_character(self, session, from_user, to_user, meta):
         char_id = meta.get("char_id") if meta else None
         if not char_id:
@@ -157,6 +171,7 @@ class ClanExchangeService(ClanBaseService):
         )
         if not char:
             return {"ok": False, "reason": "Персонаж не найден"}
+        await self._remove_from_deck(session, from_user.id, [char.id])
         char.user_id = to_user.id
         await self._recalc_power(session, from_user, to_user)
         return {"ok": True}
@@ -174,6 +189,7 @@ class ClanExchangeService(ClanBaseService):
         chars = result.scalars().all()
         if len(chars) < amount:
             return {"ok": False, "reason": f"Недостаточно «{char_name}» (есть {len(chars)})"}
+        await self._remove_from_deck(session, from_user.id, [c.id for c in chars])
         for c in chars:
             c.user_id = to_user.id
         await self._recalc_power(session, from_user, to_user)
@@ -191,6 +207,7 @@ class ClanExchangeService(ClanBaseService):
         chars = result.scalars().all()
         if not chars:
             return {"ok": False, "reason": f"Нет персонажей ранга {rank}"}
+        await self._remove_from_deck(session, from_user.id, [c.id for c in chars])
         for c in chars:
             c.user_id = to_user.id
         await self._recalc_power(session, from_user, to_user)

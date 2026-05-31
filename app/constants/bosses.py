@@ -31,7 +31,7 @@ BOSS_ROTATION: list[str] = ["nikita", "archangel", "manager", "brothers"]
 
 # ── Никита ────────────────────────────────────────────────────────────────────
 
-NIKITA_BASE_HP: int = 880_000_000_000  # 880 млрд
+NIKITA_BASE_HP: int = 300_000_000_000  # 880 млрд
 
 # На сколько % заполняется шкала отчаяния за 1 удар (0.5 = 200 ударов до 100%)
 NIKITA_DESPAIR_PER_HIT: float = 0.5
@@ -45,7 +45,7 @@ NIKITA_PHRASES: list[str] = [
 
 # ── Архангел ─────────────────────────────────────────────────────────────────
 
-ARCHANGEL_BASE_HP: int = 660_000_000_000  # 660 млрд
+ARCHANGEL_BASE_HP: int = 200_000_000_000  # 660 млрд
 
 # Веса эффектов «доната» (сумма = 100)
 ARCHANGEL_DONATE_WEIGHTS: dict[str, int] = {
@@ -55,9 +55,9 @@ ARCHANGEL_DONATE_WEIGHTS: dict[str, int] = {
     "shield":   5,  # Щит = 50% max HP (редкий)
 }
 
-ARCHANGEL_HEAL_PCT: float     = 0.05   # 5% от base_max_hp
-ARCHANGEL_SHIELD_PCT: float   = 0.50   # 50% от base_max_hp
-ARCHANGEL_DEBUFF_ATTACKS: int = 10     # количество атак с пониженным уроном
+ARCHANGEL_HEAL_PCT: float     = 0.01   # 5% от base_max_hp
+ARCHANGEL_SHIELD_PCT: float   = 0.10   # 50% от base_max_hp
+ARCHANGEL_DEBUFF_ATTACKS: int = 5     # количество атак с пониженным уроном
 
 ARCHANGEL_PHRASES: list[str] = [
     "Летс Гоу!",
@@ -66,15 +66,15 @@ ARCHANGEL_PHRASES: list[str] = [
 ]
 
 ARCHANGEL_DONATE_LABELS: dict[str, str] = {
-    "heal":   "💊 Восстановил 5% HP!",
+    "heal":   "💊 Восстановил 1% HP!",
     "cd":     "⏳ Удвоил твой КД атаки!",
-    "debuff": "⬇️ Урон по боссу снижен вдвое на 10 атак!",
-    "shield": "🛡 Поставил щит 50% HP!",
+    "debuff": "⬇️ Урон по боссу снижен вдвое на 5 атак!",
+    "shield": "🛡 Поставил щит 10% HP!",
 }
 
 # ── Менеджер ─────────────────────────────────────────────────────────────────
 
-MANAGER_BASE_HP: int = 890_000_000_000  # 890 млрд
+MANAGER_BASE_HP: int = 400_000_000_000  # 890 млрд
 
 # Возможные % слива NHCoin у атакующего за удар
 MANAGER_DRAIN_OPTIONS: list[int] = [5, 10, 15, 20]
@@ -149,8 +149,8 @@ BOSSES: list[BossConfig] = [
         ),
         special_desc=(
             "💳 <b>Система донатов</b>: каждый удар активирует рандомный эффект:\n"
-            "• Лечение 5% HP\n• Щит 50% HP (редко)\n"
-            "• Удваивает твой КД\n• –50% урона на 10 атак"
+            "• Лечение 1% HP\n• Щит 10% HP (редко)\n"
+            "• Удваивает твой КД\n• –50% урона на 5 атак"
         ),
         phrases=ARCHANGEL_PHRASES,
     ),

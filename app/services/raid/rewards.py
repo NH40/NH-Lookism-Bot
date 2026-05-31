@@ -2,6 +2,7 @@ import random
 from app.constants.raid import (
     ALCHEMY_MAX_FRAGMENTS_PER_RAID,
     PATH_FRAGMENTS_MAX_PER_RAID,
+    BUSINESS_FRAGMENTS_MAX_PER_RAID,
 )
 
 
@@ -30,6 +31,15 @@ def calc_fragments(
             base = random.randint(3, 7)
         else:
             base = random.randint(1, 2)
+    elif reward_type == "business":
+        if ratio >= 0.5:
+            base = random.randint(10, BUSINESS_FRAGMENTS_MAX_PER_RAID)
+        elif ratio >= 0.2:
+            base = random.randint(6, 9)
+        elif ratio >= 0.05:
+            base = random.randint(2, 5)
+        else:
+            base = random.randint(1, 2)
     else:
         if ratio >= 0.5:
             base = random.randint(15, 25)
@@ -50,6 +60,9 @@ def distribute_reward(user, reward_type: str, fragments: int) -> int:
     elif reward_type == "path":
         user.path_fragments += fragments
         return user.path_fragments
+    elif reward_type == "business":
+        user.business_fragments = getattr(user, "business_fragments", 0) + fragments
+        return user.business_fragments
     else:
         user.ui_fragments += fragments
         return user.ui_fragments

@@ -336,9 +336,9 @@ CIRCULAR_DONATS: list[CircularDonat] = [
     CircularDonat(
         "shadow", "Тень", "🌑",
         price_per_circle=1200, max_circles=5,
-        circle_bonus="Повышение всех статов мастерства на 1%",
+        circle_bonus="-1% ко всем КД за каждый круг",
         special_bonuses=(
-            (3, "Первая атака в бою +30% боевой мощи"),
+            (3, "Первая атака в бою +10% боевой мощи"),
             (5, "Можно скрыть себя в топе игроков"),
         ),
     ),

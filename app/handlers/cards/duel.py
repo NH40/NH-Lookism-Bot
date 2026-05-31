@@ -67,6 +67,7 @@ async def cb_duel_menu(cb: CallbackQuery, session: AsyncSession, user: User):
         ))
     pvp_mark = " ⏳" if pvp_ttl > 0 else ""
     builder.row(InlineKeyboardButton(text=f"⚔️ Против игрока{pvp_mark}", callback_data="duel_pvp"))
+    builder.row(InlineKeyboardButton(text="⚡ Авто-колода (5 сильнейших)", callback_data="duel_auto_deck"))
     builder.row(InlineKeyboardButton(text="◀️ К колоде", callback_data="deck"))
 
     text = (
@@ -90,6 +91,41 @@ async def cb_duel_menu(cb: CallbackQuery, session: AsyncSession, user: User):
             pass
         await cb.message.answer(text, reply_markup=markup, parse_mode="HTML")
     await cb.answer()
+
+
+# ── Авто-колода ──────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data == "duel_auto_deck")
+async def cb_duel_auto_deck(cb: CallbackQuery, session: AsyncSession, user: User):
+    from app.models.character import UserCharacter
+    from app.models.card_deck import UserDeck
+    from sqlalchemy import select as sa_select
+
+    # Берём 5 карточек с наибольшей мощью
+    top5 = (await session.execute(
+        sa_select(UserCharacter)
+        .where(UserCharacter.user_id == user.id)
+        .order_by(UserCharacter.power.desc())
+        .limit(5)
+    )).scalars().all()
+
+    if not top5:
+        await cb.answer("У тебя нет карточек!", show_alert=True)
+        return
+
+    # Очищаем колоду и выставляем новые слоты
+    existing = (await session.execute(
+        sa_select(UserDeck).where(UserDeck.user_id == user.id)
+    )).scalars().all()
+    for row in existing:
+        await session.delete(row)
+
+    for slot, uc in enumerate(top5, start=1):
+        session.add(UserDeck(user_id=user.id, slot=slot, char_id=uc.id))
+
+    await session.commit()
+    await cb.answer("⚡ Колода собрана из 5 сильнейших!", show_alert=False)
+    await cb_duel_menu(cb, session, user)
 
 
 # ── Дуэль с ботом ────────────────────────────────────────────────────────────

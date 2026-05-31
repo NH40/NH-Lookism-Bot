@@ -124,6 +124,19 @@ async def cb_collection_rank(cb: CallbackQuery, session: AsyncSession, user: Use
 
     lines.append(f"\n💪 Мощь ранга: {fmt_num(total_power)}")
     builder.adjust(1)
+
+    # Считаем свободные (не в колоде) карточки этого ранга
+    deck_ids = (await session.execute(
+        select(UserDeck.char_id).where(UserDeck.user_id == user.id)
+    )).scalars().all()
+    deck_id_set = set(deck_ids)
+    free_cnt = sum(1 for c in chars if c.id not in deck_id_set)
+    if free_cnt > 0:
+        builder.row(InlineKeyboardButton(
+            text=f"💨 Распылить все свободные ({free_cnt} шт.)",
+            callback_data=f"collection_discard_rank:{rank}",
+        ))
+
     builder.row(InlineKeyboardButton(text="◀️ К коллекции", callback_data="collection"))
 
     # Может вызываться из фото-сообщения (кнопка «Назад» с превью)
@@ -233,6 +246,55 @@ async def cb_card_act(cb: CallbackQuery, session: AsyncSession, user: User):
 @router.callback_query(F.data == "noop")
 async def cb_noop(cb: CallbackQuery):
     await cb.answer()
+
+
+@router.callback_query(F.data.startswith("collection_discard_rank:"))
+async def cb_collection_discard_rank(cb: CallbackQuery, session: AsyncSession, user: User):
+    """Распылить все свободные (не в колоде) карточки указанного ранга."""
+    from app.services.cooldown_service import cooldown_service
+    lock_key = cooldown_service.card_action_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
+        await cb.answer("⏳ Подожди...", show_alert=False)
+        return
+
+    rank = cb.data.split(":")[1]
+    from sqlalchemy import func
+
+    deck_ids = set((await session.execute(
+        select(UserDeck.char_id).where(UserDeck.user_id == user.id)
+    )).scalars().all())
+
+    chars = (await session.execute(
+        select(UserCharacter).where(
+            UserCharacter.user_id == user.id,
+            UserCharacter.rank == rank,
+        )
+    )).scalars().all()
+
+    total_dust = 0
+    discarded = 0
+    for c in chars:
+        if c.id in deck_ids:
+            continue
+        dust = calc_dust(c.rank, c.level)
+        total_dust += dust
+        discarded += 1
+        await session.delete(c)
+
+    if discarded == 0:
+        await cb.answer("Нет свободных карточек для распыления", show_alert=True)
+        return
+
+    user.card_dust = (user.card_dust or 0) + total_dust
+    await session.commit()
+
+    cfg = RANK_CONFIG_MAP.get(rank)
+    rank_label = cfg.label if cfg else rank
+    await cb.answer(
+        f"💨 Распылено {discarded} карточек [{rank_label}]\n+{total_dust} 💎 пыли",
+        show_alert=True,
+    )
+    await cb_collection(cb, session, user)
 
 
 @router.callback_query(F.data.startswith("card_discard:"))

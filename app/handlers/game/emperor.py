@@ -227,10 +227,12 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
             # Шанс карточки — только из состава группировки
             got_card = random.randint(1, 100) <= cfg.drop_chance
             if got_card:
-                from app.data.characters import CHARACTERS, RANK_EMOJI
+                from app.data.characters import CHARACTERS, RANK_EMOJI, RANK_CONFIG_MAP
                 candidates = [c for c in CHARACTERS if c["name"] in cfg.members]
                 if candidates:
-                    char = random.choice(candidates)
+                    # Взвешенный выбор: чем выше ранг (реже) — тем ниже вес
+                    weights = [RANK_CONFIG_MAP[c["rank"]].weight for c in candidates]
+                    char = random.choices(candidates, weights=weights, k=1)[0]
                     from app.models.character import UserCharacter
                     from app.constants.cards import LEVEL_MULTIPLIERS
                     level = 0
@@ -251,12 +253,34 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
                     result_lines.append(f"🃏 Дроп: {rank_emoji} <b>{char['name']}</b>")
                     dropped_char = char
 
-            # Обновляем запись: +1 победа, ставим КД
+            # Обновляем запись: +1 победа, ставим КД с учётом скорости мастерства
             rec.defeat_count += 1
-            rec.cooldown_until = now + timedelta(hours=GANG_COOLDOWN_HOURS)
+            base_cd_seconds = GANG_COOLDOWN_HOURS * 3600
+            from app.models.skill import UserMastery
+            from sqlalchemy import select as _sa_select
+            mastery = await session.scalar(
+                _sa_select(UserMastery).where(UserMastery.user_id == user.id)
+            )
+            speed_pct = 0
+            if mastery:
+                raw = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(mastery.speed, 0)
+                speed_pct = int(raw * getattr(user, "skill_path_bonus_multiplier", 1.0))
+            from app.repositories.title_repo import title_repo as _title_repo
+            title_ids = set(await _title_repo.get_user_titles(session, user.id))
+            if {"concentration", "focus"}.issubset(title_ids):
+                speed_pct = min(80, speed_pct + 15)
+            if "reverse_eyes" in title_ids:
+                speed_pct = min(80, speed_pct + 30)
+            if "concentration" in title_ids:
+                speed_pct = min(80, speed_pct + 30)
+            effective_cd = max(600, int(base_cd_seconds * (1 - speed_pct / 100)))
+            rec.cooldown_until = now + timedelta(seconds=effective_cd)
             new_power = _gang_power(cfg, rec.defeat_count)
             result_lines.append(f"\n💹 Группировка усилилась до {fmt_num(new_power)} (+20%)")
-            result_lines.append(f"⏳ КД: {GANG_COOLDOWN_HOURS} час")
+            cd_line = f"⏳ КД: {fmt_ttl(effective_cd)}"
+            if speed_pct:
+                cd_line += f" (скорость -{speed_pct}%)"
+            result_lines.append(cd_line)
 
             await session.flush()
 

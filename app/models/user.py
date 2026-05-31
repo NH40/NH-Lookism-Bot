@@ -193,6 +193,15 @@ class User(Base):
     # экспоненциально при каждом вызове.
     influence_donat_bonus: Mapped[int] = mapped_column(BigInteger, default=0)
 
+    # ── Бизнес-рейды ──────────────────────────────────────────────────────
+    business_fragments: Mapped[int] = mapped_column(Integer, default=0)
+    bonus_business_districts: Mapped[int] = mapped_column(Integer, default=0)
+    business_genius_level: Mapped[int] = mapped_column(Integer, default=0)
+
+    # ── Гений войны (Менеджер Ким) ────────────────────────────────────────
+    war_points: Mapped[int] = mapped_column(Integer, default=0)
+    war_genius_level: Mapped[int] = mapped_column(Integer, default=0)
+
     # ── Бан ───────────────────────────────────────────────────────────────
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
     ban_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

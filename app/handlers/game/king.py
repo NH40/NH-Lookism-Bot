@@ -416,16 +416,39 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
     if result["win"]:
         await quest_service.add_progress(session, user, "wins")
 
-    crit_str = " ⚡КРИТ!" if result.get("is_crit") else ""
-    is_pvp = result.get("defender_name") is not None
+    # После победы — автовозврат к списку городов (как было раньше)
+    if result["win"]:
+        crit_str = "⚡КРИТ! " if result.get("is_crit") else ""
+        is_pvp = result.get("defender_name") is not None
+        if is_pvp:
+            taken = result.get("districts_taken", 0)
+            await cb.answer(
+                f"✅ {crit_str}Победа PvP! +{taken} районов у {result['defender_name']}",
+                show_alert=False,
+            )
+        else:
+            gained = result.get("districts_gained", 0)
+            await cb.answer(
+                f"✅ {crit_str}Победа! +{gained} районов в {result['city']}",
+                show_alert=False,
+            )
+        text, kb = await build_king_menu(session, user)
+        try:
+            await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+        except Exception:
+            pass
+        return
 
-    # Прогресс-бар города
+    # При поражении — показываем результат с кнопками
+    is_pvp = result.get("defender_name") is not None
     city_total = result.get('city_total', 0)
     city_captured = result.get('city_captured', 0)
-    pct = min(int(city_captured / city_total * 100) if city_total > 0 else 0, 100)
-    bar_filled = min(int(pct / 10), 10)
-    progress_bar = "🟩" * bar_filled + "⬛" * (10 - bar_filled)
-    progress_str = f"\n{progress_bar} {pct}%\n" if city_total > 0 else ""
+    progress_str = ""
+    if city_total > 0:
+        pct = min(int(city_captured / city_total * 100), 100)
+        bar_filled = min(int(pct / 10), 10)
+        progress_bar = "🟩" * bar_filled + "⬛" * (10 - bar_filled)
+        progress_str = f"\n{progress_bar} {pct}%\n"
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
@@ -436,58 +459,27 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
     ))
 
     if is_pvp:
-        if result["win"]:
-            taken = result.get("districts_taken", 0)
-            text = (
-                f"✅ <b>Победа в PvP!{crit_str}</b>\n\n"
-                f"{'─' * 20}\n"
-                f"Противник: <b>{html.escape(result['defender_name'])}</b>\n"
-                f"Город: <b>{html.escape(result['city'])}</b>\n\n"
-                f"🏘 Забрано районов: <b>+{taken}</b>\n"
-                f"Моих в городе: {result.get('my_in_city', 0)}\n"
-                f"Городов с районами: {result.get('cities_count', 0)}/10\n"
-                + progress_str +
-                f"{'─' * 20}\n"
-                f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
-                f"⚔️ Его мощь: {fmt_num(result['defender_power'])}"
-            )
-        else:
-            text = (
-                f"❌ <b>Поражение в PvP!</b>\n\n"
-                f"{'─' * 20}\n"
-                f"Противник: <b>{html.escape(result['defender_name'])}</b>\n"
-                f"Город: <b>{html.escape(result['city'])}</b>\n"
-                + progress_str +
-                f"{'─' * 20}\n"
-                f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
-                f"⚔️ Его мощь: {fmt_num(result['defender_power'])}"
-            )
+        text = (
+            f"❌ <b>Поражение в PvP!</b>\n\n"
+            f"{'─' * 20}\n"
+            f"Противник: <b>{html.escape(result['defender_name'])}</b>\n"
+            f"Город: <b>{html.escape(result['city'])}</b>\n"
+            + progress_str +
+            f"{'─' * 20}\n"
+            f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
+            f"⚔️ Его мощь: {fmt_num(result['defender_power'])}"
+        )
     else:
-        if result["win"]:
-            text = (
-                f"✅ <b>Победа!{crit_str}</b>\n\n"
-                f"{'─' * 20}\n"
-                f"Город: <b>{html.escape(result['city'])}</b>\n\n"
-                f"🏘 Захвачено районов: <b>+{result.get('districts_gained', 0)}</b>\n"
-                f"Моих в городе: {result.get('my_in_city', 0)}\n"
-                f"Всего в городе: {city_captured}/{city_total}\n"
-                f"Городов с районами: {result['cities_count']}/10\n"
-                + progress_str +
-                f"{'─' * 20}\n"
-                f"💪 Твоя мощь: {fmt_num(result['user_power'])}\n"
-                f"🤖 Мощь противника: {fmt_num(result['bot_power'])}"
-            )
-        else:
-            text = (
-                f"❌ <b>Поражение!</b>\n\n"
-                f"{'─' * 20}\n"
-                f"Город: <b>{html.escape(result['city'])}</b>\n"
-                + progress_str +
-                f"Районов в городе: {city_captured}/{city_total}\n\n"
-                f"{'─' * 20}\n"
-                f"💪 Твоя мощь: {fmt_num(result['user_power'])}\n"
-                f"🤖 Мощь противника: {fmt_num(result['bot_power'])}"
-            )
+        text = (
+            f"❌ <b>Поражение!</b>\n\n"
+            f"{'─' * 20}\n"
+            f"Город: <b>{html.escape(result['city'])}</b>\n"
+            + progress_str +
+            f"Районов в городе: {city_captured}/{city_total}\n\n"
+            f"{'─' * 20}\n"
+            f"💪 Твоя мощь: {fmt_num(result['user_power'])}\n"
+            f"🤖 Мощь противника: {fmt_num(result['bot_power'])}"
+        )
 
     try:
         await cb.message.edit_text(

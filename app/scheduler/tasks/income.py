@@ -1,6 +1,11 @@
 """
 income_tick — оптимизированная версия для 5000+ игроков.
 
+Примечание по трекингу квестов:
+  Квесты «доход» (progress_key="income") обновляются в отдельной лёгкой сессии
+  через прямой SQL-апдейт, чтобы не нарушать оптимизацию основного тика.
+
+
 Было: загрузка 5000 ORM-объектов + N запросов зелий per-user + N flush'ей
       ≈ 10 000–15 000 запросов к БД каждую минуту.
 
@@ -147,3 +152,54 @@ async def income_tick():
                 len(user_deltas),
                 len(teacher_deltas),
             )
+
+    # ── 6. Трекинг квестов «доход» (отдельная сессия, не тормозит основной тик) ──
+    if user_deltas:
+        await _track_income_quests(user_deltas)
+
+
+async def _track_income_quests(user_deltas: dict[int, int]) -> None:
+    """
+    Обновляет прогресс ежедневных квестов с progress_key='income'.
+    Использует прямой SQL UPDATE вместо ORM-объектов для скорости.
+    """
+    from app.models.daily_quest import DailyQuest
+    from app.constants.quests import QUESTS_BY_ID
+    from datetime import date
+
+    today = date.today().isoformat()
+
+    # Собираем цели (target) для всех income-квестов
+    income_quest_ids = [
+        q.quest_id for q in QUESTS_BY_ID.values()
+        if (q.progress_key or q.quest_id) == "income"
+    ]
+    if not income_quest_ids:
+        return
+
+    targets: dict[str, int] = {
+        qid: QUESTS_BY_ID[qid].target for qid in income_quest_ids
+    }
+
+    try:
+        async with AsyncSessionFactory() as session:
+            async with session.begin():
+                for user_id, delta in user_deltas.items():
+                    if delta <= 0:
+                        continue
+                    result = await session.execute(
+                        select(DailyQuest).where(
+                            DailyQuest.user_id == user_id,
+                            DailyQuest.date == today,
+                            DailyQuest.quest_id.in_(income_quest_ids),
+                            DailyQuest.is_completed == False,
+                        )
+                    )
+                    quests = result.scalars().all()
+                    for q in quests:
+                        target = targets.get(q.quest_id, 0)
+                        q.progress = min(q.progress + delta, target)
+                        if q.progress >= target:
+                            q.is_completed = True
+    except Exception as exc:
+        logger.warning(f"_track_income_quests error: {exc}")

@@ -144,7 +144,7 @@ class AdminBackupMixin:
         from app.models.skill import UserPathSkills
         from app.models.king_bot import KingBot
         from app.models.city import District, FistBot
-        from app.models.bank import StorageCell, Investment, CryptoHolding
+        from app.models.bank import StorageCell, Investment
         from app.models.emperor_gang import EmperorGangRecord
         await session.execute(sa_delete(UserBuilding))
         await session.execute(sa_delete(ActivePotion))
@@ -167,8 +167,6 @@ class AdminBackupMixin:
         )
         # Вклады: удаляем чтобы планировщик не выплатил NHCoin после патча
         await session.execute(sa_delete(Investment))
-        # Крипто-холдинги: удаляем чтобы нельзя было продать крипту за NHCoin после патча
-        await session.execute(sa_delete(CryptoHolding))
         await session.flush()
 
         # ── Сброс прогресса ───────────────────────────────────────────────────────

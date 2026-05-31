@@ -151,6 +151,28 @@ async def build_king_menu(session, user, page: int = 0):
     page_items = eligible[page * per_page:(page + 1) * per_page]
 
     builder = InlineKeyboardBuilder()
+
+    # Кнопка «Продолжить» — город с наибольшим прогрессом захвата у игрока
+    if eligible and cities_by_id:
+        best_city_id = None
+        best_pct = -1
+        for city, *_ in eligible:
+            row = counts.get(city.id)
+            my = (row.my_count if row else 0) or 0
+            if my > 0:
+                total = city.total_districts or 1
+                pct = my / total
+                if pct > best_pct:
+                    best_pct = pct
+                    best_city_id = city.id
+                    best_city_name = city.name
+        if best_city_id:
+            pct_int = min(int(best_pct * 100), 99)
+            builder.row(InlineKeyboardButton(
+                text=f"⚡ Продолжить захват: {best_city_name} ({pct_int}%)",
+                callback_data=f"king_city_info:{best_city_id}",
+            ))
+
     for city, size_emoji, my_str, def_str in page_items:
         builder.row(InlineKeyboardButton(
             text=f"{size_emoji} {city.name} {my_str}| {def_str}",
@@ -416,7 +438,7 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
     if result["win"]:
         await quest_service.add_progress(session, user, "wins")
 
-    # После победы — автовозврат к списку городов (как было раньше)
+    # После победы — остаёмся в том же городе
     if result["win"]:
         crit_str = "⚡КРИТ! " if result.get("is_crit") else ""
         is_pvp = result.get("defender_name") is not None
@@ -432,11 +454,7 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
                 f"✅ {crit_str}Победа! +{gained} районов в {result['city']}",
                 show_alert=False,
             )
-        text, kb = await build_king_menu(session, user)
-        try:
-            await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-        except Exception:
-            pass
+        await cb_king_city_info(cb, session, user)
         return
 
     # При поражении — показываем результат с кнопками

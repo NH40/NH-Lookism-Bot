@@ -155,6 +155,10 @@ class PrestigeService:
         from app.services.title_service import title_service
         await title_service.reapply_all_titles(session, user)
 
+        # Стелс сбрасываем ПОСЛЕ reapply — иначе активация path_unique_2 (донат)
+        # внутри reapply снова включает shadow_stealth_active = True
+        user.shadow_stealth_active = False
+
         # Восстанавливаем крафтовый УИ после сброса донат-бонусов
         if saved_ui_level > 0:
             from app.services.raid_service import raid_service as rs

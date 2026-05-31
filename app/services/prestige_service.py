@@ -53,6 +53,7 @@ class PrestigeService:
         user.fist_wins = 0
         user.fist_cities_count = 0
         user.nh_coins = 0
+        user.card_dust = 0
         user.influence = DEFAULT_INFLUENCE
         user.combat_power = 0
         # Сбрасываем накопленный бонус от учителя; связь referred_by сохраняется,

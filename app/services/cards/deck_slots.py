@@ -53,6 +53,8 @@ class DeckSlotService:
         if existing:
             await session.delete(existing)
 
+        # flush до insert — гарантирует порядок DELETE→INSERT в БД
+        await session.flush()
         session.add(UserDeck(user_id=user.id, slot=slot, char_id=uc_id))
         await session.flush()
         return {"ok": True}

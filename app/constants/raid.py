@@ -90,7 +90,7 @@ RAID_BOSSES = {
     },
 }
 
-ALCHEMY_MAX_FRAGMENTS_PER_RAID = 25
+ALCHEMY_MAX_FRAGMENTS_PER_RAID = 80
 
 # ── Бизнес-фрагменты ─────────────────────────────────────────────────────────
 BUSINESS_FRAGMENTS_MAX_PER_RAID = 25

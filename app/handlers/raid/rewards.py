@@ -496,3 +496,98 @@ async def cb_craft_biz_district_5(cb: CallbackQuery, session: AsyncSession, user
     await session.flush()
     await cb.answer(f"✅ +{add} районов! Всего: {user.bonus_business_districts}", show_alert=True)
     await _biz_genius_page(cb, session, user, back="raid_craft")
+
+
+# ── Обменник фрагментов ───────────────────────────────────────────────────────
+
+# Таблица обменов: (from_type, from_amount, to_type, to_amount, coin_cost, label)
+_EXCHANGES = [
+    ("path",    2,  "ui",      5,   500_000,  "🔷×2 → 🔮×5 + 500K монет"),
+    ("path",    5,  "ui",     15,   1_000_000,"🔷×5 → 🔮×15 + 1M монет"),
+    ("ui",      5,  "path",    1,   800_000,  "🔮×5 → 🔷×1 + 800K монет"),
+    ("ui",     10,  "path",    3,   1_500_000,"🔮×10 → 🔷×3 + 1.5M монет"),
+    ("alchemy", 3,  "ui",      5,   400_000,  "🧪×3 → 🔮×5 + 400K монет"),
+    ("alchemy", 5,  "path",    1,   600_000,  "🧪×5 → 🔷×1 + 600K монет"),
+    ("ui",      3,  "alchemy", 5,   400_000,  "🔮×3 → 🧪×5 + 400K монет"),
+]
+
+_FRAG_FIELD = {
+    "ui":       "ui_fragments",
+    "path":     "path_fragments",
+    "alchemy":  "alchemy_fragments",
+    "business": "business_fragments",
+}
+
+
+@router.callback_query(F.data == "craft_exchange_menu")
+async def cb_craft_exchange_menu(cb: CallbackQuery, session: AsyncSession, user: User):
+    path_frags = getattr(user, "path_fragments", 0)
+    biz_frags  = getattr(user, "business_fragments", 0)
+
+    builder = InlineKeyboardBuilder()
+    for i, (ftype, famt, ttype, tamt, coins, lbl) in enumerate(_EXCHANGES):
+        src_field = _FRAG_FIELD[ftype]
+        src_have  = getattr(user, src_field, 0)
+        can_afford = src_have >= famt and user.nh_coins >= coins
+        icon = "✅" if can_afford else "❌"
+        builder.row(InlineKeyboardButton(
+            text=f"{icon} {lbl}",
+            callback_data=f"do_exchange:{i}"
+        ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="raid_craft"))
+
+    lines = [
+        "💱 <b>Обменник фрагментов</b>",
+        "<i>Обмен фрагментов между собой за NHCoin</i>",
+        "",
+        f"🔮 Фрагменты УИ: <b>{user.ui_fragments}</b>",
+        f"🧪 Фрагменты алхимии: <b>{user.alchemy_fragments}</b>",
+        f"🔷 Фрагменты Пути: <b>{path_frags}</b>",
+        f"🏢 Бизнес-фрагменты: <b>{biz_frags}</b>",
+        f"💰 NHCoin: <b>{fmt_num(user.nh_coins)}</b>",
+        "",
+        "<b>Доступные обмены:</b>",
+    ]
+
+    try:
+        await cb.message.edit_text(
+            "\n".join(lines),
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("do_exchange:"))
+async def cb_do_exchange(cb: CallbackQuery, session: AsyncSession, user: User):
+    idx = int(cb.data.split(":")[1])
+    if idx < 0 or idx >= len(_EXCHANGES):
+        await cb.answer("Неверный обмен", show_alert=True)
+        return
+
+    ftype, famt, ttype, tamt, coins, lbl = _EXCHANGES[idx]
+    src_field = _FRAG_FIELD[ftype]
+    dst_field = _FRAG_FIELD[ttype]
+
+    src_have = getattr(user, src_field, 0)
+    if src_have < famt:
+        from_emoji = {"ui": "🔮", "path": "🔷", "alchemy": "🧪", "business": "🏢"}[ftype]
+        await cb.answer(f"Нужно {famt} {from_emoji} фрагментов (есть {src_have})", show_alert=True)
+        return
+    if user.nh_coins < coins:
+        await cb.answer(f"Нужно {fmt_num(coins)} NHCoin", show_alert=True)
+        return
+
+    setattr(user, src_field, src_have - famt)
+    setattr(user, dst_field, getattr(user, dst_field, 0) + tamt)
+    user.nh_coins -= coins
+    await session.flush()
+
+    to_emoji = {"ui": "🔮", "path": "🔷", "alchemy": "🧪", "business": "🏢"}[ttype]
+    await cb.answer(
+        f"✅ Обмен выполнен!\n+{tamt} {to_emoji} фрагментов",
+        show_alert=True
+    )
+    await cb_craft_exchange_menu(cb, session, user)

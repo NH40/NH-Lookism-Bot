@@ -16,7 +16,6 @@ from app.constants.raid import (
     UI_CRAFT_COST,
     UI_LEVEL_PERKS,
     BUSINESS_DISTRICT_COST,
-    BUSINESS_INCOME_BOOST_COST,
     BUSINESS_DISTRICTS_MAX,
 )
 from app.utils.formatters import fmt_num
@@ -165,14 +164,18 @@ async def cb_raid_craft(cb: CallbackQuery, session: AsyncSession, user: User):
     builder.row(InlineKeyboardButton(text="🩺 Гений медицины",    callback_data="craft_mg_menu"))
     builder.row(InlineKeyboardButton(text="🔷 Крафт Пути",        callback_data="craft_path_menu"))
     builder.row(InlineKeyboardButton(text="🏢 Бизнес-крафт",      callback_data="craft_biz_menu"))
+    builder.row(InlineKeyboardButton(text="💱 Обменник",           callback_data="craft_exchange_menu"))
     builder.row(InlineKeyboardButton(text="◀️ Назад",             callback_data="raid_menu"))
 
+    war_points = getattr(user, "war_points", 0)
+    war_genius = getattr(user, "war_genius_level", 0)
     craft_text = (
         f"🔨 <b>Крафт</b>\n\n"
         f"🔮 Фрагменты УИ: <b>{user.ui_fragments}</b>\n"
         f"🧪 Фрагменты алхимии: <b>{user.alchemy_fragments}</b>\n"
         f"🔷 Фрагменты Пути: <b>{path_frags}</b>\n"
-        f"🏢 Бизнес-фрагменты: <b>{biz_frags}</b>\n\n"
+        f"🏢 Бизнес-фрагменты: <b>{biz_frags}</b>\n"
+        f"⚔️ Очки войны: <b>{war_points}</b> | 🎖 Гений войны: <b>{war_genius}/5</b>\n\n"
         f"👁 УИ: <b>{ui_str}</b>\n"
         f"🩺 Гений медицины: <b>{mg_str}</b>\n"
         f"🔷 Уровень пути: <b>{path_level}/{PATH_LEVEL_MAX}</b>\n"

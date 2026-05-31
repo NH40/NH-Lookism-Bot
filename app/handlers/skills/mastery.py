@@ -42,11 +42,14 @@ async def cb_mastery_menu(cb: CallbackQuery, session: AsyncSession, user: User):
         ("technique", "🏋 Техника",      "Улучшает эффективность тренировок"),
     ]
 
+    war_points = getattr(user, "war_points", 0)
+    war_genius = getattr(user, "war_genius_level", 0)
     lines = [
         f"⚔️ <b>Мастерство</b>\n\n"
         f"⭐ Очков мастерства: <b>{user.mastery_points}</b>\n"
-        f"<i>Очки получаются у тренера Тома Ли</i>\n"
-        f"<i>Стоимость: уровень = кол-во очков (1→2 = 2 очка)</i>\n\n"
+        f"⚔️ Очков войны: <b>{war_points}</b> | 🎖 Гений войны: <b>{war_genius}/5</b>\n"
+        f"<i>Мастерство — у Тома Ли | Очки войны — у Менеджера Кима</i>\n"
+        f"<i>Стоимость мастерства: уровень = кол-во очков (1→2 = 2 очка)</i>\n\n"
     ]
 
     builder = InlineKeyboardBuilder()

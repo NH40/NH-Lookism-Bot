@@ -134,10 +134,16 @@ async def _main_menu_text(session: AsyncSession, user: User) -> str:
         tui = " TUI" if user.true_ultra_instinct else ""
         ui_line = f"  🤖 УИ{tui} активен"
 
+    war_points = getattr(user, "war_points", 0)
+    war_genius = getattr(user, "war_genius_level", 0)
+    war_line = f"  ⚔️ Очки войны: {war_points} | Гений войны: {war_genius}/5" if (war_points or war_genius) else ""
+
     buff_lines = []
-    if mastery_lines:
+    if mastery_lines or war_line:
         buff_lines.append("━━━ ⚔️ Мастерство ━━━")
         buff_lines.extend(mastery_lines)
+        if war_line:
+            buff_lines.append(war_line)
     if path_line or ui_line:
         buff_lines.append("━━━ 🛤 Развитие ━━━")
         if path_line:

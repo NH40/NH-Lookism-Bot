@@ -88,7 +88,18 @@ async def cb_profile(cb: CallbackQuery, session: AsyncSession, user: User):
         )
 
     ui_str = ""
-    if user.ui_level > 0 or user.ui_is_donat or user.ui_fragments > 0 or user.alchemy_fragments > 0:
+    biz_frags  = getattr(user, "business_fragments", 0)
+    war_points = getattr(user, "war_points", 0)
+    war_genius = getattr(user, "war_genius_level", 0)
+    biz_genius = getattr(user, "business_genius_level", 0)
+    path_frags = getattr(user, "path_fragments", 0)
+    has_skills = (
+        user.ui_level > 0 or user.ui_is_donat
+        or user.ui_fragments > 0 or user.alchemy_fragments > 0
+        or path_frags > 0 or biz_frags > 0
+        or war_points > 0 or war_genius > 0 or biz_genius > 0
+    )
+    if has_skills:
         from app.handlers.skills.med_genius import any_unlocked, _unlocked_count, MG_POTIONS, is_donat as _mg_is_donat
         ui_level_label = "Донат (макс)" if user.ui_is_donat else f"Уровень {user.ui_level}/4"
         if _mg_is_donat(user):
@@ -98,12 +109,18 @@ async def cb_profile(cb: CallbackQuery, session: AsyncSession, user: User):
         else:
             mg_label = " 🔒 не открыто"
         ui_str = (
-            f"\n\n━━━ 👁 Ультра Инстинкт ━━━\n"
-            f"{ui_level_label}\n"
+            f"\n\n━━━ 👁 Навыки и фрагменты ━━━\n"
+            f"УИ: {ui_level_label}\n"
             f"🔮 Фрагменты УИ: {user.ui_fragments}\n"
             f"🧪 Фрагменты алхимии: {user.alchemy_fragments}\n"
+            f"🔷 Фрагменты Пути: {path_frags}\n"
+            f"🏢 Бизнес-фрагменты: {biz_frags}\n"
+            f"⚔️ Очки войны: {war_points} | 🎖 Гений войны: {war_genius}/5\n"
+            f"🎖 Гений бизнеса: {biz_genius}/5\n"
             f"🩺 Гений медицины:{mg_label}"
         )
+    else:
+        ui_str = ""
 
     text = (
         f"📊 <b>Профиль</b>\n\n"

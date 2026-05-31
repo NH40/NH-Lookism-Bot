@@ -140,7 +140,7 @@ async def cb_emperor_gang_info(cb: CallbackQuery, session: AsyncSession, user: U
             f"💪 Мощь: <b>{fmt_num(power)}</b>{growth_str}\n"
             f"🏆 Побед: <b>{defeat_count}</b>\n\n"
             f"🎁 Награда:\n"
-            f"  💰 {fmt_num(cfg.reward_coins_min)}–{fmt_num(cfg.reward_coins_max)} монет\n"
+            f"  💎 10–50 пыли\n"
             f"  🃏 Шанс карточки: {cfg.drop_chance}%\n\n"
             f"{can_icon} Ваша мощь: {fmt_num(user.combat_power)} / {fmt_num(power)}",
             reply_markup=builder.as_markup(),
@@ -218,11 +218,11 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
         dropped_char: dict | None = None  # карточка для отправки фото
 
         if won:
-            # Начисляем монеты
-            coins_reward = random.randint(cfg.reward_coins_min, cfg.reward_coins_max)
-            user.nh_coins += coins_reward
+            # Начисляем пыль
+            dust_reward = random.randint(10, 50)
+            user.card_dust += dust_reward
             result_lines.append(f"🏆 <b>ПОБЕДА!</b>")
-            result_lines.append(f"💰 +{fmt_num(coins_reward)} монет")
+            result_lines.append(f"💎 +{dust_reward} пыли")
 
             # Шанс карточки — только из состава группировки
             got_card = random.randint(1, 100) <= cfg.drop_chance

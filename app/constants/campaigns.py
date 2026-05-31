@@ -61,11 +61,13 @@ class CampaignResourceConfig:
 
 
 CAMPAIGN_RESOURCES: list[CampaignResourceConfig] = [
-    CampaignResourceConfig("nh_coins",         "NHCoin",              "💰", 25),
-    CampaignResourceConfig("card_dust",        "Пыль",                "💎",   0.005),
-    CampaignResourceConfig("ui_fragments",     "Фрагменты УИ",        "🔮",   0.001),
-    CampaignResourceConfig("alchemy_fragments","Фрагменты алхимии",   "🧪",   0.001),
-    CampaignResourceConfig("path_fragments",   "Фрагменты Пути",      "⚡",   0.001),
+    CampaignResourceConfig("nh_coins",          "NHCoin",                "💰", 25),
+    CampaignResourceConfig("card_dust",         "Пыль",                  "💎",  0.005),
+    CampaignResourceConfig("ui_fragments",      "Фрагменты УИ",          "🔮",  0.001),
+    CampaignResourceConfig("alchemy_fragments", "Фрагменты алхимии",     "🧪",  0.001),
+    CampaignResourceConfig("path_fragments",    "Фрагменты Пути",        "⚡",  0.001),
+    CampaignResourceConfig("business_fragments","Фрагменты бизнеса",     "🏢",  0.001),
+    CampaignResourceConfig("war_points",        "Очки войны",            "⚔️",  0.002),
 ]
 
 CAMPAIGN_RESOURCE_MAP: dict[str, CampaignResourceConfig] = {

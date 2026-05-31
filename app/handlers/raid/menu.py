@@ -70,27 +70,27 @@ async def cb_raid_menu(cb: CallbackQuery, session: AsyncSession, user: User):
         text="◀️ Назад", callback_data="main_menu"
     ))
 
-    ui_str = f"УИ {user.ui_level} уровень" if user.ui_level > 0 else "нет УИ"
-    donat_str = " (донат 🔱)" if user.ui_is_donat else ""
+    ui_str = f"Ур.{user.ui_level}" if user.ui_level > 0 else ("Донат 🔱" if user.ui_is_donat else "нет")
     path_frags = getattr(user, "path_fragments", 0)
-    path_str = f" ({path_frags}/{PATH_SPIN_CRAFT_COST} для крутки)" if path_frags < PATH_SPIN_CRAFT_COST else " ✅ готово к крутке"
     biz_frags = getattr(user, "business_fragments", 0)
     from app.handlers.skills.med_genius import any_unlocked, _unlocked_count, MG_POTIONS, is_donat as _mg_is_donat
     if _mg_is_donat(user):
-        mg_str = " ✅ Донат (все Ур.6)"
+        mg_str = "Донат (все Ур.6)"
     elif any_unlocked(user):
-        mg_str = f" {_unlocked_count(user)}/{len(MG_POTIONS)} зелий"
+        mg_str = f"{_unlocked_count(user)}/{len(MG_POTIONS)} зелий"
     else:
-        mg_str = f" 🔒 ({user.alchemy_fragments}/30 🧪)"
+        mg_str = f"🔒 ({user.alchemy_fragments}/30 🧪)"
 
     menu_text = (
         f"⚔️ <b>Рейды</b>\n\n"
-        f"🔮 Фрагменты УИ: <b>{user.ui_fragments}</b>\n"
-        f"🧪 Фрагменты алхимии: <b>{user.alchemy_fragments}</b>\n"
-        f"🔷 Фрагменты Пути: <b>{path_frags}</b>{path_str}\n"
-        f"🏢 Бизнес-фрагменты: <b>{biz_frags}</b>\n"
-        f"👁 УИ: {ui_str}{donat_str}\n"
-        f"🩺 Гений медицины:{mg_str}\n\n"
+        f"<b>Фрагменты:</b>\n"
+        f"🔮 УИ: <b>{user.ui_fragments}</b>   "
+        f"🧪 Алхимия: <b>{user.alchemy_fragments}</b>\n"
+        f"🔷 Путь: <b>{path_frags}</b>   "
+        f"🏢 Бизнес: <b>{biz_frags}</b>\n\n"
+        f"<b>Прокачка:</b>\n"
+        f"👁 УИ: {ui_str}\n"
+        f"🩺 Гений медицины: {mg_str}\n\n"
         f"Выбери цель для рейда:"
     )
     await _send_or_edit_raid_photo(cb, None, menu_text, builder.as_markup())
@@ -171,16 +171,19 @@ async def cb_raid_craft(cb: CallbackQuery, session: AsyncSession, user: User):
     war_genius = getattr(user, "war_genius_level", 0)
     craft_text = (
         f"🔨 <b>Крафт</b>\n\n"
-        f"🔮 Фрагменты УИ: <b>{user.ui_fragments}</b>\n"
-        f"🧪 Фрагменты алхимии: <b>{user.alchemy_fragments}</b>\n"
-        f"🔷 Фрагменты Пути: <b>{path_frags}</b>\n"
-        f"🏢 Бизнес-фрагменты: <b>{biz_frags}</b>\n"
-        f"⚔️ Очки войны: <b>{war_points}</b> | 🎖 Гений войны: <b>{war_genius}/5</b>\n\n"
-        f"👁 УИ: <b>{ui_str}</b>\n"
+        f"<b>Ресурсы:</b>\n"
+        f"🔮 УИ: <b>{user.ui_fragments}</b>   "
+        f"🧪 Алхимия: <b>{user.alchemy_fragments}</b>\n"
+        f"🔷 Путь: <b>{path_frags}</b>   "
+        f"🏢 Бизнес: <b>{biz_frags}</b>\n"
+        f"⚔️ Очки войны: <b>{war_points}</b>\n\n"
+        f"<b>Прогресс:</b>\n"
+        f"👁 УИ: <b>{ui_str}</b>   "
+        f"⚔️ Гений войны: <b>{war_genius}/5</b>\n"
         f"🩺 Гений медицины: <b>{mg_str}</b>\n"
-        f"🔷 Уровень пути: <b>{path_level}/{PATH_LEVEL_MAX}</b>\n"
-        f"🏘 Бонусных районов: <b>{bonus_districts}/{BUSINESS_DISTRICTS_MAX}</b>\n\n"
-        f"Выбери раздел крафта:"
+        f"🔷 Уровень пути: <b>{path_level}/{PATH_LEVEL_MAX}</b>   "
+        f"🏘 Районов: <b>{bonus_districts}/{BUSINESS_DISTRICTS_MAX}</b>\n\n"
+        f"Выбери раздел:"
     )
     await _send_or_edit_raid_photo(cb, None, craft_text, builder.as_markup())
 

@@ -37,7 +37,6 @@ def bank_menu_kb() -> "InlineKeyboardMarkup":
         InlineKeyboardButton(text="🎰 Казино",     callback_data="bank_casino"),
     )
     builder.row(
-        InlineKeyboardButton(text="₿ Крипто-ферма", callback_data="bank_crypto"),
         InlineKeyboardButton(text="🗄 Хранилище",   callback_data="bank_storage"),
     )
     builder.row(

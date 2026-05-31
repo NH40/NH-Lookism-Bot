@@ -1,5 +1,5 @@
 """
-Банк: кредиты, хранилища, криптовалюты, инвестиции.
+Банк: кредиты, хранилища, инвестиции.
 """
 from datetime import datetime
 from sqlalchemy import BigInteger, Boolean, DateTime, Float, Integer, String, Text, func
@@ -33,40 +33,6 @@ class BankCredit(Base):
     # Уведомления
     notif_block_sent: Mapped[bool] = mapped_column(Boolean, default=False)
     notif_delete_sent: Mapped[bool] = mapped_column(Boolean, default=False)
-
-
-# ─── Криптовалюта: мировой курс ───────────────────────────────────────────────
-
-class CryptoPrice(Base):
-    """Текущий курс криптовалюты (одна запись на монету)."""
-    __tablename__ = "crypto_prices"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    currency: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
-    # price хранится в "микро-NHCoin" (×100) чтобы точно считать дроби
-    price_micro: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    # Объёмы покупок/продаж за текущий период (сбрасываются каждым тиком)
-    buy_volume_micro: Mapped[int] = mapped_column(BigInteger, default=0)
-    sell_volume_micro: Mapped[int] = mapped_column(BigInteger, default=0)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
-
-
-# ─── Криптовалюта: холдинги игрока ────────────────────────────────────────────
-
-class CryptoHolding(Base):
-    """Запас криптовалюты у одного игрока."""
-    __tablename__ = "crypto_holdings"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    currency: Mapped[str] = mapped_column(String(16), nullable=False)
-
-    # Количество монет (в «единицах крипты», дробные не нужны)
-    amount: Mapped[int] = mapped_column(BigInteger, default=0)
-    # Средняя цена покупки (micro), для статистики
-    avg_buy_price_micro: Mapped[int] = mapped_column(BigInteger, default=0)
 
 
 # ─── Ячейки хранилища ─────────────────────────────────────────────────────────

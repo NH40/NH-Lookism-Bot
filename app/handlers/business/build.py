@@ -26,7 +26,6 @@ async def cb_biz_build(
 
     biz_genius = getattr(user, "business_genius_level", 0)
     all_path_buildings = BUILDINGS_BY_PATH.get(user.business_path, [])
-    # Разделяем: доступные и заблокированные
     available_buildings = [b for b in all_path_buildings if b.min_biz_genius <= biz_genius]
     locked_buildings = [b for b in all_path_buildings if b.min_biz_genius > biz_genius]
 
@@ -41,40 +40,36 @@ async def cb_biz_build(
         cost = max(1, int(b.district_cost * (1 - discount / 100)))
         can = "✅" if free >= cost else "❌"
         builder.row(InlineKeyboardButton(
-            text=f"{can} {b.emoji} {b.name} | "
-                 f"💰 {fmt_num(b.base_income)}/мин | 🏘 {cost}р.",
+            text=f"{can} {b.emoji} {b.name}  ·  {fmt_num(b.base_income)}/мин  ·  {cost} р.",
             callback_data=f"biz_select_building:{b.id}"
         ))
 
-    # Показываем следующие заблокированные здания как превью
     if locked_buildings:
         next_locked_genius = min(b.min_biz_genius for b in locked_buildings)
         for b in locked_buildings:
             if b.min_biz_genius == next_locked_genius:
                 builder.row(InlineKeyboardButton(
-                    text=f"🔒 {b.emoji} {b.name} | 💰 {fmt_num(b.base_income)}/мин"
-                         f" | Гений бизнеса Ур.{b.min_biz_genius}",
+                    text=f"🔒 {b.emoji} {b.name}  ·  Гений Ур.{b.min_biz_genius}",
                     callback_data="noop_biz"
                 ))
 
-    builder.row(InlineKeyboardButton(
-        text="🎖 Гений бизнеса", callback_data="biz_genius_menu"
-    ))
-    builder.row(InlineKeyboardButton(
-        text="◀️ Назад", callback_data="business"
-    ))
+    builder.row(InlineKeyboardButton(text="🎖 Гений бизнеса", callback_data="biz_genius_menu"))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="business"))
 
     path_info = PATH_INFO.get(user.business_path, {})
     from app.constants.raid import BIZ_GENIUS_INCOME_BONUS
     genius_bonus = BIZ_GENIUS_INCOME_BONUS[biz_genius - 1] if biz_genius > 0 else 0
+
+    genius_str = f"Ур.{biz_genius}/5" + (f"  (+{genius_bonus}% к доходу)" if genius_bonus else "")
+
     try:
         await cb.message.edit_text(
-            f"🏗 <b>Строительство</b>\n\n"
-            f"Путь: {path_info.get('emoji','')} {path_info.get('name','')}\n"
-            f"🏘 Свободно районов: {free}/{total}\n"
-            f"🎖 Гений бизнеса: <b>Ур.{biz_genius}/5</b>"
-            + (f" (+{genius_bonus}% доход)" if genius_bonus else "") + "\n\n"
-            f"Выбери здание:",
+            f"🏗 <b>Строительство</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"📍 {path_info.get('emoji','')} {path_info.get('name','')}\n"
+            f"🏘 Свободных районов: <b>{free}</b> из {total}\n"
+            f"🎖 Гений бизнеса: <b>{genius_str}</b>\n\n"
+            f"Выберите здание для постройки:",
             reply_markup=builder.as_markup(),
             parse_mode="HTML",
         )
@@ -114,21 +109,19 @@ async def cb_biz_build_city(
         cost = max(1, int(b.district_cost * (1 - discount / 100)))
         can = "✅" if free >= cost else "❌"
         builder.row(InlineKeyboardButton(
-            text=f"{can} {b.emoji} {b.name} | "
-                 f"💰 {fmt_num(b.base_income)}/мин | 🏘 {cost}р.",
+            text=f"{can} {b.emoji} {b.name}  ·  {fmt_num(b.base_income)}/мин  ·  {cost} р.",
             callback_data=f"biz_build_in:{b.id}:{city_id}"
         ))
-    builder.row(InlineKeyboardButton(
-        text="◀️ Назад", callback_data=f"biz_city:{city_id}"
-    ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"biz_city:{city_id}"))
 
     city = await city_repo.get_city(session, city_id)
     city_name = city.name if city else f"Город {city_id}"
     try:
         await cb.message.edit_text(
-            f"🏗 <b>Строительство в {city_name}</b>\n\n"
-            f"🏘 Свободно районов: {free}/{districts_in_city}\n\n"
-            f"Выбери здание:",
+            f"🏗 <b>Строительство — {city_name}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"🏘 Свободных районов: <b>{free}</b> из {districts_in_city}\n\n"
+            f"Выберите здание для постройки:",
             reply_markup=builder.as_markup(),
             parse_mode="HTML",
         )
@@ -180,33 +173,34 @@ async def cb_biz_select_building(
         if free_in_city >= cost:
             available_cities.append((city_id, city_name, free_in_city))
             builder.row(InlineKeyboardButton(
-                text=f"✅ 🏙 {city_name} | 🏘 свободно: {free_in_city}",
+                text=f"✅ 🏙 {city_name}  ·  свободно: {free_in_city} р.",
                 callback_data=f"biz_build_in:{building_id}:{city_id}"
             ))
-    builder.row(InlineKeyboardButton(
-        text="◀️ Назад", callback_data="biz_build"
-    ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="biz_build"))
 
     if not available_cities:
-        no_cities_text = (
-            f"🏗 <b>{cfg.emoji} {cfg.name}</b>\n\n"
-            f"💰 Доход: {fmt_num(cfg.base_income)}/мин\n"
-            f"🏘 Стоимость: {cost} районов\n\n"
-            f"❌ Нет городов с достаточным количеством свободных районов.\n"
-            f"<i>Захвати больше районов или снеси другие здания.</i>"
-        )
         try:
-            await cb.message.edit_text(no_cities_text, reply_markup=builder.as_markup(), parse_mode="HTML")
+            await cb.message.edit_text(
+                f"{cfg.emoji} <b>{cfg.name}</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"💰 Доход: {fmt_num(cfg.base_income)}/мин\n"
+                f"🏘 Стоимость: {cost} районов\n\n"
+                f"❌ <b>Нет городов с достаточным количеством свободных районов.</b>\n"
+                f"<i>Захвати больше районов или снеси существующие здания.</i>",
+                reply_markup=builder.as_markup(),
+                parse_mode="HTML",
+            )
         except Exception:
             pass
         return
 
     try:
         await cb.message.edit_text(
-            f"🏗 <b>{cfg.emoji} {cfg.name}</b>\n\n"
+            f"{cfg.emoji} <b>{cfg.name}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"💰 Доход: {fmt_num(cfg.base_income)}/мин\n"
             f"🏘 Стоимость: {cost} районов\n\n"
-            f"Выбери город для строительства:",
+            f"Выберите город для строительства:",
             reply_markup=builder.as_markup(),
             parse_mode="HTML",
         )

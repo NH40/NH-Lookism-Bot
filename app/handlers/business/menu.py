@@ -14,23 +14,23 @@ async def cb_business(cb: CallbackQuery, session: AsyncSession, user: User):
         builder = InlineKeyboardBuilder()
         for path_id, info in PATH_INFO.items():
             builder.button(
-                text=f"{info['color']} {info['emoji']} {info['name']}",
+                text=f"{info['color']} {info['emoji']}  {info['name']}",
                 callback_data=f"biz_path:{path_id}"
             )
         builder.adjust(1)
-        builder.row(InlineKeyboardButton(
-            text="◀️ Назад", callback_data="main_menu"
-        ))
+        builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
         try:
             await cb.message.edit_text(
-                "🏢 <b>Бизнес — Выбор пути</b>\n\n"
+                "🏢 <b>Бизнес — Выбор пути</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "Выберите направление развития.\n"
+                "⚠️ <b>Выбор нельзя изменить до гибели!</b>\n\n"
                 "🟢 ⚖️ <b>Легальный</b>\n"
                 "  Стабильный доход, влияние не меняется\n\n"
                 "🔴 🕶 <b>Нелегальный</b>\n"
-                "  −Влияние при постройке, +доход больше\n\n"
+                "  −Влияние при постройке, доход выше\n\n"
                 "🔵 🏛 <b>Политика</b>\n"
-                "  +Влияние при постройке\n\n"
-                "⚠️ <i>Выбор нельзя изменить до гибели!</i>",
+                "  +Влияние за каждую постройку",
                 reply_markup=builder.as_markup(),
                 parse_mode="HTML",
             )

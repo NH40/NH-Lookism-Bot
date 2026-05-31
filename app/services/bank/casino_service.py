@@ -16,13 +16,15 @@ logger = logging.getLogger(__name__)
 
 # ── Допустимые ресурсы ────────────────────────────────────────────────────────
 CASINO_RESOURCES: dict[str, str] = {
-    "nh_coins":          "💰 NHCoin",
-    "tickets":           "🎟 Тикеты",
-    "card_dust":         "🌫 Пыль карт",
-    "ui_fragments":      "🔮 Фрагменты УИ",
-    "alchemy_fragments": "🧪 Фрагменты алхимии",
-    "path_fragments":    "🩺 Фрагменты пути",
-    "mastery_points":    "🎯 Очки мастерства",
+    "nh_coins":           "💰 NHCoin",
+    "tickets":            "🎟 Тикеты",
+    "card_dust":          "🌫 Пыль карт",
+    "ui_fragments":       "🔮 Фрагменты УИ",
+    "alchemy_fragments":  "🧪 Фрагменты алхимии",
+    "path_fragments":     "🩺 Фрагменты пути",
+    "business_fragments": "🏢 Фрагменты бизнеса",
+    "war_points":         "⚔️ Очки войны",
+    "mastery_points":     "🎯 Очки мастерства",
 }
 CASINO_RESOURCE_LABELS = CASINO_RESOURCES  # алиас
 

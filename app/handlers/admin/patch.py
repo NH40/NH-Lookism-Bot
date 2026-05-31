@@ -27,10 +27,6 @@ async def cb_admin_patch(cb: CallbackQuery, user: User):
         text="🔖 Только сменить версию",
         callback_data="admin_version_only"
     ))
-    builder.row(InlineKeyboardButton(
-        text="💹 Сброс цен крипты",
-        callback_data="admin_crypto_reset"
-    ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="admin_main"))
     try:
         await cb.message.edit_text(
@@ -245,71 +241,6 @@ async def _broadcast_patch(
                 )
             except Exception:
                 pass
-
-
-@router.callback_query(F.data == "admin_crypto_reset")
-async def cb_admin_crypto_reset(cb: CallbackQuery, user: User):
-    if not is_admin(user.tg_id):
-        return
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(
-        text="✅ Подтвердить сброс",
-        callback_data="admin_crypto_reset_confirm"
-    ))
-    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="admin_patch"))
-    try:
-        await cb.message.edit_text(
-            "💹 <b>Сброс цен крипты</b>\n\n"
-            "Все 4 монеты вернутся к базовым ценам:\n"
-            "• CriptoNH — 100.00\n"
-            "• CriptoCH — 50.00\n"
-            "• CriptoVVIP — 500.00\n"
-            "• CriptoWWIP — 5000.00\n\n"
-            "⚠️ Холдинги игроков <b>не изменятся</b>.\n"
-            "Подтвердить?",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
-
-
-@router.callback_query(F.data == "admin_crypto_reset_confirm")
-async def cb_admin_crypto_reset_confirm(cb: CallbackQuery, session: AsyncSession, user: User):
-    if not is_admin(user.tg_id):
-        return
-    from app.models.bank import CryptoPrice
-    from app.services.bank.crypto_service import CRYPTO_CONFIG
-    from datetime import datetime, timezone
-
-    prices = (await session.execute(select(CryptoPrice))).scalars().all()
-    price_map = {p.currency: p for p in prices}
-
-    for currency, cfg in CRYPTO_CONFIG.items():
-        if currency in price_map:
-            row = price_map[currency]
-            row.price_micro = cfg["base_price"]
-            row.buy_volume_micro = 0
-            row.sell_volume_micro = 0
-            row.updated_at = datetime.now(timezone.utc)
-        else:
-            session.add(CryptoPrice(
-                currency=currency,
-                price_micro=cfg["base_price"],
-                buy_volume_micro=0,
-                sell_volume_micro=0,
-            ))
-
-    await session.flush()
-    try:
-        await cb.message.edit_text(
-            "✅ <b>Цены крипты сброшены!</b>\n\n"
-            "Все монеты вернулись к базовым значениям.",
-            reply_markup=back_kb("admin_patch"),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
 
 
 @router.callback_query(F.data == "admin_backup")

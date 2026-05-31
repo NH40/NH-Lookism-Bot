@@ -49,11 +49,13 @@ async def cb_skills(cb: CallbackQuery, session: AsyncSession, user: User):
 
     text = (
         f"⚡ <b>Навыки</b>\n\n"
-        f"💎 Очки пути: {user.skill_path_points}\n"
-        f"🗺 Путь: {path_emoji} {skill_path_label(user.skill_path)}\n"
+        f"💎 Очки пути: <b>{user.skill_path_points}</b>\n"
+        f"⚔️ Очки войны: <b>{war_points}</b>\n\n"
+        f"🗺 Путь: {path_emoji} <b>{skill_path_label(user.skill_path)}</b>\n"
         f"👁 Ультра Инстинкт: {ui_status}\n"
-        f"⚔️ Гений войны: {war_genius}/5 | ⚔️ Очки войны: {war_points}\n"
-        f"🎖 Гений бизнеса: {biz_genius}/5\n\n"
+        f"🩺 Гений медицины: <b>{mg_status}</b>\n"
+        f"⚔️ Гений войны: <b>{wg_status}</b>\n"
+        f"🎖 Гений бизнеса: <b>{bg_status}</b>\n\n"
         f"Выбери раздел:"
     )
     await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")

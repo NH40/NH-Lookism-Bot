@@ -1,7 +1,6 @@
 """
 Фоновые задачи банка:
   bank_credit_tick  — каждую минуту: блокировки, снос банд, уведомления
-  crypto_price_tick — каждые 5 минут: обновление курсов
   storage_fee_tick  — каждую минуту: плата за ячейки
   investment_tick   — каждую минуту: уведомления о созревших вкладах
 
@@ -144,19 +143,6 @@ async def bank_credit_tick():
             await bot_instance.send_message(tg_id, text, parse_mode="HTML")
         except Exception as e:
             logger.warning(f"credit delete notif error for tg_id={tg_id}: {e}")
-
-
-# ─── Крипто цены ─────────────────────────────────────────────────────────────
-
-async def crypto_price_tick():
-    """Обновить курсы всех криптовалют."""
-    async with AsyncSessionFactory() as session:
-        async with session.begin():
-            try:
-                from app.services.bank.crypto_service import crypto_service
-                await crypto_service.price_tick(session)
-            except Exception as e:
-                logger.error(f"crypto_price_tick error: {e}")
 
 
 # ─── Плата за хранилище ───────────────────────────────────────────────────────

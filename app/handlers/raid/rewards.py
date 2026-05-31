@@ -1,5 +1,7 @@
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, InlineKeyboardButton
+from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -498,60 +500,52 @@ async def cb_craft_biz_district_5(cb: CallbackQuery, session: AsyncSession, user
     await _biz_genius_page(cb, session, user, back="raid_craft")
 
 
-# ── Обменник фрагментов ───────────────────────────────────────────────────────
+# ── Обменник фрагментов (динамический) ───────────────────────────────────────
+#
+# Курс 1:1, стоимость 250 000 NHCoin за каждый обмениваемый фрагмент.
 
-# Таблица обменов: (from_type, from_amount, to_type, to_amount, coin_cost, label)
-_EXCHANGES = [
-    ("path",    2,  "ui",      5,   500_000,  "🔷×2 → 🔮×5 + 500K монет"),
-    ("path",    5,  "ui",     15,   1_000_000,"🔷×5 → 🔮×15 + 1M монет"),
-    ("ui",      5,  "path",    1,   800_000,  "🔮×5 → 🔷×1 + 800K монет"),
-    ("ui",     10,  "path",    3,   1_500_000,"🔮×10 → 🔷×3 + 1.5M монет"),
-    ("alchemy", 3,  "ui",      5,   400_000,  "🧪×3 → 🔮×5 + 400K монет"),
-    ("alchemy", 5,  "path",    1,   600_000,  "🧪×5 → 🔷×1 + 600K монет"),
-    ("ui",      3,  "alchemy", 5,   400_000,  "🔮×3 → 🧪×5 + 400K монет"),
-]
+EXCHANGE_COST_PER_FRAG = 250_000
 
-_FRAG_FIELD = {
-    "ui":       "ui_fragments",
-    "path":     "path_fragments",
-    "alchemy":  "alchemy_fragments",
-    "business": "business_fragments",
+# type_key → (emoji, поле на User, отображаемое название)
+EXCH_FRAGS: dict[str, tuple[str, str, str]] = {
+    "ui":       ("🔮", "ui_fragments",       "Фрагменты УИ"),
+    "alchemy":  ("🧪", "alchemy_fragments",  "Фрагменты алхимии"),
+    "path":     ("🔷", "path_fragments",     "Фрагменты Пути"),
+    "business": ("🏢", "business_fragments", "Фрагменты бизнеса"),
 }
+
+
+class ExchangeFSM(StatesGroup):
+    waiting_amount = State()
+
+
+def _exch_menu_text(user: User) -> str:
+    lines = [
+        "💱 <b>Обменник фрагментов</b>",
+        "<i>Курс 1:1 — стоимость 250 000 NHCoin за каждый фрагмент</i>",
+        "",
+    ]
+    for key, (emoji, field, label) in EXCH_FRAGS.items():
+        lines.append(f"{emoji} {label}: <b>{getattr(user, field, 0)}</b>")
+    lines.append(f"💰 NHCoin: <b>{fmt_num(user.nh_coins)}</b>")
+    lines.append("")
+    lines.append("Выберите тип фрагментов <b>отдать</b>:")
+    return "\n".join(lines)
 
 
 @router.callback_query(F.data == "craft_exchange_menu")
 async def cb_craft_exchange_menu(cb: CallbackQuery, session: AsyncSession, user: User):
-    path_frags = getattr(user, "path_fragments", 0)
-    biz_frags  = getattr(user, "business_fragments", 0)
-
     builder = InlineKeyboardBuilder()
-    for i, (ftype, famt, ttype, tamt, coins, lbl) in enumerate(_EXCHANGES):
-        src_field = _FRAG_FIELD[ftype]
-        src_have  = getattr(user, src_field, 0)
-        can_afford = src_have >= famt and user.nh_coins >= coins
-        icon = "✅" if can_afford else "❌"
+    for key, (emoji, field, label) in EXCH_FRAGS.items():
+        balance = getattr(user, field, 0)
         builder.row(InlineKeyboardButton(
-            text=f"{icon} {lbl}",
-            callback_data=f"do_exchange:{i}"
+            text=f"{emoji} {label}: {balance}",
+            callback_data=f"exch_from:{key}",
         ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="raid_craft"))
-
-    lines = [
-        "💱 <b>Обменник фрагментов</b>",
-        "<i>Обмен фрагментов между собой за NHCoin</i>",
-        "",
-        f"🔮 Фрагменты УИ: <b>{user.ui_fragments}</b>",
-        f"🧪 Фрагменты алхимии: <b>{user.alchemy_fragments}</b>",
-        f"🔷 Фрагменты Пути: <b>{path_frags}</b>",
-        f"🏢 Бизнес-фрагменты: <b>{biz_frags}</b>",
-        f"💰 NHCoin: <b>{fmt_num(user.nh_coins)}</b>",
-        "",
-        "<b>Доступные обмены:</b>",
-    ]
-
     try:
         await cb.message.edit_text(
-            "\n".join(lines),
+            _exch_menu_text(user),
             reply_markup=builder.as_markup(),
             parse_mode="HTML",
         )
@@ -560,34 +554,129 @@ async def cb_craft_exchange_menu(cb: CallbackQuery, session: AsyncSession, user:
     await cb.answer()
 
 
-@router.callback_query(F.data.startswith("do_exchange:"))
-async def cb_do_exchange(cb: CallbackQuery, session: AsyncSession, user: User):
-    idx = int(cb.data.split(":")[1])
-    if idx < 0 or idx >= len(_EXCHANGES):
-        await cb.answer("Неверный обмен", show_alert=True)
+@router.callback_query(F.data.startswith("exch_from:"))
+async def cb_exch_from(cb: CallbackQuery, session: AsyncSession, user: User):
+    from_key = cb.data.split(":")[1]
+    if from_key not in EXCH_FRAGS:
+        await cb.answer("Неверный тип фрагмента", show_alert=True)
         return
 
-    ftype, famt, ttype, tamt, coins, lbl = _EXCHANGES[idx]
-    src_field = _FRAG_FIELD[ftype]
-    dst_field = _FRAG_FIELD[ttype]
+    from_emoji, from_field, from_label = EXCH_FRAGS[from_key]
+    balance = getattr(user, from_field, 0)
 
-    src_have = getattr(user, src_field, 0)
-    if src_have < famt:
-        from_emoji = {"ui": "🔮", "path": "🔷", "alchemy": "🧪", "business": "🏢"}[ftype]
-        await cb.answer(f"Нужно {famt} {from_emoji} фрагментов (есть {src_have})", show_alert=True)
+    builder = InlineKeyboardBuilder()
+    for key, (emoji, field, label) in EXCH_FRAGS.items():
+        if key == from_key:
+            continue
+        builder.row(InlineKeyboardButton(
+            text=f"{emoji} {label}",
+            callback_data=f"exch_to:{from_key}:{key}",
+        ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="craft_exchange_menu"))
+    try:
+        await cb.message.edit_text(
+            f"💱 <b>Обмен</b> {from_emoji} {from_label}\n"
+            f"Ваш баланс: <b>{balance}</b>\n\n"
+            f"Выберите тип фрагментов <b>получить</b>:",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("exch_to:"))
+async def cb_exch_to(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
+    parts = cb.data.split(":")
+    if len(parts) < 3:
+        await cb.answer("Ошибка", show_alert=True)
         return
-    if user.nh_coins < coins:
-        await cb.answer(f"Нужно {fmt_num(coins)} NHCoin", show_alert=True)
+    from_key, to_key = parts[1], parts[2]
+    if from_key not in EXCH_FRAGS or to_key not in EXCH_FRAGS or from_key == to_key:
+        await cb.answer("Неверные типы фрагментов", show_alert=True)
         return
 
-    setattr(user, src_field, src_have - famt)
-    setattr(user, dst_field, getattr(user, dst_field, 0) + tamt)
-    user.nh_coins -= coins
+    from_emoji, from_field, from_label = EXCH_FRAGS[from_key]
+    to_emoji, to_field, to_label = EXCH_FRAGS[to_key]
+    balance = getattr(user, from_field, 0)
+
+    await state.set_state(ExchangeFSM.waiting_amount)
+    await state.update_data(from_key=from_key, to_key=to_key)
+
+    cancel_kb = InlineKeyboardBuilder()
+    cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="craft_exchange_menu"))
+    try:
+        await cb.message.edit_text(
+            f"💱 <b>Обмен</b>\n"
+            f"{from_emoji} {from_label} → {to_emoji} {to_label}\n\n"
+            f"Баланс: <b>{balance}</b> {from_emoji}\n"
+            f"Курс: 1:1 | Цена: {fmt_num(EXCHANGE_COST_PER_FRAG)} NHCoin за фрагмент\n\n"
+            f"Введите количество фрагментов для обмена:",
+            reply_markup=cancel_kb.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    await cb.answer()
+
+
+@router.message(ExchangeFSM.waiting_amount)
+async def msg_exch_amount(message: Message, session: AsyncSession, user: User, state: FSMContext):
+    data = await state.get_data()
+    await state.clear()
+
+    from_key = data.get("from_key")
+    to_key   = data.get("to_key")
+
+    if not from_key or not to_key or from_key not in EXCH_FRAGS or to_key not in EXCH_FRAGS:
+        await message.answer("❌ Ошибка сессии, начните обмен заново.", reply_markup=back_kb("craft_exchange_menu"), parse_mode="HTML")
+        return
+
+    try:
+        amount = int(message.text.strip().replace(" ", "").replace(",", ""))
+    except ValueError:
+        await message.answer("❌ Введите целое число.", reply_markup=back_kb("craft_exchange_menu"), parse_mode="HTML")
+        return
+
+    if amount <= 0:
+        await message.answer("❌ Количество должно быть > 0.", reply_markup=back_kb("craft_exchange_menu"), parse_mode="HTML")
+        return
+
+    from_emoji, from_field, from_label = EXCH_FRAGS[from_key]
+    to_emoji,   to_field,   to_label   = EXCH_FRAGS[to_key]
+
+    src_have = getattr(user, from_field, 0)
+    coin_cost = amount * EXCHANGE_COST_PER_FRAG
+
+    if src_have < amount:
+        await message.answer(
+            f"❌ Недостаточно {from_emoji} {from_label}.\n"
+            f"Есть: {src_have}, нужно: {amount}",
+            reply_markup=back_kb("craft_exchange_menu"),
+            parse_mode="HTML",
+        )
+        return
+
+    if user.nh_coins < coin_cost:
+        await message.answer(
+            f"❌ Недостаточно NHCoin.\n"
+            f"Нужно: {fmt_num(coin_cost)}, есть: {fmt_num(user.nh_coins)}",
+            reply_markup=back_kb("craft_exchange_menu"),
+            parse_mode="HTML",
+        )
+        return
+
+    setattr(user, from_field, src_have - amount)
+    setattr(user, to_field,   getattr(user, to_field, 0) + amount)
+    user.nh_coins -= coin_cost
     await session.flush()
 
-    to_emoji = {"ui": "🔮", "path": "🔷", "alchemy": "🧪", "business": "🏢"}[ttype]
-    await cb.answer(
-        f"✅ Обмен выполнен!\n+{tamt} {to_emoji} фрагментов",
-        show_alert=True
+    await message.answer(
+        f"✅ <b>Обмен выполнен!</b>\n\n"
+        f"Отдано: {amount} {from_emoji} {from_label}\n"
+        f"Получено: {amount} {to_emoji} {to_label}\n"
+        f"Стоимость: -{fmt_num(coin_cost)} NHCoin",
+        reply_markup=back_kb("craft_exchange_menu"),
+        parse_mode="HTML",
     )
-    await cb_craft_exchange_menu(cb, session, user)

@@ -19,13 +19,15 @@ FEE_PER_MINUTE = STORAGE_FEE_PER_MINUTE
 
 # Допустимые типы ресурсов для хранения
 RESOURCE_ITEMS = {
-    "nh_coins":          ("💰 NHCoin",         "nh_coins"),
-    "tickets":           ("🎟 Тикеты",         "tickets"),
-    "card_dust":         ("🌫 Пыль карт",      "card_dust"),
-    "ui_fragments":      ("🔮 Фрагм. УИ",      "ui_fragments"),
-    "alchemy_fragments": ("🧪 Фрагм. алхимии", "alchemy_fragments"),
-    "path_fragments":    ("🩺 Фрагм. пути",    "path_fragments"),
-    "mastery_points":    ("🎯 Очки мастерства","mastery_points"),
+    "nh_coins":           ("💰 NHCoin",            "nh_coins"),
+    "tickets":            ("🎟 Тикеты",            "tickets"),
+    "card_dust":          ("🌫 Пыль карт",         "card_dust"),
+    "ui_fragments":       ("🔮 Фрагм. УИ",         "ui_fragments"),
+    "alchemy_fragments":  ("🧪 Фрагм. алхимии",    "alchemy_fragments"),
+    "path_fragments":     ("🩺 Фрагм. пути",       "path_fragments"),
+    "business_fragments": ("🏢 Фрагм. бизнеса",    "business_fragments"),
+    "war_points":         ("⚔️ Очки войны",         "war_points"),
+    "mastery_points":     ("🎯 Очки мастерства",   "mastery_points"),
 }
 
 

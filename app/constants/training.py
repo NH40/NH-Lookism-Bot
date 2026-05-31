@@ -55,7 +55,7 @@ TRAINERS = [
             "Гений тренировок. Двое из его учеников открыли уникальный путь. "
             "Кто знает, может и ты откроешь свой. Даёт очки пути."
         ),
-        "photo": None,
+        "photo": "images/teacher/Gun.png",
         "cost": JEON_GON_COST,
         "cd": JEON_GON_CD_SECONDS,
         "reward": f"{JEON_GON_POINTS_MIN}-{JEON_GON_POINTS_MAX} очков пути",

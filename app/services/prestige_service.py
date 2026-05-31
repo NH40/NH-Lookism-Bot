@@ -136,6 +136,10 @@ class PrestigeService:
         await session.execute(
             delete(FistBot).where(FistBot.challenger_id == user.id)
         )
+        from app.models.emperor_gang import EmperorGangRecord
+        await session.execute(
+            delete(EmperorGangRecord).where(EmperorGangRecord.user_id == user.id)
+        )
 
         # ── Мастерство — только при полном сбросе ────────────────────────
         if not keep_progress:

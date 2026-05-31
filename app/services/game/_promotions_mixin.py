@@ -144,6 +144,11 @@ class PromotionsMixin:
         }
 
     async def _promote_to_emperor(self, session: AsyncSession, user: User) -> dict:
+        from sqlalchemy import delete as sql_delete
+        from app.models.emperor_gang import EmperorGangRecord
+        await session.execute(
+            sql_delete(EmperorGangRecord).where(EmperorGangRecord.user_id == user.id)
+        )
         user.phase = "emperor"
         user.extra_attack_count = 0
         await session.flush()

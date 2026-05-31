@@ -262,3 +262,4 @@ async def cb_adm_clear_buildings(cb: CallbackQuery, session: AsyncSession, user:
     await business_service._recalc_income(session, found)
     deleted = result.rowcount
     await cb.answer(f"🏗 Удалено {deleted} зданий, доход пересчитан", show_alert=True)
+

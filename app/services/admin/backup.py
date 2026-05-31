@@ -145,12 +145,14 @@ class AdminBackupMixin:
         from app.models.king_bot import KingBot
         from app.models.city import District, FistBot
         from app.models.bank import StorageCell, Investment, CryptoHolding
+        from app.models.emperor_gang import EmperorGangRecord
         await session.execute(sa_delete(UserBuilding))
         await session.execute(sa_delete(ActivePotion))
         await session.execute(sa_delete(SquadMember))
         await session.execute(sa_delete(UserCharacter))
         await session.execute(sa_delete(UserPathSkills))
         await session.execute(sa_delete(KingBot))
+        await session.execute(sa_delete(EmperorGangRecord))
         await session.execute(sa_update(District).values(owner_id=None, is_captured=False))
         await session.execute(sa_update(FistBot).values(challenger_id=None))
         # Ячейки хранилища: очищаем содержимое, закрываем слоты

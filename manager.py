@@ -248,6 +248,30 @@ async def spawn_boss(boss_id: str | None = None):
     print(f"   Активен до: {boss.expires_at.strftime('%H:%M UTC')}")
 
 
+async def reset_emperor(tg_id: int | None = None):
+    """Сбрасывает записи группировок Императора. Без аргументов — для всех игроков."""
+    from app.database import AsyncSessionFactory, init_db
+    from app.models.emperor_gang import EmperorGangRecord
+    from sqlalchemy import delete, select
+    from app.models.user import User
+
+    await init_db()
+    async with AsyncSessionFactory() as session:
+        async with session.begin():
+            if tg_id is not None:
+                user = await session.scalar(select(User).where(User.tg_id == tg_id))
+                if not user:
+                    print(f"❌ Игрок с tg_id {tg_id} не найден")
+                    return
+                result = await session.execute(
+                    delete(EmperorGangRecord).where(EmperorGangRecord.user_id == user.id)
+                )
+                print(f"✅ Сброшено {result.rowcount} записей для {user.full_name} (tg_id={tg_id})")
+            else:
+                result = await session.execute(delete(EmperorGangRecord))
+                print(f"✅ Сброшено {result.rowcount} записей группировок Императора (все игроки)")
+
+
 async def auto_backup_loop():
     """Авто-бэкап каждые 6 часов."""
     print("🔄 Запущен авто-бэкап каждые 6 часов")
@@ -271,6 +295,8 @@ Lookism Battle Planet — Manager
   autobackup                    Авто-бэкап (для Docker)
   spawnboss                     Вызвать следующего босса по ротации
   spawnboss <boss_id>           Вызвать конкретного босса (nikita/archangel/manager/brothers)
+  reset_emperor                 Сбросить группировки Императора для всех игроков
+  reset_emperor <tg_id>         Сбросить группировки Императора для одного игрока
     """)
 
 
@@ -297,5 +323,8 @@ if __name__ == "__main__":
     elif args[0] == "spawnboss":
         boss_id = args[1] if len(args) > 1 else None
         asyncio.run(spawn_boss(boss_id))
+    elif args[0] == "reset_emperor":
+        tg_id = int(args[1]) if len(args) > 1 else None
+        asyncio.run(reset_emperor(tg_id))
     else:
         print_help()

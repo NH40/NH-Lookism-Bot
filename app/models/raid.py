@@ -22,3 +22,4 @@ class RaidSession(Base):
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     is_finished: Mapped[bool] = mapped_column(Boolean, default=False)
     fragments_earned: Mapped[int] = mapped_column(Integer, default=0)
+    boss_tier: Mapped[int] = mapped_column(Integer, default=3)

@@ -164,6 +164,7 @@ async def cb_raid_craft(cb: CallbackQuery, session: AsyncSession, user: User):
     builder.row(InlineKeyboardButton(text="🩺 Гений медицины",    callback_data="craft_mg_menu"))
     builder.row(InlineKeyboardButton(text="🔷 Крафт Пути",        callback_data="craft_path_menu"))
     builder.row(InlineKeyboardButton(text="🏢 Бизнес-крафт",      callback_data="craft_biz_menu"))
+    builder.row(InlineKeyboardButton(text="⚔️ Уровни боссов",     callback_data="craft_boss_tier_menu"))
     builder.row(InlineKeyboardButton(text="💱 Обменник",           callback_data="craft_exchange_menu"))
     builder.row(InlineKeyboardButton(text="◀️ Назад",             callback_data="raid_menu"))
 

@@ -12,6 +12,7 @@ from app.constants.raid import (
     RAID_BOSSES, UI_CRAFT_COST, UI_LEVEL_PERKS,
     RAID_ATTACK_CD_SECONDS,
     PATH_SPIN_CRAFT_COST,
+    BOSS_TIER_HP_MULT, BOSS_TIER_UNLOCK_COST, BOSS_TIER_DEFAULT,
 )
 from app.services.raid.rewards import calc_fragments, distribute_reward
 
@@ -23,6 +24,48 @@ class RaidService:
 
     def attack_cd_key(self, raid_id: int, user_id: int) -> str:
         return f"raid_attack:{raid_id}:{user_id}"
+
+    # ── Tier helpers ─────────────────────────────────────────────────────────
+
+    def get_unlocked_tiers(self, user: User) -> list[int]:
+        raw = getattr(user, "raid_unlocked_tiers", "3") or "3"
+        tiers = []
+        for t in raw.split(","):
+            try:
+                tiers.append(int(t.strip()))
+            except ValueError:
+                pass
+        return sorted(set(tiers))
+
+    def is_tier_unlocked(self, user: User, tier: int) -> bool:
+        return tier in self.get_unlocked_tiers(user)
+
+    async def unlock_tier(self, session: AsyncSession, user: User, tier: int) -> dict:
+        if tier < 1 or tier > 5:
+            return {"ok": False, "reason": "Неверный уровень"}
+        if tier == BOSS_TIER_DEFAULT:
+            return {"ok": False, "reason": "Этот уровень открыт по умолчанию"}
+        if self.is_tier_unlocked(user, tier):
+            return {"ok": False, "reason": "Этот уровень уже разблокирован"}
+        cost = BOSS_TIER_UNLOCK_COST[tier]
+        if (user.war_points or 0) < cost:
+            return {
+                "ok": False,
+                "reason": f"Недостаточно очков войны (нужно {cost}, есть {user.war_points or 0})",
+            }
+        user.war_points = (user.war_points or 0) - cost
+        current = getattr(user, "raid_unlocked_tiers", "3") or "3"
+        tiers = {int(t) for t in current.split(",") if t.strip().isdigit()}
+        tiers.add(tier)
+        user.raid_unlocked_tiers = ",".join(str(t) for t in sorted(tiers))
+        await session.flush()
+        return {"ok": True, "tier": tier, "cost": cost, "war_points": user.war_points}
+
+    def get_effective_boss_hp(self, boss: dict, tier: int) -> int:
+        mult = BOSS_TIER_HP_MULT.get(tier, 1.0)
+        return int(boss["base_hp"] * mult)
+
+    # ─────────────────────────────────────────────────────────────────────────
 
     def get_clan(self, clan_id: str) -> dict | None:
         return RAID_BOSSES.get(clan_id)
@@ -87,11 +130,16 @@ class RaidService:
         return power
 
     async def start_raid(
-        self, session: AsyncSession, user: User, clan_id: str, boss_id: str
+        self, session: AsyncSession, user: User, clan_id: str, boss_id: str,
+        tier: int = BOSS_TIER_DEFAULT,
     ) -> dict:
         boss = self.get_boss(clan_id, boss_id)
         if not boss:
             return {"ok": False, "reason": "Босс не найден"}
+
+        if not self.is_tier_unlocked(user, tier):
+            cost = BOSS_TIER_UNLOCK_COST.get(tier, 0)
+            return {"ok": False, "reason": f"Уровень {tier} не разблокирован (нужно {cost} очков войны)"}
 
         cd_key = self.boss_cd_key(boss_id, user.id)
         boss_cd_ttl = await cooldown_service.get_ttl(cd_key)
@@ -122,6 +170,7 @@ class RaidService:
                 source_name = "персонажей"
             return {"ok": False, "reason": f"Нет {source_name} для атаки!"}
 
+        effective_hp = self.get_effective_boss_hp(boss, tier)
         now = datetime.now(timezone.utc)
         ends_at = now + timedelta(seconds=boss["raid_duration_seconds"])
 
@@ -134,6 +183,7 @@ class RaidService:
             ends_at=ends_at,
             is_finished=False,
             attack_count=1,
+            boss_tier=tier,
         )
         session.add(raid)
         await session.flush()
@@ -147,7 +197,7 @@ class RaidService:
             drop_bonus = await potion_service.get_raid_drop_bonus(session, user.id)
             frag_bonus = getattr(user, "fragment_bonus_pct", 0)
             total_drop = drop_bonus + frag_bonus
-            fragments = calc_fragments(power, boss["base_hp"], reward_type, total_drop)
+            fragments = calc_fragments(power, effective_hp, reward_type, total_drop)
             # Круговой донат «Корейский дьявол» круг 6: шанс удвоения наград
             double_chance = getattr(user, "circ_double_raid_chance", 0)
             doubled = False
@@ -237,7 +287,9 @@ class RaidService:
         attack_cd = cooldown_service.apply_speed_reduction(RAID_ATTACK_CD_SECONDS, speed_pct)
         await cooldown_service.set_cooldown(attack_cd_key, attack_cd)
 
-        boss_killed = raid.damage_dealt >= boss["base_hp"]
+        tier = getattr(raid, "boss_tier", BOSS_TIER_DEFAULT) or BOSS_TIER_DEFAULT
+        effective_hp = self.get_effective_boss_hp(boss, tier)
+        boss_killed = raid.damage_dealt >= effective_hp
         if boss_killed:
             reward_type = boss.get("reward_fragments", "ui")
             from app.services.potion_service import potion_service
@@ -245,7 +297,7 @@ class RaidService:
             # Круговой донат «Повелитель подземелья»: бонус к фрагментам
             frag_bonus = getattr(user, "fragment_bonus_pct", 0)
             total_drop = drop_bonus + frag_bonus
-            fragments = calc_fragments(raid.damage_dealt, boss["base_hp"], reward_type, total_drop)
+            fragments = calc_fragments(raid.damage_dealt, effective_hp, reward_type, total_drop)
             # Круговой донат «Корейский дьявол» круг 6: шанс удвоения наград
             doubled = False
             double_chance = getattr(user, "circ_double_raid_chance", 0)
@@ -315,13 +367,15 @@ class RaidService:
                 "remaining": remaining,
             }
 
+        tier = getattr(raid, "boss_tier", BOSS_TIER_DEFAULT) or BOSS_TIER_DEFAULT
+        effective_hp = self.get_effective_boss_hp(boss, tier)
         reward_type = boss.get("reward_fragments", "ui")
         from app.services.potion_service import potion_service
         drop_bonus = await potion_service.get_raid_drop_bonus(session, user.id)
         # Круговой донат «Повелитель подземелья»: бонус к фрагментам
         frag_bonus = getattr(user, "fragment_bonus_pct", 0)
         total_drop = drop_bonus + frag_bonus
-        fragments = calc_fragments(raid.damage_dealt, boss["base_hp"], reward_type, total_drop)
+        fragments = calc_fragments(raid.damage_dealt, effective_hp, reward_type, total_drop)
         # Круговой донат «Корейский дьявол» круг 6: шанс удвоения наград
         doubled = False
         double_chance = getattr(user, "circ_double_raid_chance", 0)

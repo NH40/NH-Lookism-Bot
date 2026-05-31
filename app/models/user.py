@@ -202,6 +202,10 @@ class User(Base):
     war_points: Mapped[int] = mapped_column(Integer, default=0)
     war_genius_level: Mapped[int] = mapped_column(Integer, default=0)
 
+    # ── Уровни рейд-боссов ────────────────────────────────────────────────
+    # Comma-separated список разблокированных тиров, напр. "1,2,3"
+    raid_unlocked_tiers: Mapped[str] = mapped_column(String(20), default="3")
+
     # ── Бан ───────────────────────────────────────────────────────────────
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
     ban_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

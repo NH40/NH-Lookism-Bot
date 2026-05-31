@@ -101,6 +101,22 @@ class ClanExchangeService(ClanBaseService):
         elif resource_type == "character_rank":
             return await self._exchange_characters_by_rank(session, from_user, to_user, meta)
 
+        elif resource_type == "business_fragments":
+            if amount <= 0:
+                return {"ok": False, "reason": "Количество должно быть больше 0"}
+            if (from_user.business_fragments or 0) < amount:
+                return {"ok": False, "reason": f"Недостаточно фрагментов бизнеса (есть {from_user.business_fragments or 0})"}
+            from_user.business_fragments = (from_user.business_fragments or 0) - amount
+            to_user.business_fragments = (to_user.business_fragments or 0) + amount
+
+        elif resource_type == "war_points":
+            if amount <= 0:
+                return {"ok": False, "reason": "Количество должно быть больше 0"}
+            if (from_user.war_points or 0) < amount:
+                return {"ok": False, "reason": f"Недостаточно очков войны (есть {from_user.war_points or 0})"}
+            from_user.war_points = (from_user.war_points or 0) - amount
+            to_user.war_points = (to_user.war_points or 0) + amount
+
         else:
             return {"ok": False, "reason": "Неизвестный тип ресурса"}
 

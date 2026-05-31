@@ -6,13 +6,15 @@ from app.models.user import User
 from app.models.promo import PromoCode, PromoUse
 
 REWARD_LABELS = {
-    "tickets":            "🎟 Тикеты",
-    "coins":              "💰 NHCoin",
-    "ui_fragments":       "🔮 Фрагменты УИ",
-    "alchemy_fragments":  "🧪 Фрагменты алхимии",
-    "path_fragments":     "🔷 Фрагменты Пути",
-    "path_points":        "💎 Очки пути",
-    "mastery_points":     "⭐ Очки мастерства",
+    "tickets":              "🎟 Тикеты",
+    "coins":                "💰 NHCoin",
+    "ui_fragments":         "🔮 Фрагменты УИ",
+    "alchemy_fragments":    "🧪 Фрагменты алхимии",
+    "path_fragments":       "🔷 Фрагменты Пути",
+    "path_points":          "💎 Очки пути",
+    "mastery_points":       "⭐ Очки мастерства",
+    "business_fragments":   "🏭 Фрагменты бизнеса",
+    "war_points":           "⚔️ Очки войны",
 }
 
 
@@ -163,6 +165,10 @@ class PromoService:
             user.skill_path_points += amount
         elif reward_type == "mastery_points":
             user.mastery_points += amount
+        elif reward_type == "business_fragments":
+            user.business_fragments += amount
+        elif reward_type == "war_points":
+            user.war_points += amount
 
     async def get_all_promos(self, session: AsyncSession) -> list[PromoCode]:
         result = await session.execute(

@@ -144,6 +144,7 @@ class AdminBackupMixin:
         from app.models.skill import UserPathSkills
         from app.models.king_bot import KingBot
         from app.models.city import District, FistBot
+        from app.models.bank import StorageCell, Investment, CryptoHolding
         await session.execute(sa_delete(UserBuilding))
         await session.execute(sa_delete(ActivePotion))
         await session.execute(sa_delete(SquadMember))
@@ -152,6 +153,20 @@ class AdminBackupMixin:
         await session.execute(sa_delete(KingBot))
         await session.execute(sa_update(District).values(owner_id=None, is_captured=False))
         await session.execute(sa_update(FistBot).values(challenger_id=None))
+        # Ячейки хранилища: очищаем содержимое, закрываем слоты
+        await session.execute(
+            sa_update(StorageCell).values(
+                is_open=False,
+                item_type=None,
+                item_data=None,
+                fee_debt=0,
+                last_fee_at=None,
+            )
+        )
+        # Вклады: удаляем чтобы планировщик не выплатил NHCoin после патча
+        await session.execute(sa_delete(Investment))
+        # Крипто-холдинги: удаляем чтобы нельзя было продать крипту за NHCoin после патча
+        await session.execute(sa_delete(CryptoHolding))
         await session.flush()
 
         # ── Сброс прогресса ───────────────────────────────────────────────────────

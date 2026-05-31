@@ -20,27 +20,31 @@ class ExchangeFSM(StatesGroup):
 
 
 RESOURCES = [
-    ("coins",             "💰 NHCoin"),
-    ("tickets",           "🎟 Тикеты"),
-    ("card_dust",         "🌫 Пыль карт"),
-    ("mastery_points",    "⭐ Очки мастерства"),
-    ("ui_fragments",      "🔮 Фрагменты УИ"),
-    ("alchemy_fragments", "🧪 Фрагменты алхимии"),
-    ("path_fragments",    "🔷 Фрагменты Пути"),
-    ("path_points",       "🔷 Очки пути"),
-    ("squad",             "👥 Статисты"),
-    ("character",         "🎴 Персонажи"),
+    ("coins",               "💰 NHCoin"),
+    ("tickets",             "🎟 Тикеты"),
+    ("card_dust",           "🌫 Пыль карт"),
+    ("mastery_points",      "⭐ Очки мастерства"),
+    ("ui_fragments",        "🔮 Фрагменты УИ"),
+    ("alchemy_fragments",   "🧪 Фрагменты алхимии"),
+    ("path_fragments",      "🔷 Фрагменты Пути"),
+    ("path_points",         "🔷 Очки пути"),
+    ("business_fragments",  "🏭 Фрагменты бизнеса"),
+    ("war_points",          "⚔️ Очки войны"),
+    ("squad",               "👥 Статисты"),
+    ("character",           "🎴 Персонажи"),
 ]
 
 RESOURCE_FIELDS = {
-    "coins":             "nh_coins",
-    "tickets":           "tickets",
-    "card_dust":         "card_dust",
-    "mastery_points":    "mastery_points",
-    "ui_fragments":      "ui_fragments",
-    "alchemy_fragments": "alchemy_fragments",
-    "path_fragments":    "path_fragments",
-    "path_points":       "skill_path_points",
+    "coins":               "nh_coins",
+    "tickets":             "tickets",
+    "card_dust":           "card_dust",
+    "mastery_points":      "mastery_points",
+    "ui_fragments":        "ui_fragments",
+    "alchemy_fragments":   "alchemy_fragments",
+    "path_fragments":      "path_fragments",
+    "path_points":         "skill_path_points",
+    "business_fragments":  "business_fragments",
+    "war_points":          "war_points",
 }
 
 RANK_ORDER = ["absolute", "peak", "legend", "new_legend", "gen_zero", "strong_king", "king", "boss", "member"]

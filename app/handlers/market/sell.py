@@ -185,6 +185,10 @@ async def cb_market_create_type(
         balance_str = f"У вас: <b>{user.ui_fragments}</b> фрагментов УИ"
     elif item_type == "alchemy_fragments":
         balance_str = f"У вас: <b>{user.alchemy_fragments}</b> фрагментов алхимии"
+    elif item_type == "business_fragments":
+        balance_str = f"У вас: <b>{user.business_fragments or 0}</b> фрагментов бизнеса"
+    elif item_type == "war_points":
+        balance_str = f"У вас: <b>{user.war_points or 0}</b> очков войны"
 
     await state.update_data(item_type=item_type, meta={})
     await state.set_state(MarketFSM.waiting_amount)

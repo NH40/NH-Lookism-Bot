@@ -108,9 +108,10 @@ async def build_gang_menu(session, user, page: int = 0):
 
     builder = InlineKeyboardBuilder()
     if cd > 0:
-        builder.row(InlineKeyboardButton(
-            text=f"⏳ КД: {fmt_ttl(cd)}", callback_data="attack_cd"
-        ))
+        builder.row(
+            InlineKeyboardButton(text=f"⏳ КД: {fmt_ttl(cd)}", callback_data="attack_cd"),
+            InlineKeyboardButton(text="🔄 Обновить", callback_data="attack"),
+        )
     else:
         atk_label = (
             f"⚡ Атаковать (ещё {user.extra_attack_count + 1} атаки)"

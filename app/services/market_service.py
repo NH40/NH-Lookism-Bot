@@ -218,6 +218,18 @@ class MarketService:
                 return {"ok": False, "reason": f"Недостаточно фрагментов Пути (есть {cur})"}
             user.path_fragments = cur - amount
 
+        elif item_type == "business_fragments":
+            cur = user.business_fragments or 0
+            if cur < amount:
+                return {"ok": False, "reason": f"Недостаточно фрагментов бизнеса (есть {cur})"}
+            user.business_fragments = cur - amount
+
+        elif item_type == "war_points":
+            cur = user.war_points or 0
+            if cur < amount:
+                return {"ok": False, "reason": f"Недостаточно очков войны (есть {cur})"}
+            user.war_points = cur - amount
+
         elif item_type == "card_dust":
             cur = user.card_dust or 0
             if cur < amount:
@@ -295,6 +307,12 @@ class MarketService:
 
         elif item_type == "path_fragments":
             user.path_fragments = (user.path_fragments or 0) + amount
+
+        elif item_type == "business_fragments":
+            user.business_fragments = (user.business_fragments or 0) + amount
+
+        elif item_type == "war_points":
+            user.war_points = (user.war_points or 0) + amount
 
         elif item_type == "card_dust":
             user.card_dust = (user.card_dust or 0) + amount

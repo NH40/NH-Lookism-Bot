@@ -515,7 +515,7 @@ EXCH_FRAGS: dict[str, tuple[str, str, str]] = {
 }
 
 
-class ExchangeFSM(StatesGroup):
+class FragExchangeFSM(StatesGroup):
     waiting_amount = State()
 
 
@@ -601,7 +601,7 @@ async def cb_exch_to(cb: CallbackQuery, session: AsyncSession, user: User, state
     to_emoji, to_field, to_label = EXCH_FRAGS[to_key]
     balance = getattr(user, from_field, 0)
 
-    await state.set_state(ExchangeFSM.waiting_amount)
+    await state.set_state(FragExchangeFSM.waiting_amount)
     await state.update_data(from_key=from_key, to_key=to_key)
 
     cancel_kb = InlineKeyboardBuilder()
@@ -621,7 +621,7 @@ async def cb_exch_to(cb: CallbackQuery, session: AsyncSession, user: User, state
     await cb.answer()
 
 
-@router.message(ExchangeFSM.waiting_amount)
+@router.message(FragExchangeFSM.waiting_amount)
 async def msg_exch_amount(message: Message, session: AsyncSession, user: User, state: FSMContext):
     data = await state.get_data()
     await state.clear()

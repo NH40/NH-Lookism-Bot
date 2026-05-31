@@ -13,6 +13,9 @@ from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
+# Комиссия биржи при продаже крипты (% от выручки, целое число)
+SELL_COMMISSION_PCT = 5
+
 # ─── Конфиг монет ─────────────────────────────────────────────────────────────
 # liquidity        — виртуальная глубина рынка (NHCoin); чем выше — тем меньше
 #                    одна сделка двигает цену
@@ -42,10 +45,10 @@ CRYPTO_CONFIG: dict[str, dict] = {
         "base_price":       50_00,
         "min_price":        1_00,
         "max_price":        10_000_00,
-        "liquidity":        30_000,     # NHCoin (малая глубина → большие движения)
-        "max_trade_impact": 20.0,
-        "reversion_speed":  0.010,      # возвращается медленнее — остаётся дикой
-        "maker_strength":   0.3,
+        "liquidity":        150_000,    # NHCoin (увеличено ×5 — сложнее манипулировать)
+        "max_trade_impact": 10.0,       # снижено с 20% → сложнее памп-дамп
+        "reversion_speed":  0.030,      # быстрее возврат к базе
+        "maker_strength":   0.5,
         "noise_pct":        5.0,
     },
     "CriptoVVIP": {
@@ -303,12 +306,14 @@ class CryptoService:
         cfg = CRYPTO_CONFIG[currency]
         price_row = prices[currency]
         price_micro = price_row.price_micro
-        revenue = (price_micro * units) // 100
+        gross = (price_micro * units) // 100
+        commission = max(1, gross * SELL_COMMISSION_PCT // 100)
+        revenue = gross - commission
 
         user.nh_coins += revenue
 
-        # Влияние на цену
-        delta_pct = self._apply_price_impact(price_row, revenue, is_buy=False, cfg=cfg)
+        # Влияние на цену считается по полной сумме до комиссии
+        delta_pct = self._apply_price_impact(price_row, gross, is_buy=False, cfg=cfg)
 
         holding.amount -= units
         if holding.amount == 0:

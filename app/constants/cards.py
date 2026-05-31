@@ -32,16 +32,16 @@ FUSION_COST: dict[int, int] = {
 # ── Пыль (dust) ──────────────────────────────────────────────────────────────
 # Базовое количество пыли за распыление — зависит от РАНГА карточки
 DUST_BY_RANK: dict[str, int] = {
-    "member":       5,
-    "boss":         15,
-    "king":         40,
-    "strong_king":  100,
-    "gen_zero":     280,
-    "new_legend":   700,
-    "legend":       2_000,
-    "peak":         7_000,
-    "absolute":     25_000,
-    "perfection":   100_000,
+    "member":       1,
+    "boss":         1,
+    "king":         2,
+    "strong_king":  5,
+    "gen_zero":     14,
+    "new_legend":   35,
+    "legend":       100,
+    "peak":         350,
+    "absolute":     1_250,
+    "perfection":   5_000,
 }
 
 # Множитель по уровню карточки: базовая_пыль × level_factor

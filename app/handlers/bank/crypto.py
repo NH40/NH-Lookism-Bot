@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.services.bank.crypto_service import (
-    crypto_service, CRYPTO_CONFIG, CRYPTO_CURRENCIES
+    crypto_service, CRYPTO_CONFIG, CRYPTO_CURRENCIES, SELL_COMMISSION_PCT
 )
 from app.utils.formatters import fmt_num
 from app.utils.keyboards.common import back_kb
@@ -186,11 +186,14 @@ async def cb_crypto_sell(cb: CallbackQuery, session: AsyncSession, user: User, s
     ))
     cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="bank_crypto"))
     try:
+        gross_all = (price_micro * amount) // 100
+        net_all = gross_all - max(1, gross_all * SELL_COMMISSION_PCT // 100)
         await cb.message.edit_text(
             f"{cfg['emoji']} <b>Продать {currency}</b>\n\n"
             f"У вас: <b>{amount} монет</b>\n"
             f"Текущая цена: {crypto_service.micro_to_display(price_micro)} NHCoin\n"
-            f"Получите (за всё): ~{fmt_num((price_micro * amount) // 100)} NHCoin\n\n"
+            f"Получите (за всё): ~{fmt_num(net_all)} NHCoin\n"
+            f"<i>Комиссия биржи: {SELL_COMMISSION_PCT}%</i>\n\n"
             f"Введите количество монет для продажи:",
             reply_markup=cancel_kb.as_markup(),
             parse_mode="HTML",

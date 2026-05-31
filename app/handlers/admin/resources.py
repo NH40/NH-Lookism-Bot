@@ -25,6 +25,8 @@ async def cb_adm_resources(cb: CallbackQuery, user: User):
     builder.row(InlineKeyboardButton(text="🔮 Фрагменты УИ",        callback_data=f"adm_uifrag:{tg_id}"))
     builder.row(InlineKeyboardButton(text="🧪 Фрагменты алхимии",   callback_data=f"adm_alchfrag:{tg_id}"))
     builder.row(InlineKeyboardButton(text="🔷 Фрагменты Пути",      callback_data=f"adm_pathfrag:{tg_id}"))
+    builder.row(InlineKeyboardButton(text="🏭 Фрагменты бизнеса",   callback_data=f"adm_bizfrag:{tg_id}"))
+    builder.row(InlineKeyboardButton(text="⚔️ Очки войны",          callback_data=f"adm_warpts:{tg_id}"))
     builder.row(InlineKeyboardButton(text="◀️ Назад",               callback_data=f"adm_user:{tg_id}"))
     try:
         await cb.message.edit_text("📦 Выберите ресурс для выдачи:", reply_markup=builder.as_markup())

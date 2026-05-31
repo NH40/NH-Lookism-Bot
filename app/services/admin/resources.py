@@ -24,6 +24,14 @@ class AdminResourcesMixin:
         user.path_fragments = getattr(user, "path_fragments", 0) + amount
         await session.flush()
 
+    async def give_business_fragments(self, session: AsyncSession, user: User, amount: int) -> None:
+        user.business_fragments = getattr(user, "business_fragments", 0) + amount
+        await session.flush()
+
+    async def give_war_points(self, session: AsyncSession, user: User, amount: int) -> None:
+        user.war_points = getattr(user, "war_points", 0) + amount
+        await session.flush()
+
     async def give_squad_member(self, session: AsyncSession, user: User, rank: str, count: int = 1) -> dict:
         from app.data.squad import RANKS_BY_ID
         from app.models.squad_member import SquadMember

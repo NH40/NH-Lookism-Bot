@@ -211,3 +211,83 @@ async def msg_adm_pathfrag(message: Message, session: AsyncSession, user: User, 
         parse_mode="HTML",
     )
     await _show_user_card(message, session, found)
+
+
+@router.callback_query(F.data.startswith("adm_bizfrag:"))
+async def cb_adm_bizfrag(cb: CallbackQuery, user: User, state: FSMContext):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = cb.data.split(":")[1]
+    await state.set_state(AdminFSM.waiting_business_fragments)
+    await state.update_data(target_tg_id=tg_id)
+    try:
+        await cb.message.edit_text(
+            "🏭 Введите количество фрагментов бизнеса:",
+            reply_markup=back_kb(f"adm_resources:{tg_id}"),
+        )
+    except Exception:
+        pass
+
+
+@router.message(AdminFSM.waiting_business_fragments)
+async def msg_adm_bizfrag(message: Message, session: AsyncSession, user: User, state: FSMContext):
+    if not is_admin(user.tg_id):
+        return
+    data = await state.get_data()
+    tg_id = data.get("target_tg_id")
+    await state.clear()
+    try:
+        amount = int(message.text.strip())
+    except ValueError:
+        await message.answer("Введите число")
+        return
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await message.answer("Игрок не найден")
+        return
+    await admin_service.give_business_fragments(session, found, amount)
+    await message.answer(
+        f"✅ Выдано {amount} фрагментов бизнеса игроку {html.escape(found.full_name)}",
+        parse_mode="HTML",
+    )
+    await _show_user_card(message, session, found)
+
+
+@router.callback_query(F.data.startswith("adm_warpts:"))
+async def cb_adm_warpts(cb: CallbackQuery, user: User, state: FSMContext):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = cb.data.split(":")[1]
+    await state.set_state(AdminFSM.waiting_war_points)
+    await state.update_data(target_tg_id=tg_id)
+    try:
+        await cb.message.edit_text(
+            "⚔️ Введите количество очков войны:",
+            reply_markup=back_kb(f"adm_resources:{tg_id}"),
+        )
+    except Exception:
+        pass
+
+
+@router.message(AdminFSM.waiting_war_points)
+async def msg_adm_warpts(message: Message, session: AsyncSession, user: User, state: FSMContext):
+    if not is_admin(user.tg_id):
+        return
+    data = await state.get_data()
+    tg_id = data.get("target_tg_id")
+    await state.clear()
+    try:
+        amount = int(message.text.strip())
+    except ValueError:
+        await message.answer("Введите число")
+        return
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await message.answer("Игрок не найден")
+        return
+    await admin_service.give_war_points(session, found, amount)
+    await message.answer(
+        f"✅ Выдано {amount} очков войны игроку {html.escape(found.full_name)}",
+        parse_mode="HTML",
+    )
+    await _show_user_card(message, session, found)

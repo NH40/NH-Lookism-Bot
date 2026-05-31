@@ -53,6 +53,7 @@ async def cb_biz_build(
                     callback_data="noop_biz"
                 ))
 
+    builder.row(InlineKeyboardButton(text="⚡ Авто-застройка", callback_data="biz_auto_build"))
     builder.row(InlineKeyboardButton(text="🎖 Гений бизнеса", callback_data="biz_genius_menu"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="business"))
 
@@ -230,6 +231,99 @@ async def cb_biz_build_in(
         name = cfg.name if cfg else building_id
         emoji = cfg.emoji if cfg else "🏢"
         await cb.answer(f"✅ {emoji} {name} построено!")
+        await _show_business_main(cb, session, user)
+    else:
+        await cb.answer(result["reason"], show_alert=True)
+
+
+@router.callback_query(F.data == "biz_auto_build")
+async def cb_biz_auto_build(
+    cb: CallbackQuery, session: AsyncSession, user: User
+):
+    if not user.business_path:
+        await cb.answer("Сначала выберите путь", show_alert=True)
+        return
+
+    biz_genius = getattr(user, "business_genius_level", 0)
+    available_buildings = [
+        b for b in BUILDINGS_BY_PATH.get(user.business_path, [])
+        if b.min_biz_genius <= biz_genius
+    ]
+
+    from app.models.city import District
+    result = await session.execute(
+        select(District.city_id, func.count(District.id).label("cnt"))
+        .where(
+            District.owner_id == user.id,
+            District.is_captured == True,
+            District.city_id.isnot(None),
+        )
+        .group_by(District.city_id)
+    )
+    city_rows = result.all()
+
+    free_per_city: dict[int, int] = {}
+    for city_id, dist_count in city_rows:
+        used = await building_repo.get_used_districts_in_city(session, user.id, city_id)
+        free_per_city[city_id] = max(0, dist_count - used)
+
+    total_free = sum(free_per_city.values())
+
+    builder = InlineKeyboardBuilder()
+    has_any = False
+    for b in available_buildings:
+        discount = user.building_discount_percent
+        cost = max(2, int(b.district_cost * (1 - discount / 100)))
+        if cost % 2 != 0:
+            cost += 1
+        max_count = sum(f // cost for f in free_per_city.values())
+        if max_count > 0:
+            has_any = True
+            builder.row(InlineKeyboardButton(
+                text=f"⚡ {b.emoji} {b.name} ×{max_count}  (+{fmt_num(b.base_income * max_count)}/мин)",
+                callback_data=f"biz_auto_exec:{b.id}"
+            ))
+
+    if not has_any:
+        builder.row(InlineKeyboardButton(text="❌ Нет свободных районов", callback_data="noop_biz"))
+
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="biz_build"))
+
+    try:
+        await cb.message.edit_text(
+            f"⚡ <b>Авто-застройка</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"🏘 Свободных районов: <b>{total_free}</b> (суммарно по всем городам)\n\n"
+            f"Выберите здание — оно будет построено максимальное количество раз во всех городах:",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("biz_auto_exec:"))
+async def cb_biz_auto_exec(
+    cb: CallbackQuery, session: AsyncSession, user: User
+):
+    from app.services.cooldown_service import cooldown_service
+    lock_key = cooldown_service.biz_build_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=30):
+        await cb.answer("Подожди...", show_alert=False)
+        return
+
+    building_id = cb.data.split(":")[1]
+    result = await business_service.buy_building_max(session, user, building_id)
+
+    if result["ok"]:
+        n = result["count"]
+        cfg = BUILDINGS_BY_ID.get(building_id)
+        name = cfg.name if cfg else building_id
+        emoji = cfg.emoji if cfg else "🏢"
+        if n > 0:
+            await cb.answer(f"✅ Построено: {emoji} {name} ×{n}!", show_alert=True)
+        else:
+            await cb.answer("Нет свободных районов для постройки", show_alert=True)
         await _show_business_main(cb, session, user)
     else:
         await cb.answer(result["reason"], show_alert=True)

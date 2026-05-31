@@ -204,7 +204,7 @@ class User(Base):
 
     # ── Уровни рейд-боссов ────────────────────────────────────────────────
     # Comma-separated список разблокированных тиров, напр. "1,2,3"
-    raid_unlocked_tiers: Mapped[str] = mapped_column(String(20), default="3")
+    raid_unlocked_tiers: Mapped[str] = mapped_column(String(20), default="")
 
     # ── Бан ───────────────────────────────────────────────────────────────
     is_banned: Mapped[bool] = mapped_column(Boolean, default=False)

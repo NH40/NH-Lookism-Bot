@@ -144,6 +144,17 @@ async def cb_raid_boss(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer("Босс не найден", show_alert=True)
         return
 
+    unlocked = raid_service.get_unlocked_tiers(user)
+    if not unlocked:
+        await cb.answer(
+            "🔒 Сначала разблокируй Уровень 1 в разделе Крафт → Уровни боссов!\n"
+            f"Стоимость: {BOSS_TIER_UNLOCK_COST[1]} очков войны",
+            show_alert=True,
+        )
+        return
+
+    # Показываем карточку с наивысшим разблокированным тиром по умолчанию
+    default_tier = max(unlocked)
     divisor = boss.get("combat_power_divisor", 2)
     power = await raid_service.get_user_power_for_boss(session, user, boss["damage_source"], divisor)
     if boss["damage_source"] == "squad":
@@ -153,7 +164,7 @@ async def cb_raid_boss(cb: CallbackQuery, session: AsyncSession, user: User):
     else:
         source_name = "уникальных персонажей"
 
-    text, kb = _build_boss_text_and_kb(clan_id, boss, user, power, source_name, BOSS_TIER_DEFAULT)
+    text, kb = _build_boss_text_and_kb(clan_id, boss, user, power, source_name, default_tier)
     photo = _raid_boss_photo(boss_id)
     await _send_or_edit_raid_photo(cb, photo, text, kb)
 
@@ -175,20 +186,24 @@ async def cb_raid_boss_tier(cb: CallbackQuery, session: AsyncSession, user: User
         await cb.answer("Босс не найден", show_alert=True)
         return
 
-    # Если тир не разблокирован — предложить разблокировать
+    # Если тир не разблокирован — показать подсказку
     if not raid_service.is_tier_unlocked(user, tier):
         cost = BOSS_TIER_UNLOCK_COST.get(tier, 0)
         war_pts = getattr(user, "war_points", 0) or 0
-        if cost == 0:
-            await cb.answer("Этот уровень открыт по умолчанию", show_alert=True)
-            return
-        await cb.answer(
-            f"🔒 Уровень {tier} заблокирован\n"
-            f"Стоимость: {cost} очков войны\n"
-            f"У вас: {war_pts} очков войны\n\n"
-            f"Разблокируй в разделе Крафт → Уровни боссов",
-            show_alert=True,
-        )
+        prev_locked = tier > 1 and not raid_service.is_tier_unlocked(user, tier - 1)
+        if prev_locked:
+            await cb.answer(
+                f"🔒 Сначала разблокируй Уровень {tier - 1}!",
+                show_alert=True,
+            )
+        else:
+            await cb.answer(
+                f"🔒 Уровень {tier} заблокирован\n"
+                f"Стоимость: {cost} очков войны\n"
+                f"У вас: {war_pts} очков войны\n\n"
+                f"Разблокируй в разделе Крафт → Уровни боссов",
+                show_alert=True,
+            )
         return
 
     divisor = boss.get("combat_power_divisor", 2)
@@ -285,10 +300,11 @@ async def cb_craft_boss_tier_menu(cb: CallbackQuery, session: AsyncSession, user
         t_emoji = BOSS_TIER_EMOJIS[t]
         t_name = BOSS_TIER_NAMES[t]
         hp_mult = BOSS_TIER_HP_MULT[t]
+        prev_ok = t == 1 or (t - 1) in unlocked
         if t in unlocked:
             lines.append(f"{t_emoji} Уровень {t}: {t_name} (HP ×{hp_mult}) ✅")
-        elif cost == 0:
-            lines.append(f"{t_emoji} Уровень {t}: {t_name} (HP ×{hp_mult}) — бесплатно")
+        elif not prev_ok:
+            lines.append(f"{t_emoji} Уровень {t}: {t_name} (HP ×{hp_mult}) — 🔒 (нужен ур.{t - 1})")
         else:
             lines.append(f"{t_emoji} Уровень {t}: {t_name} (HP ×{hp_mult}) — {cost}⚔️")
 
@@ -303,15 +319,16 @@ async def cb_craft_boss_tier_menu(cb: CallbackQuery, session: AsyncSession, user
     for t in range(1, 6):
         cost = BOSS_TIER_UNLOCK_COST[t]
         t_name = BOSS_TIER_NAMES[t]
+        prev_ok = t == 1 or (t - 1) in unlocked
         if t in unlocked:
             builder.row(InlineKeyboardButton(
                 text=f"✅ Уровень {t}: {t_name}",
                 callback_data="noop_raid"
             ))
-        elif cost == 0:
+        elif not prev_ok:
             builder.row(InlineKeyboardButton(
-                text=f"Открыть Уровень {t} (бесплатно)",
-                callback_data=f"boss_tier_unlock:{t}"
+                text=f"🔒 Уровень {t}: {t_name} (сначала уровень {t - 1})",
+                callback_data="noop_raid"
             ))
         else:
             can = "✓" if war_pts >= cost else "✗"

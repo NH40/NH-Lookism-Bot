@@ -28,13 +28,12 @@ class RaidService:
     # ── Tier helpers ─────────────────────────────────────────────────────────
 
     def get_unlocked_tiers(self, user: User) -> list[int]:
-        raw = getattr(user, "raid_unlocked_tiers", "3") or "3"
+        raw = getattr(user, "raid_unlocked_tiers", "") or ""
         tiers = []
         for t in raw.split(","):
-            try:
-                tiers.append(int(t.strip()))
-            except ValueError:
-                pass
+            t = t.strip()
+            if t.isdigit():
+                tiers.append(int(t))
         return sorted(set(tiers))
 
     def is_tier_unlocked(self, user: User, tier: int) -> bool:
@@ -43,10 +42,14 @@ class RaidService:
     async def unlock_tier(self, session: AsyncSession, user: User, tier: int) -> dict:
         if tier < 1 or tier > 5:
             return {"ok": False, "reason": "Неверный уровень"}
-        if tier == BOSS_TIER_DEFAULT:
-            return {"ok": False, "reason": "Этот уровень открыт по умолчанию"}
         if self.is_tier_unlocked(user, tier):
             return {"ok": False, "reason": "Этот уровень уже разблокирован"}
+        # Нельзя купить N без N-1
+        if tier > 1 and not self.is_tier_unlocked(user, tier - 1):
+            return {
+                "ok": False,
+                "reason": f"Сначала разблокируй Уровень {tier - 1}!",
+            }
         cost = BOSS_TIER_UNLOCK_COST[tier]
         if (user.war_points or 0) < cost:
             return {
@@ -54,7 +57,7 @@ class RaidService:
                 "reason": f"Недостаточно очков войны (нужно {cost}, есть {user.war_points or 0})",
             }
         user.war_points = (user.war_points or 0) - cost
-        current = getattr(user, "raid_unlocked_tiers", "3") or "3"
+        current = getattr(user, "raid_unlocked_tiers", "") or ""
         tiers = {int(t) for t in current.split(",") if t.strip().isdigit()}
         tiers.add(tier)
         user.raid_unlocked_tiers = ",".join(str(t) for t in sorted(tiers))

@@ -65,6 +65,7 @@ async def cb_biz_my_buildings(
         )
     builder.adjust(1)
     builder.row(InlineKeyboardButton(text="🏗 Построить ещё", callback_data="biz_build"))
+    builder.row(InlineKeyboardButton(text="🔨 Снести все здания", callback_data="biz_demo_all_confirm"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="business"))
 
     try:
@@ -140,6 +141,11 @@ async def _show_city_buildings(
         text="🏗 Построить здесь",
         callback_data=f"biz_build_city:{city_id}"
     ))
+    if buildings:
+        builder.row(InlineKeyboardButton(
+            text="🔨 Снести всё в этом городе",
+            callback_data=f"biz_demo_city_confirm:{city_id}"
+        ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="biz_my_buildings"))
 
     try:
@@ -191,3 +197,82 @@ async def cb_biz_demolish(
     await business_service._recalc_income(session, user)
     await cb.answer("🔨 Здание снесено! Районы освобождены.")
     await _show_city_buildings(cb.message, session, user, city_id)
+
+
+@router.callback_query(F.data.startswith("biz_demo_city_confirm:"))
+async def cb_biz_demolish_city_confirm(
+    cb: CallbackQuery, session: AsyncSession, user: User
+):
+    city_id = int(cb.data.split(":")[1])
+    buildings = await building_repo.get_city_buildings(session, user.id, city_id)
+    if not buildings:
+        await cb.answer("Зданий нет", show_alert=True)
+        return
+
+    total = sum(b.count for b in buildings)
+    city = await city_repo.get_city(session, city_id)
+    city_name = city.name if city else f"Город {city_id}"
+
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="✅ Да, снести всё", callback_data=f"biz_demo_city_all:{city_id}"),
+        InlineKeyboardButton(text="❌ Отмена", callback_data=f"biz_city:{city_id}"),
+    )
+    try:
+        await cb.message.edit_text(
+            f"🔨 <b>Снос всех зданий — {city_name}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"Вы уверены? Будет снесено <b>{total}</b> зданий.\n"
+            f"Районы освободятся, доход от этого города обнулится.",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("biz_demo_city_all:"))
+async def cb_biz_demolish_city_all(
+    cb: CallbackQuery, session: AsyncSession, user: User
+):
+    city_id = int(cb.data.split(":")[1])
+    result = await business_service.demolish_all_city(session, user, city_id)
+    await cb.answer(f"🔨 Снесено {result['count']} зданий!", show_alert=True)
+    await _show_city_buildings(cb.message, session, user, city_id)
+
+
+@router.callback_query(F.data == "biz_demo_all_confirm")
+async def cb_biz_demolish_all_confirm(
+    cb: CallbackQuery, session: AsyncSession, user: User
+):
+    buildings = await building_repo.get_user_buildings(session, user.id)
+    if not buildings:
+        await cb.answer("Зданий нет", show_alert=True)
+        return
+
+    total = sum(b.count for b in buildings)
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="✅ Да, снести ВСЁ", callback_data="biz_demo_all_exec"),
+        InlineKeyboardButton(text="❌ Отмена", callback_data="biz_my_buildings"),
+    )
+    try:
+        await cb.message.edit_text(
+            f"🔨 <b>Снос ВСЕХ зданий</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"⚠️ Вы уверены? Будет снесено <b>{total}</b> зданий во всех городах.\n"
+            f"Весь доход от зданий обнулится!",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data == "biz_demo_all_exec")
+async def cb_biz_demolish_all_exec(
+    cb: CallbackQuery, session: AsyncSession, user: User
+):
+    result = await business_service.demolish_all(session, user)
+    await cb.answer(f"🔨 Снесено {result['count']} зданий!", show_alert=True)
+    await _show_business_main(cb, session, user)

@@ -182,6 +182,138 @@ class BusinessService:
         await self._recalc_income(session, user)
         return {"ok": True, "cost": cost}
 
+    async def buy_building_max(
+        self, session: AsyncSession, user: User, building_id: str
+    ) -> dict:
+        from app.data.buildings import BUILDINGS_BY_ID
+        from app.models.city import District, City as CityModel
+
+        cfg = BUILDINGS_BY_ID.get(building_id)
+        if not cfg:
+            return {"ok": False, "reason": "Здание не найдено", "count": 0}
+
+        discount = user.building_discount_percent
+        cost = max(2, int(cfg.district_cost * (1 - discount / 100)))
+        if cost % 2 != 0:
+            cost += 1
+
+        has_great = False
+        if user.business_path == "illegal":
+            from app.repositories.title_repo import title_repo
+            has_great = await title_repo.has_title(session, user.id, "great_influence")
+        min_influence = 3000 if has_great else 10
+
+        result = await session.execute(
+            select(District.city_id, func.count(District.id).label("cnt"))
+            .where(
+                District.owner_id == user.id,
+                District.is_captured == True,
+                District.city_id.isnot(None),
+            )
+            .group_by(District.city_id)
+        )
+        city_rows = result.all()
+
+        total_built = 0
+        for city_id, district_count in city_rows:
+            city_obj = await session.get(CityModel, city_id)
+            if city_obj and city_obj.phase == "fist":
+                from app.data.cities import FIST_CITY_MAX_BUSINESSES
+                max_biz = FIST_CITY_MAX_BUSINESSES.get(city_obj.total_districts, 1)
+                existing_biz = await session.scalar(
+                    select(func.count(UserBuilding.id)).where(
+                        UserBuilding.user_id == user.id,
+                        UserBuilding.city_id == city_id,
+                        UserBuilding.is_active == True,
+                    )
+                ) or 0
+                if existing_biz >= max_biz:
+                    continue
+
+            used_in_city = await session.scalar(
+                select(func.sum(UserBuilding.district_cost)).where(
+                    UserBuilding.user_id == user.id,
+                    UserBuilding.city_id == city_id,
+                    UserBuilding.is_active == True,
+                    UserBuilding.count > 0,
+                )
+            ) or 0
+            free = district_count - used_in_city
+            n = free // cost
+            if n <= 0:
+                continue
+
+            if user.business_path == "illegal":
+                user.influence = max(min_influence, user.influence - cost * n * 3)
+            elif user.business_path == "political":
+                user.influence += cost * n * 5
+
+            res2 = await session.execute(
+                select(UserBuilding).where(
+                    UserBuilding.user_id == user.id,
+                    UserBuilding.building_type == building_id,
+                    UserBuilding.city_id == city_id,
+                    UserBuilding.is_active == True,
+                )
+            )
+            existing = res2.scalar_one_or_none()
+            if existing:
+                existing.count += n
+                existing.district_cost += cost * n
+            else:
+                session.add(UserBuilding(
+                    user_id=user.id,
+                    building_type=building_id,
+                    path=cfg.path,
+                    city_id=city_id,
+                    count=n,
+                    base_income=cfg.base_income,
+                    district_cost=cost * n,
+                ))
+            total_built += n
+
+        if total_built > 0:
+            await session.flush()
+            await self._recalc_income(session, user)
+        return {"ok": True, "count": total_built, "cost_each": cost}
+
+    async def demolish_all_city(
+        self, session: AsyncSession, user: User, city_id: int
+    ) -> dict:
+        result = await session.execute(
+            select(UserBuilding).where(
+                UserBuilding.user_id == user.id,
+                UserBuilding.city_id == city_id,
+                UserBuilding.is_active == True,
+            )
+        )
+        buildings = result.scalars().all()
+        total_count = sum(b.count for b in buildings)
+        for b in buildings:
+            await session.delete(b)
+        await session.flush()
+        if buildings:
+            await self._recalc_income(session, user)
+        return {"ok": True, "count": total_count}
+
+    async def demolish_all(
+        self, session: AsyncSession, user: User
+    ) -> dict:
+        result = await session.execute(
+            select(UserBuilding).where(
+                UserBuilding.user_id == user.id,
+                UserBuilding.is_active == True,
+            )
+        )
+        buildings = result.scalars().all()
+        total_count = sum(b.count for b in buildings)
+        for b in buildings:
+            await session.delete(b)
+        await session.flush()
+        if buildings:
+            await self._recalc_income(session, user)
+        return {"ok": True, "count": total_count}
+
     async def get_income_breakdown(
         self, session: AsyncSession, user: User
     ) -> dict:

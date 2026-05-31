@@ -2,8 +2,12 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 
-def admin_main_kb():
+def admin_main_kb(maintenance_on: bool = False):
     builder = InlineKeyboardBuilder()
+    maint_text = "🔴 Тех.режим: ВКЛ" if maintenance_on else "🟢 Тех.режим: ВЫКЛ"
+    builder.row(
+        InlineKeyboardButton(text=maint_text, callback_data="admin_maintenance_toggle"),
+    )
     builder.row(
         InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats"),
         InlineKeyboardButton(text="🔍 Найти игрока", callback_data="admin_find"),

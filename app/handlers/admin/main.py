@@ -16,6 +16,14 @@ from app.handlers.admin._common import is_admin
 router = Router()
 
 
+async def _maintenance_on() -> bool:
+    try:
+        from app.services.cooldown_service import cooldown_service
+        return bool(await cooldown_service.redis.exists("bot:maintenance"))
+    except Exception:
+        return False
+
+
 @router.callback_query(F.data == "admin_main")
 async def cb_admin_main(cb: CallbackQuery, user: User):
     if not is_admin(user.tg_id):
@@ -24,11 +32,35 @@ async def cb_admin_main(cb: CallbackQuery, user: User):
     try:
         await cb.message.edit_text(
             "🔧 <b>Панель администратора</b>",
-            reply_markup=admin_main_kb(),
+            reply_markup=admin_main_kb(await _maintenance_on()),
             parse_mode="HTML",
         )
     except Exception:
         pass
+
+
+@router.callback_query(F.data == "admin_maintenance_toggle")
+async def cb_admin_maintenance_toggle(cb: CallbackQuery, user: User):
+    if not is_admin(user.tg_id):
+        await cb.answer("Нет доступа", show_alert=True)
+        return
+    from app.services.cooldown_service import cooldown_service
+    r = cooldown_service.redis
+    if await r.exists("bot:maintenance"):
+        await r.delete("bot:maintenance")
+        status = "🟢 Тех.режим <b>ВЫКЛЮЧЕН</b> — бот открыт для игроков"
+    else:
+        await r.set("bot:maintenance", "1")
+        status = "🔴 Тех.режим <b>ВКЛЮЧЁН</b> — игроки заблокированы"
+    try:
+        await cb.message.edit_text(
+            f"🔧 <b>Панель администратора</b>\n\n{status}",
+            reply_markup=admin_main_kb(await _maintenance_on()),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    await cb.answer()
 
 
 @router.callback_query(F.data.startswith("admin_real_top"))

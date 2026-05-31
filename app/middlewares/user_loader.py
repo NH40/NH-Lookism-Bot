@@ -50,6 +50,23 @@ class UserLoaderMiddleware(BaseMiddleware):
             data["user"] = user
             data["is_new_user"] = is_new
 
+            # ── Тех.режим ─────────────────────────────────────────────────
+            if tg_user.id not in settings.admin_ids_list:
+                try:
+                    from app.services.cooldown_service import cooldown_service
+                    if await cooldown_service.redis.exists("bot:maintenance"):
+                        text = (
+                            "🔧 <b>Бот на техническом обслуживании</b>\n\n"
+                            "Пожалуйста, подождите. Мы скоро вернёмся!"
+                        )
+                        if isinstance(event, Message):
+                            await event.answer(text, parse_mode="HTML")
+                        elif isinstance(event, CallbackQuery):
+                            await event.answer("🔧 Тех.обслуживание, подождите", show_alert=True)
+                        return
+                except Exception:
+                    pass
+
             # ── Проверка бана ─────────────────────────────────────────────
             # Администраторы проходят всегда.
             if tg_user.id not in settings.admin_ids_list and getattr(user, "is_banned", False):

@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from app.models.user import User
 
 
@@ -53,15 +54,22 @@ class UserRepo:
     ) -> tuple[User, bool]:
         user = await self.get_by_tg_id(session, tg_id)
         if user:
-            # Обновляем имя/username только если они изменились,
-            # иначе flush() на каждый запрос = лишний UPDATE для 5000 игроков
             if user.full_name != full_name or user.username != username:
                 user.full_name = full_name
                 user.username = username
                 await session.flush()
             return user, False
-        user = await self.create(session, tg_id, full_name, username)
-        return user, True
+        # Savepoint защищает от race condition: два параллельных запроса
+        # одного пользователя оба проходят SELECT→не нашли→оба пытаются INSERT.
+        # При конфликте savepoint откатывается, сессия остаётся живой,
+        # и мы просто забираем уже созданную запись повторным SELECT-ом.
+        try:
+            async with session.begin_nested():
+                user = await self.create(session, tg_id, full_name, username)
+            return user, True
+        except IntegrityError:
+            user = await self.get_by_tg_id(session, tg_id)
+            return user, False
 
     async def get_top_by_power(
         self, session: AsyncSession, limit: int = 10

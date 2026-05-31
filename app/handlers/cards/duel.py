@@ -114,11 +114,9 @@ async def cb_duel_auto_deck(cb: CallbackQuery, session: AsyncSession, user: User
         return
 
     # Очищаем колоду и выставляем новые слоты
-    existing = (await session.execute(
-        sa_select(UserDeck).where(UserDeck.user_id == user.id)
-    )).scalars().all()
-    for row in existing:
-        await session.delete(row)
+    from sqlalchemy import delete as sa_delete
+    await session.execute(sa_delete(UserDeck).where(UserDeck.user_id == user.id))
+    await session.flush()
 
     for slot, uc in enumerate(top5, start=1):
         session.add(UserDeck(user_id=user.id, slot=slot, char_id=uc.id))

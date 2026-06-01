@@ -224,10 +224,29 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
             got_card = random.randint(1, 100) <= cfg.drop_chance
             if got_card:
                 from app.data.characters import CHARACTERS, RANK_EMOJI, RANK_CONFIG_MAP
-                candidates = [c for c in CHARACTERS if c["name"] in cfg.members]
+                # Фильтруем по членам группировки И разрешённым рангам дропа
+                candidates = [
+                    c for c in CHARACTERS
+                    if c["name"] in cfg.members and c["rank"] in cfg.drop_ranks
+                ]
+                if not candidates:
+                    candidates = [c for c in CHARACTERS if c["name"] in cfg.members]
                 if candidates:
-                    # Взвешенный выбор: чем выше ранг (реже) — тем ниже вес
-                    weights = [RANK_CONFIG_MAP[c["rank"]].weight for c in candidates]
+                    # Повышенные веса для редких рангов в контексте императора
+                    _EMPEROR_WEIGHTS = {
+                        "king":        6.0,
+                        "strong_king": 5.0,
+                        "gen_zero":    7.0,
+                        "new_legend":  4.0,
+                        "legend":      2.5,
+                        "peak":        1.5,
+                        "absolute":    0.8,
+                        "perfection":  0.3,
+                    }
+                    weights = [
+                        _EMPEROR_WEIGHTS.get(c["rank"], RANK_CONFIG_MAP[c["rank"]].weight)
+                        for c in candidates
+                    ]
                     char = random.choices(candidates, weights=weights, k=1)[0]
                     from app.models.character import UserCharacter
                     from app.constants.cards import LEVEL_MULTIPLIERS

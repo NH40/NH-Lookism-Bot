@@ -23,7 +23,7 @@ EMPEROR_GANGS: list[EmperorGangConfig] = [
         gang_id="yamazaki",
         name="Ямадзаки",
         emoji="⚔️",
-        desc="Легендарный клан воинов. Во главе — сам Шинген.",
+        desc="Легендарный синдикат воинов. Во главе — сам Шинген.",
         base_power=15_810_000,
         members=[
             "Shingen (Prime)",
@@ -79,7 +79,7 @@ EMPEROR_GANGS: list[EmperorGangConfig] = [
         gang_id="nhn",
         name="NHN",
         emoji="🏢",
-        desc="Корпорация тьмы: Элита, Джеймс, Ган, Гу и Кристал.",
+        desc="Корпорация NHN: Элита, Джеймс, Ган, Гу и Кристал.",
         base_power=6_900_000,
         members=[
             "Elite (Prime)",
@@ -106,7 +106,7 @@ EMPEROR_GANGS: list[EmperorGangConfig] = [
         gang_id="dg",
         name="DG",
         emoji="🔱",
-        desc="Гитаэ, Джеймс, Джей и Чансу — вершина второго поколения.",
+        desc="Гитаэ, Джеймс, Джей и Чансу — Новая группировка что убила гапрена.",
         base_power=26_000_000,
         members=[
             "Gitae (Path)",

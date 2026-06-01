@@ -50,26 +50,27 @@ async def _auto_attack_for_user(session, user_id: int) -> None:
     if war_genius == 0:
         return
 
-    # Доступные боссы для данного уровня Гения войны (все до текущего уровня включительно)
+    # Боссы, доступные для авто-атаки на данном уровне (все уровни до текущего включительно)
     allowed_pairs = set()
     for lvl in range(1, war_genius + 1):
         pair = WAR_GENIUS_BOSS_MAP.get(lvl)
         if pair:
             allowed_pairs.add(pair)
 
-    # Ищем активный рейд пользователя на одного из разрешённых боссов
+    # Ищем активный рейд пользователя — берём первый (scalar_one_or_none упадёт при дубликатах в БД)
     result = await session.execute(
         select(RaidSession).where(
             RaidSession.user_id == user_id,
             RaidSession.is_finished == False,
         )
     )
-    raid = result.scalar_one_or_none()
+    raid = result.scalars().first()
     if not raid:
         return
 
+    # Проверяем, что этот босс покрыт текущим уровнем Гения войны
     if (raid.clan_id, raid.boss_id) not in allowed_pairs:
-        return  # Рейд на босса, не покрытого текущим уровнем
+        return
 
     # Проверяем КД атаки
     attack_cd_key = raid_service.attack_cd_key(raid.id, user_id)
@@ -86,7 +87,11 @@ async def _auto_attack_for_user(session, user_id: int) -> None:
                 f"fragments={result_dict.get('fragments', 0)}"
             )
         else:
-            logger.debug(
+            logger.info(
                 f"war_genius_tick: user={user_id} auto-attacked {raid.boss_id} "
                 f"dmg={result_dict.get('damage', 0)}"
             )
+    else:
+        logger.warning(
+            f"war_genius_tick: user={user_id} attack failed: {result_dict.get('reason')}"
+        )

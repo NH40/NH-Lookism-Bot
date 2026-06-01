@@ -36,7 +36,8 @@ def _rewards_summary(rewards: list[dict]) -> str:
     parts = []
     for r in rewards:
         label = REWARD_LABELS.get(r["type"], r["type"])
-        parts.append(f"{label}: +{r['amount']:,}".replace(",", " "))
+        sign = "+" if r["amount"] > 0 else ""
+        parts.append(f"{label}: {sign}{r['amount']:,}".replace(",", " "))
     return "\n".join(parts)
 
 
@@ -63,7 +64,7 @@ class PromoService:
         for r in rewards:
             if r.get("type") not in REWARD_LABELS:
                 return {"ok": False, "reason": f"Неизвестный тип награды: {r.get('type')}"}
-            if not isinstance(r.get("amount"), int) or r["amount"] <= 0:
+            if not isinstance(r.get("amount"), int) or r["amount"] == 0:
                 return {"ok": False, "reason": f"Неверное количество для {r.get('type')}"}
 
         if limit_type not in ("uses", "time"):
@@ -152,23 +153,23 @@ class PromoService:
     def _apply_reward(self, user: User, reward_type: str, amount: int) -> None:
         if reward_type == "tickets":
             from app.config.game_balance import ticket_hard_cap
-            user.tickets = min(user.tickets + amount, ticket_hard_cap(user))
+            user.tickets = max(0, min(user.tickets + amount, ticket_hard_cap(user)))
         elif reward_type == "coins":
-            user.nh_coins += amount
+            user.nh_coins = max(0, user.nh_coins + amount)
         elif reward_type == "ui_fragments":
-            user.ui_fragments += amount
+            user.ui_fragments = max(0, user.ui_fragments + amount)
         elif reward_type == "alchemy_fragments":
-            user.alchemy_fragments += amount
+            user.alchemy_fragments = max(0, user.alchemy_fragments + amount)
         elif reward_type == "path_fragments":
-            user.path_fragments += amount
+            user.path_fragments = max(0, user.path_fragments + amount)
         elif reward_type == "path_points":
-            user.skill_path_points += amount
+            user.skill_path_points = max(0, user.skill_path_points + amount)
         elif reward_type == "mastery_points":
-            user.mastery_points += amount
+            user.mastery_points = max(0, user.mastery_points + amount)
         elif reward_type == "business_fragments":
-            user.business_fragments += amount
+            user.business_fragments = max(0, user.business_fragments + amount)
         elif reward_type == "war_points":
-            user.war_points += amount
+            user.war_points = max(0, user.war_points + amount)
 
     async def get_all_promos(self, session: AsyncSession) -> list[PromoCode]:
         result = await session.execute(

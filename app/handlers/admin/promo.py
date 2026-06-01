@@ -70,6 +70,8 @@ async def cb_admin_promo_create(cb: CallbackQuery, user: User, state: FSMContext
             f"  → действует 24 часа, фрагменты + монеты\n\n"
             f"<code>PROMO uses 1 mastery_points:10</code>\n"
             f"  → разовый, очки мастерства\n\n"
+            f"<code>PENALTY uses 999 tickets:-500</code>\n"
+            f"  → отнять 500 тикетов (не уйдёт ниже 0)\n\n"
             f"<b>Типы наград:</b>\n{types_str}",
             reply_markup=back_kb("admin_promos"),
             parse_mode="HTML",

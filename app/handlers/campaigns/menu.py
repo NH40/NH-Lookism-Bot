@@ -18,7 +18,9 @@
 from datetime import timezone
 
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, InlineKeyboardButton
+from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,10 +35,15 @@ from app.constants.campaigns import (
     MAX_ACTIVE_CAMPAIGNS,
     STATIST_COUNT_OPTIONS,
     MAX_STATISTS_PER_CAMPAIGN,
+    STATIST_RANK_MULTIPLIER,
 )
 from app.utils.formatters import fmt_num, fmt_ttl
 
 router = Router()
+
+
+class CampaignFSM(StatesGroup):
+    waiting_count = State()
 
 # ── Константы ─────────────────────────────────────────────────────────────────
 
@@ -354,18 +361,21 @@ async def cb_campaigns_dur(cb: CallbackQuery, session: AsyncSession, user: User)
         "─" * 22,
     ]
 
+    res_cfg_dur = CAMPAIGN_RESOURCE_MAP[resource_id]
     for sr in STATIST_RANK_ORDER:
         members = by_rank.get(sr, [])
         if not members:
             continue
         count = len(members)
         avg_p = int(sum(m.base_power for m in members) / count)
-        prev = campaign_service.calc_preview(avg_p, task_rank, resource_id, hours, count)
+        prev = campaign_service.calc_preview(avg_p, task_rank, resource_id, hours, count, sr)
         chance = prev["success_chance"]
         icon = "✅" if chance >= 50 else ("⚠️" if chance >= 20 else "❌")
+        sr_mult = STATIST_RANK_MULTIPLIER.get(sr, 1)
+        mult_str = f" | ×{sr_mult} {res_cfg_dur.emoji}" if res_cfg_dur.rank_scaling else ""
         lines.append(
             f"{_sr_emoji(sr)} Ранг <b>{sr}</b> — {count} ст. | "
-            f"avg {fmt_num(avg_p)} 💪 | {chance}% успех {icon}"
+            f"avg {fmt_num(avg_p)} 💪 | {chance}% успех {icon}{mult_str}"
         )
         builder.row(InlineKeyboardButton(
             text=f"{_sr_emoji(sr)} {sr}  {count} бойцов  {chance}% успех",
@@ -437,7 +447,7 @@ async def cb_campaigns_srank(cb: CallbackQuery, session: AsyncSession, user: Use
 
     for n in options:
         n_cap = min(n, avail_count, MAX_STATISTS_PER_CAMPAIGN)
-        prev = campaign_service.calc_preview(avg_power, task_rank, resource_id, hours, n_cap)
+        prev = campaign_service.calc_preview(avg_power, task_rank, resource_id, hours, n_cap, statist_rank)
         label = f"Все ({n_cap})" if n_cap == avail_count else str(n_cap)
         lines.append(
             f"👤 <b>{label}</b> — {prev['success_chance']}% успех | "
@@ -452,6 +462,10 @@ async def cb_campaigns_srank(cb: CallbackQuery, session: AsyncSession, user: Use
             callback_data=f"campaigns_cnt:{resource_id}:{task_rank}:{hours}:{statist_rank}:{n_cap}",
         ))
 
+    builder.row(InlineKeyboardButton(
+        text="✏️ Ввести число вручную",
+        callback_data=f"campaigns_custom:{resource_id}:{task_rank}:{hours}:{statist_rank}",
+    ))
     builder.row(InlineKeyboardButton(
         text="◀️ Назад",
         callback_data=f"campaigns_dur:{resource_id}:{task_rank}:{hours}",
@@ -503,7 +517,7 @@ async def cb_campaigns_cnt(cb: CallbackQuery, session: AsyncSession, user: User)
 
     res_cfg = CAMPAIGN_RESOURCE_MAP[resource_id]
     rank_cfg = CAMPAIGN_RANK_MAP[task_rank]
-    prev = campaign_service.calc_preview(avg_power, task_rank, resource_id, hours, cnt)
+    prev = campaign_service.calc_preview(avg_power, task_rank, resource_id, hours, cnt, statist_rank)
 
     text = (
         f"🗺 <b>Подтверждение похода</b>\n\n"
@@ -607,6 +621,117 @@ async def cb_campaigns_launch(cb: CallbackQuery, session: AsyncSession, user: Us
     except Exception:
         pass
     await cb.answer("Поход начался! 🚀")
+
+
+# ── Ручной ввод количества статистов ─────────────────────────────────────────
+
+@router.callback_query(F.data.startswith("campaigns_custom:"))
+async def cb_campaigns_custom(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
+    parts = cb.data.split(":")
+    if len(parts) < 5:
+        await cb.answer("Ошибка", show_alert=True)
+        return
+    resource_id, task_rank, hours_str, statist_rank = parts[1], parts[2], parts[3], parts[4]
+    try:
+        hours = int(hours_str)
+    except ValueError:
+        await cb.answer("Ошибка", show_alert=True)
+        return
+
+    available = await campaign_service.get_available_statists(session, user.id, statist_rank)
+    avail_count = len(available)
+    if avail_count == 0:
+        await cb.answer(f"Нет свободных статистов ранга {statist_rank}!", show_alert=True)
+        return
+
+    await state.set_state(CampaignFSM.waiting_count)
+    await state.update_data(
+        resource_id=resource_id,
+        task_rank=task_rank,
+        hours=hours,
+        statist_rank=statist_rank,
+        avail_count=avail_count,
+    )
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data=f"campaigns_srank:{resource_id}:{task_rank}:{hours}:{statist_rank}"))
+
+    await cb.message.answer(
+        f"✏️ Введи количество статистов ранга <b>{statist_rank}</b>\n"
+        f"Доступно: <b>{avail_count}</b> | Максимум: <b>{min(avail_count, MAX_STATISTS_PER_CAMPAIGN)}</b>",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML",
+    )
+    await cb.answer()
+
+
+@router.message(CampaignFSM.waiting_count)
+async def msg_campaigns_custom_count(msg: Message, session: AsyncSession, user: User, state: FSMContext):
+    data = await state.get_data()
+    resource_id = data.get("resource_id")
+    task_rank = data.get("task_rank")
+    hours = data.get("hours")
+    statist_rank = data.get("statist_rank")
+    avail_count = data.get("avail_count", 0)
+
+    text_in = (msg.text or "").strip()
+    if not text_in.isdigit():
+        await msg.answer(f"❌ Введи целое число от 1 до {min(avail_count, MAX_STATISTS_PER_CAMPAIGN)}")
+        return
+
+    cnt = int(text_in)
+    cap = min(avail_count, MAX_STATISTS_PER_CAMPAIGN)
+    if cnt < 1 or cnt > cap:
+        await msg.answer(f"❌ Число должно быть от 1 до {cap}")
+        return
+
+    await state.clear()
+
+    # Проверяем актуальное наличие статистов
+    available = await campaign_service.get_available_statists(session, user.id, statist_rank)
+    if cnt > len(available):
+        await msg.answer(f"❌ Недостаточно свободных статистов {statist_rank}: доступно {len(available)}")
+        return
+
+    avg_power = int(sum(m.base_power for m in available) / len(available)) if available else 0
+    chosen = sorted(available, key=lambda m: m.base_power)[:cnt]
+    avg_power = int(sum(m.base_power for m in chosen) / cnt) if cnt else 0
+
+    res_cfg = CAMPAIGN_RESOURCE_MAP[resource_id]
+    rank_cfg = CAMPAIGN_RANK_MAP[task_rank]
+    prev = campaign_service.calc_preview(avg_power, task_rank, resource_id, hours, cnt, statist_rank)
+
+    text = (
+        f"🗺 <b>Подтверждение похода</b>\n\n"
+        f"{res_cfg.emoji} Ресурс: <b>{res_cfg.label}</b>\n"
+        f"{rank_cfg.emoji} Ранг задания: <b>{task_rank}</b>\n"
+        f"⏱ Длительность: <b>{_duration_label(hours)}</b>\n"
+        f"{_sr_emoji(statist_rank)} Статисты: ранг <b>{statist_rank}</b> — {cnt} бойцов\n"
+        f"💪 Их средняя мощь: <b>{fmt_num(avg_power)}</b>\n\n"
+        f"─────────────────────\n"
+        f"📊 Прогноз:\n"
+        f"  🎯 Шанс успеха: <b>{prev['success_chance']}%</b>\n"
+        f"  🏆 Макс. награда: <b>{fmt_num(prev['resource_max'])} {res_cfg.emoji}</b>\n"
+        f"  👥 Выживут при успехе: ~{prev['survival_on_success']}%\n"
+        f"  💀 Выживут при провале: ~{prev['survival_on_fail']}%\n"
+        f"─────────────────────\n"
+        f"⚠️ Статисты уйдут в поход и вернутся\n"
+        f"   только по завершении (часть может погибнуть)."
+    )
+
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="✅ Отправить",
+            callback_data=f"campaigns_launch:{resource_id}:{task_rank}:{hours}:{statist_rank}:{cnt}",
+        ),
+        InlineKeyboardButton(
+            text="❌ Отмена",
+            callback_data="campaigns_menu",
+        ),
+    )
+
+    await msg.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
 
 # ── Сбор результата ───────────────────────────────────────────────────────────

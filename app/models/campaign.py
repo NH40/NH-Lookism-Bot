@@ -21,6 +21,7 @@ class Campaign(Base):
     statist_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     statist_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     avg_power: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)  # средняя мощь
+    statist_rank: Mapped[str] = mapped_column(String(8), nullable=False, default="ERROR")  # ранг статистов
 
     # ── Временные метки ───────────────────────────────────────────────────────
     started_at: Mapped[datetime] = mapped_column(

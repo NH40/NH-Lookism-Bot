@@ -40,6 +40,7 @@ from app.constants.campaigns import (
     MIN_SURVIVAL_SUCCESS,
     MIN_SUCCESS_CHANCE,
     POWER_BONUS_FACTOR,
+    STATIST_RANK_MULTIPLIER,
     SURVIVAL_FACTOR,
     SURVIVAL_FACTOR_FAIL,
 )
@@ -90,12 +91,14 @@ def _calc_resource(
     duration_hours: int,
     rank: str,
     resource_type: str,
+    statist_rank: str = "ERROR",
 ) -> int:
     """Количество ресурса при успешном походе."""
     res_cfg = CAMPAIGN_RESOURCE_MAP[resource_type]
     rank_cfg = CAMPAIGN_RANK_MAP[rank]
+    sr_mult = STATIST_RANK_MULTIPLIER.get(statist_rank, 1) if res_cfg.rank_scaling else 1
     base = statist_count * duration_hours * res_cfg.base_per_statist_per_hour
-    return max(1, int(base * rank_cfg.reward_multiplier))
+    return max(1, int(base * rank_cfg.reward_multiplier * sr_mult))
 
 
 # ── Основные операции ─────────────────────────────────────────────────────────
@@ -222,6 +225,7 @@ class CampaignService:
             statist_ids=chosen_ids,
             avg_power=avg_power,
             ends_at=ends_at,
+            statist_rank=statist_rank or "ERROR",
         )
 
         return {"ok": True, "reason": "", "campaign": camp}
@@ -316,6 +320,7 @@ class CampaignService:
                 duration_hours=camp.duration_hours,
                 rank=camp.rank,
                 resource_type=camp.resource_type,
+                statist_rank=camp.statist_rank or "ERROR",
             )
             # Случайность награды: 80%–120%
             factor = random.uniform(0.8, 1.2)
@@ -343,12 +348,13 @@ class CampaignService:
     # ── Вспомогательные для UI ────────────────────────────────────────────────
 
     def calc_preview(self, avg_power: int, rank: str, resource_type: str,
-                     duration_hours: int, statist_count: int) -> dict:
+                     duration_hours: int, statist_count: int,
+                     statist_rank: str = "ERROR") -> dict:
         """Предварительный расчёт для отображения в интерфейсе."""
         success_chance = _calc_success_chance(avg_power, rank)
         survival_on_success = _calc_survival_pct(avg_power, rank, True)
         survival_on_fail = _calc_survival_pct(avg_power, rank, False)
-        resource = _calc_resource(statist_count, duration_hours, rank, resource_type)
+        resource = _calc_resource(statist_count, duration_hours, rank, resource_type, statist_rank)
         return {
             "success_chance": success_chance,
             "survival_on_success": survival_on_success,

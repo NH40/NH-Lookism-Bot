@@ -49,6 +49,7 @@ class CampaignRepo:
         statist_ids: list[int],
         avg_power: int,
         ends_at: datetime,
+        statist_rank: str = "ERROR",
     ) -> Campaign:
         camp = Campaign(
             user_id=user_id,
@@ -60,6 +61,7 @@ class CampaignRepo:
             avg_power=avg_power,
             ends_at=ends_at,
             status="active",
+            statist_rank=statist_rank,
         )
         session.add(camp)
         await session.flush()

@@ -58,16 +58,18 @@ class CampaignResourceConfig:
     emoji: str
     # Базовая награда за 1 статиста за 1 час при успехе и reward_mult=1.0
     base_per_statist_per_hour: float
+    # Если True — итоговая награда умножается на STATIST_RANK_MULTIPLIER[statist_rank]
+    rank_scaling: bool = False
 
 
 CAMPAIGN_RESOURCES: list[CampaignResourceConfig] = [
-    CampaignResourceConfig("nh_coins",          "NHCoin",                "💰", 25),
-    CampaignResourceConfig("card_dust",         "Пыль",                  "💎",  0.005),
-    CampaignResourceConfig("ui_fragments",      "Фрагменты УИ",          "🔮",  0.05),
-    CampaignResourceConfig("alchemy_fragments", "Фрагменты алхимии",     "🧪",  0.05),
-    CampaignResourceConfig("path_fragments",    "Фрагменты Пути",        "⚡",  0.05),
-    CampaignResourceConfig("business_fragments","Фрагменты бизнеса",     "🏢",  0.05),
-    CampaignResourceConfig("war_points",        "Очки войны",            "⚔️",  0.002),
+    CampaignResourceConfig("nh_coins",          "NHCoin",            "💰", 25,    False),
+    CampaignResourceConfig("card_dust",         "Пыль",              "💎",  0.005, False),
+    CampaignResourceConfig("ui_fragments",      "Фрагменты УИ",      "🔮",  0.001, True),
+    CampaignResourceConfig("alchemy_fragments", "Фрагменты алхимии", "🧪",  0.001, True),
+    CampaignResourceConfig("path_fragments",    "Фрагменты Пути",    "⚡",  0.001, True),
+    CampaignResourceConfig("business_fragments","Фрагменты бизнеса", "🏢",  0.001, True),
+    CampaignResourceConfig("war_points",        "Очки войны",        "⚔️",  0.002, False),
 ]
 
 CAMPAIGN_RESOURCE_MAP: dict[str, CampaignResourceConfig] = {
@@ -109,6 +111,33 @@ SURVIVAL_FACTOR_FAIL: int = 5
 
 # Минимальный % выживших при провале
 MIN_SURVIVAL_FAIL: int = 0
+
+# ── Множитель ранга статистов (влияет только на ресурсы с rank_scaling=True) ──
+#
+#   resource = statist_count * hours * base_per_statist_per_hour
+#              * reward_multiplier * STATIST_RANK_MULTIPLIER[statist_rank]
+
+STATIST_RANK_MULTIPLIER: dict[str, int] = {
+    "ERROR": 1,
+    "F":     2,
+    "E":     5,
+    "D":     12,
+    "C":     30,
+    "B":     80,
+    "A":     200,
+    "S":     500,
+    "SS":    800,
+    "SSS":   1200,
+    "SR":    1800,
+    "SSR":   3000,
+    "UR":    5000,
+    "LR":    8000,
+    "MP":    15000,
+    "X":     25000,
+    "XX":    40000,
+    "XXX":   70000,
+    "DX":    120000,
+}
 
 # ── Выбор количества статистов (кнопки) ──────────────────────────────────────
 # Фиксированные варианты, которые предлагаются игроку. Значения — абсолютное число.

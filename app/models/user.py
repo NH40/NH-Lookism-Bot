@@ -183,6 +183,8 @@ class User(Base):
     circ_daily_districts: Mapped[int] = mapped_column(Integer, default=0)        # районов/день (Архангел)
     circ_dragon_active: Mapped[bool] = mapped_column(Boolean, default=False)     # спутник-дракон
     circ_clan_cashback: Mapped[bool] = mapped_column(Boolean, default=False)     # кешбек казны клана
+    circ_mountain_capture: Mapped[bool] = mapped_column(Boolean, default=False)  # +районов при захвате (Хозяин горы ≥2)
+    circ_trainer_discount: Mapped[int] = mapped_column(Integer, default=0)       # % скидка у Тома Ли/Чон Гона (Император)
 
     # ── Донат-валюта (NHDonate) ──────────────────────────────────────────────
     nh_donate: Mapped[int] = mapped_column(Integer, default=0)  # 1 NHDonate = 1 рубль

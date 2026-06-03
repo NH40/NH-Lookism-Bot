@@ -49,21 +49,21 @@ BUILDINGS: list[BuildingConfig] = [
 
     # ── Гений бизнеса Ур.3: Крупный элитный бизнес ────────────────────────────
     # 36 районов — нужен 64-районный город (половина большого)
-    BuildingConfig("corporation", "Корпорация",     "💎",  "legal",   2700,  36, 3),
-    BuildingConfig("cartel",      "Картель",        "💀",  "illegal", 3300,  36, 3),
-    BuildingConfig("order",       "Орден",          "👁",  "political",2400,  36, 3),
+    BuildingConfig("corporation", "Корпорация",     "💎",  "legal",   1600,  36, 3),
+    BuildingConfig("cartel",      "Картель",        "💀",  "illegal", 2000,  36, 3),
+    BuildingConfig("order",       "Орден",          "👁",  "political",1450,  36, 3),
 
     # ── Гений бизнеса Ур.4: Мегабизнес ───────────────────────────────────────
     # 48 районов — нужен 64-районный город (¾ большого)
-    BuildingConfig("conglomerate","Конгломерат",    "🌍",  "legal",   7500,  48, 4),
-    BuildingConfig("world_cartel","Мировой картель","🌑",  "illegal", 9000,  48, 4),
-    BuildingConfig("world_order", "Мировой порядок","🔮", "political",6600,  48, 4),
+    BuildingConfig("conglomerate","Конгломерат",    "🌍",  "legal",   3400,  48, 4),
+    BuildingConfig("world_cartel","Мировой картель","🌑",  "illegal", 4000,  48, 4),
+    BuildingConfig("world_order", "Мировой порядок","🔮", "political",3000,  48, 4),
 
     # ── Гений бизнеса Ур.5: Легендарный бизнес ────────────────────────────────
     # 64 районов — требует полного 64-районного города
-    BuildingConfig("empire",      "Бизнес-империя", "👑",  "legal",  13500,  64, 5),
-    BuildingConfig("shadow_throne","Теневой трон",  "♾️",  "illegal",15000,  64, 5),
-    BuildingConfig("shadow_gov",  "Теневое правительство","🌟","political",12000,64,5),
+    BuildingConfig("empire",      "Бизнес-империя", "👑",  "legal",   6500,  64, 5),
+    BuildingConfig("shadow_throne","Теневой трон",  "♾️",  "illegal", 7500,  64, 5),
+    BuildingConfig("shadow_gov",  "Теневое правительство","🌟","political",6000,64,5),
 ]
 
 BUILDINGS_BY_ID: dict[str, BuildingConfig] = {b.id: b for b in BUILDINGS}

@@ -131,10 +131,7 @@ class QuestService:
         """
         today = self._today()
 
-        # Убеждаемся, что квесты на сегодня созданы (и в новом формате)
-        await self.get_or_create_quests(session, user)
-
-        # Загружаем сегодняшние задания пользователя
+        # Загружаем только незавершённые задания дня без лишнего get_or_create
         result = await session.execute(
             select(DailyQuest).where(
                 DailyQuest.user_id == user.id,
@@ -144,6 +141,10 @@ class QuestService:
             )
         )
         quests = result.scalars().all()
+
+        # Если заданий нет — они либо не создавались, либо все выполнены
+        if not quests:
+            return
 
         completed_new = False
         for quest in quests:

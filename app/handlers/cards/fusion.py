@@ -140,7 +140,7 @@ async def cb_card_fuse_confirm(cb: CallbackQuery, session: AsyncSession, user: U
 
 @router.callback_query(F.data == "fuse_all")
 async def cb_fuse_all(cb: CallbackQuery, session: AsyncSession, user: User):
-    """Автоматически выполняет все доступные слияния подряд."""
+    """Выполняет все доступные слияния батчем (2 DB-запроса вместо 2×N)."""
     from app.services.cooldown_service import cooldown_service
     lock_key = cooldown_service.card_action_lock_key(user.id)
     if not await cooldown_service.acquire_lock(lock_key, ttl=30):
@@ -149,42 +149,12 @@ async def cb_fuse_all(cb: CallbackQuery, session: AsyncSession, user: User):
 
     await cb.answer()
 
-    total_fused = 0
-    fused_names: list[str] = []
-    MAX_ITER = 300  # защита от бесконечного цикла
+    result = await fusion_service.batch_fuse_all(session, user)
+    total_fused = result["total"]
+    fused_names = result["names"]
 
-    for _ in range(MAX_ITER):
-        # Перечитываем карточки вне колоды после каждого слияния
-        deck_ids = set((await session.execute(
-            select(UserDeck.char_id).where(UserDeck.user_id == user.id)
-        )).scalars().all())
-
-        counter: dict[tuple, int] = defaultdict(int)
-        for c in (await session.execute(
-            select(UserCharacter).where(UserCharacter.user_id == user.id)
-        )).scalars().all():
-            if c.id not in deck_ids and c.level < 3:
-                counter[(c.character_id, c.level)] += 1
-
-        # Ищем первую пару с достаточным числом копий (сначала высокие уровни)
-        to_fuse = None
-        for (char_id, level), cnt in sorted(counter.items(), key=lambda x: (-x[0][1], -x[1])):
-            cost = FUSION_COST.get(level)
-            if cost and cnt >= cost:
-                to_fuse = (char_id, level)
-                break
-
-        if not to_fuse:
-            break
-
-        result = await fusion_service.fuse_cards(session, user, to_fuse[0], to_fuse[1])
-        if not result["ok"]:
-            break
-
-        total_fused += 1
-        new_lbl = LEVEL_LABELS.get(result["new_level"], f"Ур.{result['new_level']}")
-        fused_names.append(f"{to_fuse[0]} → {new_lbl}")
-        await quest_service.add_progress(session, user, "card_fusion")
+    if total_fused > 0:
+        await quest_service.add_progress(session, user, "card_fusion", amount=total_fused)
 
     await session.commit()
 
@@ -195,7 +165,7 @@ async def cb_fuse_all(cb: CallbackQuery, session: AsyncSession, user: User):
 
     lines = [f"🔗 <b>Слияние всех — выполнено!</b>\n"]
     lines.append(f"Всего слияний: <b>{total_fused}</b>\n")
-    for name in fused_names[-15:]:  # показываем последние 15
+    for name in fused_names[-15:]:
         lines.append(f"• {name}")
     if total_fused > 15:
         lines.append(f"… и ещё {total_fused - 15}")

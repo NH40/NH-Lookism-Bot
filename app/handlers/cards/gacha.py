@@ -5,6 +5,7 @@ from aiogram.types import CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from collections import Counter
 
 from app.models.user import User
@@ -51,7 +52,7 @@ async def _pull_one_bg(chat_id: int, msg_id: int, user_db_id: int, lock_key: str
     bot = get_bot()
     try:
         async with AsyncSessionFactory() as s:
-            u = await s.get(User, user_db_id)
+            u = await s.scalar(select(User).where(User.id == user_db_id).with_for_update())
             result = await gacha_service.pull(s, u)
             if result["ok"]:
                 await quest_service.add_progress(s, u, "gacha_pull")
@@ -120,7 +121,7 @@ async def _pull_10_bg(chat_id: int, msg_id: int, user_db_id: int, lock_key: str)
     bot = get_bot()
     try:
         async with AsyncSessionFactory() as s:
-            u = await s.get(User, user_db_id)
+            u = await s.scalar(select(User).where(User.id == user_db_id).with_for_update())
             count = min(10, u.tickets)
             results = await gacha_service.pull_n(s, u, count)
             if results:

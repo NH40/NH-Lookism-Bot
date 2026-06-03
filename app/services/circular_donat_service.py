@@ -103,7 +103,8 @@ def _apply_one_donat(user: User, donat_id: str, circles: int) -> None:
 
     elif donat_id == "mountain_lord":
         user.squad_power_bonus += 20 * circles
-        # circle 2: extra districts on capture — handled in game logic via circ_daily_districts
+        if circles >= 2:
+            user.circ_mountain_capture = True
         if circles >= 4:
             user.circ_ticket_overflow = True
 
@@ -128,6 +129,7 @@ def _apply_one_donat(user: User, donat_id: str, circles: int) -> None:
             user.fragment_bonus_pct += 10
         if circles >= 4:
             user.fragment_bonus_pct += 10
+        user.train_bonus_percent += 5 * circles
 
     elif donat_id == "emperor_circle":
         # Base per-circle bonuses
@@ -147,6 +149,7 @@ def _apply_one_donat(user: User, donat_id: str, circles: int) -> None:
         user.income_bonus_percent += int(base_income_per * circles * multiplier)
         user.circ_passive_income += int(base_passive_per * circles * multiplier)
         user.recruit_count_bonus += int(base_recruit_per * circles * multiplier)
+        user.circ_trainer_discount += int(2 * circles * multiplier)
 
 
 async def rebuild_circular_bonuses(session: AsyncSession, user: User) -> None:
@@ -172,6 +175,8 @@ async def rebuild_circular_bonuses(session: AsyncSession, user: User) -> None:
     user.circ_daily_districts = 0
     user.circ_dragon_active = False
     user.circ_clan_cashback = False
+    user.circ_mountain_capture = False
+    user.circ_trainer_discount = 0
     # path_unique_* сбрасываем — доустановим из кругов ниже
     user.path_unique_1 = False
     user.path_unique_2 = False

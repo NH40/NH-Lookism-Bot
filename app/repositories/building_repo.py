@@ -43,6 +43,20 @@ class BuildingRepo:
         )
         return result or 0
 
+    async def get_used_districts_per_city(
+        self, session: AsyncSession, user_id: int
+    ) -> dict[int, int]:
+        """Возвращает {city_id: used_districts} за один запрос."""
+        rows = (await session.execute(
+            select(UserBuilding.city_id, func.sum(UserBuilding.district_cost)).where(
+                UserBuilding.user_id == user_id,
+                UserBuilding.city_id.isnot(None),
+                UserBuilding.is_active == True,
+                UserBuilding.count > 0,
+            ).group_by(UserBuilding.city_id)
+        )).all()
+        return {city_id: (used or 0) for city_id, used in rows}
+
     async def get_city_buildings(
         self, session: AsyncSession, user_id: int, city_id: int
     ) -> list[UserBuilding]:

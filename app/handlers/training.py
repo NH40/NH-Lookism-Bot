@@ -103,6 +103,15 @@ async def cb_trainer_info(cb: CallbackQuery, session: AsyncSession, user: User):
     on_cd = await cooldown_service.is_on_cooldown(cd_key)
     ttl = await cooldown_service.get_ttl(cd_key) if on_cd else 0
 
+    # Скидка Императора применяется к Тому Ли и Чон Гону
+    base_cost = trainer['cost']
+    if trainer_id in ('tom_lee', 'jeon_gon'):
+        discount = getattr(user, 'circ_trainer_discount', 0)
+        effective_cost = max(1, int(base_cost * (1 - discount / 100)))
+    else:
+        discount = 0
+        effective_cost = base_cost
+
     builder = InlineKeyboardBuilder()
     if on_cd:
         builder.row(InlineKeyboardButton(
@@ -111,7 +120,7 @@ async def cb_trainer_info(cb: CallbackQuery, session: AsyncSession, user: User):
         ))
     else:
         builder.row(InlineKeyboardButton(
-            text=f"💪 Тренироваться ({fmt_num(trainer['cost'])} NHCoin)",
+            text=f"💪 Тренироваться ({fmt_num(effective_cost)} NHCoin)",
             callback_data=f"train_with:{trainer_id}"
         ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="trainer_back"))
@@ -129,10 +138,14 @@ async def cb_trainer_info(cb: CallbackQuery, session: AsyncSession, user: User):
             boss_lbl = WAR_GENIUS_BOSS_LABELS.get(war_genius + 1, "")
             war_extra += f"\nСледующий ур. ({war_genius + 1}): <b>{next_cost}</b> очков → {boss_lbl}"
 
+    cost_line = f"💰 Цена: <b>{fmt_num(effective_cost)} NHCoin</b>"
+    if discount:
+        cost_line += f" <i>(-{discount}% скидка)</i>"
+
     caption = (
         f"{trainer['emoji']} <b>{trainer['name']}</b>\n\n"
         f"{trainer['description']}\n\n"
-        f"💰 Цена: <b>{fmt_num(trainer['cost'])} NHCoin</b>\n"
+        f"{cost_line}\n"
         f"⏳ КД: <b>{trainer['cd'] // 3600} ч</b>\n"
         f"🎁 Награда: <b>{trainer['reward']}</b>"
         + war_extra

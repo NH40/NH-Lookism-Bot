@@ -37,14 +37,16 @@ class TrainingService:
                 "cd": ttl,
             }
 
-        if user.nh_coins < TOM_LEE_COST:
+        discount = getattr(user, 'circ_trainer_discount', 0)
+        effective_cost = max(1, int(TOM_LEE_COST * (1 - discount / 100)))
+        if user.nh_coins < effective_cost:
             return {
                 "ok": False,
-                "reason": f"Недостаточно NHCoin (нужно {TOM_LEE_COST:,})",
+                "reason": f"Недостаточно NHCoin (нужно {effective_cost:,})",
             }
 
-        user.nh_coins -= TOM_LEE_COST
-        user.coins_spent += TOM_LEE_COST
+        user.nh_coins -= effective_cost
+        user.coins_spent += effective_cost
 
         points = random.randint(TOM_LEE_POINTS_MIN, TOM_LEE_POINTS_MAX)
         user.mastery_points += points
@@ -63,7 +65,7 @@ class TrainingService:
             "ok": True,
             "points": points,
             "total_points": user.mastery_points,
-            "cost": TOM_LEE_COST,
+            "cost": effective_cost,
             "type": "mastery",
         }
 
@@ -78,10 +80,12 @@ class TrainingService:
                 "cd": ttl,
             }
 
-        if user.nh_coins < JEON_GON_COST:
+        discount = getattr(user, 'circ_trainer_discount', 0)
+        effective_cost = max(1, int(JEON_GON_COST * (1 - discount / 100)))
+        if user.nh_coins < effective_cost:
             return {
                 "ok": False,
-                "reason": f"Недостаточно NHCoin (нужно {JEON_GON_COST:,})",
+                "reason": f"Недостаточно NHCoin (нужно {effective_cost:,})",
             }
 
         if not user.skill_path:
@@ -90,8 +94,8 @@ class TrainingService:
                 "reason": "Сначала выбери путь в разделе Навыки",
             }
 
-        user.nh_coins -= JEON_GON_COST
-        user.coins_spent += JEON_GON_COST
+        user.nh_coins -= effective_cost
+        user.coins_spent += effective_cost
 
         points = random.randint(JEON_GON_POINTS_MIN, JEON_GON_POINTS_MAX)
         user.skill_path_points += points
@@ -109,7 +113,7 @@ class TrainingService:
             "ok": True,
             "points": points,
             "total_points": user.skill_path_points,
-            "cost": JEON_GON_COST,
+            "cost": effective_cost,
             "type": "path",
         }
 

@@ -35,7 +35,7 @@ async def roll_crit(session: AsyncSession, user: User) -> tuple[int, bool]:
 def _apply_shadow_first_attack(user: User, power: int) -> tuple[int, bool]:
     """
     Тень: «Первый удар» (path_unique_1=True).
-    Первая атака в каждой атакующей сессии (double_attack_used=False) даёт +20% к мощи.
+    Первая атака в каждой атакующей сессии (double_attack_used=False) даёт +10% к мощи.
     Возвращает (power, first_attack_bonus_applied).
     """
     if getattr(user, "path_unique_1", False) and not getattr(user, "double_attack_used", False):
@@ -60,7 +60,7 @@ async def fight_district(
 
     user_power, is_crit = await roll_crit(session, user)
 
-    # Тень: «Первый удар» — первая атака +30% мощи
+    # Тень: «Первый удар» — первая атака +10% мощи
     first_attack_bonus = False
     if is_first_attack:
         user_power, first_attack_bonus = _apply_shadow_first_attack(user, user_power)
@@ -108,7 +108,7 @@ async def fight_player(
     """
     attacker_power, is_crit = await roll_crit(session, attacker)
 
-    # Тень: «Первый удар» — первая атака +30% мощи
+    # Тень: «Первый удар» — первая атака +10% мощи
     first_attack_bonus = False
     if is_first_attack:
         attacker_power, first_attack_bonus = _apply_shadow_first_attack(attacker, attacker_power)

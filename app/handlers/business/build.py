@@ -157,20 +157,24 @@ async def cb_biz_select_building(
     discount = user.building_discount_percent
     cost = max(1, int(cfg.district_cost * (1 - discount / 100)))
 
+    used_per_city = await building_repo.get_used_districts_per_city(session, user.id)
+
+    dist_rows = (await session.execute(
+        select(District.city_id, func.count(District.id).label("cnt"))
+        .where(
+            District.owner_id == user.id,
+            District.city_id.in_([c[0] for c in cities_with_districts]),
+            District.is_captured == True,
+        )
+        .group_by(District.city_id)
+    )).all()
+    dist_per_city = {city_id: cnt for city_id, cnt in dist_rows}
+
     builder = InlineKeyboardBuilder()
     available_cities = []
     for city_id, city_name in cities_with_districts:
-        districts_count = await session.scalar(
-            select(func.count(District.id)).where(
-                District.owner_id == user.id,
-                District.city_id == city_id,
-                District.is_captured == True,
-            )
-        ) or 0
-        used = await building_repo.get_used_districts_in_city(
-            session, user.id, city_id
-        )
-        free_in_city = districts_count - used
+        districts_count = dist_per_city.get(city_id, 0)
+        free_in_city = districts_count - used_per_city.get(city_id, 0)
         if free_in_city >= cost:
             available_cities.append((city_id, city_name, free_in_city))
             builder.row(InlineKeyboardButton(
@@ -250,7 +254,6 @@ async def cb_biz_auto_build(
         if b.min_biz_genius <= biz_genius
     ]
 
-    from app.models.city import District
     result = await session.execute(
         select(District.city_id, func.count(District.id).label("cnt"))
         .where(
@@ -262,10 +265,11 @@ async def cb_biz_auto_build(
     )
     city_rows = result.all()
 
-    free_per_city: dict[int, int] = {}
-    for city_id, dist_count in city_rows:
-        used = await building_repo.get_used_districts_in_city(session, user.id, city_id)
-        free_per_city[city_id] = max(0, dist_count - used)
+    used_per_city = await building_repo.get_used_districts_per_city(session, user.id)
+    free_per_city: dict[int, int] = {
+        city_id: max(0, dist_count - used_per_city.get(city_id, 0))
+        for city_id, dist_count in city_rows
+    }
 
     total_free = sum(free_per_city.values())
 

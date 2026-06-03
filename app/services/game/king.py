@@ -97,6 +97,10 @@ class GameKingService(GameBase):
             if free_count > 0:
                 # Захватываем свободные районы
                 target = min(random.randint(2, 8), free_count)
+                # Хозяин горы ≥2 кругов: бонус районов зависит от размера города
+                if getattr(user, 'circ_mountain_capture', False):
+                    _extra = {4: 2, 8: 4, 16: 6, 32: 8, 64: 12}.get(city.total_districts, 2)
+                    target = min(target + _extra, free_count)
                 for _ in range(target):
                     d_r = await session.execute(
                         select(District).where(

@@ -40,8 +40,10 @@ async def cb_shop(cb: CallbackQuery, session: AsyncSession, user: User):
 @router.callback_query(F.data == "shop_craft")
 async def cb_shop_craft(cb: CallbackQuery, session: AsyncSession, user: User):
     dust = getattr(user, "card_dust", 0)
+    overflow = getattr(user, "circ_ticket_overflow", False)
+    ticket_cap = user.max_tickets * 2 if overflow else user.max_tickets
+    ticket_space = max(0, ticket_cap - user.tickets)
     can_craft = dust // TICKET_CRAFT_COST
-    ticket_space = user.max_tickets - user.tickets
 
     builder = InlineKeyboardBuilder()
     if can_craft > 0 and ticket_space > 0:
@@ -61,9 +63,9 @@ async def cb_shop_craft(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.message.edit_text(
             f"⚗️ <b>Крафт тикетов</b>\n\n"
             f"💎 Пыль: {fmt_num(dust)}\n"
-            f"🎟 Тикеты: {user.tickets}/{user.max_tickets}\n\n"
+            f"🎟 Тикеты: {user.tickets}/{ticket_cap}" + (f" (лимит ×2 🌟)" if overflow else "") + "\n\n"
             f"1 тикет = {TICKET_CRAFT_COST} 💎 пыли\n"
-            f"Можно скрафтить: {can_craft} тик.\n\n"
+            f"Можно скрафтить: {min(can_craft, ticket_space)} тик.\n\n"
             f"<i>Пыль получается:\n"
             f"• Распыление карточек из коллекции\n"
             f"• Победа в дуэлях</i>",
@@ -98,7 +100,9 @@ async def cb_craft_ticket_1(cb: CallbackQuery, session: AsyncSession, user: User
 
 @router.callback_query(F.data == "craft_ticket_max")
 async def cb_craft_ticket_max(cb: CallbackQuery, session: AsyncSession, user: User):
-    space = user.max_tickets - user.tickets
+    overflow = getattr(user, "circ_ticket_overflow", False)
+    ticket_cap = user.max_tickets * 2 if overflow else user.max_tickets
+    space = ticket_cap - user.tickets
     dust = getattr(user, "card_dust", 0)
     count = min(space, dust // TICKET_CRAFT_COST)
     if count <= 0:

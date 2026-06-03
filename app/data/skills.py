@@ -149,7 +149,7 @@ PATH_SKILLS: dict[str, list[PathSkill]] = {
         PathSkill("shd_power_2",  "Ночной охотник",     "🌙", "+15% боевая мощь — в темноте ты непобедим",              "shadow", 8,  {"squad_power_bonus": 15},        2),
         PathSkill("shd_income_1", "Теневой рэкет",      "💸", "+10% доход — нелегальный бизнес всегда доходнее",        "shadow", 7,  {"income_bonus_percent": 10},     2),
         # Уровень 3
-        PathSkill("shd_first_atk","Первый удар",        "💥", "Первая атака в бою +20% мощи — бей первым, бей жёстко",  "shadow", 10, {"path_unique_1": True},          3),
+        PathSkill("shd_first_atk","Первый удар",        "💥", "Первая атака в бою +10% мощи — бей первым, бей жёстко",  "shadow", 10, {"path_unique_1": True},          3),
         PathSkill("shd_cd_3",     "Поток теней",        "🌊", "-10% ещё КД всего — скорость твой конёк",               "shadow", 11, {"all_cd_reduction": 10},         3),
         # Уровень 4
         PathSkill("shd_invisible","Скрытность",         "🫥", "Скрыть себя в топе — никто не знает чего ты достиг",    "shadow", 14, {"path_unique_2": True},          4),

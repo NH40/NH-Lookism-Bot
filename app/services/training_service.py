@@ -51,10 +51,9 @@ class TrainingService:
         points = random.randint(TOM_LEE_POINTS_MIN, TOM_LEE_POINTS_MAX)
         user.mastery_points += points
 
-        # КД с учётом скорости мастерства
-        mastery_r = await session.execute(select(UserMastery).where(UserMastery.user_id == user.id))
-        mastery = mastery_r.scalar_one_or_none()
-        raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(mastery.speed if mastery else 0, 0)
+        # КД с учётом скорости мастерства — только колонка speed
+        speed = await session.scalar(select(UserMastery.speed).where(UserMastery.user_id == user.id))
+        raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed or 0, 0)
         speed_pct = int(raw_speed * user.skill_path_bonus_multiplier)
         cd = cooldown_service.apply_speed_reduction(TOM_LEE_CD_SECONDS, speed_pct)
         await cooldown_service.set_cooldown(cd_key, cd)
@@ -100,9 +99,8 @@ class TrainingService:
         points = random.randint(JEON_GON_POINTS_MIN, JEON_GON_POINTS_MAX)
         user.skill_path_points += points
 
-        mastery_r = await session.execute(select(UserMastery).where(UserMastery.user_id == user.id))
-        mastery = mastery_r.scalar_one_or_none()
-        raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(mastery.speed if mastery else 0, 0)
+        speed = await session.scalar(select(UserMastery.speed).where(UserMastery.user_id == user.id))
+        raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed or 0, 0)
         speed_pct = int(raw_speed * user.skill_path_bonus_multiplier)
         cd = cooldown_service.apply_speed_reduction(JEON_GON_CD_SECONDS, speed_pct)
         await cooldown_service.set_cooldown(cd_key, cd)
@@ -141,9 +139,8 @@ class TrainingService:
         points = random.randint(MANAGER_KIM_POINTS_MIN, MANAGER_KIM_POINTS_MAX)
         user.war_points = getattr(user, "war_points", 0) + points
 
-        mastery_r = await session.execute(select(UserMastery).where(UserMastery.user_id == user.id))
-        mastery = mastery_r.scalar_one_or_none()
-        raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(mastery.speed if mastery else 0, 0)
+        speed = await session.scalar(select(UserMastery.speed).where(UserMastery.user_id == user.id))
+        raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed or 0, 0)
         speed_pct = int(raw_speed * user.skill_path_bonus_multiplier)
         cd = cooldown_service.apply_speed_reduction(MANAGER_KIM_CD_SECONDS, speed_pct)
         await cooldown_service.set_cooldown(cd_key, cd)

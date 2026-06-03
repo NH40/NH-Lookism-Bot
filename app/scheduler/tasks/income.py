@@ -161,15 +161,13 @@ async def income_tick():
 async def _track_income_quests(user_deltas: dict[int, int]) -> None:
     """
     Обновляет прогресс ежедневных квестов с progress_key='income'.
-    Использует прямой SQL UPDATE вместо ORM-объектов для скорости.
+    Один bulk UPDATE на тип квеста вместо N запросов per-user.
     """
-    from app.models.daily_quest import DailyQuest
     from app.constants.quests import QUESTS_BY_ID
     from datetime import date
 
     today = date.today().isoformat()
 
-    # Собираем цели (target) для всех income-квестов
     income_quest_ids = [
         q.quest_id for q in QUESTS_BY_ID.values()
         if (q.progress_key or q.quest_id) == "income"
@@ -177,29 +175,31 @@ async def _track_income_quests(user_deltas: dict[int, int]) -> None:
     if not income_quest_ids:
         return
 
-    targets: dict[str, int] = {
-        qid: QUESTS_BY_ID[qid].target for qid in income_quest_ids
-    }
+    active_deltas = {uid: d for uid, d in user_deltas.items() if d > 0}
+    if not active_deltas:
+        return
+
+    # VALUES (uid, delta) — целые числа, SQL-инъекция невозможна
+    rows = ", ".join(f"({int(uid)}, {int(d)})" for uid, d in active_deltas.items())
 
     try:
         async with AsyncSessionFactory() as session:
             async with session.begin():
-                for user_id, delta in user_deltas.items():
-                    if delta <= 0:
-                        continue
-                    result = await session.execute(
-                        select(DailyQuest).where(
-                            DailyQuest.user_id == user_id,
-                            DailyQuest.date == today,
-                            DailyQuest.quest_id.in_(income_quest_ids),
-                            DailyQuest.is_completed == False,
-                        )
-                    )
-                    quests = result.scalars().all()
-                    for q in quests:
-                        target = targets.get(q.quest_id, 0)
-                        q.progress = min(q.progress + delta, target)
-                        if q.progress >= target:
-                            q.is_completed = True
+                for quest_id in income_quest_ids:
+                    target = int(QUESTS_BY_ID[quest_id].target)
+                    await session.execute(text(f"""
+                        UPDATE daily_quests dq
+                        SET
+                            progress = LEAST(dq.progress + v.delta, {target}),
+                            is_completed = CASE
+                                WHEN LEAST(dq.progress + v.delta, {target}) >= {target} THEN TRUE
+                                ELSE dq.is_completed
+                            END
+                        FROM (VALUES {rows}) AS v(uid, delta)
+                        WHERE dq.user_id = v.uid
+                          AND dq.date = :today
+                          AND dq.quest_id = :qid
+                          AND dq.is_completed = FALSE
+                    """), {"today": today, "qid": quest_id})
     except Exception as exc:
         logger.warning(f"_track_income_quests error: {exc}")

@@ -1,8 +1,11 @@
 import logging
+from datetime import datetime, timezone
+
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import AsyncSessionFactory
 from app.models.user import User
+from app.models.potion import ActivePotion
 from app.services.deck_service import deck_service
 from app.services.squad_service import squad_service
 
@@ -33,10 +36,28 @@ async def ultra_instinct_tick():
     # Одна сессия на всех пользователей; savepoint изолирует ошибки.
     async with AsyncSessionFactory() as session:
         async with session.begin():
+            # Батч-загрузка всех UI-юзеров одним запросом (вместо N session.get)
+            users_result = await session.execute(
+                select(User).where(User.id.in_(user_ids))
+            )
+            users_map = {u.id: u for u in users_result.scalars().all()}
+
+            # Батч-загрузка активных зелий для всех юзеров одним запросом
+            now = datetime.now(timezone.utc)
+            potions_result = await session.execute(
+                select(ActivePotion).where(
+                    ActivePotion.user_id.in_(user_ids),
+                    ActivePotion.expires_at > now,
+                )
+            )
+            potions_by_user: dict[int, list[ActivePotion]] = {}
+            for p in potions_result.scalars().all():
+                potions_by_user.setdefault(p.user_id, []).append(p)
+
             for user_id in user_ids:
                 try:
                     async with session.begin_nested():
-                        user = await session.get(User, user_id)
+                        user = users_map.get(user_id)
                         if not user:
                             continue
                         if user.ui_auto_ticket:
@@ -47,8 +68,10 @@ async def ultra_instinct_tick():
                             await _ui_recruit(session, user)
                         if user.ui_auto_train:
                             await squad_service.train(session, user)
-                        # Гений медицины: авто-зелья
-                        await _med_genius_auto_potion(session, user)
+                        # Гений медицины: авто-зелья (используем предзагруженные зелья)
+                        await _med_genius_auto_potion(
+                            session, user, potions_by_user.get(user_id, [])
+                        )
                 except Exception as e:
                     logger.error(f"ui_tick error for user {user_id}: {e}")
 
@@ -61,11 +84,14 @@ async def _ui_recruit(session: AsyncSession, user):
     await squad_service.recruit(session, user)
 
 
-async def _med_genius_auto_potion(session: AsyncSession, user):
+async def _med_genius_auto_potion(
+    session: AsyncSession, user, preloaded_potions: list | None = None
+):
     """
     Гений медицины: авто-покупка зелий всех типов.
     Уровень каждого зелья (mg_level_*) определяет тир.
     Если нет активного зелья данного типа и хватает монет — покупает тир по уровню.
+    preloaded_potions — уже загруженные активные зелья (опционально, для батч-режима).
     """
     from app.handlers.skills.med_genius import MG_POTIONS
     from app.services.potion_service import potion_service
@@ -73,7 +99,10 @@ async def _med_genius_auto_potion(session: AsyncSession, user):
 
     donat = getattr(user, "med_genius_donat", False)
 
-    active    = await potion_service.get_active(session, user.id)
+    if preloaded_potions is not None:
+        active = preloaded_potions
+    else:
+        active = await potion_service.get_active(session, user.id)
     active_set = {p.potion_type for p in active}
 
     for potion_cfg in MG_POTIONS:

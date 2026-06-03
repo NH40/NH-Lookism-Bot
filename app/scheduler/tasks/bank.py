@@ -57,16 +57,24 @@ async def bank_credit_tick():
                 )
                 users_map = {u.id: u for u in users_r.scalars().all()}
 
+                # Батч-загрузка всех долгов для всех заблокированных — 1 запрос вместо N
+                all_debts_r = await session.execute(
+                    select(BankCredit).where(
+                        and_(
+                            BankCredit.user_id.in_(blocked_user_ids),
+                            BankCredit.is_paid == False,
+                        )
+                    )
+                )
+                debts_by_user: dict = {}
+                for d in all_debts_r.scalars().all():
+                    debts_by_user.setdefault(d.user_id, []).append(d)
+
                 for uid in blocked_user_ids:
                     u = users_map.get(uid)
                     if not u:
                         continue
-                    debts_r = await session.execute(
-                        select(BankCredit).where(
-                            and_(BankCredit.user_id == u.id, BankCredit.is_paid == False)
-                        )
-                    )
-                    debts = debts_r.scalars().all()
+                    debts = debts_by_user.get(uid, [])
                     total_debt = sum(c.due_amount - c.paid_amount for c in debts)
                     block_notifications.append((
                         u.tg_id,

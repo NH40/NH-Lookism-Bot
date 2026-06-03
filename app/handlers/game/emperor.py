@@ -17,32 +17,67 @@ from app.utils.formatters import fmt_num, fmt_ttl
 
 router = Router()
 
+# Весовые коэффициенты рангов для дропа в контексте императора — константа модуля
+_EMPEROR_WEIGHTS = {
+    "king":        6.0,
+    "strong_king": 5.0,
+    "gen_zero":    7.0,
+    "new_legend":  4.0,
+    "legend":      2.5,
+    "peak":        1.5,
+    "absolute":    0.8,
+    "perfection":  0.3,
+}
+
 # ── Вспомогательные ───────────────────────────────────────────────────────────
-
-async def _get_record(
-    session: AsyncSession, user_id: int, gang_id: str
-) -> EmperorGangRecord | None:
-    return await session.scalar(
-        select(EmperorGangRecord).where(
-            EmperorGangRecord.user_id == user_id,
-            EmperorGangRecord.gang_id == gang_id,
-        )
-    )
-
 
 def _gang_power(cfg, defeat_count: int) -> int:
     """Мощь группировки с учётом роста после каждой победы (+20%)."""
     return int(cfg.base_power * ((1 + GANG_STRENGTH_GROWTH) ** defeat_count))
 
 
+async def _batch_get_records(
+    session: AsyncSession, user_id: int
+) -> dict[str, EmperorGangRecord]:
+    """Загружает все записи пользователя одним запросом."""
+    rows = (await session.execute(
+        select(EmperorGangRecord).where(EmperorGangRecord.user_id == user_id)
+    )).scalars().all()
+    return {r.gang_id: r for r in rows}
+
+
+async def _compute_speed_pct(session: AsyncSession, user: User) -> int:
+    """Вычисляет % снижения КД с учётом мастерства и титулов. 2 запроса вместо 4."""
+    from app.models.skill import UserMastery
+    from app.repositories.title_repo import title_repo
+
+    speed = await session.scalar(
+        select(UserMastery.speed).where(UserMastery.user_id == user.id)
+    )
+    raw = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed or 0, 0)
+    speed_pct = int(raw * getattr(user, "skill_path_bonus_multiplier", 1.0))
+
+    title_ids = set(await title_repo.get_user_titles(session, user.id))
+    if {"concentration", "focus"}.issubset(title_ids):
+        speed_pct = min(80, speed_pct + 15)
+    if "reverse_eyes" in title_ids:
+        speed_pct = min(80, speed_pct + 30)
+    if "concentration" in title_ids:
+        speed_pct = min(80, speed_pct + 30)
+    return speed_pct
+
+
 async def _build_gang_list(session: AsyncSession, user: User) -> tuple[str, any]:
     now = datetime.now(timezone.utc)
     builder = InlineKeyboardBuilder()
 
+    # Один запрос вместо N (по одному на каждую группировку)
+    records = await _batch_get_records(session, user.id)
+
     lines = [f"⚔️ <b>Группировки Императора</b>\n"]
 
     for cfg in EMPEROR_GANGS:
-        rec = await _get_record(session, user.id, cfg.gang_id)
+        rec = records.get(cfg.gang_id)
         defeat_count = rec.defeat_count if rec else 0
         cooldown_until = rec.cooldown_until if rec else None
 
@@ -76,7 +111,7 @@ async def _build_gang_list(session: AsyncSession, user: User) -> tuple[str, any]
     return text, builder.as_markup()
 
 
-# ── Главное меню Emperor (вместо экрана пробуждения) ─────────────────────────
+# ── Главное меню Emperor ──────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "emperor_gangs")
 async def cb_emperor_gangs(cb: CallbackQuery, session: AsyncSession, user: User):
@@ -87,7 +122,6 @@ async def cb_emperor_gangs(cb: CallbackQuery, session: AsyncSession, user: User)
     try:
         await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     except Exception:
-        # Сообщение — фото (результат боя с карточкой) — удаляем и присылаем текст
         try:
             await cb.message.delete()
         except Exception:
@@ -106,7 +140,12 @@ async def cb_emperor_gang_info(cb: CallbackQuery, session: AsyncSession, user: U
         await cb.answer("Группировка не найдена", show_alert=True)
         return
 
-    rec = await _get_record(session, user.id, gang_id)
+    rec = await session.scalar(
+        select(EmperorGangRecord).where(
+            EmperorGangRecord.user_id == user.id,
+            EmperorGangRecord.gang_id == gang_id,
+        )
+    )
     defeat_count = rec.defeat_count if rec else 0
     power = _gang_power(cfg, defeat_count)
     now = datetime.now(timezone.utc)
@@ -154,7 +193,12 @@ async def cb_emperor_gang_info(cb: CallbackQuery, session: AsyncSession, user: U
 @router.callback_query(F.data.startswith("emperor_gang_cd:"))
 async def cb_emperor_gang_cd(cb: CallbackQuery, session: AsyncSession, user: User):
     gang_id = cb.data.split(":")[1]
-    rec = await _get_record(session, user.id, gang_id)
+    rec = await session.scalar(
+        select(EmperorGangRecord).where(
+            EmperorGangRecord.user_id == user.id,
+            EmperorGangRecord.gang_id == gang_id,
+        )
+    )
     now = datetime.now(timezone.utc)
     if rec and rec.cooldown_until and rec.cooldown_until > now:
         secs = int((rec.cooldown_until - now).total_seconds())
@@ -187,14 +231,17 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
     try:
         now = datetime.now(timezone.utc)
 
-        # Получаем или создаём запись
-        rec = await _get_record(session, user.id, gang_id)
+        rec = await session.scalar(
+            select(EmperorGangRecord).where(
+                EmperorGangRecord.user_id == user.id,
+                EmperorGangRecord.gang_id == gang_id,
+            )
+        )
         if not rec:
             rec = EmperorGangRecord(user_id=user.id, gang_id=gang_id, defeat_count=0)
             session.add(rec)
             await session.flush()
 
-        # Проверяем КД
         if rec.cooldown_until and rec.cooldown_until > now:
             secs = int((rec.cooldown_until - now).total_seconds())
             await cb.answer(f"⏳ КД: {fmt_ttl(secs)}", show_alert=True)
@@ -211,10 +258,14 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
         result_lines.append(f"💪 Ваша мощь: {fmt_num(user_power)}")
         result_lines.append(f"👊 Мощь врага: {fmt_num(gang_power)}\n")
 
-        dropped_char: dict | None = None  # карточка для отправки фото
+        dropped_char: dict | None = None
+
+        # КД считаем один раз для обоих исходов (2 запроса вместо 4)
+        speed_pct = await _compute_speed_pct(session, user)
+        base_cd_seconds = GANG_COOLDOWN_HOURS * 3600
+        effective_cd = max(600, int(base_cd_seconds * (1 - speed_pct / 100)))
 
         if won:
-            # Начисляем пыль
             dust_reward = random.randint(10, 50)
             user.card_dust += dust_reward
             result_lines.append(f"🏆 <b>ПОБЕДА!</b>")
@@ -224,25 +275,16 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
             got_card = random.randint(1, 100) <= cfg.drop_chance
             if got_card:
                 from app.data.characters import CHARACTERS, RANK_EMOJI, RANK_CONFIG_MAP
-                # Фильтруем по членам группировки И разрешённым рангам дропа
+                # Множества для O(1) поиска вместо O(n) на списках
+                member_set = set(cfg.members)
+                rank_set = set(cfg.drop_ranks)
                 candidates = [
                     c for c in CHARACTERS
-                    if c["name"] in cfg.members and c["rank"] in cfg.drop_ranks
+                    if c["name"] in member_set and c["rank"] in rank_set
                 ]
                 if not candidates:
-                    candidates = [c for c in CHARACTERS if c["name"] in cfg.members]
+                    candidates = [c for c in CHARACTERS if c["name"] in member_set]
                 if candidates:
-                    # Повышенные веса для редких рангов в контексте императора
-                    _EMPEROR_WEIGHTS = {
-                        "king":        6.0,
-                        "strong_king": 5.0,
-                        "gen_zero":    7.0,
-                        "new_legend":  4.0,
-                        "legend":      2.5,
-                        "peak":        1.5,
-                        "absolute":    0.8,
-                        "perfection":  0.3,
-                    }
                     weights = [
                         _EMPEROR_WEIGHTS.get(c["rank"], RANK_CONFIG_MAP[c["rank"]].weight)
                         for c in candidates
@@ -268,27 +310,7 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
                     result_lines.append(f"🃏 Дроп: {rank_emoji} <b>{char['name']}</b>")
                     dropped_char = char
 
-            # Обновляем запись: +1 победа, ставим КД с учётом скорости мастерства
             rec.defeat_count += 1
-            base_cd_seconds = GANG_COOLDOWN_HOURS * 3600
-            from app.models.skill import UserMastery
-            from sqlalchemy import select as _sa_select
-            mastery = await session.scalar(
-                _sa_select(UserMastery).where(UserMastery.user_id == user.id)
-            )
-            speed_pct = 0
-            if mastery:
-                raw = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(mastery.speed, 0)
-                speed_pct = int(raw * getattr(user, "skill_path_bonus_multiplier", 1.0))
-            from app.repositories.title_repo import title_repo as _title_repo
-            title_ids = set(await _title_repo.get_user_titles(session, user.id))
-            if {"concentration", "focus"}.issubset(title_ids):
-                speed_pct = min(80, speed_pct + 15)
-            if "reverse_eyes" in title_ids:
-                speed_pct = min(80, speed_pct + 30)
-            if "concentration" in title_ids:
-                speed_pct = min(80, speed_pct + 30)
-            effective_cd = max(600, int(base_cd_seconds * (1 - speed_pct / 100)))
             rec.cooldown_until = now + timedelta(seconds=effective_cd)
             new_power = _gang_power(cfg, rec.defeat_count)
             result_lines.append(f"\n💹 Группировка усилилась до {fmt_num(new_power)} (+20%)")
@@ -297,39 +319,16 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
                 cd_line += f" (скорость -{speed_pct}%)"
             result_lines.append(cd_line)
 
-            await session.flush()
-
         else:
             result_lines.append(f"💀 <b>ПОРАЖЕНИЕ</b>")
             result_lines.append(f"Группировка оказалась сильнее. Прокачайся и попробуй снова!")
-
-            # КД после поражения — те же расчёты что и после победы
-            base_cd_seconds = GANG_COOLDOWN_HOURS * 3600
-            from app.models.skill import UserMastery
-            from sqlalchemy import select as _sa_select
-            mastery = await session.scalar(
-                _sa_select(UserMastery).where(UserMastery.user_id == user.id)
-            )
-            speed_pct = 0
-            if mastery:
-                raw = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(mastery.speed, 0)
-                speed_pct = int(raw * getattr(user, "skill_path_bonus_multiplier", 1.0))
-            from app.repositories.title_repo import title_repo as _title_repo
-            title_ids = set(await _title_repo.get_user_titles(session, user.id))
-            if {"concentration", "focus"}.issubset(title_ids):
-                speed_pct = min(80, speed_pct + 15)
-            if "reverse_eyes" in title_ids:
-                speed_pct = min(80, speed_pct + 30)
-            if "concentration" in title_ids:
-                speed_pct = min(80, speed_pct + 30)
-            effective_cd = max(600, int(base_cd_seconds * (1 - speed_pct / 100)))
             rec.cooldown_until = now + timedelta(seconds=effective_cd)
             cd_line = f"⏳ КД: {fmt_ttl(effective_cd)}"
             if speed_pct:
                 cd_line += f" (скорость -{speed_pct}%)"
             result_lines.append(cd_line)
 
-            await session.flush()
+        await session.flush()
 
         text = "\n".join(result_lines)
         builder = InlineKeyboardBuilder()
@@ -338,7 +337,6 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
         ))
         kb = builder.as_markup()
 
-        # Если выпала карточка — пробуем отправить фото
         if dropped_char:
             from app.bot_instance import get_bot
             from app.utils.card_sender import send_card_photo
@@ -358,7 +356,6 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
                 await cb.answer()
                 return
 
-        # Карточки нет или фото не нашлось — просто редактируем текст
         try:
             await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
         except Exception:

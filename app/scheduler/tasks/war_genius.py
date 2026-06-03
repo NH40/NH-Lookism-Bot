@@ -30,19 +30,26 @@ async def war_genius_tick() -> None:
 
     async with AsyncSessionFactory() as session:
         async with session.begin():
+            # Батч-загрузка всех юзеров одним запросом вместо N session.get()
+            users_result = await session.execute(
+                select(User).where(User.id.in_(user_ids))
+            )
+            users_map = {u.id: u for u in users_result.scalars().all()}
+
             for user_id in user_ids:
                 try:
                     async with session.begin_nested():
-                        await _auto_attack_for_user(session, user_id)
+                        await _auto_attack_for_user(session, user_id, users_map.get(user_id))
                 except Exception as exc:
                     logger.error(f"war_genius_tick: user_id={user_id} error: {exc}")
 
 
-async def _auto_attack_for_user(session, user_id: int) -> None:
+async def _auto_attack_for_user(session, user_id: int, user=None) -> None:
     from app.services.cooldown_service import cooldown_service
     from app.services.raid_service import raid_service
 
-    user = await session.get(User, user_id)
+    if user is None:
+        user = await session.get(User, user_id)
     if not user:
         return
 

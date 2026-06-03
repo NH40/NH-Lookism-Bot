@@ -193,6 +193,9 @@ class RaidService:
 
         reward_type = boss.get("reward_fragments", "ui")
 
+        # Получаем speed_pct один раз для любого пути (instant или обычный)
+        speed_pct = await self._get_speed_pct(session, user)
+
         # Круговой донат «Корейский дьявол» круг 3: шанс мгновенного рейда
         instant_chance = getattr(user, "circ_instant_raid_chance", 0)
         if instant_chance > 0 and random.randint(1, 100) <= instant_chance:
@@ -212,7 +215,6 @@ class RaidService:
             total_fragments = distribute_reward(user, reward_type, fragments)
             user.raid_boss_wins = (user.raid_boss_wins or 0) + 1
             cd_key = self.boss_cd_key(boss_id, user.id)
-            speed_pct = await self._get_speed_pct(session, user)
             boss_cd = cooldown_service.apply_speed_reduction(boss["cd_hours"] * 3600, speed_pct)
             await cooldown_service.set_cooldown(cd_key, boss_cd)
             await session.flush()
@@ -231,7 +233,6 @@ class RaidService:
             }
 
         attack_cd_key = self.attack_cd_key(raid.id, user.id)
-        speed_pct = await self._get_speed_pct(session, user)
         attack_cd = cooldown_service.apply_speed_reduction(RAID_ATTACK_CD_SECONDS, speed_pct)
         await cooldown_service.set_cooldown(attack_cd_key, attack_cd)
 
@@ -541,13 +542,11 @@ class RaidService:
         }
 
     async def _get_speed_pct(self, session: AsyncSession, user: User) -> int:
-        from sqlalchemy import select as sa_select
         from app.models.skill import UserMastery
-        speed_levels = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
         speed = await session.scalar(
-            sa_select(UserMastery.speed).where(UserMastery.user_id == user.id)
+            select(UserMastery.speed).where(UserMastery.user_id == user.id)
         )
-        raw = speed_levels.get(speed or 0, 0)
+        raw = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed or 0, 0)
         return int(raw * user.skill_path_bonus_multiplier)
 
     def _apply_ui_level(self, user: User, level: int) -> None:

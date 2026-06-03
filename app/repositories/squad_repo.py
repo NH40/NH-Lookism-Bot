@@ -13,18 +13,18 @@ class SquadRepo:
     ) -> int:
         """Единственное место расчёта боевой мощи."""
 
-        # 1. Мощь отряда
+        # 1. Мощь отряда — только нужные колонки
         result = await session.execute(
-            select(SquadMember).where(SquadMember.user_id == user.id)
+            select(SquadMember.rank, SquadMember.stars, SquadMember.base_power)
+            .where(SquadMember.user_id == user.id)
         )
-        members = result.scalars().all()
         squad_power = 0
-        for m in members:
-            rank_cfg = RANKS_BY_ID.get(m.rank)
+        for row in result.all():
+            rank_cfg = RANKS_BY_ID.get(row.rank)
             if not rank_cfg:
                 continue
-            star_bonus = STAR_BONUS_PERCENT.get(m.stars, 0)
-            squad_power += int(m.base_power * (1 + star_bonus / 100))
+            star_bonus = STAR_BONUS_PERCENT.get(row.stars, 0)
+            squad_power += int(row.base_power * (1 + star_bonus / 100))
 
         # 2. Мощь персонажей
         char_r = await session.execute(
@@ -39,15 +39,14 @@ class SquadRepo:
 
         total = squad_power + char_power + teacher_bonus
 
-        # Бонус мастерства силы — применяется ко ВСЕЙ боевой мощи (отряд + персонажи)
+        # Бонус мастерства силы — только колонка strength
         from app.models.skill import UserMastery
-        mastery_r = await session.execute(
-            select(UserMastery).where(UserMastery.user_id == user.id)
+        strength = await session.scalar(
+            select(UserMastery.strength).where(UserMastery.user_id == user.id)
         )
-        mastery = mastery_r.scalar_one_or_none()
-        if mastery:
+        if strength:
             strength_bonus = {0: 0, 1: 5, 2: 10, 3: 20, 4: 30}
-            raw = strength_bonus.get(mastery.strength, 0)
+            raw = strength_bonus.get(strength, 0)
             effective = raw * user.skill_path_bonus_multiplier
             total = int(total * (1 + effective / 100))
 

@@ -136,9 +136,10 @@ async def _notify_boss_result(result: dict) -> None:
             if rewards_map:
                 from app.models.user import User as UserModel
                 users_result = await session.execute(
-                    select(UserModel).where(UserModel.id.in_(list(rewards_map.keys())))
+                    select(UserModel.id, UserModel.tg_id, UserModel.notifications_enabled)
+                    .where(UserModel.id.in_(list(rewards_map.keys())))
                 )
-                users = list(users_result.scalars().all())
+                users = users_result.all()
                 for u in users:
                     if not u.notifications_enabled:
                         continue

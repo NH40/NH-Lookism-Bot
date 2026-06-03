@@ -76,6 +76,7 @@ class UserRepo:
     ) -> list:
         result = await session.execute(
             select(User.full_name, User.combat_power, User.phase, User.ultra_instinct)
+            .where(User.shadow_stealth_active.is_(False))
             .order_by(User.combat_power.desc())
             .limit(limit)
         )

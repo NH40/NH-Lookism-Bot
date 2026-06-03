@@ -104,7 +104,7 @@ def _apply_one_donat(user: User, donat_id: str, circles: int) -> None:
     elif donat_id == "mountain_lord":
         user.squad_power_bonus += 20 * circles
         if circles >= 2:
-            user.circ_mountain_capture = True
+            user.circ_mountain_extra = True
         if circles >= 4:
             user.circ_ticket_overflow = True
 
@@ -175,7 +175,7 @@ async def rebuild_circular_bonuses(session: AsyncSession, user: User) -> None:
     user.circ_daily_districts = 0
     user.circ_dragon_active = False
     user.circ_clan_cashback = False
-    user.circ_mountain_capture = False
+    user.circ_mountain_extra = False
     user.circ_trainer_discount = 0
     # path_unique_* сбрасываем — доустановим из кругов ниже
     user.path_unique_1 = False

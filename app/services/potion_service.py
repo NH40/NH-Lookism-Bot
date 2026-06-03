@@ -99,9 +99,16 @@ class PotionService:
         )
 
     async def get_power_bonus(self, session: AsyncSession, user_id: int) -> int:
-        """Бонус к боевой мощи от активных зелий (%)."""
-        potions = await self.get_active(session, user_id)
-        return sum(p.bonus_value for p in potions if p.potion_type == "power")
+        """Бонус к боевой мощи от активных зелий (%) — прямой SUM без загрузки всех зелий."""
+        now = datetime.now(timezone.utc)
+        result = await session.scalar(
+            select(func.sum(ActivePotion.bonus_value)).where(
+                ActivePotion.user_id == user_id,
+                ActivePotion.potion_type == "power",
+                ActivePotion.expires_at > now,
+            )
+        )
+        return result or 0
 
     # ── Геттеры эффективных значений ────────────────────────────────────────
 

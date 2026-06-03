@@ -70,6 +70,14 @@ class TitleRepo:
         )
         return (count or 0) == len(titles_in_set)
 
+    async def has_all_sets(self, session: AsyncSession, user_id: int) -> bool:
+        """Проверяет наличие всех донатных сетов (VVIP) — 1 запрос вместо N."""
+        owned = set(await self.get_user_titles(session, user_id))
+        return all(
+            all(t.title_id in owned for t in DONAT_TITLES if t.set_id == s.set_id)
+            for s in DONAT_SETS
+        )
+
     async def get_titles_display(
         self, session: AsyncSession, user_id: int
     ) -> str:

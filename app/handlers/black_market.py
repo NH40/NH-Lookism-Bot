@@ -11,13 +11,9 @@ router = Router()
 
 
 async def _vvip_check(session, user: User) -> bool:
-    """VVIP = купил все 5 донатных сетов титулов."""
-    from app.services.title_service import title_service
-    from app.data.titles import DONAT_SETS
-    for s in DONAT_SETS:
-        if not await title_service.has_set(session, user.id, s.set_id):
-            return False
-    return True
+    """VVIP = купил все 5 донатных сетов титулов. 1 запрос вместо 5."""
+    from app.repositories.title_repo import title_repo
+    return await title_repo.has_all_sets(session, user.id)
 
 
 @router.callback_query(F.data == "black_market")

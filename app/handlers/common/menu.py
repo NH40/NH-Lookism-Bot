@@ -27,9 +27,8 @@ async def cmd_start(message: Message, session: AsyncSession, user: User, is_new_
         except Exception:
             pass
 
-    from app.services.title_service import title_service
-    from app.data.titles import DONAT_SETS as _DS
-    has_vvip = all([await title_service.has_set(session, user.id, s.set_id) for s in _DS])
+    from app.repositories.title_repo import title_repo
+    has_vvip = await title_repo.has_all_sets(session, user.id)
     if is_new_user:
         await message.answer(
             f"👋 Добро пожаловать, <b>{html.escape(user.full_name)}</b>!\n\n"
@@ -49,9 +48,8 @@ async def cmd_start(message: Message, session: AsyncSession, user: User, is_new_
 @router.callback_query(F.data == "main_menu")
 async def cb_main_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     text = await _main_menu_text(session, user)
-    from app.services.title_service import title_service
-    from app.data.titles import DONAT_SETS as _DS
-    has_vvip = all([await title_service.has_set(session, user.id, s.set_id) for s in _DS])
+    from app.repositories.title_repo import title_repo
+    has_vvip = await title_repo.has_all_sets(session, user.id)
     kb = main_menu_kb(has_vvip=has_vvip)
     try:
         await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")

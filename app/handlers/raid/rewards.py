@@ -502,7 +502,10 @@ async def cb_craft_biz_district_5(cb: CallbackQuery, session: AsyncSession, user
 
 # ── Обменник фрагментов (динамический) ───────────────────────────────────────
 #
-# Курс 1:1, стоимость 250 000 NHCoin за каждый обмениваемый фрагмент.
+# Веса основаны на максимальном дропе за рейд:
+#   алхимия=80, УИ=25 (2 босса), бизнес=25, путь=20
+# Итоговые веса: алхимия=1, УИ=2, бизнес=3, путь=4.
+# Получаемое количество: amount * VALUE[from] // VALUE[to].
 
 EXCHANGE_COST_PER_FRAG = 250_000
 
@@ -514,15 +517,41 @@ EXCH_FRAGS: dict[str, tuple[str, str, str]] = {
     "business": ("🏢", "business_fragments", "Фрагменты бизнеса"),
 }
 
+# Относительная редкость (чем выше — тем ценнее)
+FRAG_VALUE: dict[str, int] = {
+    "alchemy":  1,
+    "ui":       2,
+    "business": 3,
+    "path":     4,
+}
+
 
 class FragExchangeFSM(StatesGroup):
     waiting_amount = State()
 
 
+def _exch_calc(from_key: str, to_key: str, amount: int) -> int:
+    """Сколько фрагментов to_key получит пользователь за amount фрагментов from_key."""
+    return amount * FRAG_VALUE[from_key] // FRAG_VALUE[to_key]
+
+
+def _exch_rate_str(from_key: str, to_key: str) -> str:
+    """Возвращает строку вида '3 🧪 → 1 🏢' (минимальная единица обмена)."""
+    from math import gcd
+    fv = FRAG_VALUE[from_key]
+    tv = FRAG_VALUE[to_key]
+    g = gcd(fv, tv)
+    give = tv // g
+    recv = fv // g
+    fe = EXCH_FRAGS[from_key][0]
+    te = EXCH_FRAGS[to_key][0]
+    return f"{give} {fe} → {recv} {te}"
+
+
 def _exch_menu_text(user: User) -> str:
     lines = [
         "💱 <b>Обменник фрагментов</b>",
-        "<i>Курс 1:1 — стоимость 250 000 NHCoin за каждый фрагмент</i>",
+        "<i>Курс зависит от редкости. Стоимость: 250 000 NHCoin за каждый отданный фрагмент.</i>",
         "",
     ]
     for key, (emoji, field, label) in EXCH_FRAGS.items():
@@ -568,8 +597,9 @@ async def cb_exch_from(cb: CallbackQuery, session: AsyncSession, user: User):
     for key, (emoji, field, label) in EXCH_FRAGS.items():
         if key == from_key:
             continue
+        rate = _exch_rate_str(from_key, key)
         builder.row(InlineKeyboardButton(
-            text=f"{emoji} {label}",
+            text=f"{emoji} {label} ({rate})",
             callback_data=f"exch_to:{from_key}:{key}",
         ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="craft_exchange_menu"))
@@ -604,6 +634,7 @@ async def cb_exch_to(cb: CallbackQuery, session: AsyncSession, user: User, state
     await state.set_state(FragExchangeFSM.waiting_amount)
     await state.update_data(from_key=from_key, to_key=to_key)
 
+    rate_str = _exch_rate_str(from_key, to_key)
     cancel_kb = InlineKeyboardBuilder()
     cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="craft_exchange_menu"))
     try:
@@ -611,8 +642,8 @@ async def cb_exch_to(cb: CallbackQuery, session: AsyncSession, user: User, state
             f"💱 <b>Обмен</b>\n"
             f"{from_emoji} {from_label} → {to_emoji} {to_label}\n\n"
             f"Баланс: <b>{balance}</b> {from_emoji}\n"
-            f"Курс: 1:1 | Цена: {fmt_num(EXCHANGE_COST_PER_FRAG)} NHCoin за фрагмент\n\n"
-            f"Введите количество фрагментов для обмена:",
+            f"Курс: {rate_str} | Цена: {fmt_num(EXCHANGE_COST_PER_FRAG)} NHCoin за отданный фрагмент\n\n"
+            f"Введите количество фрагментов <b>отдать</b>:",
             reply_markup=cancel_kb.as_markup(),
             parse_mode="HTML",
         )
@@ -646,8 +677,19 @@ async def msg_exch_amount(message: Message, session: AsyncSession, user: User, s
     from_emoji, from_field, from_label = EXCH_FRAGS[from_key]
     to_emoji,   to_field,   to_label   = EXCH_FRAGS[to_key]
 
-    src_have = getattr(user, from_field, 0)
+    src_have  = getattr(user, from_field, 0)
+    received  = _exch_calc(from_key, to_key, amount)
     coin_cost = amount * EXCHANGE_COST_PER_FRAG
+
+    if received <= 0:
+        rate_str = _exch_rate_str(from_key, to_key)
+        await message.answer(
+            f"❌ Слишком мало фрагментов для обмена.\n"
+            f"Минимальный курс: {rate_str}",
+            reply_markup=back_kb("craft_exchange_menu"),
+            parse_mode="HTML",
+        )
+        return
 
     if src_have < amount:
         await message.answer(
@@ -668,14 +710,14 @@ async def msg_exch_amount(message: Message, session: AsyncSession, user: User, s
         return
 
     setattr(user, from_field, src_have - amount)
-    setattr(user, to_field,   getattr(user, to_field, 0) + amount)
+    setattr(user, to_field,   getattr(user, to_field, 0) + received)
     user.nh_coins -= coin_cost
     await session.flush()
 
     await message.answer(
         f"✅ <b>Обмен выполнен!</b>\n\n"
         f"Отдано: {amount} {from_emoji} {from_label}\n"
-        f"Получено: {amount} {to_emoji} {to_label}\n"
+        f"Получено: {received} {to_emoji} {to_label}\n"
         f"Стоимость: -{fmt_num(coin_cost)} NHCoin",
         reply_markup=back_kb("craft_exchange_menu"),
         parse_mode="HTML",

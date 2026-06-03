@@ -71,6 +71,7 @@ async def cb_fist_bot(cb: CallbackQuery, session: AsyncSession, user: User):
 
     try:
         result = await game_service.fist_attack_bot(session, user, bot_id)
+        await session.commit()
     finally:
         await cooldown_service.release_lock(lock_key)
 
@@ -168,6 +169,7 @@ async def cb_fist_pvp(cb: CallbackQuery, session: AsyncSession, user: User):
 
     try:
         result = await game_service.fist_pvp_attack(session, user, defender_id)
+        await session.commit()
     finally:
         await cooldown_service.release_lock(lock_key)
 

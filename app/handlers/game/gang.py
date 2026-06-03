@@ -188,6 +188,7 @@ async def cb_do_attack(cb: CallbackQuery, session: AsyncSession, user: User):
 
     try:
         result = await game_service.gang_attack_bot(session, user)
+        await session.commit()
     finally:
         await cooldown_service.release_lock(lock_key)
 

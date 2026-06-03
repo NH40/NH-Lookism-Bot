@@ -419,6 +419,7 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
 
     try:
         result = await game_service.king_attack(session, user, city_id)
+        await session.commit()
     finally:
         await cooldown_service.release_lock(lock_key)
 

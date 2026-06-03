@@ -1,9 +1,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, update as sa_update
+from sqlalchemy import select, func, update as sa_update, case
 from app.models.user import User
 from app.models.squad_member import SquadMember
 from app.models.character import UserCharacter
-from app.data.squad import RANKS_BY_ID, STAR_BONUS_PERCENT
+from app.data.squad import RANKS_BY_ID
 
 
 class SquadRepo:
@@ -13,18 +13,20 @@ class SquadRepo:
     ) -> int:
         """Единственное место расчёта боевой мощи."""
 
-        # 1. Мощь отряда — только нужные колонки
-        result = await session.execute(
-            select(SquadMember.rank, SquadMember.stars, SquadMember.base_power)
+        # 1. Мощь отряда — один агрегирующий запрос вместо загрузки всех строк
+        star_mult = case(
+            (SquadMember.stars == 1, 1.10),
+            (SquadMember.stars == 2, 1.20),
+            (SquadMember.stars == 3, 1.30),
+            (SquadMember.stars == 4, 1.40),
+            (SquadMember.stars == 5, 1.50),
+            else_=1.0,
+        )
+        squad_power_raw = await session.scalar(
+            select(func.sum(SquadMember.base_power * star_mult))
             .where(SquadMember.user_id == user.id)
         )
-        squad_power = 0
-        for row in result.all():
-            rank_cfg = RANKS_BY_ID.get(row.rank)
-            if not rank_cfg:
-                continue
-            star_bonus = STAR_BONUS_PERCENT.get(row.stars, 0)
-            squad_power += int(row.base_power * (1 + star_bonus / 100))
+        squad_power = int(squad_power_raw or 0)
 
         # 2. Мощь персонажей
         char_r = await session.execute(

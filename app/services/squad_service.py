@@ -1,6 +1,6 @@
 import random
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, insert
 from app.models.user import User
 from app.models.squad_member import SquadMember
 from app.models.skill import UserMastery
@@ -148,14 +148,11 @@ class SquadService:
         user.nh_coins -= total
         user.coins_spent += total
 
-        for _ in range(count):
-            member = SquadMember(
-                user_id=user.id,
-                rank=rank,
-                stars=0,
-                base_power=rank_cfg.base_power,
-            )
-            session.add(member)
+        row = {"user_id": user.id, "rank": rank, "stars": 0, "base_power": rank_cfg.base_power}
+        _BATCH = 5_000
+        for offset in range(0, count, _BATCH):
+            batch = [row] * min(_BATCH, count - offset)
+            await session.execute(insert(SquadMember), batch)
 
         user.total_statists_recruited = (user.total_statists_recruited or 0) + count
 

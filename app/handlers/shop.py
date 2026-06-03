@@ -340,7 +340,7 @@ async def cb_shop_buy_rank(
     await state.update_data(rank=rank, price_per=price)
 
     builder = InlineKeyboardBuilder()
-    for qty in [1, 5, 10, 25, 50, 100]:
+    for qty in [1, 10, 100, 1_000, 10_000, 100_000]:
         total = price * qty
         can = "✅" if user.nh_coins >= total else "❌"
         builder.button(
@@ -394,7 +394,7 @@ async def cb_shop_input_qty(
             f"✏️ <b>Введите количество статистов [{rank}]</b>\n\n"
             f"Цена: {fmt_num(price)}/шт\n"
             f"Баланс: {fmt_num(user.nh_coins)}\n\n"
-            f"Введите число от 1 до 10000:",
+            f"Введите число от 1 до 1 000 000:",
             reply_markup=builder.as_markup(),
             parse_mode="HTML",
         )

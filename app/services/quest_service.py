@@ -8,6 +8,9 @@ from app.constants.quests import (
     DAILY_QUESTS, QUESTS_BY_ID, ALL_DONE_QUEST,
     DAILY_QUESTS_COUNT, COOLDOWN_DAYS,
 )
+from app.config.game_balance import (
+    QUEST_SWAP_COSTS, QUEST_SWAP_MAX_PER_DAY, QUEST_FULL_REROLL_COST,
+)
 
 
 class QuestService:
@@ -240,6 +243,202 @@ class QuestService:
             "coins": cfg.reward_coins,
             "tickets": cfg.reward_tickets,
         }
+
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Redis-счётчики замен / реролла
+    # ─────────────────────────────────────────────────────────────────────────
+
+    async def _seconds_until_midnight(self) -> int:
+        now = datetime.now(timezone.utc)
+        next_reset = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        return int((next_reset - now).total_seconds()) + 3600  # запас час
+
+    async def get_swap_count(self, user_id: int) -> int:
+        from app.services.cooldown_service import cooldown_service
+        val = await cooldown_service.redis.get(f"quest:swap:{user_id}:{self._today()}")
+        return int(val) if val else 0
+
+    async def _incr_swap_count(self, user_id: int) -> None:
+        from app.services.cooldown_service import cooldown_service
+        key = f"quest:swap:{user_id}:{self._today()}"
+        await cooldown_service.redis.incr(key)
+        await cooldown_service.redis.expire(key, await self._seconds_until_midnight())
+
+    async def is_reroll_used(self, user_id: int) -> bool:
+        from app.services.cooldown_service import cooldown_service
+        return await cooldown_service.redis.exists(
+            f"quest:reroll:{user_id}:{self._today()}"
+        ) == 1
+
+    async def _set_reroll_used(self, user_id: int) -> None:
+        from app.services.cooldown_service import cooldown_service
+        await cooldown_service.redis.setex(
+            f"quest:reroll:{user_id}:{self._today()}",
+            await self._seconds_until_midnight(),
+            "1",
+        )
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Замена одного квеста
+    # ─────────────────────────────────────────────────────────────────────────
+
+    async def swap_quest(
+        self, session: AsyncSession, user: User, quest_id: str
+    ) -> dict:
+        from app.utils.formatters import fmt_num
+        today = self._today()
+
+        result = await session.execute(
+            select(DailyQuest).where(
+                DailyQuest.user_id == user.id,
+                DailyQuest.quest_id == quest_id,
+                DailyQuest.date == today,
+            )
+        )
+        quest = result.scalar_one_or_none()
+        if not quest:
+            return {"ok": False, "reason": "Задание не найдено"}
+        if quest.quest_id == "all_done":
+            return {"ok": False, "reason": "Это задание нельзя заменить"}
+        if quest.is_completed:
+            return {"ok": False, "reason": "Нельзя заменить выполненное задание"}
+
+        swap_count = await self.get_swap_count(user.id)
+        if swap_count >= QUEST_SWAP_MAX_PER_DAY:
+            return {"ok": False, "reason": "Достигнут лимит замен на сегодня (3/3)"}
+
+        cost = QUEST_SWAP_COSTS[swap_count]
+        if user.nh_coins < cost:
+            return {"ok": False, "reason": f"Недостаточно монет! Нужно {fmt_num(cost)} NHCoin"}
+
+        # Текущие квесты — чтобы не выдать уже активный
+        cur_r = await session.execute(
+            select(DailyQuest.quest_id).where(
+                DailyQuest.user_id == user.id,
+                DailyQuest.date == today,
+            )
+        )
+        current_ids = set(cur_r.scalars().all())
+
+        # Кулдаун-окно (прошлые дни)
+        window_start = (
+            datetime.strptime(today, "%Y-%m-%d") - timedelta(days=COOLDOWN_DAYS)
+        ).strftime("%Y-%m-%d")
+        recent_r = await session.execute(
+            select(DailyQuest.quest_id).where(
+                DailyQuest.user_id == user.id,
+                DailyQuest.quest_id != "all_done",
+                DailyQuest.date > window_start,
+                DailyQuest.date < today,
+            )
+        )
+        recently_used = set(recent_r.scalars().all())
+
+        all_ids = [q.quest_id for q in DAILY_QUESTS]
+        available = [
+            qid for qid in all_ids
+            if qid not in recently_used and qid not in current_ids
+        ]
+        if not available:
+            available = [qid for qid in all_ids if qid not in current_ids]
+        if not available:
+            available = all_ids[:]
+
+        new_quest_id = random.choice(available)
+
+        await session.delete(quest)
+        await session.flush()
+
+        session.add(DailyQuest(
+            user_id=user.id,
+            quest_id=new_quest_id,
+            progress=0,
+            date=today,
+        ))
+        user.nh_coins -= cost
+        await session.flush()
+        await self._incr_swap_count(user.id)
+
+        return {"ok": True, "cost": cost}
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Полный реролл всех незавершённых квестов
+    # ─────────────────────────────────────────────────────────────────────────
+
+    async def full_reroll(
+        self, session: AsyncSession, user: User
+    ) -> dict:
+        from app.utils.formatters import fmt_num
+        today = self._today()
+
+        if await self.is_reroll_used(user.id):
+            return {"ok": False, "reason": "Полный реролл уже использован сегодня"}
+        if user.nh_coins < QUEST_FULL_REROLL_COST:
+            return {
+                "ok": False,
+                "reason": f"Недостаточно монет! Нужно {fmt_num(QUEST_FULL_REROLL_COST)} NHCoin",
+            }
+
+        result = await session.execute(
+            select(DailyQuest).where(
+                DailyQuest.user_id == user.id,
+                DailyQuest.date == today,
+            )
+        )
+        all_quests = result.scalars().all()
+
+        uncompleted = [
+            q for q in all_quests
+            if not q.is_completed and q.quest_id != "all_done"
+        ]
+        if not uncompleted:
+            return {"ok": False, "reason": "Все задания уже выполнены!"}
+
+        completed_ids = {q.quest_id for q in all_quests if q.is_completed}
+        needed = len(uncompleted)
+
+        for q in uncompleted:
+            await session.delete(q)
+        await session.flush()
+
+        window_start = (
+            datetime.strptime(today, "%Y-%m-%d") - timedelta(days=COOLDOWN_DAYS)
+        ).strftime("%Y-%m-%d")
+        recent_r = await session.execute(
+            select(DailyQuest.quest_id).where(
+                DailyQuest.user_id == user.id,
+                DailyQuest.quest_id != "all_done",
+                DailyQuest.date > window_start,
+                DailyQuest.date < today,
+            )
+        )
+        recently_used = set(recent_r.scalars().all())
+
+        all_ids = [q.quest_id for q in DAILY_QUESTS]
+        available = [
+            qid for qid in all_ids
+            if qid not in recently_used and qid not in completed_ids
+        ]
+        if len(available) < needed:
+            available = [qid for qid in all_ids if qid not in completed_ids]
+        if len(available) < needed:
+            available = all_ids[:]
+
+        new_ids = random.sample(available, min(needed, len(available)))
+        for new_id in new_ids:
+            session.add(DailyQuest(
+                user_id=user.id,
+                quest_id=new_id,
+                progress=0,
+                date=today,
+            ))
+
+        user.nh_coins -= QUEST_FULL_REROLL_COST
+        await session.flush()
+        await self._set_reroll_used(user.id)
+
+        return {"ok": True, "cost": QUEST_FULL_REROLL_COST, "replaced": needed}
 
 
 quest_service = QuestService()

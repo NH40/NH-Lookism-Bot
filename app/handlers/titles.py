@@ -36,8 +36,25 @@ async def cb_titles(cb: CallbackQuery, session: AsyncSession, user: User):
 
 # ── ДОСТИЖЕНИЯ ──────────────────────────────────────────────────────────────
 
-@router.callback_query(F.data == "achievements_menu")
-async def cb_achievements_menu(cb: CallbackQuery, session: AsyncSession, user: User):
+_ACH_CATEGORIES = [
+    ("⚔️ Боевая мощь",  ["power_10k", "power_50k", "power_100k", "power_500k", "power_1m"]),
+    ("📍 Фазы",          ["first_king", "king_5_cities", "first_fist", "fist_10_cities", "emperor"]),
+    ("🌟 Престиж",       ["prestige_1", "prestige_3"]),
+    ("🏆 Топ",           ["top_10", "top_5", "top_1"]),
+    ("💸 Траты",         ["spend_100k", "spend_1m", "spend_5m"]),
+    ("⚔️ Победы",        ["wins_10", "wins_100", "wins_500", "wins_1000"]),
+    ("🏛 Аукцион",       ["auction_win_1", "auction_win_5"]),
+    ("🎯 Особые",        ["future_masterpiece", "shadow_syndicate"]),
+    ("📦 Коллекция",     ["all_achievements", "absolute"]),
+    ("🔐 Секретные",     ["settings_100", "settings_500"]),
+]
+_ACH_PAGE_SIZE = 5  # категорий на странице
+
+
+async def _show_achievements(cb: CallbackQuery, session, user: User, page: int = 0):
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+    from aiogram.types import InlineKeyboardButton
+
     result = await session.execute(
         select(UserAchievement.achievement_id).where(
             UserAchievement.user_id == user.id,
@@ -46,21 +63,12 @@ async def cb_achievements_menu(cb: CallbackQuery, session: AsyncSession, user: U
     )
     claimed = set(result.scalars().all())
 
-    categories = [
-        ("⚔️ Боевая мощь",  ["power_10k", "power_50k", "power_100k", "power_500k", "power_1m"]),
-        ("📍 Фазы",          ["first_king", "king_5_cities", "first_fist", "fist_10_cities", "emperor"]),
-        ("🌟 Престиж",       ["prestige_1", "prestige_3"]),
-        ("🏆 Топ",           ["top_10", "top_5", "top_1"]),
-        ("💸 Траты",         ["spend_100k", "spend_1m", "spend_5m"]),
-        ("⚔️ Победы",        ["wins_10", "wins_100", "wins_500", "wins_1000"]),
-        ("🏛 Аукцион",       ["auction_win_1", "auction_win_5"]),
-        ("🎯 Особые",        ["future_masterpiece", "shadow_syndicate"]),
-        ("📦 Коллекция",     ["all_achievements", "absolute"]),
-        ("🔐 Секретные",     ["settings_100", "settings_500"]),
-    ]
+    total_pages = max(1, (len(_ACH_CATEGORIES) + _ACH_PAGE_SIZE - 1) // _ACH_PAGE_SIZE)
+    page = max(0, min(page, total_pages - 1))
+    page_cats = _ACH_CATEGORIES[page * _ACH_PAGE_SIZE : (page + 1) * _ACH_PAGE_SIZE]
 
     lines = []
-    for cat_name, ids in categories:
+    for cat_name, ids in page_cats:
         lines.append(f"\n<b>{cat_name}</b>\n")
         for aid in ids:
             ach = ACHIEVEMENT_MAP.get(aid)
@@ -76,19 +84,40 @@ async def cb_achievements_menu(cb: CallbackQuery, session: AsyncSession, user: U
                 f"    └ 🎁 {ach.bonus_description}\n"
             )
 
-    from aiogram.utils.keyboard import InlineKeyboardBuilder
-    from aiogram.types import InlineKeyboardButton
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
         text="🔍 Проверить достижения", callback_data="check_achievements"
     ))
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"ach_page:{page - 1}"))
+    nav.append(InlineKeyboardButton(
+        text=f"📄 {page + 1}/{total_pages}", callback_data=f"ach_page:{page}"
+    ))
+    if page + 1 < total_pages:
+        nav.append(InlineKeyboardButton(text="▶️", callback_data=f"ach_page:{page + 1}"))
+    builder.row(*nav)
     builder.row(InlineKeyboardButton(text="🔙 Назад", callback_data="titles"))
 
-    await cb.message.edit_text(
-        f"🥇 <b>Достижения</b>\n{''.join(lines)}",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
+    try:
+        await cb.message.edit_text(
+            f"🥇 <b>Достижения</b> (стр. {page + 1}/{total_pages})\n{''.join(lines)}",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data == "achievements_menu")
+async def cb_achievements_menu(cb: CallbackQuery, session: AsyncSession, user: User):
+    await _show_achievements(cb, session, user, page=0)
+
+
+@router.callback_query(F.data.startswith("ach_page:"))
+async def cb_ach_page(cb: CallbackQuery, session: AsyncSession, user: User):
+    page = int(cb.data.split(":")[1])
+    await _show_achievements(cb, session, user, page=page)
 
 
 @router.callback_query(F.data == "check_achievements")

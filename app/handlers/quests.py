@@ -6,13 +6,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timezone, timedelta
 from app.models.user import User
 from app.services.quest_service import quest_service
+from app.services.cooldown_service import cooldown_service
 from app.constants.quests import QUESTS_BY_ID
+from app.config.game_balance import QUEST_SWAP_COSTS, QUEST_SWAP_MAX_PER_DAY, QUEST_FULL_REROLL_COST
 from app.utils.formatters import fmt_num
 
 router = Router()
 
-# Заданий на странице (кроме all_done, который всегда снизу)
 PAGE_SIZE = 5
+
+
+def _fmt_millions(coins: int) -> str:
+    return f"{coins // 1_000_000}M"
 
 
 def _build_quest_page(
@@ -20,9 +25,9 @@ def _build_quest_page(
     page: int,
     h: int,
     m: int,
+    swap_count: int,
+    reroll_used: bool,
 ) -> tuple[str, "InlineKeyboardMarkup"]:
-    """Формирует текст и клавиатуру для страницы заданий."""
-    # Разделяем all_done и обычные задания
     regular = [q for q in quests if q.quest_id != "all_done"]
     all_done = next((q for q in quests if q.quest_id == "all_done"), None)
 
@@ -31,16 +36,28 @@ def _build_quest_page(
 
     page_quests = regular[page * PAGE_SIZE : (page + 1) * PAGE_SIZE]
 
+    swap_left = QUEST_SWAP_MAX_PER_DAY - swap_count
+    next_swap_cost = QUEST_SWAP_COSTS[swap_count] if swap_count < QUEST_SWAP_MAX_PER_DAY else None
+
     lines = [
         "📋 <b>Ежедневные задания</b>\n",
         f"⏰ Сброс через: <b>{h}ч {m}м</b>",
         f"📄 Страница {page + 1}/{total_pages}\n",
-        "─" * 22 + "\n",
     ]
+    if next_swap_cost:
+        lines.append(
+            f"💸 Замен осталось: <b>{swap_left}/3</b>  (след. замена: {fmt_num(next_swap_cost)})"
+        )
+    else:
+        lines.append("💸 Замены исчерпаны на сегодня")
+    if not reroll_used:
+        lines.append(f"♻️ Полный реролл: <b>{fmt_num(QUEST_FULL_REROLL_COST)}</b> (доступен)")
+    else:
+        lines.append("♻️ Полный реролл: использован")
+    lines.append("\n" + "─" * 22 + "\n")
 
     builder = InlineKeyboardBuilder()
 
-    # ── Обычные задания текущей страницы ─────────────────────────────────────
     for quest in page_quests:
         cfg = QUESTS_BY_ID.get(quest.quest_id)
         if not cfg:
@@ -73,8 +90,13 @@ def _build_quest_page(
                 text=f"🎁 {cfg.emoji} {cfg.name}",
                 callback_data=f"quest_claim:{quest.quest_id}"
             ))
+        elif not quest.is_completed and not quest.is_claimed and next_swap_cost:
+            builder.row(InlineKeyboardButton(
+                text=f"💸 Заменить ({_fmt_millions(next_swap_cost)})",
+                callback_data=f"quest_swap:{quest.quest_id}"
+            ))
 
-    # ── Разделитель и задание «Выполнить все» ────────────────────────────────
+    # ── Задание «Выполнить все» ──────────────────────────────────────────────
     if all_done:
         cfg_ad = QUESTS_BY_ID.get("all_done")
         if cfg_ad:
@@ -102,6 +124,13 @@ def _build_quest_page(
                     callback_data="quest_claim:all_done"
                 ))
 
+    # ── Полный реролл ────────────────────────────────────────────────────────
+    if not reroll_used:
+        builder.row(InlineKeyboardButton(
+            text=f"♻️ Переролить всё ({_fmt_millions(QUEST_FULL_REROLL_COST)})",
+            callback_data="quest_full_reroll"
+        ))
+
     # ── Навигация ─────────────────────────────────────────────────────────────
     nav_buttons = []
     if page > 0:
@@ -125,13 +154,15 @@ def _build_quest_page(
 
 async def _show_quests(cb: CallbackQuery, session: AsyncSession, user: User, page: int = 0):
     quests = await quest_service.get_or_create_quests(session, user)
+    swap_count = await quest_service.get_swap_count(user.id)
+    reroll_used = await quest_service.is_reroll_used(user.id)
 
     now = datetime.now(timezone.utc)
     next_reset = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     remaining = int((next_reset - now).total_seconds())
     h, m = divmod(remaining // 60, 60)
 
-    text, markup = _build_quest_page(quests, page, h, m)
+    text, markup = _build_quest_page(quests, page, h, m, swap_count, reroll_used)
     try:
         await cb.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
     except Exception:
@@ -165,4 +196,46 @@ async def cb_quest_claim(cb: CallbackQuery, session: AsyncSession, user: User):
     if result["tickets"] > 0:
         msg += f"\n🎟 +{result['tickets']} тикетов"
     await cb.answer(msg, show_alert=True)
+    await _show_quests(cb, session, user, page=0)
+
+
+@router.callback_query(F.data.startswith("quest_swap:"))
+async def cb_quest_swap(cb: CallbackQuery, session: AsyncSession, user: User):
+    lock_key = f"lock:quest_swap:{user.id}"
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("⏳ Подождите...", show_alert=False)
+        return
+
+    quest_id = cb.data.split(":")[1]
+    result = await quest_service.swap_quest(session, user, quest_id)
+
+    if not result["ok"]:
+        await cb.answer(result["reason"], show_alert=True)
+        return
+
+    await cb.answer(
+        f"✅ Задание заменено!\n💰 -{fmt_num(result['cost'])} NHCoin",
+        show_alert=True,
+    )
+    await _show_quests(cb, session, user, page=0)
+
+
+@router.callback_query(F.data == "quest_full_reroll")
+async def cb_quest_full_reroll(cb: CallbackQuery, session: AsyncSession, user: User):
+    lock_key = f"lock:quest_reroll:{user.id}"
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("⏳ Подождите...", show_alert=False)
+        return
+
+    result = await quest_service.full_reroll(session, user)
+
+    if not result["ok"]:
+        await cb.answer(result["reason"], show_alert=True)
+        return
+
+    await cb.answer(
+        f"♻️ Задания переролены ({result['replaced']} шт.)!\n"
+        f"💰 -{fmt_num(result['cost'])} NHCoin",
+        show_alert=True,
+    )
     await _show_quests(cb, session, user, page=0)

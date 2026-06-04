@@ -47,6 +47,9 @@ def admin_user_kb(tg_id: int, donat_duel_cd: bool = False, is_banned: bool = Fal
         InlineKeyboardButton(text="🎟 Тикеты", callback_data=f"adm_tickets:{tg_id}"),
         InlineKeyboardButton(text="📦 Ресурсы", callback_data=f"adm_resources:{tg_id}"),
     )
+    builder.row(
+        InlineKeyboardButton(text="💳 NHDonate", callback_data=f"adm_donate:{tg_id}"),
+    )
 
     # ── Армия и карты ────────────────────────────────────────────────────────
     builder.row(

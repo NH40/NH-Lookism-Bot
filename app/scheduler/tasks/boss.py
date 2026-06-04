@@ -152,6 +152,15 @@ async def _notify_boss_result(result: dict) -> None:
                     from app.services.boss_service import fmt_hp as fhp, fmt_boss_coins as fcoins
                     place_str = f"🥇🥈🥉4️⃣5️⃣"[place - 1] if place and place <= 5 else "👥"
 
+                    extra_field = r.get("extra_field")
+                    extra_amount = r.get("extra_amount", 0)
+                    _extra_labels: dict[str, str] = {
+                        "skill_path_points":  "💎 Очки пути",
+                        "path_fragments":     "🔷 Фрагменты Пути",
+                        "business_fragments": "🏢 Фрагменты бизнеса",
+                        "war_points":         "⚔️ Очки войны",
+                    }
+
                     personal_text = (
                         f"{outcome_icon} <b>{emoji} {name} — {outcome_text}</b>"
                         f"{phrase_line}\n\n"
@@ -159,6 +168,9 @@ async def _notify_boss_result(result: dict) -> None:
                         f"⚔️ Нанесено урона: <b>{fhp(damage)}</b>\n"
                         f"🎟 Получено тикетов: <b>+{tickets}</b>"
                     )
+                    if extra_field and extra_amount > 0:
+                        label = _extra_labels.get(extra_field, extra_field)
+                        personal_text += f"\n{label}: <b>+{extra_amount}</b>"
                     if coins_delta:
                         sign = "+" if coins_delta > 0 else ""
                         personal_text += f"\n💰 Монеты: <b>{sign}{fcoins(abs(coins_delta))}</b>"

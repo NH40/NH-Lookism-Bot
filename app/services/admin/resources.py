@@ -32,6 +32,10 @@ class AdminResourcesMixin:
         user.war_points = getattr(user, "war_points", 0) + amount
         await session.flush()
 
+    async def give_donate(self, session: AsyncSession, user: User, amount: int) -> None:
+        user.nh_donate = getattr(user, "nh_donate", 0) + amount
+        await session.flush()
+
     async def give_squad_member(self, session: AsyncSession, user: User, rank: str, count: int = 1) -> dict:
         from app.data.squad import RANKS_BY_ID
         from app.models.squad_member import SquadMember

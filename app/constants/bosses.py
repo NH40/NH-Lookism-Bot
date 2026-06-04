@@ -26,6 +26,24 @@ BOSS_TOP_REWARDS: list[int] = [100, 80, 50, 40, 25]
 # Тикеты всем участникам (игнорируют max_tickets)
 BOSS_PARTICIPANT_REWARD: int = 10
 
+# ── Дополнительные ресурсы за победу над боссом ───────────────────────────────
+
+# Фрагменты (Никита → path_fragments, Менеджер → business_fragments)
+BOSS_EXTRA_FRAG_TOP: list[int] = [250, 200, 150, 100, 50]
+BOSS_EXTRA_FRAG_PARTICIPANT: int = 25
+
+# Очки (Архангел → skill_path_points, Братья → war_points)
+BOSS_EXTRA_POINTS_TOP: list[int] = [50, 40, 30, 20, 10]
+BOSS_EXTRA_POINTS_PARTICIPANT: int = 5
+
+# boss_id → (поле User, тип награды: "frag" | "pts")
+BOSS_EXTRA_RESOURCE: dict[str, tuple[str, str]] = {
+    "archangel": ("skill_path_points",  "pts"),
+    "nikita":    ("path_fragments",     "frag"),
+    "manager":   ("business_fragments", "frag"),
+    "brothers":  ("war_points",         "pts"),
+}
+
 # ── Ротация боссов (по порядку) ────────────────────────────────────────────────
 BOSS_ROTATION: list[str] = ["nikita", "archangel", "manager", "brothers"]
 

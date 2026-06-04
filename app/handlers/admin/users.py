@@ -156,6 +156,48 @@ async def msg_adm_tickets(
     await _show_user_card(message, session, found)
 
 
+@router.callback_query(F.data.startswith("adm_donate:"))
+async def cb_adm_donate(cb: CallbackQuery, user: User, state: FSMContext):
+    if not is_admin(user.tg_id):
+        return
+    tg_id = cb.data.split(":")[1]
+    await state.set_state(AdminFSM.waiting_donate_amount)
+    await state.update_data(target_tg_id=tg_id)
+    try:
+        await cb.message.edit_text(
+            f"💳 Введите количество NHDonate для игрока {tg_id}:",
+            reply_markup=back_kb(f"adm_user:{tg_id}"),
+        )
+    except Exception:
+        pass
+
+
+@router.message(AdminFSM.waiting_donate_amount)
+async def msg_adm_donate(
+    message: Message, session: AsyncSession, user: User, state: FSMContext
+):
+    if not is_admin(user.tg_id):
+        return
+    data = await state.get_data()
+    tg_id = data.get("target_tg_id")
+    await state.clear()
+    try:
+        amount = int(message.text.strip())
+    except ValueError:
+        await message.answer("Введите число")
+        return
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await message.answer("Игрок не найден")
+        return
+    await admin_service.give_donate(session, found, amount)
+    await message.answer(
+        f"✅ Выдано {fmt_num(amount)} NHDonate игроку {html.escape(found.full_name)}",
+        parse_mode="HTML",
+    )
+    await _show_user_card(message, session, found)
+
+
 @router.callback_query(F.data.startswith("adm_prestige:"))
 async def cb_adm_prestige(cb: CallbackQuery, session: AsyncSession, user: User):
     if not is_admin(user.tg_id):

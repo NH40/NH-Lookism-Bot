@@ -17,6 +17,11 @@ from app.constants.bosses import (
     BOSS_ATTACK_CD_MIN,
     BOSS_ATTACK_CD_SECONDS,
     BOSS_DURATION_HOURS,
+    BOSS_EXTRA_FRAG_PARTICIPANT,
+    BOSS_EXTRA_FRAG_TOP,
+    BOSS_EXTRA_POINTS_PARTICIPANT,
+    BOSS_EXTRA_POINTS_TOP,
+    BOSS_EXTRA_RESOURCE,
     BOSS_MAP,
     BOSS_PARTICIPANT_REWARD,
     BOSS_ROTATION,
@@ -298,26 +303,47 @@ class BossService:
         top_ids = {rec.user_id for rec in top}
         participant_ids = {rec.user_id for rec in all_attackers}
 
+        # Доп. ресурс только при победе
+        extra_cfg = BOSS_EXTRA_RESOURCE.get(boss.boss_id) if defeated else None
+
         rewards: list[dict] = []
 
         # Топ-5
         for i, rec in enumerate(top):
-            tickets = BOSS_TOP_REWARDS[i] if i < len(BOSS_TOP_REWARDS) else BOSS_PARTICIPANT_REWARD
+            base_tickets = BOSS_TOP_REWARDS[i] if i < len(BOSS_TOP_REWARDS) else BOSS_PARTICIPANT_REWARD
+            tickets = base_tickets * 2 if defeated else base_tickets
+            extra_field: str | None = None
+            extra_amount = 0
+            if extra_cfg:
+                extra_field, rtype = extra_cfg
+                top_table = BOSS_EXTRA_FRAG_TOP if rtype == "frag" else BOSS_EXTRA_POINTS_TOP
+                fallback = BOSS_EXTRA_FRAG_PARTICIPANT if rtype == "frag" else BOSS_EXTRA_POINTS_PARTICIPANT
+                extra_amount = top_table[i] if i < len(top_table) else fallback
             rewards.append({
                 "user_id": rec.user_id,
                 "tickets": tickets,
                 "damage": rec.damage_dealt,
                 "place": i + 1,
+                "extra_field": extra_field,
+                "extra_amount": extra_amount,
             })
 
         # Остальные участники
         for rec in all_attackers:
             if rec.user_id not in top_ids:
+                tickets = BOSS_PARTICIPANT_REWARD * 2 if defeated else BOSS_PARTICIPANT_REWARD
+                extra_field = None
+                extra_amount = 0
+                if extra_cfg:
+                    extra_field, rtype = extra_cfg
+                    extra_amount = BOSS_EXTRA_FRAG_PARTICIPANT if rtype == "frag" else BOSS_EXTRA_POINTS_PARTICIPANT
                 rewards.append({
                     "user_id": rec.user_id,
-                    "tickets": BOSS_PARTICIPANT_REWARD,
+                    "tickets": tickets,
                     "damage": rec.damage_dealt,
                     "place": None,
+                    "extra_field": extra_field,
+                    "extra_amount": extra_amount,
                 })
 
         # Применяем тикеты и специальные эффекты (Менеджер)
@@ -337,6 +363,11 @@ class BossService:
                     continue
                 from app.config.game_balance import ticket_hard_cap
                 u.tickets = min(u.tickets + r["tickets"], ticket_hard_cap(u))
+
+                extra_field = r.get("extra_field")
+                extra_amount = r.get("extra_amount", 0)
+                if extra_field and extra_amount > 0:
+                    setattr(u, extra_field, (getattr(u, extra_field, 0) or 0) + extra_amount)
 
                 # Менеджер: бонус при победе; штраф при провале не начисляется —
                 # монеты снимаются только у того, кто атаковал (во время боя).

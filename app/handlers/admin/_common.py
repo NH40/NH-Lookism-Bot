@@ -55,6 +55,8 @@ class AdminFSM(StatesGroup):
     waiting_card_take_qty = State()  # ввод количества при удалении
     # Бан
     waiting_ban_reason = State()     # ввод причины бана
+    # NHDonate
+    waiting_donate_amount = State()
 
 
 async def _build_user_card_text(session: AsyncSession, found) -> tuple[str, bool, bool]:
@@ -97,6 +99,7 @@ async def _build_user_card_text(session: AsyncSession, found) -> tuple[str, bool
         f"{phase_label(found.phase)}\n"
         f"⚔️ Мощь: {fmt_power(found.combat_power)}\n"
         f"💰 Монеты: {fmt_num(found.nh_coins)}\n"
+        f"💳 NHDonate: {fmt_num(getattr(found, 'nh_donate', 0))}\n"
         f"🎟 Тикеты: {found.tickets}/{found.max_tickets}\n"
         f"🌟 Пробуждений: {found.prestige_level}"
         f"{ban_str}\n"

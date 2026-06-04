@@ -191,11 +191,19 @@ async def cb_biz_demolish(
         building.district_cost = max(0, building.district_cost - cost_per)
         await session.flush()
     else:
+        cost_per = building.district_cost
         await session.delete(building)
         await session.flush()
 
+    business_service._apply_demolish_influence(user, cost_per)
     await business_service._recalc_income(session, user)
-    await cb.answer("🔨 Здание снесено! Районы освобождены.")
+
+    influence_note = ""
+    if user.business_path == "political":
+        influence_note = f" −{cost_per * 5} влияния"
+    elif user.business_path == "illegal":
+        influence_note = f" +{cost_per * 5} влияния"
+    await cb.answer(f"🔨 Здание снесено! Районы освобождены.{influence_note}")
     await _show_city_buildings(cb.message, session, user, city_id)
 
 

@@ -9,20 +9,26 @@ PATH_INFO = {
     "legal": {
         "name": "Легальный",
         "emoji": "⚖️",
-        "desc": "Стабильный доход, не влияет на влияние",
+        "desc": "Стабильный доход, влияние не меняется",
         "color": "🟢",
     },
     "illegal": {
         "name": "Нелегальный",
         "emoji": "🕶",
-        "desc": "−Влияние при постройке, но больше дохода",
+        "desc": "−Влияние при постройке, +влияние при сносе. Лучший доход",
         "color": "🔴",
     },
     "political": {
         "name": "Политика",
         "emoji": "🏛",
-        "desc": "+Влияние при постройке",
+        "desc": "+Влияние при постройке, −влияние при сносе",
         "color": "🔵",
+    },
+    "digital": {
+        "name": "Цифровой",
+        "emoji": "💻",
+        "desc": "Дешёвые районы + Сетевой эффект: +10% доход за каждые 10 зданий (макс +50%)",
+        "color": "🟣",
     },
 }
 
@@ -39,6 +45,8 @@ async def _show_business_main(
 
     # Бонусы к доходу
     bonuses = []
+    if info.get('network_bonus'):
+        bonuses.append(f"  🌐 Сетевой эффект: +{info['network_bonus']}%")
     if info.get('biz_genius_bonus'):
         bonuses.append(f"  🎖 Гений бизнеса: +{info['biz_genius_bonus']}%")
     if info.get('skills_bonus'):
@@ -72,9 +80,17 @@ async def _show_business_main(
         circ_per_min = info.get("circ_passive_per_min", 0) or circ_passive
         circ_line = f"\n💸 Пассивный доход: +{fmt_num(circ_per_min)}/мин"
 
-    from app.constants.raid import BIZ_GENIUS_LEVEL_LABELS
+    from app.constants.raid import BIZ_GENIUS_LEVEL_LABELS, BIZ_GENIUS_DISCOUNT, BIZ_GENIUS_INCOME_BONUS
     genius_label = BIZ_GENIUS_LEVEL_LABELS.get(biz_genius, "") if biz_genius > 0 else "не открыт"
-    genius_str = f"Ур.{biz_genius}/5" + (f" — {genius_label}" if genius_label else "")
+    genius_discount = BIZ_GENIUS_DISCOUNT[biz_genius - 1] if biz_genius > 0 else 0
+    genius_income_b = BIZ_GENIUS_INCOME_BONUS[biz_genius - 1] if biz_genius > 0 else 0
+    genius_perks = []
+    if genius_income_b:
+        genius_perks.append(f"+{genius_income_b}% доход")
+    if genius_discount:
+        genius_perks.append(f"-{genius_discount}% стройка")
+    genius_perks_str = f" ({', '.join(genius_perks)})" if genius_perks else ""
+    genius_str = f"Ур.{biz_genius}/5" + (f" — {genius_label}" if genius_label else "") + genius_perks_str
 
     # Дополнительная информация
     extra_lines = []

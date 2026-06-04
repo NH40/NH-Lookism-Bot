@@ -459,3 +459,4 @@ async def _do_buy_recruits(
     if not await cooldown_service.acquire_lock(lock_key, ttl=5):
         return {"ok": False, "reason": "Подожди..."}
     return await squad_service.buy_recruit(session, user, rank, count)
+

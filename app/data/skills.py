@@ -79,21 +79,21 @@ MASTERY_BY_ID: dict[str, MasteryConfig] = {m.skill_id: m for m in MASTERY}
 PATH_SKILLS: dict[str, list[PathSkill]] = {
     "businessman": [
         # Уровень 0 — базовые
-        PathSkill("biz_income_1",   "Деловая хватка",      "📈", "+10% к доходу — деньги сами идут в руки",                   "businessman", 3,  {"income_bonus_percent": 10},      0),
-        PathSkill("biz_discount_1", "Экономия",            "💸", "-10% стоимость зданий — умеешь торговаться",                "businessman", 4,  {"building_discount_percent": 10}, 0),
+        PathSkill("biz_income_1",   "Деловая хватка",      "📈", "+15% к доходу — деньги сами идут в руки",                   "businessman", 3,  {"income_bonus_percent": 15},      0),
+        PathSkill("biz_discount_1", "Экономия",            "💸", "-10% стоимость зданий — умеешь торговаться",                 "businessman", 4,  {"building_discount_percent": 10}, 0),
         # Уровень 1
-        PathSkill("biz_income_2",   "Масштабирование",     "📊", "+20% к доходу — бизнес растёт как на дрожжах",              "businessman", 5,  {"income_bonus_percent": 20},      1),
-        PathSkill("biz_quality_1",  "Инвестор в кадры",    "🎓", "+5% к качеству тренировки — вкладываешь в лучших",          "businessman", 5,  {"train_quality_bonus": 5},        1),
-        PathSkill("biz_discount_2", "Оптовик",             "🏭", "-20% стоимость зданий — оптом всегда дешевле",              "businessman", 7,  {"building_discount_percent": 20}, 1),
+        PathSkill("biz_income_2",   "Масштабирование",     "📊", "+25% к доходу — бизнес растёт как на дрожжах",              "businessman", 5,  {"income_bonus_percent": 25},      1),
+        PathSkill("biz_quality_1",  "Земельный банк",      "🏘", "+5 бонусных районов — расширяй бизнес без войны",           "businessman", 5,  {"bonus_business_districts": 5},   1),
+        PathSkill("biz_discount_2", "Оптовик",             "🏭", "-20% стоимость зданий — оптом всегда дешевле",               "businessman", 7,  {"building_discount_percent": 20}, 1),
         # Уровень 2
-        PathSkill("biz_income_3",   "Монополия",           "🏰", "+30% к доходу — конкурентов не осталось",                   "businessman", 8,  {"income_bonus_percent": 30},      2),
-        PathSkill("biz_quality_2",  "Элитный тренер",      "🏆", "+10% к качеству тренировки — только топ бойцы",             "businessman", 9,  {"train_quality_bonus": 10},       2),
+        PathSkill("biz_income_3",   "Монополия",           "🏰", "+35% к доходу — конкурентов не осталось",                   "businessman", 8,  {"income_bonus_percent": 35},      2),
+        PathSkill("biz_quality_2",  "Мегаэкспансия",       "🌆", "+8 бонусных районов — ты скупаешь всё",                     "businessman", 9,  {"bonus_business_districts": 8},   2),
         PathSkill("biz_recruit_1",  "HR-директор",         "🤝", "+15% вербовка — кадры решают всё",                          "businessman", 8,  {"recruit_count_bonus": 15},       2),
         # Уровень 3
         PathSkill("biz_multiplier", "Районный барон",      "🌍", "×1.5 к доходу районов — твой район, твои правила",          "businessman", 12, {"district_multiplier": 1.5},      3),
-        PathSkill("biz_income_4",   "Корпорация",          "🏙", "+40% к доходу — ты уже не просто бизнесмен",                "businessman", 11, {"income_bonus_percent": 40},      3),
+        PathSkill("biz_income_4",   "Корпорация",          "🏙", "+50% к доходу — ты уже не просто бизнесмен",                "businessman", 11, {"income_bonus_percent": 50},      3),
         # Уровень 4
-        PathSkill("biz_reket",      "Рэкет",               "🔫", "+1 доп. атака в КД — бизнес надо защищать... кулаками",    "businessman", 14, {"extra_attack_count": 1},         4),
+        PathSkill("biz_reket",      "Деловая империя",     "👑", "+20% к доходу — абсолютная монополия на рынке",             "businessman", 14, {"income_bonus_percent": 20},      4),
         PathSkill("biz_compound",   "Сложный процент",     "💹", "+50% доход от районов — деньги делают деньги",              "businessman", 13, {"district_multiplier": 1.5},      4),
     ],
     "romantic": [

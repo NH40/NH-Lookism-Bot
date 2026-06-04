@@ -334,9 +334,13 @@ async def cb_craft_path_spin(cb: CallbackQuery, session: AsyncSession, user: Use
 
 async def _biz_genius_page(cb: CallbackQuery, session: AsyncSession, user: User, back: str = "raid_craft"):
     """Общая функция отображения страницы Гения бизнеса."""
+    from app.constants.raid import BUSINESS_DISTRICT_COST_TIER2, BUSINESS_DISTRICTS_TIER1_MAX, BIZ_GENIUS_DISCOUNT
     biz_frags = getattr(user, "business_fragments", 0)
     biz_genius = getattr(user, "business_genius_level", 0)
     bonus_districts = getattr(user, "bonus_business_districts", 0)
+
+    # Текущая цена района (зависит от тира)
+    current_dist_cost = BUSINESS_DISTRICT_COST if bonus_districts < BUSINESS_DISTRICTS_TIER1_MAX else BUSINESS_DISTRICT_COST_TIER2
 
     builder = InlineKeyboardBuilder()
 
@@ -357,20 +361,21 @@ async def _biz_genius_page(cb: CallbackQuery, session: AsyncSession, user: User,
 
     # ── Бизнес-экспансия: бонусные районы ────────────────────────────────────
     if bonus_districts < BUSINESS_DISTRICTS_MAX:
-        can_d = "✅" if biz_frags >= BUSINESS_DISTRICT_COST else "❌"
+        can_d = "✅" if biz_frags >= current_dist_cost else "❌"
+        tier_label = " 🥈Тир 2" if bonus_districts >= BUSINESS_DISTRICTS_TIER1_MAX else ""
         builder.row(InlineKeyboardButton(
-            text=f"{can_d} +1 бонусный район — {BUSINESS_DISTRICT_COST} 🏢"
+            text=f"{can_d} +1 бонусный район — {current_dist_cost} 🏢{tier_label}"
                  f" [{bonus_districts}/{BUSINESS_DISTRICTS_MAX}]",
             callback_data="craft_biz_district"
         ))
-        if biz_frags >= BUSINESS_DISTRICT_COST * 5 and bonus_districts + 5 <= BUSINESS_DISTRICTS_MAX:
+        if biz_frags >= current_dist_cost * 5 and bonus_districts + 5 <= BUSINESS_DISTRICTS_MAX:
             builder.row(InlineKeyboardButton(
-                text=f"✅ +5 районов — {BUSINESS_DISTRICT_COST * 5} 🏢",
+                text=f"✅ +5 районов — {current_dist_cost * 5} 🏢",
                 callback_data="craft_biz_district_5"
             ))
     else:
         builder.row(InlineKeyboardButton(
-            text=f"✅ Бизнес-экспансия — максимум ({BUSINESS_DISTRICTS_MAX}/50)",
+            text=f"✅ Бизнес-экспансия — максимум ({BUSINESS_DISTRICTS_MAX}/{BUSINESS_DISTRICTS_MAX})",
             callback_data="noop_raid"
         ))
 
@@ -379,31 +384,35 @@ async def _biz_genius_page(cb: CallbackQuery, session: AsyncSession, user: User,
     # ── Текст ─────────────────────────────────────────────────────────────────
     lines = [
         "🎖 <b>Гений бизнеса</b>",
-        f"<i>Фрагменты — у Элиты (Нулевое поколение)</i>",
+        "<i>Фрагменты — у Элиты (Нулевое поколение)</i>",
         "",
         f"🏢 Бизнес-фрагменты: <b>{biz_frags}</b>",
         f"🎖 Уровень: <b>{biz_genius}/5</b>",
         "",
         "<b>── Уровни Гения бизнеса ──</b>",
-        "<i>Каждый уровень открывает новые здания и даёт бонус к доходу</i>",
+        "<i>Каждый уровень: новые здания + бонус к доходу + скидка на строительство</i>",
         "",
     ]
     for lvl in range(1, 6):
         cost = BIZ_GENIUS_COSTS[lvl - 1]
         bonus = BIZ_GENIUS_INCOME_BONUS[lvl - 1]
+        discount = BIZ_GENIUS_DISCOUNT[lvl - 1]
         lbl = BIZ_GENIUS_LEVEL_LABELS.get(lvl, "")
+        perks = f"+{bonus}% доход, -{discount}% стройка"
         if biz_genius >= lvl:
-            lines.append(f"✅ Ур.{lvl}: {lbl} — +{bonus}% доход")
+            lines.append(f"✅ Ур.{lvl}: {lbl} — {perks}")
         elif biz_genius + 1 == lvl:
-            lines.append(f"🔓 Ур.{lvl}: {lbl} — {cost} 🏢 | +{bonus}% доход")
+            lines.append(f"🔓 Ур.{lvl}: {lbl} — {cost} 🏢 | {perks}")
         else:
-            lines.append(f"🔒 Ур.{lvl}: {lbl} — {cost} 🏢 | +{bonus}% доход")
+            lines.append(f"🔒 Ур.{lvl}: {lbl} — {cost} 🏢 | {perks}")
 
     lines += [
         "",
         "<b>── Бизнес-экспансия ──</b>",
-        f"<i>Бонусные районы для строительства без захвата городов</i>",
-        f"🏘 Куплено: <b>{bonus_districts}/{BUSINESS_DISTRICTS_MAX}</b> | Цена: {BUSINESS_DISTRICT_COST} 🏢/р.",
+        "<i>Бонусные районы для строительства без захвата городов</i>",
+        f"🏘 Куплено: <b>{bonus_districts}/{BUSINESS_DISTRICTS_MAX}</b>",
+        f"  Тир 1 (1–{BUSINESS_DISTRICTS_TIER1_MAX}): {BUSINESS_DISTRICT_COST} 🏢/р.",
+        f"  Тир 2 ({BUSINESS_DISTRICTS_TIER1_MAX + 1}–{BUSINESS_DISTRICTS_MAX}): {BUSINESS_DISTRICT_COST_TIER2} 🏢/р.",
     ]
 
     try:
@@ -466,15 +475,17 @@ async def cb_biz_genius_upgrade(cb: CallbackQuery, session: AsyncSession, user: 
 
 @router.callback_query(F.data == "craft_biz_district")
 async def cb_craft_biz_district(cb: CallbackQuery, session: AsyncSession, user: User):
+    from app.constants.raid import BUSINESS_DISTRICT_COST_TIER2, BUSINESS_DISTRICTS_TIER1_MAX
     biz_frags = getattr(user, "business_fragments", 0)
     bonus_districts = getattr(user, "bonus_business_districts", 0)
     if bonus_districts >= BUSINESS_DISTRICTS_MAX:
         await cb.answer("Достигнут максимум бонусных районов!", show_alert=True)
         return
-    if biz_frags < BUSINESS_DISTRICT_COST:
-        await cb.answer(f"Нужно {BUSINESS_DISTRICT_COST} 🏢 фрагментов", show_alert=True)
+    cost = BUSINESS_DISTRICT_COST if bonus_districts < BUSINESS_DISTRICTS_TIER1_MAX else BUSINESS_DISTRICT_COST_TIER2
+    if biz_frags < cost:
+        await cb.answer(f"Нужно {cost} 🏢 фрагментов", show_alert=True)
         return
-    user.business_fragments = biz_frags - BUSINESS_DISTRICT_COST
+    user.business_fragments = biz_frags - cost
     user.bonus_business_districts = bonus_districts + 1
     await session.flush()
     await cb.answer(f"✅ +1 бонусный район! Всего: {user.bonus_business_districts}", show_alert=True)
@@ -483,20 +494,32 @@ async def cb_craft_biz_district(cb: CallbackQuery, session: AsyncSession, user: 
 
 @router.callback_query(F.data == "craft_biz_district_5")
 async def cb_craft_biz_district_5(cb: CallbackQuery, session: AsyncSession, user: User):
-    cost5 = BUSINESS_DISTRICT_COST * 5
+    from app.constants.raid import BUSINESS_DISTRICT_COST_TIER2, BUSINESS_DISTRICTS_TIER1_MAX
     biz_frags = getattr(user, "business_fragments", 0)
     bonus_districts = getattr(user, "bonus_business_districts", 0)
-    if biz_frags < cost5:
-        await cb.answer(f"Нужно {cost5} 🏢 фрагментов", show_alert=True)
-        return
-    add = min(5, BUSINESS_DISTRICTS_MAX - bonus_districts)
-    if add <= 0:
+    if bonus_districts >= BUSINESS_DISTRICTS_MAX:
         await cb.answer("Достигнут максимум!", show_alert=True)
         return
-    user.business_fragments = biz_frags - (add * BUSINESS_DISTRICT_COST)
+    # Считаем реальную стоимость с учётом тира (районы могут пересекать границу)
+    total_cost = 0
+    add = 0
+    cur = bonus_districts
+    for _ in range(5):
+        if cur >= BUSINESS_DISTRICTS_MAX:
+            break
+        c = BUSINESS_DISTRICT_COST if cur < BUSINESS_DISTRICTS_TIER1_MAX else BUSINESS_DISTRICT_COST_TIER2
+        if biz_frags < total_cost + c:
+            break
+        total_cost += c
+        add += 1
+        cur += 1
+    if add <= 0:
+        await cb.answer(f"Нужно больше 🏢 фрагментов", show_alert=True)
+        return
+    user.business_fragments = biz_frags - total_cost
     user.bonus_business_districts = bonus_districts + add
     await session.flush()
-    await cb.answer(f"✅ +{add} районов! Всего: {user.bonus_business_districts}", show_alert=True)
+    await cb.answer(f"✅ +{add} районов ({total_cost} 🏢)! Всего: {user.bonus_business_districts}", show_alert=True)
     await _biz_genius_page(cb, session, user, back="raid_craft")
 
 

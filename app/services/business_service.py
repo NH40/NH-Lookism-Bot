@@ -15,6 +15,20 @@ class BusinessService:
             return 0
         return BIZ_GENIUS_INCOME_BONUS[min(lvl, len(BIZ_GENIUS_INCOME_BONUS)) - 1]
 
+    @staticmethod
+    async def _digital_network_bonus(session: AsyncSession, user: User) -> int:
+        """Сетевой эффект: +10% за каждые 10 цифровых зданий, макс +50%."""
+        if getattr(user, "business_path", None) != "digital":
+            return 0
+        count = await session.scalar(
+            select(func.sum(UserBuilding.count)).where(
+                UserBuilding.user_id == user.id,
+                UserBuilding.is_active == True,
+                UserBuilding.path == "digital",
+            )
+        ) or 0
+        return min(50, (count // 10) * 10)
+
     async def _recalc_income(self, session: AsyncSession, user: User) -> None:
         result = await session.execute(
             select(
@@ -28,7 +42,8 @@ class BusinessService:
         base_income = result.scalar() or 0
         clan_bonus = getattr(user, 'clan_income_bonus', 0) + getattr(user, 'clan_donat_income_bonus', 0)
         biz_genius_bonus = self._biz_genius_bonus(user)
-        total_bonus = user.income_bonus_percent + user.prestige_income_bonus + clan_bonus + biz_genius_bonus
+        network_bonus = await self._digital_network_bonus(session, user)
+        total_bonus = user.income_bonus_percent + user.prestige_income_bonus + clan_bonus + biz_genius_bonus + network_bonus
         effective_income = int(
             base_income * (1 + total_bonus / 100) * user.district_multiplier
         )
@@ -75,6 +90,28 @@ class BusinessService:
             .values(total_earned=Referral.total_earned + amount)
         )
 
+    @staticmethod
+    def _apply_demolish_influence(user: User, districts: int) -> None:
+        """Корректирует влияние при сносе зданий.
+        Политика: теряет влияние обратно (cost * 5).
+        Нелегальный: возвращает влияние (cost * 5).
+        """
+        if districts <= 0:
+            return
+        delta = districts * 5
+        if user.business_path == "political":
+            user.influence = max(0, user.influence - delta)
+        elif user.business_path == "illegal":
+            user.influence += delta
+
+    @staticmethod
+    def _genius_discount(user: User) -> int:
+        from app.constants.raid import BIZ_GENIUS_DISCOUNT
+        lvl = getattr(user, "business_genius_level", 0)
+        if lvl <= 0:
+            return 0
+        return BIZ_GENIUS_DISCOUNT[min(lvl, len(BIZ_GENIUS_DISCOUNT)) - 1]
+
     async def buy_building(
         self, session: AsyncSession, user: User,
         building_id: str, city_id: int | None = None
@@ -90,7 +127,7 @@ class BusinessService:
         if not user.business_path:
             user.business_path = cfg.path
 
-        discount = user.building_discount_percent
+        discount = user.building_discount_percent + self._genius_discount(user)
         cost = max(2, int(cfg.district_cost * (1 - discount / 100)))
         if cost % 2 != 0:
             cost += 1
@@ -146,14 +183,13 @@ class BusinessService:
                     return {"ok": False, "reason": f"В этом городе максимум {max_biz} {sfx}"}
 
         if user.business_path == "illegal":
-            loss = cost * 3
+            loss = cost * 5
             from app.repositories.title_repo import title_repo
             has_great = await title_repo.has_title(session, user.id, "great_influence")
             min_influence = 3000 if has_great else 10
             user.influence = max(min_influence, user.influence - loss)
         elif user.business_path == "political":
             user.influence += cost * 5
-
         result = await session.execute(
             select(UserBuilding).where(
                 UserBuilding.user_id == user.id,
@@ -192,7 +228,7 @@ class BusinessService:
         if not cfg:
             return {"ok": False, "reason": "Здание не найдено", "count": 0}
 
-        discount = user.building_discount_percent
+        discount = user.building_discount_percent + self._genius_discount(user)
         cost = max(2, int(cfg.district_cost * (1 - discount / 100)))
         if cost % 2 != 0:
             cost += 1
@@ -244,7 +280,7 @@ class BusinessService:
                 continue
 
             if user.business_path == "illegal":
-                user.influence = max(min_influence, user.influence - cost * n * 3)
+                user.influence = max(min_influence, user.influence - cost * n * 5)
             elif user.business_path == "political":
                 user.influence += cost * n * 5
 
@@ -289,10 +325,12 @@ class BusinessService:
         )
         buildings = result.scalars().all()
         total_count = sum(b.count for b in buildings)
+        total_districts = sum(b.district_cost for b in buildings)
         for b in buildings:
             await session.delete(b)
         await session.flush()
         if buildings:
+            self._apply_demolish_influence(user, total_districts)
             await self._recalc_income(session, user)
         return {"ok": True, "count": total_count}
 
@@ -307,10 +345,12 @@ class BusinessService:
         )
         buildings = result.scalars().all()
         total_count = sum(b.count for b in buildings)
+        total_districts = sum(b.district_cost for b in buildings)
         for b in buildings:
             await session.delete(b)
         await session.flush()
         if buildings:
+            self._apply_demolish_influence(user, total_districts)
             await self._recalc_income(session, user)
         return {"ok": True, "count": total_count}
 
@@ -332,8 +372,9 @@ class BusinessService:
         clan_donat_bonus = getattr(user, 'clan_donat_income_bonus', 0)
         clan_bonus = clan_upgrade_bonus + clan_donat_bonus
         biz_genius_bonus = self._biz_genius_bonus(user)
+        network_bonus = await self._digital_network_bonus(session, user)
         other_bonus = user.income_bonus_percent + user.prestige_income_bonus
-        total_bonus = other_bonus + clan_bonus + biz_genius_bonus
+        total_bonus = other_bonus + clan_bonus + biz_genius_bonus + network_bonus
 
         effective_income = int(base * (1 + total_bonus / 100) * user.district_multiplier)
         effective_final = int(effective_income * (1 + potion_bonus / 100))
@@ -355,8 +396,9 @@ class BusinessService:
             "district_multiplier": user.district_multiplier,
             "skills_bonus": user.income_bonus_percent,
             "biz_genius_bonus": biz_genius_bonus,
-            "circ_passive_income": circ_passive,      # /час
-            "circ_passive_per_min": circ_per_min,     # /мин (как реально зачисляется)
+            "network_bonus": network_bonus,
+            "circ_passive_income": circ_passive,
+            "circ_passive_per_min": circ_per_min,
         }
 
 

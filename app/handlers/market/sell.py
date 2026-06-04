@@ -407,6 +407,8 @@ async def msg_market_price(
     )
 
     if result["ok"]:
+        from app.utils.region_activity import record
+        await record(session, user.id, "market")
         label = market_service.get_item_label(item_type)
         await message.answer(
             f"✅ <b>Товар выставлен!</b>\n\n"

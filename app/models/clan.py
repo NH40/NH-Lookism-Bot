@@ -40,6 +40,8 @@ class ClanMember(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     clan_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     user_id: Mapped[int] = mapped_column(Integer, nullable=False, unique=True, index=True)
+    # owner / deputy / captain / member
+    rank: Mapped[str] = mapped_column(String(16), nullable=False, default="member")
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

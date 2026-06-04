@@ -37,7 +37,7 @@ class TrainingService:
                 "cd": ttl,
             }
 
-        discount = getattr(user, 'circ_trainer_discount', 0)
+        discount = getattr(user, 'circ_trainer_discount', 0) + getattr(user, 'region_trainer_discount', 0)
         effective_cost = max(1, int(TOM_LEE_COST * (1 - discount / 100)))
         if user.nh_coins < effective_cost:
             return {
@@ -79,7 +79,7 @@ class TrainingService:
                 "cd": ttl,
             }
 
-        discount = getattr(user, 'circ_trainer_discount', 0)
+        discount = getattr(user, 'circ_trainer_discount', 0) + getattr(user, 'region_trainer_discount', 0)
         effective_cost = max(1, int(JEON_GON_COST * (1 - discount / 100)))
         if user.nh_coins < effective_cost:
             return {

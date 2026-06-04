@@ -14,6 +14,7 @@ from app.models.king_bot import KingBot
 from app.models.promo import PromoCode, PromoUse
 from app.models.daily_quest import DailyQuest
 from app.models.clan import Clan, ClanMember, ClanInvite, ClanWar, ClanAuction
+from app.models.clan_region import KoreanRegion, KoreanRegionWar, KoreanRegionWarParticipant, KoreanRegionActivity
 
 __all__ = [
     "User", "City", "District", "FistBot",
@@ -21,5 +22,7 @@ __all__ = [
     "UserAchievement", "UserDonatTitle",
     "ActivePotion", "UserMastery", "UserPathSkills",
     "Referral", "Auction", "AuctionLot", "AuctionBid",
-    "GameVersion", "MarketListing", "KingBot", "PromoCode", "PromoUse", "DailyQuest", "Clan", "ClanMember", "ClanInvite", "ClanWar", "ClanAuction"
+    "GameVersion", "MarketListing", "KingBot", "PromoCode", "PromoUse", "DailyQuest",
+    "Clan", "ClanMember", "ClanInvite", "ClanWar", "ClanAuction",
+    "KoreanRegion", "KoreanRegionWar", "KoreanRegionWarParticipant", "KoreanRegionActivity",
 ]

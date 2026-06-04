@@ -121,6 +121,8 @@ async def cb_auction_bid(cb: CallbackQuery, session: AsyncSession, user: User):
     result = await auction_service.place_bid(session, user, amount)
     if result["ok"]:
         await cb.answer(f"✅ Ставка {fmt_num(amount)} принята!")
+        from app.utils.region_activity import record
+        await record(session, user.id, "auction")
     else:
         await cb.answer(result["reason"], show_alert=True)
     await _render_auction(cb, session, user)

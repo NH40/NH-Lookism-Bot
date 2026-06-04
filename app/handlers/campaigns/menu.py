@@ -599,6 +599,9 @@ async def cb_campaigns_launch(cb: CallbackQuery, session: AsyncSession, user: Us
         await cb.answer(result["reason"], show_alert=True)
         return
 
+    from app.utils.region_activity import record
+    await record(session, user.id, "campaign")
+
     camp = result["campaign"]
     res_cfg = CAMPAIGN_RESOURCE_MAP[resource_id]
     rank_cfg = CAMPAIGN_RANK_MAP[task_rank]
@@ -756,6 +759,9 @@ async def cb_campaigns_collect(cb: CallbackQuery, session: AsyncSession, user: U
     if not result["ok"]:
         await cb.answer(result.get("reason", "Ошибка"), show_alert=True)
         return
+
+    from app.utils.region_activity import record
+    await record(session, user.id, "campaign")
 
     res_cfg = CAMPAIGN_RESOURCE_MAP.get(result["resource_type"])
     rank_cfg = CAMPAIGN_RANK_MAP.get(result["rank"])

@@ -100,6 +100,14 @@ class SquadService:
         # Счётчик достижений
         user.total_statists_recruited = (user.total_statists_recruited or 0) + len(recruited)
 
+        # Активность в войне за регион
+        from app.models.clan import ClanMember
+        from sqlalchemy import select as _sel
+        from app.services.clan import clan_service
+        clan_member = await session.scalar(_sel(ClanMember).where(ClanMember.user_id == user.id))
+        if clan_member:
+            await clan_service.record_activity(session, user.id, clan_member.clan_id, "recruit")
+
         # Пересчёт боевой мощи
         from app.repositories.squad_repo import squad_repo
         await squad_repo.update_user_combat_power(session, user)
@@ -202,7 +210,8 @@ class SquadService:
         # Охват тренировки (% от кандидатов)
         train_bonus = await potion_service.get_effective_train_bonus(session, user)
         clan_train = getattr(user, 'clan_train_bonus', 0) + getattr(user, 'clan_donat_train_bonus', 0)
-        coverage_pct = min(100, TRAIN_BASE_COVERAGE + train_bonus + clan_train)
+        region_train = getattr(user, 'region_train_pct', 0)
+        coverage_pct = min(100, TRAIN_BASE_COVERAGE + train_bonus + clan_train + region_train)
         count_to_train = max(1, int(len(candidates) * coverage_pct / 100))
 
         # Случайный выбор
@@ -237,9 +246,9 @@ class SquadService:
         from app.repositories.title_repo import title_repo
         has_focus = await title_repo.has_title(session, user.id, "focus")
         extra = 20 if has_focus else 0
-        # clan_train_bonus + donat тоже влияют на КД тренировки
         clan_speed = (getattr(user, 'clan_train_bonus', 0) + getattr(user, 'clan_donat_train_bonus', 0)) // 2
-        train_cd_seconds = cooldown_service.apply_speed_reduction(5 * 60, speed_pct, extra + clan_speed)
+        region_train_cd = getattr(user, 'region_train_cd_pct', 0)
+        train_cd_seconds = cooldown_service.apply_speed_reduction(5 * 60, speed_pct + region_train_cd, extra + clan_speed)
 
         if is_second:
             await cooldown_service.set_cooldown(

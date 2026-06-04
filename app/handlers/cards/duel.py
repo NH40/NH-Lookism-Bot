@@ -151,6 +151,8 @@ async def cb_duel_bot(cb: CallbackQuery, session: AsyncSession, user: User):
     result = await duel_service.duel_vs_bot(session, user, tier)
     if result["ok"]:
         await quest_service.add_progress(session, user, "card_duel")
+        from app.utils.region_activity import record
+        await record(session, user.id, "duel")
     await session.commit()
 
     if not result["ok"]:

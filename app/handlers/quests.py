@@ -158,6 +158,9 @@ async def cb_quest_claim(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer(result["reason"], show_alert=True)
         return
 
+    from app.utils.region_activity import record
+    await record(session, user.id, "quest")
+
     msg = f"✅ Награда получена!\n💰 +{fmt_num(result['coins'])} NHCoin"
     if result["tickets"] > 0:
         msg += f"\n🎟 +{result['tickets']} тикетов"

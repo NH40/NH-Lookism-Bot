@@ -26,8 +26,6 @@ async def cb_market_menu(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.message.edit_text(
             f"🏪 <b>Биржа</b>\n\n"
             f"💰 NHCoin: <b>{fmt_num(user.nh_coins)}</b>\n"
-            f"🏢 Фрагм. бизнеса: <b>{user.business_fragments}</b>\n"
-            f"⚔️ Очки войны: <b>{user.war_points}</b>\n\n"
             f"Выбери роль:",
             reply_markup=builder.as_markup(),
             parse_mode="HTML",

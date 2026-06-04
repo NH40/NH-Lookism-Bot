@@ -94,7 +94,7 @@ class ClanInviteService(ClanBaseService):
         for other in other_invites.scalars().all():
             other.is_pending = False
         invite.is_pending = False
-        member = ClanMember(clan_id=clan.id, user_id=user.id)
+        member = ClanMember(clan_id=clan.id, user_id=user.id, rank="member")
         session.add(member)
         await self.recalc_power(session, clan)
         await self._add_clan_bonuses_to_user(session, clan, user)

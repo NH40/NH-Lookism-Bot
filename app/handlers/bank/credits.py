@@ -155,6 +155,9 @@ async def msg_credit_amount(message: Message, session: AsyncSession, user: User,
         await message.answer(err, reply_markup=back_kb("bank_credits"), parse_mode="HTML")
         return
 
+    from app.utils.region_activity import record
+    await record(session, user.id, "bank")
+
     due = int(amount * REPAY_FACTOR)
     await message.answer(
         f"✅ <b>Кредит выдан!</b>\n\n"

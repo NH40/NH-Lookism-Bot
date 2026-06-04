@@ -176,6 +176,9 @@ async def msg_invest_amount(message: Message, session: AsyncSession, user: User,
         await message.answer(err, reply_markup=back_kb("bank_investments"), parse_mode="HTML")
         return
 
+    from app.utils.region_activity import record
+    await record(session, user.id, "bank")
+
     payout = amount + int(amount * pct / 100)
     await message.answer(
         f"✅ <b>Вклад открыт!</b>\n\n"

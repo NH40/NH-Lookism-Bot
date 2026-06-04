@@ -48,7 +48,7 @@ class ClanBaseService:
         clan = Clan(name=name, owner_id=user.id, combat_power=user.combat_power)
         session.add(clan)
         await session.flush()
-        member = ClanMember(clan_id=clan.id, user_id=user.id)
+        member = ClanMember(clan_id=clan.id, user_id=user.id, rank="owner")
         session.add(member)
         await session.flush()
         return {"ok": True, "clan_id": clan.id, "name": name}
@@ -151,22 +151,26 @@ class ClanBaseService:
 
     async def _remove_clan_bonuses_from_user(self, session: AsyncSession, user: User) -> None:
         from app.services.business_service import business_service
+        from app.services.clan.region import ClanRegionService
         user.clan_income_bonus = 0
         user.clan_ticket_bonus = 0
         user.clan_train_bonus = 0
         user.clan_donat_income_bonus = 0
         user.clan_donat_ticket_bonus = 0
         user.clan_donat_train_bonus = 0
-        user.clan_vvip_level = 0          # сбрасываем VVIP при выходе из клана
+        user.clan_vvip_level = 0
+        await ClanRegionService().clear_region_bonuses_for_user(user)
         await business_service._recalc_income(session, user)
 
     async def _add_clan_bonuses_to_user(self, session: AsyncSession, clan: Clan, user: User) -> None:
         from app.services.business_service import business_service
+        from app.services.clan.region import ClanRegionService
         user.clan_income_bonus = clan.bonus_income_pct
         user.clan_ticket_bonus = clan.bonus_ticket_pct
         user.clan_train_bonus = clan.bonus_train_pct
         user.clan_donat_income_bonus = clan.donat_income_pct
         user.clan_donat_ticket_bonus = clan.donat_ticket_pct
         user.clan_donat_train_bonus = clan.donat_train_pct
-        user.clan_vvip_level = getattr(clan, "vvip_level", 0)  # синхронизируем VVIP при входе
+        user.clan_vvip_level = getattr(clan, "vvip_level", 0)
+        await ClanRegionService().apply_region_bonuses_for_user(session, user, clan.id)
         await business_service._recalc_income(session, user)

@@ -36,8 +36,10 @@ class GachaService:
             ttl = await cooldown_service.get_ttl(cd_key)
             return {"ok": False, "reason": cooldown_service.format_ttl(ttl)}
 
-        # Круговой донат «Повелитель гор» круг 4: переполнение — лимит ×2
-        overflow = getattr(user, "circ_ticket_overflow", False)
+        overflow = (
+            getattr(user, "circ_ticket_overflow", False)
+            or getattr(user, "region_ticket_overflow", False)
+        )
         ticket_cap = user.max_tickets * 2 if overflow else user.max_tickets
         if user.tickets >= ticket_cap:
             return {"ok": False, "reason": f"Хранилище полно ({user.tickets}/{ticket_cap})"}
@@ -64,7 +66,11 @@ class GachaService:
         await cooldown_service.set_cooldown(cd_key, cd_seconds)
 
         if got:
-            double = getattr(user, "double_ticket", False)
+            region_double_chance = 50 if getattr(user, "region_double_ticket", False) else 0
+            double = (
+                getattr(user, "double_ticket", False)
+                or (region_double_chance > 0 and random.randint(1, 100) <= region_double_chance)
+            )
             gained = 2 if double and (user.tickets + 1 < ticket_cap) else 1
             user.tickets = min(ticket_cap, user.tickets + gained)
             await session.flush()

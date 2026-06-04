@@ -33,14 +33,19 @@ async def cb_clans_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     builder.row(InlineKeyboardButton(text="🔍 Найти клан", callback_data="clan_search:0"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
 
-    try:
-        await cb.message.edit_text(
-            "🏯 <b>Кланы</b>\n\nВы не состоите в клане.\nСоздайте свой или вступите в существующий!",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    text = "🏯 <b>Кланы</b>\n\nВы не состоите в клане.\nСоздайте свой или вступите в существующий!"
+    kb = builder.as_markup()
+    if cb.message.photo:
+        try:
+            await cb.message.delete()
+        except Exception:
+            pass
+        await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
+    else:
+        try:
+            await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+        except Exception:
+            await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
 
 
 async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, clan: Clan):
@@ -48,7 +53,9 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
     is_owner = clan.owner_id == user.id
     now = datetime.now(timezone.utc)
 
-    from app.models.clan import ClanWar
+    from app.models.clan import ClanWar, ClanMember
+    from app.services.clan.region import RANK_LABELS
+
     active_war = await session.scalar(
         select(ClanWar).where(
             ClanWar.is_finished == False,
@@ -56,39 +63,81 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
         )
     )
     active_auction = await clan_service.get_active_auction(session, clan.id)
+    active_region_war = await clan_service.get_active_war_for_clan(session, clan.id)
+    own_region = await clan_service.get_clan_region(session, clan.id)
+
+    # Ранг текущего пользователя
+    my_member = await session.scalar(
+        select(ClanMember).where(
+            ClanMember.clan_id == clan.id,
+            ClanMember.user_id == user.id,
+        )
+    )
+    my_rank = my_member.rank if my_member else "member"
+    my_rank_label = RANK_LABELS.get(my_rank, my_rank)
+    can_manage = my_rank in ("owner", "deputy")
 
     builder = InlineKeyboardBuilder()
+
+    # Ряд 1: приглашение + участники
     if is_owner:
-        builder.row(InlineKeyboardButton(text="📨 Пригласить", callback_data="clan_invite"))
-    builder.row(InlineKeyboardButton(text="👥 Участники", callback_data="clan_members"))
-    builder.row(InlineKeyboardButton(text="🏦 Казна", callback_data="clan_treasury"))
-    builder.row(InlineKeyboardButton(text="🔄 Обмен", callback_data="clan_exchange"))
-    builder.row(InlineKeyboardButton(text="🛒 Магазин клана", callback_data="clan_shop"))
-
-    if active_auction:
-        remaining = max(0, int((active_auction.ends_at - now).total_seconds()))
-        h, m = divmod(remaining // 60, 60)
-        builder.row(InlineKeyboardButton(
-            text=f"🏛 Аукцион (⏳{h}ч {m}м)",
-            callback_data=f"clan_auction:{active_auction.id}"
-        ))
+        builder.row(
+            InlineKeyboardButton(text="📨 Пригласить", callback_data="clan_invite"),
+            InlineKeyboardButton(text="👥 Участники",  callback_data="clan_members"),
+        )
     else:
-        builder.row(InlineKeyboardButton(text="🏛 Аукцион", callback_data="clan_auction_info"))
+        builder.row(InlineKeyboardButton(text="👥 Участники", callback_data="clan_members"))
 
-    if active_war:
-        remaining = max(0, int((active_war.ends_at - now).total_seconds()))
-        h, m = divmod(remaining // 60, 60)
-        builder.row(InlineKeyboardButton(
-            text=f"⚔️ Война (⏳{h}ч {m}м)",
-            callback_data=f"clan_war_status:{active_war.id}"
-        ))
-    else:
-        builder.row(InlineKeyboardButton(text="⚔️ Война", callback_data="clan_war"))
+    # Ряд 2: казна + обмен
+    builder.row(
+        InlineKeyboardButton(text="🏦 Казна",   callback_data="clan_treasury"),
+        InlineKeyboardButton(text="🔄 Обмен",   callback_data="clan_exchange"),
+    )
 
+    # Ряд 3: магазин + аукцион
+    auction_btn = (
+        InlineKeyboardButton(
+            text=f"🏛 Аукцион ⏳{divmod(max(0, int((active_auction.ends_at - now).total_seconds())) // 60, 60)[0]}ч",
+            callback_data=f"clan_auction:{active_auction.id}",
+        ) if active_auction else
+        InlineKeyboardButton(text="🏛 Аукцион", callback_data="clan_auction_info")
+    )
+    builder.row(
+        InlineKeyboardButton(text="🛒 Магазин", callback_data="clan_shop"),
+        auction_btn,
+    )
+
+    # Ряд 4: война клановая + война за регион
+    war_btn = (
+        InlineKeyboardButton(
+            text=f"⚔️ Война ⏳{divmod(max(0, int((active_war.ends_at - now).total_seconds())) // 60, 60)[0]}ч",
+            callback_data=f"clan_war_status:{active_war.id}",
+        ) if active_war else
+        InlineKeyboardButton(text="⚔️ Война", callback_data="clan_war")
+    )
+    region_btn = (
+        InlineKeyboardButton(
+            text=f"🗺 Регион ⏳{divmod(max(0, int((active_region_war.ends_at - now).total_seconds())) // 60, 60)[0]}ч",
+            callback_data=f"clan_region_war_status:{active_region_war.id}",
+        ) if active_region_war else
+        InlineKeyboardButton(text="🗺 Регионы", callback_data="clan_regions_map")
+    )
+    builder.row(war_btn, region_btn)
+
+    # Ряд 5: зал славы (отдельно — широкая)
+    builder.row(InlineKeyboardButton(text="🏆 Зал Славы", callback_data="region_hall_of_fame"))
+
+    # Для владельца: управление
     if is_owner:
-        builder.row(InlineKeyboardButton(text="✏️ Редактировать", callback_data="clan_edit"))
-    builder.row(InlineKeyboardButton(text="🚪 Покинуть клан", callback_data="clan_leave"))
-    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
+        builder.row(
+            InlineKeyboardButton(text="🎖 Ранги", callback_data="clan_manage_ranks"),
+            InlineKeyboardButton(text="✏️ Редактировать", callback_data="clan_edit"),
+        )
+
+    builder.row(
+        InlineKeyboardButton(text="🚪 Покинуть", callback_data="clan_leave"),
+        InlineKeyboardButton(text="◀️ Назад",    callback_data="main_menu"),
+    )
 
     # Улучшения клана (из казны)
     upgrade_lines = []
@@ -107,26 +156,38 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
     vvip_level = getattr(clan, "vvip_level", 0)
     vvip_str = f"\n👑 VVIP: {vvip_level}" if vvip_level > 0 else ""
 
-    war_str = "\n⚔️ Идёт война!" if active_war else ""
+    war_str = "\n⚔️ Идёт клановая война!" if active_war else ""
 
-    try:
-        await cb.message.edit_text(
-            f"🏯 <b>{html.escape(clan.name)}</b>"
-            f"{'  👑 Владелец' if is_owner else ''}\n\n"
-            f"{'─' * 20}\n"
-            f"👥 Участников: {len(members)}/{clan.max_members}\n"
-            f"💪 Боевая мощь: {fmt_num(clan.combat_power)}\n"
-            f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin"
-            f"{upgrade_str}"
-            f"{donat_str}"
-            f"{vvip_str}"
-            f"{war_str}\n\n"
-            f"Выбери действие:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    region_str = ""
+    if own_region:
+        region_str = f"\n🗺 Регион: {own_region.emoji} {own_region.name}"
+
+    text = (
+        f"🏯 <b>{html.escape(clan.name)}</b>  {my_rank_label}\n\n"
+        f"{'─' * 20}\n"
+        f"👥 Участников: {len(members)}/{clan.max_members}\n"
+        f"💪 Боевая мощь: {fmt_num(clan.combat_power)}\n"
+        f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin"
+        f"{region_str}"
+        f"{upgrade_str}"
+        f"{donat_str}"
+        f"{vvip_str}"
+        f"{war_str}\n\n"
+        f"Выбери действие:"
+    )
+    kb = builder.as_markup()
+    if cb.message.photo:
+        # Удаляем фото-сообщение и отправляем текстовое
+        try:
+            await cb.message.delete()
+        except Exception:
+            pass
+        await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
+    else:
+        try:
+            await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+        except Exception:
+            await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
 
 # Участники клана
 

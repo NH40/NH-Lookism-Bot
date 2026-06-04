@@ -68,8 +68,12 @@ async def income_tick():
                     User.prestige_income_bonus,
                     User.clan_income_bonus,
                     User.clan_donat_income_bonus,
+                    User.region_income_pct,
+                    User.region_passive_income,
+                    User.region_income_building_pct,
                 ).where(
-                    or_(User.income_per_minute > 0, User.circ_passive_income > 0)
+                    or_(User.income_per_minute > 0, User.circ_passive_income > 0,
+                        User.region_passive_income > 0)
                 )
             )
             users = result.all()
@@ -103,7 +107,8 @@ async def income_tick():
                 potion_bonus = income_bonuses.get(u.id, 0)
 
                 if u.income_per_minute > 0:
-                    total = int(u.income_per_minute * (1 + potion_bonus / 100))
+                    building_bonus = (u.region_income_building_pct or 0)
+                    total = int(u.income_per_minute * (1 + (potion_bonus + building_bonus) / 100))
 
                     if total > 0:
                         if u.referred_by:
@@ -116,13 +121,13 @@ async def income_tick():
                         else:
                             earned += total
 
-                # Пассивный доход от круговых донатов: NHCoin/мин (уже за минуту)
-                # Применяем все % баффы дохода: навыки, пробуждение, клан, зелье
-                circ = u.circ_passive_income or 0
+                # Пассивный доход: circ-донаты + регион-бонус
+                circ = (u.circ_passive_income or 0) + (u.region_passive_income or 0)
                 if circ > 0:
                     skills_bonus = (u.income_bonus_percent or 0) + (u.prestige_income_bonus or 0)
                     clan_bonus   = (u.clan_income_bonus or 0) + (u.clan_donat_income_bonus or 0)
-                    circ_total_bonus = skills_bonus + clan_bonus + potion_bonus
+                    region_bonus = (u.region_income_pct or 0)
+                    circ_total_bonus = skills_bonus + clan_bonus + region_bonus + potion_bonus
                     per_tick = max(0, int(circ * (1 + circ_total_bonus / 100)))
                     if per_tick > 0:
                         earned += per_tick

@@ -252,6 +252,9 @@ async def cb_boss_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         final_cd = int(base_cd * result["cd_multiplier"])
         await cooldown_service.set_cooldown(cd_key, final_cd)
 
+        from app.utils.region_activity import record
+        await record(session, user.id, "boss")
+
         cfg = BOSS_MAP.get(boss.boss_id)
         boss_defeated = result["boss_defeated"]
 

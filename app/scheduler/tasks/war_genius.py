@@ -20,9 +20,11 @@ logger = logging.getLogger(__name__)
 
 async def war_genius_tick() -> None:
     async with AsyncSessionFactory() as session:
-        # Берём id пользователей с активным Гением войны
+        from sqlalchemy import or_
         user_ids = list((await session.execute(
-            select(User.id).where(User.war_genius_level > 0)
+            select(User.id).where(
+                or_(User.war_genius_level > 0, User.region_war_genius > 0)
+            )
         )).scalars())
 
     if not user_ids:
@@ -53,11 +55,13 @@ async def _auto_attack_for_user(session, user_id: int, user=None) -> None:
     if not user:
         return
 
-    war_genius = getattr(user, "war_genius_level", 0)
+    war_genius = max(
+        getattr(user, "war_genius_level", 0),
+        getattr(user, "region_war_genius", 0),
+    )
     if war_genius == 0:
         return
 
-    # Боссы, доступные для авто-атаки на данном уровне (все уровни до текущего включительно)
     allowed_pairs = set()
     for lvl in range(1, war_genius + 1):
         pair = WAR_GENIUS_BOSS_MAP.get(lvl)

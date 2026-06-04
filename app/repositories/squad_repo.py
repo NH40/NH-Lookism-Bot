@@ -27,6 +27,10 @@ class SquadRepo:
             .where(SquadMember.user_id == user.id)
         )
         squad_power = int(squad_power_raw or 0)
+        # Регион: +% только к силе статистов
+        region_squad_pct = getattr(user, 'region_squad_power_pct', 0)
+        if region_squad_pct > 0:
+            squad_power = int(squad_power * (1 + region_squad_pct / 100))
 
         # 2. Мощь персонажей
         char_r = await session.execute(
@@ -35,6 +39,10 @@ class SquadRepo:
             )
         )
         char_power = char_r.scalar() or 0
+        # Регион: +% только к силе персонажей
+        region_char_pct = getattr(user, 'region_char_power_pct', 0)
+        if region_char_pct > 0:
+            char_power = int(char_power * (1 + region_char_pct / 100))
 
         # 3. Бонус от учителя (обновляется scheduler'ом каждые 30 мин)
         teacher_bonus = user.teacher_power_bonus if user.referred_by else 0

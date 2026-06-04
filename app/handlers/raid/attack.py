@@ -65,7 +65,8 @@ async def cb_raid_status(cb: CallbackQuery, session: AsyncSession, user: User):
     ))
 
     boss_name = boss["name"] if boss else raid.boss_id
-    boss_hp = boss["base_hp"] if boss else 0
+    tier = getattr(raid, "boss_tier", 1) or 1
+    boss_hp = raid_service.get_effective_boss_hp(boss, tier) if boss else 0
 
     damage_pct = min(100.0, (raid.damage_dealt / boss_hp * 100)) if boss_hp > 0 else 0
     hp_bar_filled = int(damage_pct / 10)
@@ -103,6 +104,16 @@ async def cb_raid_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         return
 
     if result.get("boss_killed"):
+        # Засчитываем активность в войне за регион
+        from app.models.clan import ClanMember
+        from sqlalchemy import select as _select
+        from app.services.clan import clan_service
+        clan_member = await session.scalar(
+            _select(ClanMember).where(ClanMember.user_id == user.id)
+        )
+        if clan_member:
+            await clan_service.record_activity(session, user.id, clan_member.clan_id, "raid")
+
         rt = result.get("reward_type")
         if rt == "alchemy":
             frag_emoji, frag_name = "🧪", "фрагментов алхимии"

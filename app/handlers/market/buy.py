@@ -191,6 +191,8 @@ async def cb_market_buy(cb: CallbackQuery, session: AsyncSession, user: User):
         return
 
     await quest_service.add_progress(session, user, "market_buy")
+    from app.utils.region_activity import record
+    await record(session, user.id, "market")
 
     label = market_service.get_item_label(result["item_type"])
     await cb.answer(

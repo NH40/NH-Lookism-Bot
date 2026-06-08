@@ -31,7 +31,6 @@ async def cb_biz_build(
 
     used = await building_repo.get_used_districts(session, user.id)
     total = await city_repo.get_total_districts(session, user.id)
-    total += getattr(user, "bonus_business_districts", 0)
     free = max(0, total - used)
 
     builder = InlineKeyboardBuilder()

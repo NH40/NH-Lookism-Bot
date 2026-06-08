@@ -165,7 +165,7 @@ class TitleService:
                     UserAchievement.claimed == True,
                 )
             )
-            if already.scalar_one_or_none():
+            if already.scalars().first():
                 continue
             if await self._check_condition_new(session, user, ach):
                 await self._grant_achievement_new(session, user, ach)

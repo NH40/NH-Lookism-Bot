@@ -124,7 +124,11 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
     )
     builder.row(war_btn, region_btn)
 
-    # Ряд 5: зал славы (отдельно — широкая)
+    # Ряд 5: здания региона (если клан владеет регионом)
+    if own_region:
+        builder.row(InlineKeyboardButton(text="🏗 Здания региона", callback_data="clan_region_buildings"))
+
+    # Ряд 6: зал славы (отдельно — широкая)
     builder.row(InlineKeyboardButton(text="🏆 Зал Славы", callback_data="region_hall_of_fame"))
 
     # Для владельца: управление
@@ -139,11 +143,15 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
         InlineKeyboardButton(text="◀️ Назад",    callback_data="main_menu"),
     )
 
-    # Улучшения клана (из казны)
+    # Улучшения клана (из казны NHCoin + ОА)
     upgrade_lines = []
     if clan.bonus_income_pct: upgrade_lines.append(f"💰 +{clan.bonus_income_pct}%")
     if clan.bonus_ticket_pct: upgrade_lines.append(f"🎟 +{clan.bonus_ticket_pct}%")
     if clan.bonus_train_pct:  upgrade_lines.append(f"🏋 +{clan.bonus_train_pct}%")
+    ap_inc = getattr(clan, "ap_income_circles", 0)
+    ap_tr  = getattr(clan, "ap_train_circles", 0)
+    if ap_inc: upgrade_lines.append(f"🎯💰 +{ap_inc * 5}%")
+    if ap_tr:  upgrade_lines.append(f"🎯🏋 +{ap_tr * 3}%")
     upgrade_str = "\n⚙️ Улучшения: " + " | ".join(upgrade_lines) if upgrade_lines else ""
 
     # Донат-бонусы
@@ -161,6 +169,10 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
     region_str = ""
     if own_region:
         region_str = f"\n🗺 Регион: {own_region.emoji} {own_region.name}"
+        if user.clan_region_income > 0:
+            region_str += f"\n🏗 Доход зданий: +{fmt_num(user.clan_region_income)}/мин"
+
+    ap_str = f"\n🎯 Казна ОА: {clan.treasury_ap}" if getattr(clan, "treasury_ap", 0) > 0 else ""
 
     text = (
         f"🏯 <b>{html.escape(clan.name)}</b>  {my_rank_label}\n\n"
@@ -168,6 +180,7 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
         f"👥 Участников: {len(members)}/{clan.max_members}\n"
         f"💪 Боевая мощь: {fmt_num(clan.combat_power)}\n"
         f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin"
+        f"{ap_str}"
         f"{region_str}"
         f"{upgrade_str}"
         f"{donat_str}"

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, update as sa_update
+from sqlalchemy import select, and_, or_, func, update as sa_update
 
 from app.models.clan import Clan, ClanMember
 from app.models.clan_region import (
@@ -9,6 +9,7 @@ from app.models.clan_region import (
     KoreanRegionWarParticipant,
     KoreanRegionActivity,
 )
+from app.models.user import User
 from app.services.clan.base import ClanBaseService
 
 # Ограничение участников клана для войны за регион
@@ -27,6 +28,25 @@ RANK_LABELS = {
 
 # Ранги, которые могут управлять войной (начать/отменить)
 WAR_ALLOWED_RANKS = {"owner", "deputy"}
+
+
+def _calc_personal_score(a: KoreanRegionActivity) -> int:
+    return (
+        min(a.train_count, 10) * 1
+        + min(a.attack_gang_count, 5) * 2
+        + min(a.attack_king_count, 5) * 3
+        + min(a.attack_fist_count, 3) * 4
+        + min(a.spend_count, 10) * 1
+        + min(a.raid_count, 5) * 3
+        + min(a.recruit_count, 10) * 1
+        + min(a.auction_count, 5) * 2
+        + min(a.duel_count, 5) * 3
+        + min(a.market_count, 5) * 1
+        + min(a.campaign_count, 3) * 4
+        + min(a.boss_count, 5) * 3
+        + min(a.quest_count, 5) * 2
+        + min(a.bank_count, 5) * 1
+    )
 
 
 class ClanRegionService(ClanBaseService):
@@ -62,33 +82,22 @@ class ClanRegionService(ClanBaseService):
     async def get_active_war_for_clan(
         self, session: AsyncSession, clan_id: int
     ) -> KoreanRegionWar | None:
-        """Активная война, в которой участвует клан (как инициатор или участник)."""
-        # Проверяем как инициатор
-        war = await session.scalar(
-            select(KoreanRegionWar).where(
-                KoreanRegionWar.initiator_clan_id == clan_id,
+        """Активная война клана — 1 LEFT JOIN вместо 3 запросов."""
+        return await session.scalar(
+            select(KoreanRegionWar)
+            .outerjoin(
+                KoreanRegionWarParticipant,
+                KoreanRegionWarParticipant.war_id == KoreanRegionWar.id,
+            )
+            .where(
                 KoreanRegionWar.is_finished == False,
+                or_(
+                    KoreanRegionWar.initiator_clan_id == clan_id,
+                    KoreanRegionWarParticipant.clan_id == clan_id,
+                ),
             )
+            .limit(1)
         )
-        if war:
-            return war
-        # Проверяем как присоединившийся
-        participant = await session.scalar(
-            select(KoreanRegionWarParticipant).where(
-                KoreanRegionWarParticipant.clan_id == clan_id,
-            ).join(
-                KoreanRegionWar,
-                and_(
-                    KoreanRegionWar.id == KoreanRegionWarParticipant.war_id,
-                    KoreanRegionWar.is_finished == False,
-                )
-            )
-        )
-        if participant:
-            return await session.scalar(
-                select(KoreanRegionWar).where(KoreanRegionWar.id == participant.war_id)
-            )
-        return None
 
     async def get_war_participants(
         self, session: AsyncSession, war_id: int
@@ -147,12 +156,12 @@ class ClanRegionService(ClanBaseService):
         if rank not in WAR_ALLOWED_RANKS:
             return {"ok": False, "reason": "Только владелец или заместитель может начать войну"}
 
-        members = await self.get_clan_members(session, clan.id)
-        if len(members) > REGION_WAR_MAX_MEMBERS:
+        member_count = await self.get_clan_member_count(session, clan.id)
+        if member_count > REGION_WAR_MAX_MEMBERS:
             return {
                 "ok": False,
                 "reason": f"Клан не может участвовать в войне за регион при более {REGION_WAR_MAX_MEMBERS} участниках. "
-                          f"У вас {len(members)}.",
+                          f"У вас {member_count}.",
             }
 
         # Проверяем, не участвует ли клан уже в какой-либо войне за регион
@@ -205,8 +214,8 @@ class ClanRegionService(ClanBaseService):
         if rank not in WAR_ALLOWED_RANKS:
             return {"ok": False, "reason": "Только владелец или заместитель может присоединиться к войне"}
 
-        members = await self.get_clan_members(session, clan.id)
-        if len(members) > REGION_WAR_MAX_MEMBERS:
+        member_count = await self.get_clan_member_count(session, clan.id)
+        if member_count > REGION_WAR_MAX_MEMBERS:
             return {
                 "ok": False,
                 "reason": f"Клан не может участвовать при более {REGION_WAR_MAX_MEMBERS} участниках",
@@ -300,7 +309,13 @@ class ClanRegionService(ClanBaseService):
 
         setattr(activity, count_field, current + 1)
 
-        # Добавляем очки участнику
+        # ОА зарабатываются в реальном времени — те же очки что и военный счёт
+        await session.execute(
+            sa_update(User).where(User.id == user_id)
+            .values(activity_points=User.activity_points + pts)
+        )
+
+        # Добавляем очки участнику клана
         participant = await session.scalar(
             select(KoreanRegionWarParticipant).where(
                 KoreanRegionWarParticipant.war_id == war.id,
@@ -372,6 +387,12 @@ class ClanRegionService(ClanBaseService):
         if prev_owner_clan_id and prev_owner_clan_id != best.clan_id:
             await self.clear_region_bonuses_for_clan(session, prev_owner_clan_id)
         await self.apply_region_bonuses_for_clan(session, best.clan_id, region)
+
+        # Победитель получает военный счёт в казну ОА клана
+        best_clan = await session.scalar(select(Clan).where(Clan.id == best.clan_id))
+        if best_clan:
+            best_clan.treasury_ap = (best_clan.treasury_ap or 0) + best.score
+            await session.flush()
 
         return {
             "ok": True,
@@ -458,29 +479,32 @@ class ClanRegionService(ClanBaseService):
     async def apply_region_bonuses_for_clan(
         self, session: AsyncSession, clan_id: int, region: "KoreanRegion"
     ) -> None:
-        from app.models.user import User
         from app.data.regions import REGION_BY_SLUG
         cfg = REGION_BY_SLUG.get(region.slug)
         if not cfg:
             return
-        members = await self.get_clan_members(session, clan_id)
-        if not members:
+        # Субзапрос: не грузим участников в память
+        count = await self.get_clan_member_count(session, clan_id)
+        if not count:
             return
-        # Bulk UPDATE: 1 query for owner, 1 for members (vs N individual UPDATEs)
         clan = await session.scalar(select(Clan).where(Clan.id == clan_id))
         owner_id = clan.owner_id if clan else None
-        member_ids = [m.user_id for m in members if m.user_id != owner_id]
-        if owner_id and any(m.user_id == owner_id for m in members):
+        # 1 запрос для владельца, 1 для остальных
+        if owner_id:
             await session.execute(
                 sa_update(User).where(User.id == owner_id)
                 .values(**self._bonus_values(cfg, True))
             )
-        if member_ids:
-            await session.execute(
-                sa_update(User).where(User.id.in_(member_ids))
-                .values(**self._bonus_values(cfg, False))
-            )
+        member_subq = (
+            select(ClanMember.user_id)
+            .where(ClanMember.clan_id == clan_id, ClanMember.user_id != owner_id)
+        )
+        await session.execute(
+            sa_update(User).where(User.id.in_(member_subq))
+            .values(**self._bonus_values(cfg, False))
+        )
         await session.flush()
+        await self.recalc_clan_region_income(session, clan_id, has_region=True)
 
     async def apply_region_bonuses_for_user(
         self, session: AsyncSession, user: "User", clan_id: int
@@ -501,13 +525,11 @@ class ClanRegionService(ClanBaseService):
     async def clear_region_bonuses_for_clan(
         self, session: AsyncSession, clan_id: int
     ) -> None:
-        from app.models.user import User
-        members = await self.get_clan_members(session, clan_id)
-        if not members:
-            return
-        user_ids = [m.user_id for m in members]
+        # Субзапрос — не грузим участников в память
+        subq = select(ClanMember.user_id).where(ClanMember.clan_id == clan_id)
         await session.execute(
-            sa_update(User).where(User.id.in_(user_ids)).values(**self._zero_values())
+            sa_update(User).where(User.id.in_(subq))
+            .values(**self._zero_values(), clan_region_income=0)
         )
         await session.flush()
 

@@ -1,9 +1,13 @@
+import asyncio
+
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from app.models.user import User
+from app.models.squad_member import SquadMember
 from app.services.squad_service import squad_service, PHASE_RANK_WEIGHTS, _calc_recruit_count
 from app.services.cooldown_service import cooldown_service
 from app.repositories.squad_repo import squad_repo
@@ -36,9 +40,11 @@ def _phase_ranks_str(phase: str) -> str:
 
 @router.callback_query(F.data == "squad")
 async def cb_squad(cb: CallbackQuery, session: AsyncSession, user: User):
-    recruit_cd = await cooldown_service.get_ttl(cooldown_service.recruit_key(user.id))
-    train_cd = await cooldown_service.get_ttl(cooldown_service.train_key(user.id))
-    squad_count = await squad_repo.get_squad_count(session, user.id)
+    recruit_cd, train_cd, squad_count = await asyncio.gather(
+        cooldown_service.get_ttl(cooldown_service.recruit_key(user.id)),
+        cooldown_service.get_ttl(cooldown_service.train_key(user.id)),
+        squad_repo.get_squad_count(session, user.id),
+    )
 
     from aiogram.utils.keyboard import InlineKeyboardBuilder
     from aiogram.types import InlineKeyboardButton
@@ -53,6 +59,9 @@ async def cb_squad(cb: CallbackQuery, session: AsyncSession, user: User):
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
 
     ranks_str = _phase_ranks_str(user.phase)
+    expected_recruits = _calc_recruit_count(user.influence, user.recruit_count_bonus)
+    if user.double_recruit:
+        expected_recruits *= 2
 
     text = (
         f"👥 <b>Группировка</b>\n\n"
@@ -60,7 +69,8 @@ async def cb_squad(cb: CallbackQuery, session: AsyncSession, user: User):
         f"💪 Боевая мощь: {fmt_num(user.combat_power)}\n"
         f"⚡ Влияние: {fmt_num(user.influence)}\n\n"
         f"🏅 Доступные ранги: {ranks_str}\n"
-        f"<i>Влияние открывает более высокие ранги</i>\n\n"
+        f"📢 Вербовка: ~{expected_recruits} бойцов\n"
+        f"<i>Больше влияния → больше статистов за вербовку</i>\n\n"
         f"Выбери действие:"
     )
     await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
@@ -139,16 +149,17 @@ async def cb_do_train(cb: CallbackQuery, session: AsyncSession, user: User):
 
 @router.callback_query(F.data == "squad_list")
 async def cb_squad_list(cb: CallbackQuery, session: AsyncSession, user: User):
-    from sqlalchemy import select
-    from app.models.squad_member import SquadMember
-    from collections import Counter
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+    from aiogram.types import InlineKeyboardButton
 
-    result = await session.execute(
-        select(SquadMember).where(SquadMember.user_id == user.id)
-    )
-    members = result.scalars().all()
+    # Агрегированный запрос вместо загрузки всех ORM-объектов
+    agg_rows = (await session.execute(
+        select(SquadMember.rank, SquadMember.stars, func.count().label("cnt"))
+        .where(SquadMember.user_id == user.id)
+        .group_by(SquadMember.rank, SquadMember.stars)
+    )).all()
 
-    if not members:
+    if not agg_rows:
         await cb.message.edit_text(
             "🗒 <b>Состав армии</b>\n\nОтряд пуст",
             reply_markup=back_kb("squad"),
@@ -156,20 +167,26 @@ async def cb_squad_list(cb: CallbackQuery, session: AsyncSession, user: User):
         )
         return
 
-    rank_order = RANK_ORDER
-    lines = ["🗒 <b>Состав армии</b>\n"]
+    # Строим структуру rank -> {stars -> count}
+    rank_data: dict[str, dict[int, int]] = {}
+    total = 0
+    five_star = 0
+    for rank, stars, cnt in agg_rows:
+        rank_data.setdefault(rank, {})[stars] = cnt
+        total += cnt
+        if stars == 5:
+            five_star += cnt
 
-    for rank in rank_order:
-        rank_members = [m for m in members if m.rank == rank]
-        if not rank_members:
+    lines = ["🗒 <b>Состав армии</b>\n"]
+    for rank in RANK_ORDER:
+        star_counts = rank_data.get(rank)
+        if not star_counts:
             continue
 
-        rank_cfg = RANKS_BY_ID.get(rank)
+        rank_total = sum(star_counts.values())
         emoji = RANK_EMOJI.get(rank, "")
-        lines.append(f"\n{emoji} Ранг {rank} — {len(rank_members)} бойцов")
+        lines.append(f"\n{emoji} Ранг {rank} — {rank_total} бойцов")
 
-        # Группируем по звёздам
-        star_counts = Counter(m.stars for m in rank_members)
         for stars in range(5, -1, -1):
             cnt = star_counts.get(stars, 0)
             if cnt:
@@ -177,14 +194,10 @@ async def cb_squad_list(cb: CallbackQuery, session: AsyncSession, user: User):
                 empty = "☆" * (5 - stars)
                 lines.append(f"  {filled}{empty} × {cnt}")
 
-    total = len(members)
-    five_star = sum(1 for m in members if m.stars == 5)
     lines.append(f"\n{'─' * 20}")
     lines.append(f"👥 Всего бойцов: {total}")
     lines.append(f"💪 Боевая мощь: {fmt_num(user.combat_power)}")
 
-    from aiogram.utils.keyboard import InlineKeyboardBuilder
-    from aiogram.types import InlineKeyboardButton
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="◀️ К группировке", callback_data="squad"))
 

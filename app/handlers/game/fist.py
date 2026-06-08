@@ -97,6 +97,8 @@ async def cb_fist_bot(cb: CallbackQuery, session: AsyncSession, user: User):
     await quest_service.add_progress(session, user, "attacks")
     if result["win"]:
         await quest_service.add_progress(session, user, "wins")
+        from app.utils.region_activity import record
+        await record(session, user.id, "attack_fist")
 
     crit_str = " ⚡КРИТ!" if result.get("is_crit") else ""
     if result.get("demoted"):
@@ -188,6 +190,8 @@ async def cb_fist_pvp(cb: CallbackQuery, session: AsyncSession, user: User):
     await quest_service.add_progress(session, user, "attacks")
     if result["win"]:
         await quest_service.add_progress(session, user, "wins")
+        from app.utils.region_activity import record
+        await record(session, user.id, "attack_fist")
 
     crit_str = " ⚡КРИТ!" if result.get("is_crit") else ""
     if result.get("demoted"):

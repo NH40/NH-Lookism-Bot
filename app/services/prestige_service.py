@@ -100,6 +100,16 @@ class PrestigeService:
         user.bonus_business_districts = 0
         user.business_genius_level = 0
 
+        # Удаляем личный город бонусных районов
+        from app.models.city import City
+        bonus_city_row = await session.execute(
+            select(City).where(City.phase == "business", City.owner_id == user.id)
+        )
+        bonus_city = bonus_city_row.scalar_one_or_none()
+        if bonus_city:
+            await session.execute(delete(District).where(District.city_id == bonus_city.id))
+            await session.delete(bonus_city)
+
         # ── Клановые бонусы от апгрейдов (не донат) ─────────────────────
         user.clan_income_bonus = 0
         user.clan_ticket_bonus = 0

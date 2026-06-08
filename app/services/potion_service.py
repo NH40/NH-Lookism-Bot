@@ -11,10 +11,10 @@ class PotionService:
     # Привязаны к тиру 2 новой системы MG_TIERS.
     # Ключи — старые ID для обратной совместимости с кланами.
     CLAN_POTION_CONFIG = {
-        "potion_combat":    {"potion_type": "power",     "bonus_value": 50,  "duration_minutes": 30},  # MG Тир 2
-        "potion_income":    {"potion_type": "income",    "bonus_value": 70,  "duration_minutes": 60},  # MG Тир 2
-        "potion_influence": {"potion_type": "influence", "bonus_value": 60,  "duration_minutes": 45},  # MG Тир 2
-        "potion_training":  {"potion_type": "training",  "bonus_value": 38,  "duration_minutes": 60},  # MG Тир 2
+        "potion_combat":    {"potion_type": "power",     "bonus_value": 40,  "duration_minutes": 30},  # MG Тир 2
+        "potion_income":    {"potion_type": "income",    "bonus_value": 40,  "duration_minutes": 60},  # MG Тир 2
+        "potion_influence": {"potion_type": "influence", "bonus_value": 40,  "duration_minutes": 45},  # MG Тир 2
+        "potion_training":  {"potion_type": "training",  "bonus_value": 35,  "duration_minutes": 60},  # MG Тир 2
         "potion_luck":      {"potion_type": "luck",      "bonus_value": 9,   "duration_minutes": 30},  # MG Тир 2
         "potion_raid_drop": {"potion_type": "raid_drop", "bonus_value": 25,  "duration_minutes": 60},  # MG Тир 2
     }

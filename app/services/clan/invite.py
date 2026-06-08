@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update as sa_update
 from app.models.user import User
 from app.models.clan import Clan, ClanMember, ClanInvite
 from app.services.clan.base import ClanBaseService
@@ -8,8 +8,9 @@ from app.services.clan.base import ClanBaseService
 class ClanInviteService(ClanBaseService):
 
     async def invite_user(self, session: AsyncSession, clan: Clan, from_user: User, to_username: str) -> dict:
-        members = await self.get_clan_members(session, clan.id)
-        if len(members) >= clan.max_members:
+        # COUNT вместо загрузки всех участников
+        count = await self.get_clan_member_count(session, clan.id)
+        if count >= clan.max_members:
             return {"ok": False, "reason": f"Клан уже заполнен ({clan.max_members} чел.)"}
         to_user = await session.scalar(select(User).where(User.username == to_username.lstrip("@")))
         if not to_user:
@@ -37,8 +38,9 @@ class ClanInviteService(ClanBaseService):
         existing_member = await session.scalar(select(ClanMember).where(ClanMember.user_id == user.id))
         if existing_member:
             return {"ok": False, "reason": "Вы уже состоите в клане"}
-        members = await self.get_clan_members(session, clan.id)
-        if len(members) >= clan.max_members:
+        # COUNT вместо загрузки всех участников
+        count = await self.get_clan_member_count(session, clan.id)
+        if count >= clan.max_members:
             return {"ok": False, "reason": "Клан уже заполнен"}
         existing_request = await session.scalar(
             select(ClanInvite).where(ClanInvite.to_user_id == user.id, ClanInvite.is_pending == True)
@@ -79,20 +81,22 @@ class ClanInviteService(ClanBaseService):
         clan = await session.scalar(select(Clan).where(Clan.id == invite.clan_id))
         if not clan:
             return {"ok": False, "reason": "Клан не найден"}
-        members = await self.get_clan_members(session, clan.id)
-        if len(members) >= clan.max_members:
+        # COUNT вместо загрузки всех участников
+        count = await self.get_clan_member_count(session, clan.id)
+        if count >= clan.max_members:
             invite.is_pending = False
             await session.flush()
             return {"ok": False, "reason": "Клан уже заполнен"}
-        other_invites = await session.execute(
-            select(ClanInvite).where(
+        # Bulk UPDATE вместо цикла по other_invites
+        await session.execute(
+            sa_update(ClanInvite)
+            .where(
                 ClanInvite.to_user_id == user.id,
                 ClanInvite.is_pending == True,
                 ClanInvite.id != invite_id,
             )
+            .values(is_pending=False)
         )
-        for other in other_invites.scalars().all():
-            other.is_pending = False
         invite.is_pending = False
         member = ClanMember(clan_id=clan.id, user_id=user.id, rank="member")
         session.add(member)

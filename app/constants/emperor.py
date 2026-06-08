@@ -10,14 +10,15 @@ class EmperorGangConfig:
     name: str
     emoji: str
     desc: str
-    base_power: int          # Базовая мощь группировки
-    members: list[str]       # Имена персонажей из CHARACTERS
+    base_power: int
+    members: list[str]
     reward_coins_min: int
     reward_coins_max: int
-    drop_chance: int         # % шанс выпадения карточки (0-100)
-    drop_ranks: list[str]    # Ранги для дропа карточки
+    drop_chance: int
+    drop_ranks: list[str]
 
 
+# Монетные награды ÷2 — бои должны быть прибыльными, но не заменять пассивный доход
 EMPEROR_GANGS: list[EmperorGangConfig] = [
     EmperorGangConfig(
         gang_id="yamazaki",
@@ -37,8 +38,8 @@ EMPEROR_GANGS: list[EmperorGangConfig] = [
             "Gun (Mastery)",
             "Gun (Base)",
         ],
-        reward_coins_min=160_000,
-        reward_coins_max=4_000_000,
+        reward_coins_min=80_000,
+        reward_coins_max=2_000_000,
         drop_chance=55,
         drop_ranks=["gen_zero", "new_legend", "legend", "peak"],
     ),
@@ -70,8 +71,8 @@ EMPEROR_GANGS: list[EmperorGangConfig] = [
             "Gwang (Prime)",
             "Bakgu (NOH)"
         ],
-        reward_coins_min=40_000,
-        reward_coins_max=5_000_000,
+        reward_coins_min=20_000,
+        reward_coins_max=2_500_000,
         drop_chance=50,
         drop_ranks=["gen_zero", "new_legend", "legend", "peak"],
     ),
@@ -97,8 +98,8 @@ EMPEROR_GANGS: list[EmperorGangConfig] = [
             "Jinyoung (Old)",
             "Crystal",
         ],
-        reward_coins_min=120_000,
-        reward_coins_max=2_900_000,
+        reward_coins_min=60_000,
+        reward_coins_max=1_450_000,
         drop_chance=55,
         drop_ranks=["gen_zero", "new_legend", "legend", "peak"],
     ),
@@ -119,8 +120,8 @@ EMPEROR_GANGS: list[EmperorGangConfig] = [
             "J (Police)",
             "Jaegyeon (King incheon)"
         ],
-        reward_coins_min=100_000,
-        reward_coins_max=3_040_000,
+        reward_coins_min=50_000,
+        reward_coins_max=1_520_000,
         drop_chance=50,
         drop_ranks=["strong_king", "gen_zero", "new_legend", "legend", "peak"],
     ),
@@ -150,8 +151,8 @@ EMPEROR_GANGS: list[EmperorGangConfig] = [
             "Jaemin (Daejeon)",
             "Dalyoung (King busan)"
         ],
-        reward_coins_min=10_000,
-        reward_coins_max=160_000,
+        reward_coins_min=5_000,
+        reward_coins_max=80_000,
         drop_chance=45,
         drop_ranks=["king", "strong_king", "gen_zero"],
     ),
@@ -170,8 +171,8 @@ EMPEROR_GANGS: list[EmperorGangConfig] = [
             "Jake (Awaking)",
             "Mandeok (Mastery)",
         ],
-        reward_coins_min=30_000,
-        reward_coins_max=100_000,
+        reward_coins_min=15_000,
+        reward_coins_max=50_000,
         drop_chance=45,
         drop_ranks=["king", "strong_king", "gen_zero", "new_legend"],
     ),
@@ -190,8 +191,8 @@ EMPEROR_GANGS: list[EmperorGangConfig] = [
             "Gwang (Prime)",
             "Hansu (0%)",
         ],
-        reward_coins_min=50_000,
-        reward_coins_max=160_000,
+        reward_coins_min=25_000,
+        reward_coins_max=80_000,
         drop_chance=50,
         drop_ranks=["gen_zero", "new_legend", "legend"],
     ),
@@ -211,8 +212,8 @@ EMPEROR_GANGS: list[EmperorGangConfig] = [
             "Tom (Wildness)",
             "Tom (Base)",
         ],
-        reward_coins_min=36_000,
-        reward_coins_max=120_000,
+        reward_coins_min=18_000,
+        reward_coins_max=60_000,
         drop_chance=50,
         drop_ranks=["gen_zero", "new_legend", "legend"],
     ),
@@ -228,8 +229,8 @@ EMPEROR_GANGS: list[EmperorGangConfig] = [
             "Taejin (Kudo)",
             "Logan (Hostel B)",
         ],
-        reward_coins_min=20_000,
-        reward_coins_max=80_000,
+        reward_coins_min=10_000,
+        reward_coins_max=40_000,
         drop_chance=45,
         drop_ranks=["king", "strong_king", "gen_zero", "new_legend"],
     ),

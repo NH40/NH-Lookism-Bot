@@ -181,6 +181,7 @@ class User(Base):
     circ_instant_raid_chance: Mapped[int] = mapped_column(Integer, default=0)    # % шанс мгновенного рейда
     circ_double_raid_chance: Mapped[int] = mapped_column(Integer, default=0)     # % шанс удвоения рейда
     circ_daily_districts: Mapped[int] = mapped_column(Integer, default=0)        # районов/день (Архангел)
+    circ_daily_districts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # когда последний раз выдавался город
     circ_dragon_active: Mapped[bool] = mapped_column(Boolean, default=False)     # спутник-дракон
     circ_clan_cashback: Mapped[bool] = mapped_column(Boolean, default=False)     # кешбек казны клана
     circ_mountain_extra: Mapped[bool] = mapped_column(Boolean, default=False)    # +районов при захвате (Хозяин горы ≥2)
@@ -204,6 +205,10 @@ class User(Base):
     region_raid_damage_pct: Mapped[int] = mapped_column(Integer, default=0)    # +% урона в рейдах
     region_income_building_pct: Mapped[int] = mapped_column(Integer, default=0) # +% к доходу зданий
     region_trainer_discount: Mapped[int] = mapped_column(Integer, default=0)   # % скидка у тренеров
+
+    # ── Клан: очки активности и доход от зданий региона ──────────────────────
+    activity_points: Mapped[int] = mapped_column(Integer, default=0)
+    clan_region_income: Mapped[int] = mapped_column(Integer, default=0)
 
     # ── Донат-валюта (NHDonate) ──────────────────────────────────────────────
     nh_donate: Mapped[int] = mapped_column(Integer, default=0)  # 1 NHDonate = 1 рубль

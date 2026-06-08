@@ -438,6 +438,8 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
     await quest_service.add_progress(session, user, "attacks")
     if result["win"]:
         await quest_service.add_progress(session, user, "wins")
+        from app.utils.region_activity import record
+        await record(session, user.id, "attack_king")
 
     # После победы — остаёмся в том же городе
     if result["win"]:

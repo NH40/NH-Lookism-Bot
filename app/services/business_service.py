@@ -145,7 +145,6 @@ class BusinessService:
         else:
             from app.repositories.city_repo import city_repo
             district_count = await city_repo.get_total_districts(session, user.id)
-            district_count += getattr(user, "bonus_business_districts", 0)
 
         # Занятые районы — только активные здания с count > 0
         used_in_city = await session.scalar(
@@ -353,6 +352,43 @@ class BusinessService:
             self._apply_demolish_influence(user, total_districts)
             await self._recalc_income(session, user)
         return {"ok": True, "count": total_count}
+
+    async def get_or_create_bonus_city(self, session: AsyncSession, user: User):
+        from app.models.city import City
+        result = await session.execute(
+            select(City).where(City.phase == "business", City.owner_id == user.id)
+        )
+        city = result.scalar_one_or_none()
+        if not city:
+            city = City(
+                sector="biz",
+                phase="business",
+                type_id=0,
+                name="Личный квартал",
+                total_districts=0,
+                captured_districts=0,
+                is_fully_captured=True,
+                owner_id=user.id,
+                district_power_multiplier=1.0,
+            )
+            session.add(city)
+            await session.flush()
+        return city
+
+    async def add_bonus_districts(self, session: AsyncSession, user: User, count: int) -> None:
+        from app.models.city import City, District
+        city = await self.get_or_create_bonus_city(session, user)
+        for i in range(count):
+            d = District(
+                city_id=city.id,
+                number=city.total_districts + i + 1,
+                owner_id=user.id,
+                is_captured=True,
+            )
+            session.add(d)
+        city.total_districts += count
+        city.captured_districts += count
+        await session.flush()
 
     async def get_income_breakdown(
         self, session: AsyncSession, user: User

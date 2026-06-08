@@ -314,8 +314,14 @@ async def cb_region_attack(cb: CallbackQuery, session: AsyncSession, user: User)
         notif = (
             f"⚔️ <b>Война за регион!</b>\n\n"
             f"Клан <b>{html.escape(clan.name)}</b> начал войну за "
-            f"{region.emoji} <b>{region.name}</b>!\n"
-            f"Будьте активны — тренируйтесь и атакуйте!"
+            f"{region.emoji} <b>{region.name}</b>!\n\n"
+            f"🎯 Каждое действие приносит <b>ОА</b> прямо сейчас:\n"
+            f"  🏋 Тренировка ×1 (макс 10)\n"
+            f"  ⚔️ Атака банды ×2 (макс 5)\n"
+            f"  👑 Атака короля ×3 (макс 5)\n"
+            f"  👊 Атака кулака ×4 (макс 3)\n"
+            f"  🗡 Рейд ×3 (макс 5)  •  🏆 Кампания ×4 (макс 3)\n\n"
+            f"Победитель получит регион и ОА в казну клана!"
         )
         await _send_notifications(bot, tg_ids, notif)
 

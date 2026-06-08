@@ -30,15 +30,15 @@ CASINO_X3_RATIO_MAX: float = 3.3
 # Максимальное число ячеек на игрока
 STORAGE_MAX_SLOTS: int = 5
 # Стоимость открытия одной ячейки (NHCoin)
-STORAGE_OPEN_COST: int = 100_000
+STORAGE_OPEN_COST: int = 33_000
 # Комиссия за хранение (NHCoin/минуту, только если ячейка не пуста)
-STORAGE_FEE_PER_MINUTE: int = 200
+STORAGE_FEE_PER_MINUTE: int = 65
 
 # ── Инвестиции ────────────────────────────────────────────────────────────────
 # Максимальное число одновременных вкладов
 INVEST_MAX_SLOTS: int = 3
 # Максимальная сумма одного вклада (NHCoin)
-INVEST_MAX_DEPOSIT: int = 200_000_000
+INVEST_MAX_DEPOSIT: int = 67_000_000
 # Срок (часы) → доходность (%)
 INVEST_DURATION_OPTIONS: dict[int, int] = {
     1:  3,

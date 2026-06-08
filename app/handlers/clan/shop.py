@@ -241,6 +241,7 @@ async def cb_clan_potion_type(cb: CallbackQuery, session: AsyncSession, user: Us
 
 @router.callback_query(F.data.startswith("clan_buy:"))
 async def cb_clan_buy(cb: CallbackQuery, session: AsyncSession, user: User):
+    from app.services.cooldown_service import cooldown_service
     item_id = cb.data.split(":")[1]
     clan = await clan_service.get_user_clan(session, user.id)
     if not clan:
@@ -250,6 +251,11 @@ async def cb_clan_buy(cb: CallbackQuery, session: AsyncSession, user: User):
     item = CLAN_SHOP_MAP.get(item_id)
     if not item:
         await cb.answer("Товар не найден", show_alert=True)
+        return
+
+    lock_key = cooldown_service.clan_shop_lock_key(clan.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("⏳ Подожди...", show_alert=False)
         return
 
     result = await clan_service.buy_clan_shop(session, clan, user, item_id)
@@ -277,10 +283,16 @@ async def cb_clan_buy(cb: CallbackQuery, session: AsyncSession, user: User):
 
 @router.callback_query(F.data.startswith("clan_upgrade:"))
 async def cb_clan_upgrade(cb: CallbackQuery, session: AsyncSession, user: User):
+    from app.services.cooldown_service import cooldown_service
     upgrade_id = cb.data.split(":")[1]
     clan = await clan_service.get_user_clan(session, user.id)
     if not clan:
         await cb.answer("Вы не в клане", show_alert=True)
+        return
+
+    lock_key = cooldown_service.clan_shop_lock_key(clan.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("⏳ Подожди...", show_alert=False)
         return
 
     result = await clan_service.buy_upgrade(session, clan, user, upgrade_id)

@@ -71,9 +71,10 @@ async def income_tick():
                     User.region_income_pct,
                     User.region_passive_income,
                     User.region_income_building_pct,
+                    User.clan_region_income,
                 ).where(
                     or_(User.income_per_minute > 0, User.circ_passive_income > 0,
-                        User.region_passive_income > 0)
+                        User.region_passive_income > 0, User.clan_region_income > 0)
                 )
             )
             users = result.all()
@@ -120,6 +121,11 @@ async def income_tick():
                             )
                         else:
                             earned += total
+
+                # Доход от зданий клана в регионе
+                clan_bld = u.clan_region_income or 0
+                if clan_bld > 0:
+                    earned += clan_bld
 
                 # Пассивный доход: circ-донаты + регион-бонус
                 circ = (u.circ_passive_income or 0) + (u.region_passive_income or 0)

@@ -488,6 +488,8 @@ async def cb_craft_biz_district(cb: CallbackQuery, session: AsyncSession, user: 
     user.business_fragments = biz_frags - cost
     user.bonus_business_districts = bonus_districts + 1
     await session.flush()
+    from app.services.business_service import business_service
+    await business_service.add_bonus_districts(session, user, 1)
     await cb.answer(f"✅ +1 бонусный район! Всего: {user.bonus_business_districts}", show_alert=True)
     await _biz_genius_page(cb, session, user, back="raid_craft")
 
@@ -519,6 +521,8 @@ async def cb_craft_biz_district_5(cb: CallbackQuery, session: AsyncSession, user
     user.business_fragments = biz_frags - total_cost
     user.bonus_business_districts = bonus_districts + add
     await session.flush()
+    from app.services.business_service import business_service
+    await business_service.add_bonus_districts(session, user, add)
     await cb.answer(f"✅ +{add} районов ({total_cost} 🏢)! Всего: {user.bonus_business_districts}", show_alert=True)
     await _biz_genius_page(cb, session, user, back="raid_craft")
 

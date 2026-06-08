@@ -1,5 +1,5 @@
 from aiogram import Router
-from app.handlers.clan import main, invite, treasury, shop, auction, war, exchange, edit, region
+from app.handlers.clan import main, invite, treasury, shop, auction, war, exchange, edit, region, buildings
 
 router = Router()
 router.include_router(main.router)
@@ -11,3 +11,4 @@ router.include_router(war.router)
 router.include_router(exchange.router)
 router.include_router(edit.router)
 router.include_router(region.router)
+router.include_router(buildings.router)

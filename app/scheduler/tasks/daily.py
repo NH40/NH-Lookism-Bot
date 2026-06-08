@@ -6,6 +6,7 @@ circ_daily_districts (Архангел круг 10):
   Для остальных фаз — начисляется NHCoin-эквивалент (N × DISTRICT_DAILY_COIN_RATE).
 """
 import logging
+from datetime import datetime, timezone
 from sqlalchemy import select
 from app.database import AsyncSessionFactory
 from app.models.user import User
@@ -59,6 +60,7 @@ async def daily_tick():
                         user.fist_cities_count = fist_cnt
                         await business_service._recalc_income(session, user)
 
+                        user.circ_daily_districts_at = datetime.now(timezone.utc)
                         notifications.append((
                             user.tg_id,
                             f"🏙 <b>Архангел подарил вам город!</b>\n\n"
@@ -70,6 +72,7 @@ async def daily_tick():
                         # Не Кулак — монетный эквивалент
                         bonus = districts * DISTRICT_DAILY_COIN_RATE
                         user.nh_coins += bonus
+                        user.circ_daily_districts_at = datetime.now(timezone.utc)
                         from app.utils.formatters import fmt_num
                         notifications.append((
                             user.tg_id,

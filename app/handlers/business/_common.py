@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from aiogram.types import CallbackQuery, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -80,6 +81,31 @@ async def _show_business_main(
         circ_per_min = info.get("circ_passive_per_min", 0) or circ_passive
         circ_line = f"\n💸 Пассивный доход: +{fmt_num(circ_per_min)}/мин"
 
+    # Доход от зданий клана в регионе
+    clan_bld_line = ""
+    clan_bld_income = getattr(user, "clan_region_income", 0)
+    if clan_bld_income:
+        clan_bld_line = f"\n🏗 Здания клана: +{fmt_num(clan_bld_income)}/мин"
+
+    # Таймер ежедневного города Архангела (круг 10)
+    archangel_timer_line = ""
+    if getattr(user, "circ_daily_districts", 0) > 0:
+        last_at = getattr(user, "circ_daily_districts_at", None)
+        now = datetime.now(timezone.utc)
+        if last_at is None:
+            archangel_timer_line = "\n👼 Ежедневный город (64р.): <b>скоро!</b>"
+        else:
+            if last_at.tzinfo is None:
+                last_at = last_at.replace(tzinfo=timezone.utc)
+            next_at = last_at + timedelta(hours=24)
+            remaining = (next_at - now).total_seconds()
+            if remaining <= 0:
+                archangel_timer_line = "\n👼 Ежедневный город (64р.): <b>готово!</b>"
+            else:
+                h, rem = divmod(int(remaining), 3600)
+                m, s = divmod(rem, 60)
+                archangel_timer_line = f"\n👼 Ежедневный город (64р.): через <b>{h}ч {m}м {s}с</b>"
+
     from app.constants.raid import BIZ_GENIUS_LEVEL_LABELS, BIZ_GENIUS_DISCOUNT, BIZ_GENIUS_INCOME_BONUS
     genius_label = BIZ_GENIUS_LEVEL_LABELS.get(biz_genius, "") if biz_genius > 0 else "не открыт"
     genius_discount = BIZ_GENIUS_DISCOUNT[biz_genius - 1] if biz_genius > 0 else 0
@@ -111,6 +137,8 @@ async def _show_business_main(
         f"📈 Итоговый доход: <b>{fmt_num(info['final_income'])}/мин</b>"
         f"{bonus_section}"
         f"{circ_line}"
+        f"{clan_bld_line}"
+        f"{archangel_timer_line}"
     )
 
     builder = InlineKeyboardBuilder()

@@ -1,6 +1,6 @@
 import random
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, insert
+from sqlalchemy import select, insert, update as sa_update
 from app.models.user import User
 from app.models.squad_member import SquadMember
 from app.models.skill import UserMastery
@@ -8,15 +8,18 @@ from app.services.cooldown_service import cooldown_service
 from app.services.potion_service import potion_service
 from app.data.squad import RANKS_BY_ID, PHASE_RANKS, STAR_BONUS_PERCENT
 from app.constants.squad import PHASE_RANK_WEIGHTS
-from app.config.game_balance import TRAIN_BASE_COVERAGE, TRAIN_BASE_SUCCESS_CHANCE, TRAIN_MAX_SUCCESS_CHANCE
+from app.config.game_balance import (
+    TRAIN_BASE_COVERAGE, TRAIN_BASE_SUCCESS_CHANCE, TRAIN_MAX_SUCCESS_CHANCE,
+    RECRUIT_INFLUENCE_TIERS,
+)
 
-# Базовый множитель количества статистов от влияния
+
 def _calc_recruit_count(influence: int, bonus_pct: int) -> int:
-    """
-    Базовое количество: influence / 100, минимум 1, максимум 20.
-    Бонус вербовки увеличивает итог на %.
-    """
-    base = max(1, min(20, influence // 100))
+    """Базовое количество по тирам влияния; bonus_pct увеличивает итог на %."""
+    base = 1
+    for threshold, count in RECRUIT_INFLUENCE_TIERS:
+        if influence >= threshold:
+            base = count
     bonus = max(0, int(base * bonus_pct / 100))
     return base + bonus
 
@@ -80,21 +83,23 @@ class SquadService:
         ranks = list(phase_weights.keys())
         weights = list(phase_weights.values())
 
+        selected_ranks = random.choices(ranks, weights=weights, k=count)
+        rows = []
         recruited = []
-        for _ in range(count):
-            rank = random.choices(ranks, weights=weights, k=1)[0]
+        for rank in selected_ranks:
             rank_cfg = RANKS_BY_ID.get(rank)
             if not rank_cfg:
                 continue
-            member = SquadMember(
-                user_id=user.id,
-                rank=rank,
-                stars=0,
-                base_power=rank_cfg.base_power,
-            )
-            session.add(member)
+            rows.append({
+                "user_id": user.id,
+                "rank": rank,
+                "stars": 0,
+                "base_power": rank_cfg.base_power,
+            })
             recruited.append(rank)
 
+        if rows:
+            await session.execute(insert(SquadMember), rows)
         await session.flush()
 
         # Счётчик достижений
@@ -195,16 +200,13 @@ class SquadService:
             ttl = await cooldown_service.get_ttl(cd_key)
             return {"ok": False, "reason": f"Тренировка через {cooldown_service.format_ttl(ttl)}"}
 
-        # Все статисты у кого < 5 звёзд
-        result = await session.execute(
-            select(SquadMember).where(
-                SquadMember.user_id == user.id,
-                SquadMember.stars < 5,
-            )
-        )
-        candidates = result.scalars().all()
+        # Загружаем только (id, stars) — без полных ORM-объектов
+        cand_rows = (await session.execute(
+            select(SquadMember.id, SquadMember.stars)
+            .where(SquadMember.user_id == user.id, SquadMember.stars < 5)
+        )).all()
 
-        if not candidates:
+        if not cand_rows:
             return {"ok": False, "reason": "Все статисты уже имеют 5 звёзд или отряд пуст"}
 
         # Охват тренировки (% от кандидатов)
@@ -212,29 +214,33 @@ class SquadService:
         clan_train = getattr(user, 'clan_train_bonus', 0) + getattr(user, 'clan_donat_train_bonus', 0)
         region_train = getattr(user, 'region_train_pct', 0)
         coverage_pct = min(100, TRAIN_BASE_COVERAGE + train_bonus + clan_train + region_train)
-        count_to_train = max(1, int(len(candidates) * coverage_pct / 100))
+        count_to_train = max(1, int(len(cand_rows) * coverage_pct / 100))
 
-        # Случайный выбор
-        to_train = random.sample(candidates, min(count_to_train, len(candidates)))
+        to_train = random.sample(cand_rows, min(count_to_train, len(cand_rows)))
 
-        # Шанс успеха тренировки: базово + train_quality_bonus
         success_chance = min(TRAIN_MAX_SUCCESS_CHANCE, TRAIN_BASE_SUCCESS_CHANCE + user.train_quality_bonus)
 
         upgraded = 0
         failed = 0
         stars_added_total = 0
+        updates: list[dict] = []
 
-        for member in to_train:
+        for row_id, row_stars in to_train:
             if random.randint(1, 100) <= success_chance:
-                # Успех — добавляем от 1 до 3 звёзд
-                max_add = 5 - member.stars
+                max_add = 5 - row_stars
                 stars_add = random.randint(1, min(3, max_add))
-                member.stars += stars_add
+                updates.append({"id": row_id, "stars": row_stars + stars_add})
                 stars_added_total += stars_add
                 upgraded += 1
             else:
                 failed += 1
 
+        # Один bulk UPDATE вместо N индивидуальных flush-апдейтов
+        if updates:
+            await session.execute(
+                sa_update(SquadMember),
+                updates,
+            )
         await session.flush()
 
         from app.repositories.squad_repo import squad_repo

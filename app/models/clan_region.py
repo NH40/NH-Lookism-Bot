@@ -76,7 +76,7 @@ class KoreanRegionActivity(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     war_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    clan_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    clan_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
 
     # Счётчики действий
     train_count:       Mapped[int] = mapped_column(Integer, default=0)  # тренировка +1×10

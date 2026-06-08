@@ -85,6 +85,7 @@ class SquadRepo:
 
         # Ограничиваем разумным максимумом (BIGINT safe)
         total = min(total, 9_000_000_000_000)
+        old_power = user.combat_power or 0
         user.combat_power = total
 
         try:
@@ -93,17 +94,14 @@ class SquadRepo:
                 select(ClanMember.clan_id).where(ClanMember.user_id == user.id)
             )
             if clan_id:
-                # Single JOIN query — no extra loads for Clan object or member list
-                total_power = await session.scalar(
-                    select(func.sum(User.combat_power))
-                    .join(ClanMember, ClanMember.user_id == User.id)
-                    .where(ClanMember.clan_id == clan_id)
-                )
-                await session.execute(
-                    sa_update(Clan)
-                    .where(Clan.id == clan_id)
-                    .values(combat_power=total_power or 0)
-                )
+                delta = total - old_power
+                if delta != 0:
+                    # Delta-апдейт вместо пересчёта SUM по всем членам клана
+                    await session.execute(
+                        sa_update(Clan)
+                        .where(Clan.id == clan_id)
+                        .values(combat_power=Clan.combat_power + delta)
+                    )
         except Exception:
             pass
 

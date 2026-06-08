@@ -13,11 +13,16 @@ class Clan(Base):
     combat_power: Mapped[int] = mapped_column(BigInteger, default=0)
     treasury: Mapped[int] = mapped_column(BigInteger, default=0)
     max_members: Mapped[int] = mapped_column(Integer, default=5)
-    # Улучшения
+    # Улучшения (за NHCoin из казны)
     bonus_max_members: Mapped[int] = mapped_column(Integer, default=0)
     bonus_income_pct: Mapped[int] = mapped_column(Integer, default=0)
     bonus_ticket_pct: Mapped[int] = mapped_column(Integer, default=0)
     bonus_train_pct: Mapped[int] = mapped_column(Integer, default=0)
+    # Казна очков активности (ОА) и улучшения за ОА
+    treasury_ap: Mapped[int] = mapped_column(Integer, default=0)
+    ap_income_circles: Mapped[int] = mapped_column(Integer, default=0)
+    ap_train_circles: Mapped[int] = mapped_column(Integer, default=0)
+    ap_ticket_circles: Mapped[int] = mapped_column(Integer, default=0)
     # Донат-бонусы (выдаются администратором)
     donat_income_pct: Mapped[int] = mapped_column(Integer, default=0)
     donat_ticket_pct: Mapped[int] = mapped_column(Integer, default=0)

@@ -63,7 +63,7 @@ class CampaignResourceConfig:
 
 
 CAMPAIGN_RESOURCES: list[CampaignResourceConfig] = [
-    CampaignResourceConfig("nh_coins",          "NHCoin",            "💰", 25,    False),
+    CampaignResourceConfig("nh_coins",          "NHCoin",            "💰",  8,    False),
     CampaignResourceConfig("card_dust",         "Пыль",              "💎",  0.005, False),
     CampaignResourceConfig("ui_fragments",      "Фрагменты УИ",      "🔮",  0.001, True),
     CampaignResourceConfig("alchemy_fragments", "Фрагменты алхимии", "🧪",  0.001, True),

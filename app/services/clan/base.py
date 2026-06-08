@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete as sa_delete
 from app.models.user import User
 from app.models.clan import Clan, ClanMember
 
@@ -7,12 +7,12 @@ from app.models.clan import Clan, ClanMember
 class ClanBaseService:
 
     async def get_user_clan(self, session: AsyncSession, user_id: int) -> Clan | None:
-        member = await session.scalar(
-            select(ClanMember).where(ClanMember.user_id == user_id)
+        # Single JOIN instead of 2 separate queries
+        return await session.scalar(
+            select(Clan)
+            .join(ClanMember, ClanMember.clan_id == Clan.id)
+            .where(ClanMember.user_id == user_id)
         )
-        if not member:
-            return None
-        return await session.scalar(select(Clan).where(Clan.id == member.clan_id))
 
     async def get_clan_members(self, session: AsyncSession, clan_id: int) -> list:
         result = await session.execute(
@@ -20,15 +20,25 @@ class ClanBaseService:
         )
         return result.scalars().all()
 
+    async def get_clan_member_count(self, session: AsyncSession, clan_id: int) -> int:
+        """COUNT(*) без загрузки ORM-объектов."""
+        return await session.scalar(
+            select(func.count()).where(ClanMember.clan_id == clan_id)
+        ) or 0
+
+    async def get_clan_member_ids(self, session: AsyncSession, clan_id: int) -> list[int]:
+        """Только user_id участников — без загрузки полных ORM-объектов."""
+        result = await session.execute(
+            select(ClanMember.user_id).where(ClanMember.clan_id == clan_id)
+        )
+        return list(result.scalars().all())
+
     async def recalc_power(self, session: AsyncSession, clan: Clan) -> None:
-        members = await self.get_clan_members(session, clan.id)
-        user_ids = [m.user_id for m in members]
-        if not user_ids:
-            clan.combat_power = 0
-            await session.flush()
-            return
+        # JOIN-субзапрос — без загрузки участников в память
         total = await session.scalar(
-            select(func.sum(User.combat_power)).where(User.id.in_(user_ids))
+            select(func.sum(User.combat_power))
+            .join(ClanMember, ClanMember.user_id == User.id)
+            .where(ClanMember.clan_id == clan.id)
         )
         clan.combat_power = total or 0
         await session.flush()
@@ -87,9 +97,8 @@ class ClanBaseService:
     async def delete_clan(self, session: AsyncSession, clan: Clan, owner: User) -> dict:
         if clan.owner_id != owner.id:
             return {"ok": False, "reason": "Только владелец может удалить клан"}
-        members = await self.get_clan_members(session, clan.id)
-        for m in members:
-            await session.delete(m)
+        # Bulk DELETE вместо цикла
+        await session.execute(sa_delete(ClanMember).where(ClanMember.clan_id == clan.id))
         await session.delete(clan)
         await session.flush()
         return {"ok": True}
@@ -137,13 +146,19 @@ class ClanBaseService:
 
     async def _apply_clan_bonuses(self, session: AsyncSession, clan: Clan) -> None:
         from app.services.business_service import business_service
-        members = await self.get_clan_members(session, clan.id)
-        user_ids = [m.user_id for m in members]
+        from app.config.game_balance import CLAN_AP_INCOME_BONUS, CLAN_AP_TRAIN_BONUS, CLAN_AP_TICKET_BONUS
+        # Загружаем только user_id — без полных ORM-объектов
+        user_ids = await self.get_clan_member_ids(session, clan.id)
+        if not user_ids:
+            return
         users = (await session.execute(select(User).where(User.id.in_(user_ids)))).scalars().all()
+        ap_income = getattr(clan, "ap_income_circles", 0) * CLAN_AP_INCOME_BONUS
+        ap_train = getattr(clan, "ap_train_circles", 0) * CLAN_AP_TRAIN_BONUS
+        ap_ticket = getattr(clan, "ap_ticket_circles", 0) * CLAN_AP_TICKET_BONUS
         for u in users:
-            u.clan_income_bonus = clan.bonus_income_pct
-            u.clan_ticket_bonus = clan.bonus_ticket_pct
-            u.clan_train_bonus = clan.bonus_train_pct
+            u.clan_income_bonus = clan.bonus_income_pct + ap_income
+            u.clan_ticket_bonus = clan.bonus_ticket_pct + ap_ticket
+            u.clan_train_bonus = clan.bonus_train_pct + ap_train
             u.clan_donat_income_bonus = clan.donat_income_pct
             u.clan_donat_ticket_bonus = clan.donat_ticket_pct
             u.clan_donat_train_bonus = clan.donat_train_pct
@@ -159,18 +174,31 @@ class ClanBaseService:
         user.clan_donat_ticket_bonus = 0
         user.clan_donat_train_bonus = 0
         user.clan_vvip_level = 0
+        user.clan_region_income = 0
         await ClanRegionService().clear_region_bonuses_for_user(user)
         await business_service._recalc_income(session, user)
 
     async def _add_clan_bonuses_to_user(self, session: AsyncSession, clan: Clan, user: User) -> None:
         from app.services.business_service import business_service
         from app.services.clan.region import ClanRegionService
-        user.clan_income_bonus = clan.bonus_income_pct
-        user.clan_ticket_bonus = clan.bonus_ticket_pct
-        user.clan_train_bonus = clan.bonus_train_pct
+        from app.services.clan.buildings import ClanBuildingsService
+        from app.config.game_balance import CLAN_AP_INCOME_BONUS, CLAN_AP_TRAIN_BONUS, CLAN_AP_TICKET_BONUS
+        ap_income = getattr(clan, "ap_income_circles", 0) * CLAN_AP_INCOME_BONUS
+        ap_train = getattr(clan, "ap_train_circles", 0) * CLAN_AP_TRAIN_BONUS
+        ap_ticket = getattr(clan, "ap_ticket_circles", 0) * CLAN_AP_TICKET_BONUS
+        user.clan_income_bonus = clan.bonus_income_pct + ap_income
+        user.clan_ticket_bonus = clan.bonus_ticket_pct + ap_ticket
+        user.clan_train_bonus = clan.bonus_train_pct + ap_train
         user.clan_donat_income_bonus = clan.donat_income_pct
         user.clan_donat_ticket_bonus = clan.donat_ticket_pct
         user.clan_donat_train_bonus = clan.donat_train_pct
         user.clan_vvip_level = getattr(clan, "vvip_level", 0)
         await ClanRegionService().apply_region_bonuses_for_user(session, user, clan.id)
+        region = await ClanRegionService().get_clan_region(session, clan.id)
+        if region:
+            bld_svc = ClanBuildingsService()
+            buildings = await bld_svc.get_clan_buildings(session, clan.id)
+            user.clan_region_income = bld_svc.calc_total_income_per_member(buildings)
+        else:
+            user.clan_region_income = 0
         await business_service._recalc_income(session, user)

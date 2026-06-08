@@ -18,7 +18,31 @@ class TreasuryFSM(StatesGroup):
 
 
 @router.callback_query(F.data == "clan_treasury")
-async def cb_clan_treasury(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
+async def cb_clan_treasury(cb: CallbackQuery, session: AsyncSession, user: User):
+    clan = await clan_service.get_user_clan(session, user.id)
+    if not clan:
+        await cb.answer("Вы не в клане", show_alert=True)
+        return
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="💰 Пополнить NHCoin", callback_data="clan_treasury_deposit_coin"))
+    builder.row(InlineKeyboardButton(text="🎯 Пополнить ОА", callback_data="clan_deposit_ap"))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clans_menu"))
+
+    text = (
+        f"🏦 <b>Казна клана {html.escape(clan.name)}</b>\n\n"
+        f"💰 NHCoin: <b>{fmt_num(clan.treasury)}</b>   (у вас: {fmt_num(user.nh_coins)})\n"
+        f"🎯 ОА:     <b>{clan.treasury_ap}</b>          (у вас: {user.activity_points})\n\n"
+        f"Что хотите пополнить?"
+    )
+    try:
+        await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    except Exception:
+        await cb.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+
+
+@router.callback_query(F.data == "clan_treasury_deposit_coin")
+async def cb_clan_treasury_deposit_coin(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
     clan = await clan_service.get_user_clan(session, user.id)
     if not clan:
         await cb.answer("Вы не в клане", show_alert=True)
@@ -26,7 +50,7 @@ async def cb_clan_treasury(cb: CallbackQuery, session: AsyncSession, user: User,
 
     await state.set_state(TreasuryFSM.waiting_amount)
     cancel_kb = InlineKeyboardBuilder()
-    cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="clans_menu"))
+    cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="clan_treasury"))
 
     try:
         await cb.message.edit_text(

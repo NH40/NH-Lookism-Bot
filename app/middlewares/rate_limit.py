@@ -2,7 +2,7 @@ import logging
 from typing import Callable, Any, Awaitable
 
 from aiogram import BaseMiddleware
-from aiogram.types import TelegramObject, CallbackQuery
+from aiogram.types import TelegramObject, CallbackQuery, Message, PreCheckoutQuery
 
 from app.config import settings
 from app.config.rate_limit import (
@@ -95,6 +95,12 @@ class RateLimitMiddleware(BaseMiddleware):
             return await handler(event, data)
 
         if uid in settings.admin_ids_list:
+            return await handler(event, data)
+
+        # Payment events must never be rate-limited: missing them loses real money
+        if isinstance(event, (PreCheckoutQuery,)):
+            return await handler(event, data)
+        if isinstance(event, Message) and event.successful_payment:
             return await handler(event, data)
 
         if await self._is_banned(uid):

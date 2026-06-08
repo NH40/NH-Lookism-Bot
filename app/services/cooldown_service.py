@@ -170,6 +170,10 @@ class CooldownService:
     def credit_repay_lock_key(user_id: int) -> str:
         return f"lock:credit_repay:{user_id}"
 
+    @staticmethod
+    def clan_shop_lock_key(clan_id: int) -> str:
+        return f"lock:clan_shop:{clan_id}"
+
     async def acquire_lock(self, key: str, ttl: int = 5) -> bool:
         """Returns True if lock acquired, False if already locked.
         Uses atomic SET NX EX — single round-trip, no race window."""

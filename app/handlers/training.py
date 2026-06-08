@@ -258,6 +258,9 @@ async def cb_train_with(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer("Тренер не найден", show_alert=True)
         return
 
+    from app.utils.region_activity import record
+    await record(session, user.id, "train")
+
     # Показываем результат: если текущее сообщение — фото, удаляем и отправляем текст
     try:
         if cb.message.photo:

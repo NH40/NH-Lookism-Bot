@@ -79,63 +79,63 @@ MASTERY_BY_ID: dict[str, MasteryConfig] = {m.skill_id: m for m in MASTERY}
 PATH_SKILLS: dict[str, list[PathSkill]] = {
     "businessman": [
         # Уровень 0 — базовые
-        PathSkill("biz_income_1",   "Деловая хватка",      "📈", "+15% к доходу — деньги сами идут в руки",                   "businessman", 3,  {"income_bonus_percent": 15},      0),
-        PathSkill("biz_discount_1", "Экономия",            "💸", "-10% стоимость зданий — умеешь торговаться",                 "businessman", 4,  {"building_discount_percent": 10}, 0),
+        PathSkill("biz_income_1",   "Деловая хватка",      "📈", "+8% к доходу — деньги сами идут в руки",                    "businessman", 3,  {"income_bonus_percent": 8},       0),
+        PathSkill("biz_discount_1", "Экономия",            "💸", "-5% стоимость зданий — умеешь торговаться",                  "businessman", 4,  {"building_discount_percent": 5},  0),
         # Уровень 1
-        PathSkill("biz_income_2",   "Масштабирование",     "📊", "+25% к доходу — бизнес растёт как на дрожжах",              "businessman", 5,  {"income_bonus_percent": 25},      1),
-        PathSkill("biz_quality_1",  "Земельный банк",      "🏘", "+5 бонусных районов — расширяй бизнес без войны",           "businessman", 5,  {"bonus_business_districts": 5},   1),
-        PathSkill("biz_discount_2", "Оптовик",             "🏭", "-20% стоимость зданий — оптом всегда дешевле",               "businessman", 7,  {"building_discount_percent": 20}, 1),
+        PathSkill("biz_income_2",   "Масштабирование",     "📊", "+12% к доходу — бизнес растёт как на дрожжах",              "businessman", 5,  {"income_bonus_percent": 12},      1),
+        PathSkill("biz_quality_1",  "Земельный банк",      "🏘", "+2 бонусных района — расширяй бизнес без войны",            "businessman", 5,  {"bonus_business_districts": 2},   1),
+        PathSkill("biz_discount_2", "Оптовик",             "🏭", "-10% стоимость зданий — оптом всегда дешевле",               "businessman", 7,  {"building_discount_percent": 10}, 1),
         # Уровень 2
-        PathSkill("biz_income_3",   "Монополия",           "🏰", "+35% к доходу — конкурентов не осталось",                   "businessman", 8,  {"income_bonus_percent": 35},      2),
-        PathSkill("biz_quality_2",  "Мегаэкспансия",       "🌆", "+8 бонусных районов — ты скупаешь всё",                     "businessman", 9,  {"bonus_business_districts": 8},   2),
-        PathSkill("biz_recruit_1",  "HR-директор",         "🤝", "+15% вербовка — кадры решают всё",                          "businessman", 8,  {"recruit_count_bonus": 15},       2),
+        PathSkill("biz_income_3",   "Монополия",           "🏰", "+18% к доходу — конкурентов не осталось",                   "businessman", 8,  {"income_bonus_percent": 18},      2),
+        PathSkill("biz_quality_2",  "Мегаэкспансия",       "🌆", "+4 бонусных района — ты скупаешь всё",                      "businessman", 9,  {"bonus_business_districts": 4},   2),
+        PathSkill("biz_recruit_1",  "HR-директор",         "🤝", "+8% вербовка — кадры решают всё",                           "businessman", 8,  {"recruit_count_bonus": 8},        2),
         # Уровень 3
-        PathSkill("biz_multiplier", "Районный барон",      "🌍", "×1.5 к доходу районов — твой район, твои правила",          "businessman", 12, {"district_multiplier": 1.5},      3),
-        PathSkill("biz_income_4",   "Корпорация",          "🏙", "+50% к доходу — ты уже не просто бизнесмен",                "businessman", 11, {"income_bonus_percent": 50},      3),
+        PathSkill("biz_multiplier", "Районный барон",      "🌍", "×1.25 к доходу районов — твой район, твои правила",         "businessman", 12, {"district_multiplier": 1.25},     3),
+        PathSkill("biz_income_4",   "Корпорация",          "🏙", "+25% к доходу — ты уже не просто бизнесмен",                "businessman", 11, {"income_bonus_percent": 25},      3),
         # Уровень 4
-        PathSkill("biz_reket",      "Деловая империя",     "👑", "+20% к доходу — абсолютная монополия на рынке",             "businessman", 14, {"income_bonus_percent": 20},      4),
-        PathSkill("biz_compound",   "Сложный процент",     "💹", "+50% доход от районов — деньги делают деньги",              "businessman", 13, {"district_multiplier": 1.5},      4),
+        PathSkill("biz_reket",      "Деловая империя",     "👑", "+10% к доходу — абсолютная монополия на рынке",             "businessman", 14, {"income_bonus_percent": 10},      4),
+        PathSkill("biz_compound",   "Сложный процент",     "💹", "+25% доход от районов — деньги делают деньги",              "businessman", 13, {"district_multiplier": 1.25},     4),
     ],
     "romantic": [
         # Уровень 0 — базовые
-        PathSkill("rom_tickets_1",  "Обаяние",             "💘", "+1 слот тикета — люди тянутся к тебе сами",                "romantic", 3,  {"max_tickets": 1},           0),
-        PathSkill("rom_chance_1",   "Везунчик",            "🍀", "+5% шанс тикета — удача любит тебя",                       "romantic", 3,  {"ticket_chance": 5},          0),
-        PathSkill("rom_recruit_1",  "Вербовщик",           "👥", "+20% бойцов при вербовке — умеешь убеждать",               "romantic", 4,  {"recruit_count_bonus": 20},   0),
+        PathSkill("rom_tickets_1",  "Обаяние",             "💘", "+1 слот тикета — люди тянутся к тебе сами",                "romantic", 3,  {"max_tickets": 1},                  0),
+        PathSkill("rom_recruit_1",  "Вербовщик",           "👥", "+25% бойцов при вербовке — умеешь убеждать",               "romantic", 4,  {"recruit_count_bonus": 25},          0),
         # Уровень 1
-        PathSkill("rom_tickets_2",  "Харизма",             "💝", "+2 слота тикета — твоя улыбка открывает двери",            "romantic", 6,  {"max_tickets": 2},            1),
-        PathSkill("rom_chance_2",   "Любимчик судьбы",     "⭐", "+10% шанс тикета — судьба благосклонна к романтикам",     "romantic", 5,  {"ticket_chance": 10},         1),
-        PathSkill("rom_quality_1",  "Вдохновение",         "✨", "+5% к качеству тренировки — романтика мотивирует бойцов",  "romantic", 5,  {"train_quality_bonus": 5},    1),
+        PathSkill("rom_recruit_2",   "Харизма",             "💝", "+35% бойцов — твоя улыбка открывает двери",               "romantic", 5,  {"recruit_count_bonus": 35},          1),
+        PathSkill("rom_discount_1", "Народная любовь",     "❤️", "-15% стоимость вербовки — люди идут за тобой бесплатно",  "romantic", 5,  {"recruit_discount_percent": 15},     1),
+        PathSkill("rom_statist_1",  "Боевая подготовка",   "⚔️", "+10% мощь статистов — ты обучаешь, не только вербуешь",   "romantic", 5,  {"statist_power_bonus": 10},          1),
         # Уровень 2
-        PathSkill("rom_recruit_2",  "Мастер вербовки",     "🎯", "+40% бойцов — за тобой идут толпами",                     "romantic", 8,  {"recruit_count_bonus": 40},   2),
-        PathSkill("rom_chance_3",   "Дитя удачи",          "🌟", "+15% шанс тикета — ты рождён под счастливой звездой",     "romantic", 8,  {"ticket_chance": 15},         2),
-        PathSkill("rom_income_1",   "Щедрый покровитель",  "🌹", "+15% доход — любовь окупается",                            "romantic", 7,  {"income_bonus_percent": 15},  2),
+        PathSkill("rom_recruit_3",  "Мастер вербовки",     "🎯", "+50% бойцов — за тобой идут толпами",                     "romantic", 8,  {"recruit_count_bonus": 50},          2),
+        PathSkill("rom_discount_2", "Оптовый вербовщик",   "🏪", "-25% стоимость вербовки — оптом всегда дешевле",           "romantic", 9,  {"recruit_discount_percent": 25},     2),
+        PathSkill("rom_tickets_2",  "Легенда харизмы",     "💖", "+2 слота тикета — о тебе слагают легенды",                "romantic", 8,  {"max_tickets": 2},                  2),
         # Уровень 3
-        PathSkill("rom_tickets_3",  "Легенда романтики",   "💖", "+3 слота тикета — о тебе слагают легенды",                "romantic", 10, {"max_tickets": 3},            3),
-        PathSkill("rom_attack_x",   "Счастливый удар",     "🎲", "+1 доп. атака — удача улыбается смелым",                   "romantic", 13, {"extra_attack_count": 1},     3),
-        PathSkill("rom_discount_1", "Народная любовь",     "❤️", "-15% стоимость вербовки — люди идут бесплатно",            "romantic", 11, {"recruit_discount_percent": 15}, 3),
+        PathSkill("rom_double",     "Двойная вербовка",    "⚡", "Двойная вербовка — два отряда за один раз",                "romantic", 15, {"double_recruit": True},             3),
+        PathSkill("rom_recruit_4",  "Легенда вербовки",    "🌟", "+60% бойцов — непревзойдённый рекрутёр",                  "romantic", 12, {"recruit_count_bonus": 60},          3),
+        PathSkill("rom_statist_2",  "Элитная гвардия",     "🛡", "+15% мощь статистов — твои бойцы становятся элитой",      "romantic", 11, {"statist_power_bonus": 15},          3),
         # Уровень 4
-        PathSkill("rom_double",     "Двойная вербовка",    "⚡", "Двойная вербовка — два отряда за один раз",                "romantic", 15, {"double_recruit": True},      4),
-        PathSkill("rom_max_ticket", "Звезда удачи",        "🌠", "+1 макс. слот тикета — судьба всегда за тебя",             "romantic", 14, {"max_tickets": 1},            4),
+        PathSkill("rom_recruit_5",  "Армия харизмата",     "👑", "+80% бойцов — твоя армия не знает границ",                "romantic", 15, {"recruit_count_bonus": 80},          4),
+        PathSkill("rom_max_ticket", "Звезда удачи",        "🌠", "+1 макс. слот тикета — судьба всегда за тебя",             "romantic", 14, {"max_tickets": 1},                  4),
+        PathSkill("rom_statist_3",  "Армия монстров",      "💪", "+20% мощь статистов — твои люди сильнейшие в стране",      "romantic", 14, {"statist_power_bonus": 20},          4),
     ],
     "monster": [
         # Уровень 0 — базовые
-        PathSkill("mon_train_1",  "Тренировочный монстр", "🏋", "+10% охват тренировки — ты не устаёшь",                    "monster", 3,  {"train_bonus_percent": 10},  0),
-        PathSkill("mon_power_1",  "Монстр силы",          "💥", "+10% боевая мощь — твоя банда страшнее всех",               "monster", 5,  {"squad_power_bonus": 10},    0),
+        PathSkill("mon_power_1",   "Монстр силы",          "💥", "+15% боевая мощь — твоя банда страшнее всех",               "monster", 5,  {"squad_power_bonus": 15},              0),
+        PathSkill("mon_power_2",   "Зверь в клетке",       "🦁", "+10% боевая мощь — сила жаждет выхода",                     "monster", 4,  {"squad_power_bonus": 10},              0),
         # Уровень 1
-        PathSkill("mon_train_2",  "Машина войны",         "⚙️", "+20% охват — твой режим тренировок убивает слабых",         "monster", 6,  {"train_bonus_percent": 20},  1),
-        PathSkill("mon_quality_1","Жёсткий тренер",       "🎯", "+10% к качеству тренировки — только жёсткие методы",       "monster", 6,  {"train_quality_bonus": 10},  1),
-        PathSkill("mon_ticket_1", "Проверка боем",        "🎟", "+5% шанс тикета — только сильных замечает судьба",          "monster", 5,  {"ticket_chance": 5},         1),
+        PathSkill("mon_power_3",   "Машина войны",         "⚙️", "+20% боевая мощь — ты — живое оружие",                      "monster", 7,  {"squad_power_bonus": 20},              1),
+        PathSkill("mon_extra_atk1","Берсерк",              "😤", "+1 доп. атака — ты не останавливаешься, пока враг дышит",   "monster", 6,  {"extra_attack_count": 1},              1),
+        PathSkill("mon_trainer_cd","Режим зверя",          "⏱", "-25% КД Том Ли, Чон Гон, Менеджер Ким — монстр не отдыхает","monster", 6,  {"trainer_cd_reduction": 25},           1),
         # Уровень 2
-        PathSkill("mon_train_3",  "Абсолютная форма",     "🔥", "+30% охват — ты — живое воплощение силы",                   "monster", 10, {"train_bonus_percent": 30},  2),
-        PathSkill("mon_power_2",  "Пиковая форма",        "🌋", "+20% боевая мощь — предел человеческих возможностей",       "monster", 10, {"squad_power_bonus": 20},    2),
-        PathSkill("mon_quality_2","Совершенная методика", "🧬", "+15% к качеству тренировки — ты знаешь предел каждого",    "monster", 11, {"train_quality_bonus": 15},  2),
+        PathSkill("mon_power_4",   "Пиковая форма",        "🌋", "+30% боевая мощь — предел человеческих возможностей",       "monster", 10, {"squad_power_bonus": 30},              2),
+        PathSkill("mon_power_5",   "Непоколебимый",        "🗿", "+20% боевая мощь — тебя уже боятся все вокруг",              "monster", 10, {"squad_power_bonus": 20},              2),
+        PathSkill("mon_train_1",   "Стальная воля",        "🏋", "+15% охват тренировки — монстры тренируются иначе",          "monster", 10, {"train_bonus_percent": 15},             2),
         # Уровень 3
-        PathSkill("mon_dtrain",   "Двойная тренировка",   "🔄", "Тренировка 2 раза в КД — отдых для слабаков",              "monster", 12, {"double_train": True},       3),
-        PathSkill("mon_extra_atk","Берсерк",              "😤", "+1 доп. атака — ты не останавливаешься, пока враг дышит",  "monster", 14, {"extra_attack_count": 1},    3),
-        PathSkill("mon_power_3",  "Непоколебимый",        "🗿", "+30% боевая мощь — тебя уже боятся все вокруг",             "monster", 13, {"squad_power_bonus": 30},    3),
+        PathSkill("mon_dattack",   "Двойная атака",        "⚔️", "Атака 2 раза в КД — бей пока стоишь",                       "monster", 14, {"double_attack": True},                3),
+        PathSkill("mon_power_6",   "Высшая форма",         "👹", "+35% боевая мощь — ты вышел за пределы человеческого",      "monster", 12, {"squad_power_bonus": 35},              3),
+        PathSkill("mon_extra_atk2","Неудержимый",          "🔥", "+1 доп. атака — монстры не знают усталости",                "monster", 13, {"extra_attack_count": 1},              3),
         # Уровень 4
-        PathSkill("mon_dattack",  "Двойная атака",        "⚔️", "Атака 2 раза в КД — бей пока стоишь",                      "monster", 15, {"double_attack": True},      4),
-        PathSkill("mon_fury",     "Ярость монстра",       "😱", "+1 доп. атака + серия побед усиливает следующий удар",      "monster", 14, {"extra_attack_count": 1},    4),
+        PathSkill("mon_emperor",   "Охотник за бандами",   "👑", "Атаковать одну группировку дважды до КД — безжалостный",    "monster", 15, {"emperor_gang_multi_attack": True},    4),
+        PathSkill("mon_extra_atk3","Ярость монстра",       "😱", "+1 доп. атака — всё ещё не остановился",                   "monster", 14, {"extra_attack_count": 1},              4),
     ],
     "shadow": [
         # ── Тень: путь скрытности, скорости и манипуляций ─────────────────────
@@ -164,11 +164,11 @@ PATH_SYNERGIES: dict[tuple[str, str], dict] = {
     ("businessman", "monster"):   {"name": "Беспощадный капиталист",  "emoji": "💰", "effect": {"income_bonus_percent": 5},      "desc": "+5% доход — бизнес с кулаком"},
     ("businessman", "romantic"):  {"name": "Харизматичный делец",     "emoji": "🤝", "effect": {"recruit_discount_percent": 15}, "desc": "-15% стоимость вербовки"},
     ("businessman", "shadow"):    {"name": "Теневой капитал",         "emoji": "🌑", "effect": {"income_bonus_percent": 10},     "desc": "+10% доход — деньги не пахнут"},
-    ("romantic",    "monster"):   {"name": "Страсть к власти",        "emoji": "🔥", "effect": {"train_bonus_percent": 10},     "desc": "+10% охват тренировки"},
-    ("romantic",    "businessman"):{"name": "Богатый покровитель",    "emoji": "💝", "effect": {"ticket_chance": 5},            "desc": "+5% шанс тикета"},
-    ("romantic",    "shadow"):    {"name": "Роковое влечение",        "emoji": "🌹", "effect": {"ticket_chance": 5},            "desc": "+5% шанс тикета — опасная привлекательность"},
+    ("romantic",    "monster"):   {"name": "Страсть к власти",        "emoji": "🔥", "effect": {"squad_power_bonus": 8},        "desc": "+8% боевая мощь"},
+    ("romantic",    "businessman"):{"name": "Богатый покровитель",    "emoji": "💝", "effect": {"recruit_discount_percent": 10},"desc": "-10% стоимость вербовки"},
+    ("romantic",    "shadow"):    {"name": "Роковое влечение",        "emoji": "🌹", "effect": {"recruit_count_bonus": 15},     "desc": "+15% вербовка — опасная привлекательность"},
     ("monster",     "businessman"):{"name": "Рэкетир",                "emoji": "😤", "effect": {"income_bonus_percent": 5},     "desc": "+5% доход"},
-    ("monster",     "romantic"):  {"name": "Одержимость силой",       "emoji": "👹", "effect": {"train_bonus_percent": 5},      "desc": "+5% охват тренировки"},
+    ("monster",     "romantic"):  {"name": "Одержимость силой",       "emoji": "👹", "effect": {"squad_power_bonus": 8},        "desc": "+8% боевая мощь"},
     ("monster",     "shadow"):    {"name": "Ночная ярость",           "emoji": "🌑", "effect": {"squad_power_bonus": 7},        "desc": "+7% боевая мощь — удвоенная жестокость"},
     ("shadow",      "businessman"):{"name": "Серый кардинал",         "emoji": "🃏", "effect": {"income_bonus_percent": 5},     "desc": "+5% доход — управляй из тени"},
     ("shadow",      "romantic"):  {"name": "Теневой обаятель",        "emoji": "💫", "effect": {"recruit_count_bonus": 12},     "desc": "+12% вербовка — умеешь убеждать незаметно"},

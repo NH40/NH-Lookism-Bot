@@ -15,40 +15,40 @@ def calc_fragments(
     ratio = min(1.0, damage / boss_hp)
     if reward_type == "alchemy":
         if ratio >= 0.5:
-            base = random.randint(20, ALCHEMY_MAX_FRAGMENTS_PER_RAID)
+            base = random.randint(25, ALCHEMY_MAX_FRAGMENTS_PER_RAID)
+        elif ratio >= 0.2:
+            base = random.randint(15, 24)
+        elif ratio >= 0.05:
+            base = random.randint(8, 14)
+        else:
+            base = random.randint(3, 7)
+    elif reward_type == "path":
+        if ratio >= 0.5:
+            base = random.randint(20, PATH_FRAGMENTS_MAX_PER_RAID)
         elif ratio >= 0.2:
             base = random.randint(12, 19)
         elif ratio >= 0.05:
             base = random.randint(5, 11)
         else:
-            base = random.randint(1, 4)
-    elif reward_type == "path":
-        if ratio >= 0.5:
-            base = random.randint(15, PATH_FRAGMENTS_MAX_PER_RAID)
-        elif ratio >= 0.2:
-            base = random.randint(8, 14)
-        elif ratio >= 0.05:
-            base = random.randint(3, 7)
-        else:
-            base = random.randint(1, 2)
+            base = random.randint(2, 4)
     elif reward_type == "business":
         if ratio >= 0.5:
-            base = random.randint(10, BUSINESS_FRAGMENTS_MAX_PER_RAID)
+            base = random.randint(15, BUSINESS_FRAGMENTS_MAX_PER_RAID)
         elif ratio >= 0.2:
-            base = random.randint(6, 9)
+            base = random.randint(9, 14)
         elif ratio >= 0.05:
-            base = random.randint(2, 5)
+            base = random.randint(4, 8)
         else:
-            base = random.randint(1, 2)
+            base = random.randint(2, 3)
     else:
         if ratio >= 0.5:
-            base = random.randint(15, 25)
+            base = random.randint(20, 35)
         elif ratio >= 0.2:
-            base = random.randint(8, 15)
+            base = random.randint(12, 19)
         elif ratio >= 0.05:
-            base = random.randint(3, 8)
+            base = random.randint(5, 11)
         else:
-            base = random.randint(1, 3)
+            base = random.randint(2, 4)
     return int(base * (1 + drop_bonus_pct / 100))
 
 

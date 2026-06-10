@@ -23,6 +23,7 @@ CARD_IMAGE_MAP: dict[str, str] = {
     "Samuel (Hormones)":      "images/card/new_legend/Samuel_Hormones.png",
 
     # ── legend ────────────────────────────────────────────────────────────────
+    "James (Legend First Gen)": "images/card/legend/James_LegendFirstGen.png",
     "Tom (Rage mode)":       "images/card/legend/TomLee_RageMode.png",
     "Gapryong (Overcoming)": "images/card/legend/Gapryong_Overcoming.png",
     "Gun (TUI)":             "images/card/legend/Gun_TUI.png",
@@ -40,7 +41,7 @@ CARD_IMAGE_MAP: dict[str, str] = {
     "Daniel (Prime)":    "images/card/peak/Daniel_Prime.png",
     "Gapryong (Prime)":  "images/card/peak/Gapryong_Prime.png",
     "Shingen (Prime)":   "images/card/peak/Shinghen_Prime.png",
-    "James (Prime)":     "images/card/peak/James_Prime.png",
+    "James (Prime)":     "images/card/peak/James_Path.png",
     "Gitae (Path)":      "images/card/peak/Gitae_Path.png",
     "Mujin (Prime)":     "images/card/peak/Mujin_Prime.png",
     "Jinyoung (Path)":   "images/card/peak/Junyong_Path.png",  # Junyong = Jinyoung (준영)
@@ -140,6 +141,7 @@ CARD_IMAGE_MAP: dict[str, str] = {
     # ── gen_zero ──────────────────────────────────────────────────────────────
     "Old Gapryong (Overcoming)": "images/card/gen_zero/OldGapryong_Overcoming.png",
     "Shingen (TUI Lethargic)":   "images/card/gen_zero/Shinghen_LethargicTui.png",
+    "Baekho (Old)":              "images/card/gen_zero/Baekho_Old.png",
     "Baekho (Prime)":            "images/card/gen_zero/Baekho_Prime.png",
     "Old Gapryong (Base)":       "images/card/gen_zero/OldGapryong_Base.png",
     "Shingen (Lethargic)":       "images/card/gen_zero/Shinghen_Lethargic.png",
@@ -153,19 +155,26 @@ CARD_IMAGE_MAP: dict[str, str] = {
     "Paecheon (Hwarang)":        "images/card/gen_zero/Paecheon_Hwarang.png",
     "Paecheon (Dark blood)":     "images/card/gen_zero/Paecheon_DarkBlood.png",
     "Elite (Old)":               "images/card/gen_zero/Elite_OId.png",
+    "Eunha (Prime)":             "images/card/gen_zero/Eunha_Prime.png",
     "Gentleman (Prime)":         "images/card/gen_zero/Gentleman_Prime.png",
+    "Choi (Prime)":              "images/card/gen_zero/Choi_Prime.png",
     "Choi (Lighting)":           "images/card/gen_zero/Choi_Lighting.png",
     "Paecheon (Base)":           "images/card/gen_zero/Paecheon_Base.png",
+    "Sangcheol (Daniel's Dad)":  "images/card/gen_zero/Sangcheol_DanielDad.png",
     "Shigeaki (Kojima)":         "images/card/gen_zero/Shigeaki_Kojima.png",
     "Hiroaki (Kojima)":          "images/card/gen_zero/Hiroaki_Kojima.png",
     "Jaesu (Prime)":             "images/card/gen_zero/Jaesu_Prime.png",
+    "Bangho (Hwarang)":          "images/card/gen_zero/Bangho_Hwarang.png",
     "Beolgu (Prime)":            "images/card/gen_zero/Beolgu_Prime.png",
     "Gwang (Prime)":             "images/card/gen_zero/Gwang_Prime.png",
+    "Bakgu (Prime)":             "images/card/gen_zero/Bakgu_Prime.png",
     "Bakgu (NOH)":               "images/card/gen_zero/Bakgu_NON.png",  # filename typo: NON → NOH
+    "Yoru Park":                 "images/card/gen_zero/YoruPark.png",
     "Somi (Mom Gun)":            "images/card/gen_zero/Somi _GunMom.png",
     "Ms'Kim":                    "images/card/gen_zero/Ms'Kim.png",
 
     # ── absolute ──────────────────────────────────────────────────────────────
+    "Hasbullla (Конь)":              "images/card/absolute/Hasbullla_Horse.png",
     "Kuropatkaa (Hopeful)":         "images/card/absolute/Kuropatkaa_Hopeful.png",
     "Marise (Boosty)":              "images/card/absolute/Marise_Boosty.png",
     "Some Thing (STYLIST)":         "images/card/absolute/SomeThing_Stylist.png",

@@ -5,8 +5,9 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
-from app.models.clan import Clan
+from app.models.clan import Clan, ClanMember
 from app.services.clan import clan_service
+from sqlalchemy import select
 from app.constants.clan import (
     CLAN_SHOP_ITEMS, CLAN_SHOP_MAP, CLAN_SHOP_CATEGORIES, CLAN_UPGRADES,
     CLAN_DONAT_PACKAGES,
@@ -16,11 +17,26 @@ from app.utils.formatters import fmt_num
 router = Router()
 
 
+_SHOP_ALLOWED_RANKS = {"owner", "deputy", "captain"}
+_UPGRADE_ALLOWED_RANKS = {"owner", "deputy"}
+
+
+async def _get_member_rank(session: AsyncSession, clan_id: int, user_id: int) -> str:
+    m = await session.scalar(
+        select(ClanMember).where(ClanMember.clan_id == clan_id, ClanMember.user_id == user_id)
+    )
+    return m.rank if m else "member"
+
+
 @router.callback_query(F.data == "clan_shop")
 async def cb_clan_shop(cb: CallbackQuery, session: AsyncSession, user: User):
     clan = await clan_service.get_user_clan(session, user.id)
     if not clan:
         await cb.answer("Вы не в клане", show_alert=True)
+        return
+    rank = await _get_member_rank(session, clan.id, user.id)
+    if rank not in _SHOP_ALLOWED_RANKS:
+        await cb.answer("Покупки из казны доступны с ранга ⚔️ Капитан", show_alert=True)
         return
 
     builder = InlineKeyboardBuilder()
@@ -40,7 +56,7 @@ async def cb_clan_shop(cb: CallbackQuery, session: AsyncSession, user: User):
         pass
 
 
-async def _show_upgrades(cb: CallbackQuery, clan: Clan):
+async def _show_upgrades(cb: CallbackQuery, clan: Clan, can_buy: bool = False):
     builder = InlineKeyboardBuilder()
     for upgrade in CLAN_UPGRADES:
         can = "✅" if clan.treasury >= upgrade.price else "❌"
@@ -55,9 +71,10 @@ async def _show_upgrades(cb: CallbackQuery, clan: Clan):
             already = True
 
         icon = "🔒" if already else can
+        cb_data = "noop_clan" if (already or not can_buy) else f"clan_upgrade:{upgrade.upgrade_id}"
         builder.row(InlineKeyboardButton(
             text=f"{icon} {upgrade.name} — {fmt_num(upgrade.price)}",
-            callback_data="noop_clan" if already else f"clan_upgrade:{upgrade.upgrade_id}"
+            callback_data=cb_data,
         ))
 
     slots_str = f"+{clan.bonus_max_members}" if clan.bonus_max_members > 0 else "нет"
@@ -136,9 +153,9 @@ _POTION_TYPE_GROUPS = [
 ]
 
 
-async def _show_category(cb: CallbackQuery, clan: Clan, cat_id: str):
+async def _show_category(cb: CallbackQuery, clan: Clan, cat_id: str, can_buy_upgrades: bool = False):
     if cat_id == "upgrades":
-        await _show_upgrades(cb, clan)
+        await _show_upgrades(cb, clan, can_buy=can_buy_upgrades)
         return
     if cat_id == "donate":
         await _show_donate(cb, clan)
@@ -200,7 +217,8 @@ async def cb_clan_shop_cat(cb: CallbackQuery, session: AsyncSession, user: User)
     if not clan:
         await cb.answer("Вы не в клане", show_alert=True)
         return
-    await _show_category(cb, clan, cat_id)
+    rank = await _get_member_rank(session, clan.id, user.id)
+    await _show_category(cb, clan, cat_id, can_buy_upgrades=rank in _UPGRADE_ALLOWED_RANKS)
 
 
 @router.callback_query(F.data.startswith("clan_potion_type:"))
@@ -247,6 +265,10 @@ async def cb_clan_buy(cb: CallbackQuery, session: AsyncSession, user: User):
     if not clan:
         await cb.answer("Вы не в клане", show_alert=True)
         return
+    rank = await _get_member_rank(session, clan.id, user.id)
+    if rank not in _SHOP_ALLOWED_RANKS:
+        await cb.answer("Покупки из казны доступны с ранга ⚔️ Капитан", show_alert=True)
+        return
 
     item = CLAN_SHOP_MAP.get(item_id)
     if not item:
@@ -278,7 +300,8 @@ async def cb_clan_buy(cb: CallbackQuery, session: AsyncSession, user: User):
         return
 
     await session.refresh(clan)
-    await _show_category(cb, clan, item.category)
+    rank = await _get_member_rank(session, clan.id, user.id)
+    await _show_category(cb, clan, item.category, can_buy_upgrades=rank in _UPGRADE_ALLOWED_RANKS)
 
 
 @router.callback_query(F.data.startswith("clan_upgrade:"))
@@ -288,6 +311,10 @@ async def cb_clan_upgrade(cb: CallbackQuery, session: AsyncSession, user: User):
     clan = await clan_service.get_user_clan(session, user.id)
     if not clan:
         await cb.answer("Вы не в клане", show_alert=True)
+        return
+    rank = await _get_member_rank(session, clan.id, user.id)
+    if rank not in _UPGRADE_ALLOWED_RANKS:
+        await cb.answer("Улучшения клана доступны только владельцу и заместителю", show_alert=True)
         return
 
     lock_key = cooldown_service.clan_shop_lock_key(clan.id)

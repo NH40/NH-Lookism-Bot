@@ -30,6 +30,7 @@ from sqlalchemy import select, text, func, or_
 from app.database import AsyncSessionFactory
 from app.models.user import User
 from app.models.potion import ActivePotion
+from app.models.clan import Clan, ClanMember
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,31 @@ async def income_tick():
                 row.user_id: row.total_bonus for row in pot_result.all()
             }
 
+            # ── 2b. Бонусы владельца клана для дохода зданий региона ─────────
+            # user_id -> суммарный бонус % владельца его клана
+            clan_bld_users = [u.id for u in users if (u.clan_region_income or 0) > 0]
+            owner_bonus_map: dict[int, int] = {}
+            if clan_bld_users:
+                from sqlalchemy.orm import aliased
+                OwnerUser = aliased(User, name="owner_user")
+                ob_result = await session.execute(
+                    select(
+                        ClanMember.user_id,
+                        (
+                            func.coalesce(OwnerUser.income_bonus_percent, 0)
+                            + func.coalesce(OwnerUser.prestige_income_bonus, 0)
+                            + func.coalesce(OwnerUser.clan_income_bonus, 0)
+                            + func.coalesce(OwnerUser.clan_donat_income_bonus, 0)
+                            + func.coalesce(OwnerUser.region_income_pct, 0)
+                            + func.coalesce(OwnerUser.region_income_building_pct, 0)
+                        ).label("owner_bonus"),
+                    )
+                    .join(Clan, Clan.id == ClanMember.clan_id)
+                    .join(OwnerUser, OwnerUser.id == Clan.owner_id)
+                    .where(ClanMember.user_id.in_(clan_bld_users))
+                )
+                owner_bonus_map = {row.user_id: int(row.owner_bonus or 0) for row in ob_result.all()}
+
             # ── 3. Считаем дельты в Python ──────────────────────────────────
             user_deltas: dict[int, int] = {}    # user_id -> монеты к зачислению
             teacher_deltas: dict[int, int] = {} # teacher_id -> монеты к зачислению
@@ -122,10 +148,11 @@ async def income_tick():
                         else:
                             earned += total
 
-                # Доход от зданий клана в регионе
+                # Доход от зданий клана — умножается на бонусы владельца клана
                 clan_bld = u.clan_region_income or 0
                 if clan_bld > 0:
-                    earned += clan_bld
+                    owner_bonus = owner_bonus_map.get(u.id, 0)
+                    earned += max(0, int(clan_bld * (1 + owner_bonus / 100)))
 
                 # Пассивный доход: circ-донаты + регион-бонус
                 circ = (u.circ_passive_income or 0) + (u.region_passive_income or 0)

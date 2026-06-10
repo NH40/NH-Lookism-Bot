@@ -34,6 +34,9 @@ class Clan(Base):
     donat_school_circles: Mapped[int] = mapped_column(Integer, default=0)
     donat_war_circles: Mapped[int] = mapped_column(Integer, default=0)
     donat_premium_circles: Mapped[int] = mapped_column(Integer, default=0)
+    # КД после войны регион-vs-регион (4 часа, нельзя вызывать/быть вызванным)
+    region_war_cd_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

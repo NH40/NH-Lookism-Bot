@@ -12,12 +12,15 @@ from app.models.clan_region import (
 from app.models.user import User
 from app.services.clan.base import ClanBaseService
 
-# Ограничение участников клана для войны за регион
-REGION_WAR_MAX_MEMBERS = 15
-# Минимальный порог очков для захвата региона (макс на игрока = 82, макс на клан = 15×82 = 1230)
-REGION_WAR_MIN_SCORE = 100
-# Продолжительность войны в часах
-REGION_WAR_HOURS = 6
+from app.config.game_balance import (
+    REGION_WAR_MAX_MEMBERS,
+    REGION_WAR_MIN_SCORE,
+    REGION_WAR_HOURS,
+    REGION_SHIELD_HOURS,
+    REGION_SHIELD_CD_HOURS,
+    REGION_VS_REGION_CD_HOURS,
+    REGION_VS_REGION_WIN_MULTIPLIER,
+)
 
 RANK_LABELS = {
     "owner": "👑 Владелец",
@@ -156,56 +159,65 @@ class ClanRegionService(ClanBaseService):
         if rank not in WAR_ALLOWED_RANKS:
             return {"ok": False, "reason": "Только владелец или заместитель может начать войну"}
 
+        # Клан с регионом не может атаковать (макс 1 регион на клан)
+        own_region = await self.get_clan_region(session, clan.id)
+        if own_region:
+            return {"ok": False, "reason": "У вашего клана уже есть регион. Клан может владеть только одним регионом."}
+
+        if region.owner_clan_id == clan.id:
+            return {"ok": False, "reason": "Ваш клан уже владеет этим регионом"}
+
         member_count = await self.get_clan_member_count(session, clan.id)
         if member_count > REGION_WAR_MAX_MEMBERS:
             return {
                 "ok": False,
-                "reason": f"Клан не может участвовать в войне за регион при более {REGION_WAR_MAX_MEMBERS} участниках. "
-                          f"У вас {member_count}.",
+                "reason": f"Клан не может участвовать при более {REGION_WAR_MAX_MEMBERS} участниках",
             }
 
-        # Проверяем, не участвует ли клан уже в какой-либо войне за регион
+        # Клан уже в войне
         existing = await self.get_active_war_for_clan(session, clan.id)
         if existing:
             return {"ok": False, "reason": "Ваш клан уже участвует в войне за регион"}
 
-        # Проверяем, нет ли уже активной войны за этот регион
+        # Есть активная война → присоединиться
         active_war = await self.get_active_war_for_region(session, region.id)
         if active_war:
-            # Разрешаем присоединиться к войне
             return await self.join_region_war(session, clan, active_war, requester_id)
 
-        # Ваш клан уже владеет этим регионом
-        if region.owner_clan_id == clan.id:
-            return {"ok": False, "reason": "Ваш клан уже владеет этим регионом"}
-
-        # Проверяем, нет ли у клана уже другого региона
-        own_region = await self.get_clan_region(session, clan.id)
-        if own_region:
-            return {
-                "ok": False,
-                "reason": f"Ваш клан уже владеет регионом {own_region.emoji} {own_region.name}. "
-                          "Один клан — один регион.",
-            }
-
         now = datetime.now(timezone.utc)
+
+        # Проверяем щит на регионе
+        if region.shield_until and region.shield_until > now:
+            remaining = int((region.shield_until - now).total_seconds())
+            h, m = divmod(remaining // 60, 60)
+            return {"ok": False, "reason": f"Регион защищён щитом ещё {h}ч {m}м"}
+
         war = KoreanRegionWar(
             region_id=region.id,
             initiator_clan_id=clan.id,
+            war_type="capture",
             ends_at=now + timedelta(hours=REGION_WAR_HOURS),
         )
         session.add(war)
         await session.flush()
 
-        participant = KoreanRegionWarParticipant(
-            war_id=war.id,
-            clan_id=clan.id,
-            score=0,
-        )
-        session.add(participant)
+        session.add(KoreanRegionWarParticipant(war_id=war.id, clan_id=clan.id, score=0))
+
+        # Если регион уже занят → авто-добавляем клан-владельца как защитника
+        defender_clan_id = None
+        if region.owner_clan_id and region.owner_clan_id != clan.id:
+            defender_clan_id = region.owner_clan_id
+            session.add(KoreanRegionWarParticipant(war_id=war.id, clan_id=defender_clan_id, score=0))
+
         await session.flush()
 
-        return {"ok": True, "war_id": war.id, "ends_at": war.ends_at, "joined": False}
+        return {
+            "ok": True,
+            "war_id": war.id,
+            "ends_at": war.ends_at,
+            "joined": False,
+            "defender_clan_id": defender_clan_id,
+        }
 
     async def join_region_war(
         self, session: AsyncSession, clan: Clan, war: KoreanRegionWar, requester_id: int
@@ -223,13 +235,12 @@ class ClanRegionService(ClanBaseService):
 
         own_region = await self.get_clan_region(session, clan.id)
         if own_region:
-            return {"ok": False, "reason": "Клан уже владеет регионом. Один клан — один регион."}
+            return {"ok": False, "reason": "Клан с регионом не может участвовать в захвате."}
 
         existing = await self.get_active_war_for_clan(session, clan.id)
         if existing:
             return {"ok": False, "reason": "Клан уже участвует в другой войне за регион"}
 
-        # Проверяем, не участвует ли уже в этой войне
         already = await session.scalar(
             select(KoreanRegionWarParticipant).where(
                 KoreanRegionWarParticipant.war_id == war.id,
@@ -239,15 +250,107 @@ class ClanRegionService(ClanBaseService):
         if already:
             return {"ok": False, "reason": "Клан уже участвует в этой войне"}
 
-        participant = KoreanRegionWarParticipant(
-            war_id=war.id,
-            clan_id=clan.id,
-            score=0,
-        )
-        session.add(participant)
+        session.add(KoreanRegionWarParticipant(war_id=war.id, clan_id=clan.id, score=0))
         await session.flush()
 
         return {"ok": True, "war_id": war.id, "ends_at": war.ends_at, "joined": True}
+
+    # ── Война регион-vs-регион (за ОА) ────────────────────────────────────────
+
+    async def start_region_vs_region_war(
+        self, session: AsyncSession, attacker_clan: Clan, defender_region: KoreanRegion, requester_id: int
+    ) -> dict:
+        """Клан с регионом объявляет войну другому клану с регионом — за ОА, без смены владельца."""
+        rank = await self.get_member_rank(session, attacker_clan.id, requester_id)
+        if rank not in WAR_ALLOWED_RANKS:
+            return {"ok": False, "reason": "Только владелец или заместитель может объявить войну"}
+
+        attacker_region = await self.get_clan_region(session, attacker_clan.id)
+        if not attacker_region:
+            return {"ok": False, "reason": "У вашего клана нет региона"}
+
+        if not defender_region.owner_clan_id:
+            return {"ok": False, "reason": "У этого региона нет владельца"}
+
+        if defender_region.owner_clan_id == attacker_clan.id:
+            return {"ok": False, "reason": "Нельзя объявить войну самому себе"}
+
+        now = datetime.now(timezone.utc)
+
+        if attacker_clan.region_war_cd_until and attacker_clan.region_war_cd_until > now:
+            remaining = int((attacker_clan.region_war_cd_until - now).total_seconds())
+            h, m = divmod(remaining // 60, 60)
+            return {"ok": False, "reason": f"Ваш клан в КД ещё {h}ч {m}м"}
+
+        defender_clan = await session.scalar(select(Clan).where(Clan.id == defender_region.owner_clan_id))
+        if not defender_clan:
+            return {"ok": False, "reason": "Клан-владелец не найден"}
+
+        if defender_clan.region_war_cd_until and defender_clan.region_war_cd_until > now:
+            remaining = int((defender_clan.region_war_cd_until - now).total_seconds())
+            h, m = divmod(remaining // 60, 60)
+            return {"ok": False, "reason": f"Клан противника в КД ещё {h}ч {m}м"}
+
+        if defender_region.shield_until and defender_region.shield_until > now:
+            remaining = int((defender_region.shield_until - now).total_seconds())
+            h, m = divmod(remaining // 60, 60)
+            return {"ok": False, "reason": f"Регион противника защищён щитом ещё {h}ч {m}м"}
+
+        for cid in (attacker_clan.id, defender_clan.id):
+            existing = await self.get_active_war_for_clan(session, cid)
+            if existing:
+                whose = "Ваш клан" if cid == attacker_clan.id else "Клан противника"
+                return {"ok": False, "reason": f"{whose} уже участвует в войне за регион"}
+
+        from app.config.game_balance import REGION_VS_REGION_WAR_HOURS
+        war = KoreanRegionWar(
+            region_id=defender_region.id,
+            initiator_clan_id=attacker_clan.id,
+            war_type="region_vs_region",
+            ends_at=now + timedelta(hours=REGION_VS_REGION_WAR_HOURS),
+        )
+        session.add(war)
+        await session.flush()
+
+        for cid in (attacker_clan.id, defender_clan.id):
+            session.add(KoreanRegionWarParticipant(war_id=war.id, clan_id=cid, score=0))
+        await session.flush()
+
+        return {
+            "ok": True,
+            "war_id": war.id,
+            "ends_at": war.ends_at,
+            "defender_clan_id": defender_clan.id,
+            "defender_clan_name": defender_clan.name,
+        }
+
+    # ── Щит региона ───────────────────────────────────────────────────────────
+
+    async def activate_region_shield(
+        self, session: AsyncSession, clan: Clan, region: KoreanRegion
+    ) -> dict:
+        """Активирует щит на регионе клана (12ч защиты, затем 10ч КД)."""
+        if region.owner_clan_id != clan.id:
+            return {"ok": False, "reason": "Ваш клан не владеет этим регионом"}
+
+        now = datetime.now(timezone.utc)
+
+        if region.shield_until and region.shield_until > now:
+            remaining = int((region.shield_until - now).total_seconds())
+            h, m = divmod(remaining // 60, 60)
+            return {"ok": False, "reason": f"Щит уже активен ещё {h}ч {m}м"}
+
+        if region.shield_cd_until and region.shield_cd_until > now:
+            remaining = int((region.shield_cd_until - now).total_seconds())
+            h, m = divmod(remaining // 60, 60)
+            return {"ok": False, "reason": f"Щит на перезарядке ещё {h}ч {m}м"}
+
+        shield_until = now + timedelta(hours=REGION_SHIELD_HOURS)
+        region.shield_until = shield_until
+        region.shield_cd_until = shield_until + timedelta(hours=REGION_SHIELD_CD_HOURS)
+        await session.flush()
+
+        return {"ok": True, "shield_until": shield_until}
 
     # ── Активность игрока ──────────────────────────────────────────────────────
 
@@ -345,25 +448,72 @@ class ClanRegionService(ClanBaseService):
         return outcomes
 
     async def _resolve_war(self, session: AsyncSession, war: KoreanRegionWar) -> dict:
-        region = await self.get_region_by_id(session, war.region_id)
-        if not region:
-            war.is_finished = True
-            return {"ok": False}
+        if war.war_type == "region_vs_region":
+            return await self._resolve_rvr_war(session, war)
+        return await self._resolve_capture_war(session, war)
 
+    async def _resolve_rvr_war(self, session: AsyncSession, war: KoreanRegionWar) -> dict:
+        """RvR: победитель ×1.5 ОА, проигравший ×1. Регион не переходит."""
         participants = await self.get_war_participants(session, war.id)
+        war.is_finished = True
 
         if not participants:
-            war.is_finished = True
             await session.flush()
             return {"ok": False, "reason": "no_participants"}
 
-        # Победитель — участник с наибольшим счётом
         best = max(participants, key=lambda p: p.score)
+        war.winner_clan_id = best.clan_id
+        now = datetime.now(timezone.utc)
+        cd_until = now + timedelta(hours=REGION_VS_REGION_CD_HOURS)
 
+        for p in participants:
+            clan = await session.scalar(select(Clan).where(Clan.id == p.clan_id))
+            if not clan:
+                continue
+            is_winner = p.clan_id == best.clan_id
+            ap = int(p.score * REGION_VS_REGION_WIN_MULTIPLIER) if is_winner else p.score
+            clan.treasury_ap = (clan.treasury_ap or 0) + ap
+            clan.region_war_cd_until = cd_until
+
+        region = await self.get_region_by_id(session, war.region_id)
+        await session.flush()
+        return {
+            "ok": True,
+            "war_type": "region_vs_region",
+            "winner_clan_id": best.clan_id,
+            "region_id": war.region_id,
+            "region_name": region.name if region else "?",
+            "region_emoji": region.emoji if region else "🗺",
+            "winner_score": best.score,
+            "prev_owner_clan_id": None,
+            "region_transferred": False,
+        }
+
+    async def _resolve_capture_war(self, session: AsyncSession, war: KoreanRegionWar) -> dict:
+        """Завершает войну за регион.
+
+        Если регион был занят → был защитник. Победитель получает регион и ×1.5 ОА,
+        проигравший — свои очки. Оба клана получают 4ч КД.
+        """
+        region = await self.get_region_by_id(session, war.region_id)
+        if not region:
+            war.is_finished = True
+            await session.flush()
+            return {"ok": False}
+
+        participants = await self.get_war_participants(session, war.id)
         war.is_finished = True
 
+        if not participants:
+            await session.flush()
+            return {"ok": False, "reason": "no_participants"}
+
+        best = max(participants, key=lambda p: p.score)
+        now = datetime.now(timezone.utc)
+        prev_owner_clan_id = region.owner_clan_id
+        was_contested = prev_owner_clan_id is not None
+
         if best.score < REGION_WAR_MIN_SCORE:
-            # Никто не набрал минимальный порог — регион остаётся без владельца
             war.winner_clan_id = None
             if region.owner_clan_id:
                 await self.clear_region_bonuses_for_clan(session, region.owner_clan_id)
@@ -374,30 +524,39 @@ class ClanRegionService(ClanBaseService):
                 "winner_clan_id": None,
                 "region_id": region.id,
                 "region_name": region.name,
+                "region_emoji": region.emoji,
                 "best_score": best.score,
                 "min_score": REGION_WAR_MIN_SCORE,
             }
 
-        prev_owner_clan_id = region.owner_clan_id
         war.winner_clan_id = best.clan_id
-        region.owner_clan_id = best.clan_id
-        await session.flush()
+        cd_until = now + timedelta(hours=REGION_VS_REGION_CD_HOURS) if was_contested else None
 
-        # Снимаем бонусы у предыдущего владельца, применяем победителю
+        # ОА в казну + КД для всех участников
+        for p in participants:
+            p_clan = await session.scalar(select(Clan).where(Clan.id == p.clan_id))
+            if not p_clan:
+                continue
+            is_winner = p.clan_id == best.clan_id
+            if was_contested:
+                ap_earned = int(p.score * REGION_VS_REGION_WIN_MULTIPLIER) if is_winner else p.score
+                p_clan.region_war_cd_until = cd_until
+            else:
+                ap_earned = p.score
+            p_clan.treasury_ap = (p_clan.treasury_ap or 0) + ap_earned
+
+        # Передача региона
         if prev_owner_clan_id and prev_owner_clan_id != best.clan_id:
             await self.clear_region_bonuses_for_clan(session, prev_owner_clan_id)
+        region.owner_clan_id = best.clan_id
+        await session.flush()
         await self.apply_region_bonuses_for_clan(session, best.clan_id, region)
-
-        # Победитель получает военный счёт в казну ОА клана
-        best_clan = await session.scalar(select(Clan).where(Clan.id == best.clan_id))
-        if best_clan:
-            best_clan.treasury_ap = (best_clan.treasury_ap or 0) + best.score
-            await session.flush()
 
         return {
             "ok": True,
             "winner_clan_id": best.clan_id,
             "prev_owner_clan_id": prev_owner_clan_id,
+            "region_transferred": was_contested and prev_owner_clan_id != best.clan_id,
             "region_id": region.id,
             "region_name": region.name,
             "region_emoji": region.emoji,

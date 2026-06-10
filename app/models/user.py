@@ -65,6 +65,7 @@ class User(Base):
     double_attack: Mapped[bool] = mapped_column(Boolean, default=False)
     double_attack_used: Mapped[bool] = mapped_column(Boolean, default=False)
     extra_attack_count: Mapped[int] = mapped_column(Integer, default=0)
+    emperor_gang_multi_attack: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # ── Перемирие ─────────────────────────────────────────────────────────
     truce_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -81,8 +82,10 @@ class User(Base):
     skill_path: Mapped[str | None] = mapped_column(String(16))
     skill_path_points: Mapped[int] = mapped_column(Integer, default=0)
     skill_path_bonus_multiplier: Mapped[float] = mapped_column(Float, default=1.0)
-    squad_power_bonus: Mapped[int] = mapped_column(Integer, default=0)   # % бонус к боевой мощи (путь Монстра)
-    all_cd_reduction: Mapped[int] = mapped_column(Integer, default=0)    # % сокращение ВСЕХ КД (путь Тени)
+    squad_power_bonus: Mapped[int] = mapped_column(Integer, default=0)      # % бонус к боевой мощи (путь Монстра)
+    statist_power_bonus: Mapped[int] = mapped_column(Integer, default=0)   # % бонус только к мощи статистов (путь Романтика)
+    trainer_cd_reduction: Mapped[int] = mapped_column(Integer, default=0)  # % снижение КД тренеров (путь Монстра)
+    all_cd_reduction: Mapped[int] = mapped_column(Integer, default=0)      # % сокращение ВСЕХ КД (путь Тени)
 
     # ── Рейды ─────────────────────────────────────────────────────────────
     ui_fragments: Mapped[int] = mapped_column(Integer, default=0)

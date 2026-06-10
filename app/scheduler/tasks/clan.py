@@ -83,9 +83,9 @@ async def region_war_tick():
                 winner_id = outcome.get("winner_clan_id")
                 region_emoji = outcome.get("region_emoji", "🗺")
                 region_name = outcome.get("region_name", "регион")
+                winner_score = outcome.get("winner_score", 0)
 
                 if not winner_id:
-                    # Никто не набрал порог — рассылаем всем участникам войны
                     continue
 
                 tg_ids_r = await session.execute(
@@ -94,16 +94,26 @@ async def region_war_tick():
                     .where(ClanMember.clan_id == winner_id)
                 )
                 tg_ids = list(tg_ids_r.scalars())
-                text = (
-                    f"🏆 <b>Победа в войне за регион!</b>\n\n"
-                    f"{region_emoji} <b>{region_name}</b> теперь принадлежит вашему клану!\n"
-                    f"Бонусы региона активированы."
-                )
-                if bot:
-                    await _send_notifications(bot, tg_ids, text)
-
-                # Уведомляем бывшего владельца если был
+                region_transferred = outcome.get("region_transferred", False)
                 prev_id = outcome.get("prev_owner_clan_id")
+
+                if region_transferred:
+                    win_text = (
+                        f"🏆 <b>Регион захвачен!</b>\n\n"
+                        f"{region_emoji} <b>{region_name}</b> теперь принадлежит вашему клану!\n"
+                        f"Счёт: <b>{winner_score}</b> ОА  →  +{int(winner_score * 1.5)} в казну\n"
+                        f"Бонусы региона активированы."
+                    )
+                else:
+                    win_text = (
+                        f"🏆 <b>Победа в войне за регион!</b>\n\n"
+                        f"{region_emoji} <b>{region_name}</b> теперь принадлежит вашему клану!\n"
+                        f"Счёт: <b>{winner_score}</b> ОА в казну.\n"
+                        f"Бонусы региона активированы."
+                    )
+                if bot:
+                    await _send_notifications(bot, tg_ids, win_text)
+
                 if prev_id and prev_id != winner_id:
                     prev_tg_r = await session.execute(
                         select(User.tg_id)

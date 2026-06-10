@@ -47,12 +47,30 @@ async def cb_region_buildings(cb: CallbackQuery, session: AsyncSession, user: Us
 
     buildings = await clan_service.get_clan_buildings(session, clan.id)
     bld_by_type = {b.building_type: b for b in buildings}
-    total_income = clan_service.calc_total_income_per_member(buildings)
+    base_income = clan_service.calc_total_income_per_member(buildings)
+
+    # Бонусы владельца клана для умножения дохода зданий
+    from sqlalchemy import select as sa_select
+    from app.models.user import User as UserModel
+    owner = await session.scalar(sa_select(UserModel).where(UserModel.id == clan.owner_id))
+    owner_bonus = 0
+    if owner:
+        owner_bonus = (
+            (owner.income_bonus_percent or 0)
+            + (owner.prestige_income_bonus or 0)
+            + (owner.clan_income_bonus or 0)
+            + (owner.clan_donat_income_bonus or 0)
+            + (owner.region_income_pct or 0)
+            + (owner.region_income_building_pct or 0)
+        )
+    effective_income = max(0, int(base_income * (1 + owner_bonus / 100)))
+
+    owner_bonus_str = f" (×{1 + owner_bonus / 100:.2f} бонус владельца)" if owner_bonus else ""
 
     lines = [
         f"🏗 <b>Здания региона {region.emoji} {region.name}</b>\n",
         f"🎯 Казна ОА: <b>{clan.treasury_ap}</b>   |   Мои ОА: <b>{user.activity_points}</b>\n",
-        f"💰 Итого доход: <b>{fmt_num(total_income)}/мин</b> каждому участнику\n",
+        f"💰 Итого доход: <b>{fmt_num(effective_income)}/мин</b> каждому участнику{owner_bonus_str}\n",
         "─" * 20,
     ]
 
@@ -61,20 +79,22 @@ async def cb_region_buildings(cb: CallbackQuery, session: AsyncSession, user: Us
     for btype, cfg in CLAN_REGION_BUILDINGS.items():
         b = bld_by_type.get(btype)
         cur_level = b.level if b else 0
-        cur_income = cfg["income_per_level"][cur_level] if cur_level > 0 else 0
+        cur_base = cfg["income_per_level"][cur_level] if cur_level > 0 else 0
         next_level = cur_level + 1
 
         if cur_level == 0:
             level_str = "не построено"
             income_str = ""
         else:
+            cur_effective = max(0, int(cur_base * (1 + owner_bonus / 100)))
             level_str = f"Ур.{cur_level}/{CLAN_REGION_BUILDING_MAX_LEVEL}"
-            income_str = f"  💰 +{fmt_num(cur_income)}/мин"
+            income_str = f"  💰 +{fmt_num(cur_effective)}/мин"
 
         if next_level <= CLAN_REGION_BUILDING_MAX_LEVEL:
             next_cost = cfg["ap_cost_per_level"][next_level]
-            next_income = cfg["income_per_level"][next_level]
-            action_str = f"→ Ур.{next_level}: {next_cost} ОА (+{fmt_num(next_income)}/мин)"
+            next_base = cfg["income_per_level"][next_level]
+            next_effective = max(0, int(next_base * (1 + owner_bonus / 100)))
+            action_str = f"→ Ур.{next_level}: {next_cost} ОА (+{fmt_num(next_effective)}/мин)"
         else:
             action_str = "✅ Макс. уровень"
 

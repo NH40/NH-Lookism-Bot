@@ -30,6 +30,10 @@ class KoreanRegion(Base):
     # Клан-владелец (NULL = никто не владеет)
     owner_clan_id: Mapped[int | None] = mapped_column(Integer, index=True)
 
+    # Щит: защита от нападений после победы в войне
+    shield_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    shield_cd_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
 
 class KoreanRegionWar(Base):
     """Активная война за регион. Один активный экземпляр на регион."""
@@ -38,6 +42,9 @@ class KoreanRegionWar(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     region_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     initiator_clan_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    # "capture" — захват региона без владельца или у другого клана
+    # "region_vs_region" — вызов клана с регионом другим кланом с регионом
+    war_type: Mapped[str] = mapped_column(String(24), nullable=False, default="capture")
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     is_finished: Mapped[bool] = mapped_column(Boolean, default=False)
     winner_clan_id: Mapped[int | None] = mapped_column(Integer)

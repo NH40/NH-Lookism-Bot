@@ -8,7 +8,7 @@ from aiogram.types import InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.user import User
-from app.models.clan import Clan, ClanInvite
+from app.models.clan import Clan, ClanInvite, ClanMember
 from app.services.clan import clan_service
 from app.utils.formatters import fmt_num
 
@@ -22,8 +22,15 @@ class InviteFSM(StatesGroup):
 @router.callback_query(F.data == "clan_invite")
 async def cb_clan_invite(cb: CallbackQuery, session: AsyncSession, user: User):
     clan = await clan_service.get_user_clan(session, user.id)
-    if not clan or clan.owner_id != user.id:
-        await cb.answer("Только владелец может управлять приглашениями", show_alert=True)
+    if not clan:
+        await cb.answer("Вы не в клане", show_alert=True)
+        return
+    my_member = await session.scalar(
+        select(ClanMember).where(ClanMember.clan_id == clan.id, ClanMember.user_id == user.id)
+    )
+    my_rank = my_member.rank if my_member else "member"
+    if my_rank not in ("owner", "deputy"):
+        await cb.answer("Только владелец или заместитель может управлять приглашениями", show_alert=True)
         return
 
     # Входящие заявки

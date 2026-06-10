@@ -76,6 +76,7 @@ class PrestigeService:
         user.double_attack = False
         user.double_attack_used = False
         user.extra_attack_count = 0
+        user.emperor_gang_multi_attack = False
 
         # ── Путь и алхимия сбрасываются всегда ───────────────────────────
         user.skill_path = None
@@ -87,6 +88,8 @@ class PrestigeService:
         user.double_ticket = False
         user.path_awakened = False
         user.squad_power_bonus = 0
+        user.statist_power_bonus = 0
+        user.trainer_cd_reduction = 0
         user.all_cd_reduction = 0
         user.recruit_discount_percent = 0
         user.win_streak = 0

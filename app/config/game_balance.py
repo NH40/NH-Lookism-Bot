@@ -26,7 +26,7 @@ REFERRAL_STUDENT_POWER_BONUS: int = 75_000
 # Начальное максимальное количество тикетов у игрока
 DEFAULT_MAX_TICKETS: int = 3
 # Начальный шанс тикета (%)
-DEFAULT_TICKET_CHANCE: int = 25
+DEFAULT_TICKET_CHANCE: int = 30
 # Максимальное число тикетов при Ultra Instinct (TUI)
 TUI_MAX_TICKETS: int = 500
 # Жёсткий лимит накопления тикетов для всех игроков
@@ -105,12 +105,17 @@ CITIES_NEEDED_FOR_KING: int = 10
 FIST_WINS_NEEDED: int = 10
 
 # ── Войны за регионы Кореи ────────────────────────────────────────────────────
-# Максимальный размер клана для участия в войне за регион
 REGION_WAR_MAX_MEMBERS: int = 15
-# Минимальный порог очков активности для захвата региона
 REGION_WAR_MIN_SCORE: int = 10
-# Продолжительность войны за регион (часы)
 REGION_WAR_HOURS: int = 6
+# Щит региона: активируется после победы в захвате, длится 12 ч, затем КД 10 ч
+REGION_SHIELD_HOURS: int = 12
+REGION_SHIELD_CD_HOURS: int = 10
+# Война регион-vs-регион: длительность та же; КД для обоих кланов после окончания
+REGION_VS_REGION_WAR_HOURS: int = 2
+REGION_VS_REGION_CD_HOURS: int = 4
+# Множитель ОА для победителя в войне регион-vs-регион
+REGION_VS_REGION_WIN_MULTIPLIER: float = 1.5
 
 # ── Здания клана в захваченных регионах Кореи ────────────────────────────────
 # income_per_level[0] — не используется; [1..3] — доход NHCoin/мин на участника клана

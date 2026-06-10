@@ -13,6 +13,7 @@ from app.models.clan import Clan, ClanMember
 from app.models.clan_region import KoreanRegion, KoreanRegionWar, KoreanRegionWarParticipant, KoreanRegionActivity
 from app.services.clan import clan_service
 from app.services.clan.region import RANK_LABELS, REGION_WAR_MIN_SCORE, REGION_WAR_MAX_MEMBERS
+from app.config.game_balance import REGION_SHIELD_HOURS
 from app.data.regions import REGION_BY_SLUG
 from app.utils.formatters import fmt_num
 
@@ -161,9 +162,8 @@ async def cb_regions_map(cb: CallbackQuery, session: AsyncSession, user: User):
 
 # ── Просмотр одного региона ────────────────────────────────────────────────────
 
-@router.callback_query(F.data.startswith("clan_region_view:"))
-async def cb_region_view(cb: CallbackQuery, session: AsyncSession, user: User):
-    region_id = int(cb.data.split(":")[1])
+async def _show_region_view(cb: CallbackQuery, session: AsyncSession, user: User, region_id: int):
+    """Показывает страницу региона с актуальными кнопками."""
     region = await clan_service.get_region_by_id(session, region_id)
     if not region:
         await cb.answer("Регион не найден", show_alert=True)
@@ -173,7 +173,6 @@ async def cb_region_view(cb: CallbackQuery, session: AsyncSession, user: User):
     war = await clan_service.get_active_war_for_region(session, region_id)
     now = datetime.now(timezone.utc)
 
-    # Владелец региона
     if region.owner_clan_id:
         owner_clan = await session.scalar(select(Clan).where(Clan.id == region.owner_clan_id))
         owner_str = f"🏯 <b>{html.escape(owner_clan.name)}</b>" if owner_clan else "🏯 Неизвестен"
@@ -201,6 +200,7 @@ async def cb_region_view(cb: CallbackQuery, session: AsyncSession, user: User):
 
     if clan:
         clan_war = await clan_service.get_active_war_for_clan(session, clan.id)
+        own_region = await clan_service.get_clan_region(session, clan.id)
         member = await session.scalar(
             select(ClanMember).where(
                 ClanMember.clan_id == clan.id,
@@ -209,41 +209,111 @@ async def cb_region_view(cb: CallbackQuery, session: AsyncSession, user: User):
         )
         rank = member.rank if member else "member"
         can_manage = rank in ("owner", "deputy")
-        members_count = len(await clan_service.get_clan_members(session, clan.id))
 
-        if can_manage and members_count <= REGION_WAR_MAX_MEMBERS:
-            if war:
-                # Есть активная война — можно присоединиться (если не участвуем)
-                already_participating = await session.scalar(
-                    select(KoreanRegionWarParticipant).where(
-                        KoreanRegionWarParticipant.war_id == war.id,
-                        KoreanRegionWarParticipant.clan_id == clan.id,
-                    )
-                )
-                if not already_participating and not clan_war:
-                    builder.row(InlineKeyboardButton(
-                        text="⚔️ Вступить в войну",
-                        callback_data=f"clan_region_join_war:{region_id}",
-                    ))
-                elif already_participating:
-                    builder.row(InlineKeyboardButton(
-                        text="📊 Статус войны",
-                        callback_data=f"clan_region_war_status:{war.id}",
-                    ))
-            elif not clan_war and region.owner_clan_id != clan.id:
-                builder.row(InlineKeyboardButton(
-                    text="⚔️ Начать войну за регион",
-                    callback_data=f"clan_region_attack:{region_id}",
-                ))
-            elif clan_war:
+        if can_manage:
+            if clan_war:
+                # Клан уже в войне → показать статус
                 builder.row(InlineKeyboardButton(
                     text="📊 Статус войны",
                     callback_data=f"clan_region_war_status:{clan_war.id}",
                 ))
+            elif own_region:
+                # Клан с регионом
+                if own_region.id == region_id:
+                    # Смотрит свой регион → управление щитом
+                    shield_active = region.shield_until and region.shield_until > now
+                    shield_cd_active = region.shield_cd_until and region.shield_cd_until > now
+                    if shield_active:
+                        remaining = int((region.shield_until - now).total_seconds())
+                        h2, m2 = divmod(remaining // 60, 60)
+                        builder.row(InlineKeyboardButton(
+                            text=f"🛡 Щит активен: {h2}ч {m2}м",
+                            callback_data="noop_clan",
+                        ))
+                    elif shield_cd_active:
+                        remaining = int((region.shield_cd_until - now).total_seconds())
+                        h2, m2 = divmod(remaining // 60, 60)
+                        builder.row(InlineKeyboardButton(
+                            text=f"🛡 Щит на КД: {h2}ч {m2}м",
+                            callback_data="noop_clan",
+                        ))
+                    else:
+                        builder.row(InlineKeyboardButton(
+                            text=f"🛡 Активировать щит ({REGION_SHIELD_HOURS}ч)",
+                            callback_data=f"clan_shield_activate:{region_id}",
+                        ))
+                elif region.owner_clan_id and region.owner_clan_id != clan.id:
+                    # Смотрит ЧУЖОЙ занятый регион → RvR война за ОА
+                    shield_active = region.shield_until and region.shield_until > now
+                    cd_active = clan.region_war_cd_until and clan.region_war_cd_until > now
+                    if shield_active:
+                        remaining = int((region.shield_until - now).total_seconds())
+                        h2, m2 = divmod(remaining // 60, 60)
+                        builder.row(InlineKeyboardButton(
+                            text=f"🛡 Регион под щитом {h2}ч {m2}м",
+                            callback_data="noop_clan",
+                        ))
+                    elif cd_active:
+                        remaining = int((clan.region_war_cd_until - now).total_seconds())
+                        h2, m2 = divmod(remaining // 60, 60)
+                        builder.row(InlineKeyboardButton(
+                            text=f"⏳ КД войны: {h2}ч {m2}м",
+                            callback_data="noop_clan",
+                        ))
+                    elif war:
+                        builder.row(InlineKeyboardButton(
+                            text="📊 Статус войны",
+                            callback_data=f"clan_region_war_status:{war.id}",
+                        ))
+                    else:
+                        builder.row(InlineKeyboardButton(
+                            text="⚔️ Объявить войну (×1.5 ОА)",
+                            callback_data=f"clan_rvr_attack:{region_id}",
+                        ))
+            else:
+                # Клан без региона → захват или вступление в войну
+                members_count = await clan_service.get_clan_member_count(session, clan.id)
+                if members_count <= REGION_WAR_MAX_MEMBERS and region.owner_clan_id != clan.id:
+                    if war:
+                        already = await session.scalar(
+                            select(KoreanRegionWarParticipant).where(
+                                KoreanRegionWarParticipant.war_id == war.id,
+                                KoreanRegionWarParticipant.clan_id == clan.id,
+                            )
+                        )
+                        if not already:
+                            builder.row(InlineKeyboardButton(
+                                text="⚔️ Вступить в войну",
+                                callback_data=f"clan_region_join_war:{region_id}",
+                            ))
+                        else:
+                            builder.row(InlineKeyboardButton(
+                                text="📊 Статус войны",
+                                callback_data=f"clan_region_war_status:{war.id}",
+                            ))
+                    else:
+                        shield_active = region.shield_until and region.shield_until > now
+                        if shield_active:
+                            remaining = int((region.shield_until - now).total_seconds())
+                            h2, m2 = divmod(remaining // 60, 60)
+                            builder.row(InlineKeyboardButton(
+                                text=f"🛡 Регион под щитом {h2}ч {m2}м",
+                                callback_data="noop_clan",
+                            ))
+                        else:
+                            builder.row(InlineKeyboardButton(
+                                text="⚔️ Начать захват",
+                                callback_data=f"clan_region_attack:{region_id}",
+                            ))
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clan_regions_map"))
-
     await _reply(cb, text, builder.as_markup())
+
+
+@router.callback_query(F.data.startswith("clan_region_view:"))
+async def cb_region_view(cb: CallbackQuery, session: AsyncSession, user: User):
+    region_id = int(cb.data.split(":")[1])
+    await _show_region_view(cb, session, user, region_id)
 
 
 # ── Начало войны за регион ─────────────────────────────────────────────────────
@@ -301,17 +371,11 @@ async def cb_region_attack(cb: CallbackQuery, session: AsyncSession, user: User)
 
     await _reply(cb, text, builder.as_markup())
 
-    # Уведомляем членов клана
     from app.bot_instance import get_bot
     from app.scheduler.tasks.notifications import _send_notifications
     bot = get_bot()
     if bot:
-        members = await clan_service.get_clan_members(session, clan.id)
-        other_ids = [m.user_id for m in members if m.user_id != user.id]
-        tg_ids = list((await session.execute(
-            select(User.tg_id).where(User.id.in_(other_ids))
-        )).scalars().all()) if other_ids else []
-        notif = (
+        war_notif = (
             f"⚔️ <b>Война за регион!</b>\n\n"
             f"Клан <b>{html.escape(clan.name)}</b> начал войну за "
             f"{region.emoji} <b>{region.name}</b>!\n\n"
@@ -323,7 +387,29 @@ async def cb_region_attack(cb: CallbackQuery, session: AsyncSession, user: User)
             f"  🗡 Рейд ×3 (макс 5)  •  🏆 Кампания ×4 (макс 3)\n\n"
             f"Победитель получит регион и ОА в казну клана!"
         )
-        await _send_notifications(bot, tg_ids, notif)
+        # Уведомляем атакующий клан
+        members = await clan_service.get_clan_members(session, clan.id)
+        other_ids = [m.user_id for m in members if m.user_id != user.id]
+        tg_ids = list((await session.execute(
+            select(User.tg_id).where(User.id.in_(other_ids))
+        )).scalars().all()) if other_ids else []
+        await _send_notifications(bot, tg_ids, war_notif)
+
+        # Уведомляем клан-защитника если регион был занят
+        defender_clan_id = result.get("defender_clan_id")
+        if defender_clan_id:
+            def_members = await clan_service.get_clan_members(session, defender_clan_id)
+            def_uids = [m.user_id for m in def_members]
+            def_tg_ids = list((await session.execute(
+                select(User.tg_id).where(User.id.in_(def_uids))
+            )).scalars().all()) if def_uids else []
+            defender_notif = (
+                f"🚨 <b>Ваш регион атакован!</b>\n\n"
+                f"Клан <b>{html.escape(clan.name)}</b> начал войну за ваш регион "
+                f"{region.emoji} <b>{region.name}</b>!\n\n"
+                f"Набирайте ОА — защитите свой регион!"
+            )
+            await _send_notifications(bot, def_tg_ids, defender_notif)
 
 
 # ── Вступление в активную войну ────────────────────────────────────────────────
@@ -366,7 +452,6 @@ async def cb_region_war_status(cb: CallbackQuery, session: AsyncSession, user: U
 
 async def _show_war_status(cb: CallbackQuery, session: AsyncSession, war_id: int):
     """Внутренняя функция отображения статуса войны (чтобы вызывать без cb.data)."""
-    # Нет изменений war_id — используется напрямую
     war = await session.scalar(select(KoreanRegionWar).where(KoreanRegionWar.id == war_id))
     if not war:
         await cb.answer("Война не найдена", show_alert=True)
@@ -376,6 +461,8 @@ async def _show_war_status(cb: CallbackQuery, session: AsyncSession, war_id: int
     participants = await clan_service.get_war_participants(session, war.id)
     now = datetime.now(timezone.utc)
 
+    is_rvr = war.war_type == "region_vs_region"
+
     if war.is_finished:
         time_str = "Завершена"
     else:
@@ -383,14 +470,18 @@ async def _show_war_status(cb: CallbackQuery, session: AsyncSession, war_id: int
         h, m = divmod(remaining // 60, 60)
         time_str = f"⏰ {h}ч {m}м"
 
+    from app.config.game_balance import REGION_VS_REGION_WIN_MULTIPLIER
+    war_title = "Война регионов" if is_rvr else "Война за регион"
     lines = [
-        f"⚔️ <b>Война за {region.emoji if region else ''} {region.name if region else '?'}</b>\n",
+        f"⚔️ <b>{war_title} {region.emoji if region else ''} {region.name if region else '?'}</b>\n",
         f"Статус: {time_str}\n",
-        f"🎯 Порог победы: {REGION_WAR_MIN_SCORE} очков\n",
-        "─" * 20,
     ]
+    if is_rvr:
+        lines.append(f"🏆 Победитель ×{REGION_VS_REGION_WIN_MULTIPLIER} ОА, проигравший ×1\n")
+    else:
+        lines.append(f"🎯 Порог захвата: {REGION_WAR_MIN_SCORE} очков\n")
+    lines.append("─" * 20)
 
-    # Batch load participant clans (1 query instead of N)
     if participants:
         p_clan_ids = [p.clan_id for p in participants]
         p_clans_map = {c.id: c for c in (await session.execute(
@@ -399,15 +490,24 @@ async def _show_war_status(cb: CallbackQuery, session: AsyncSession, war_id: int
     else:
         p_clans_map = {}
 
+    max_score = max((p.score for p in participants), default=1) or 1
+
     for i, p in enumerate(participants, 1):
         p_clan = p_clans_map.get(p.clan_id)
         name = html.escape(p_clan.name) if p_clan else "?"
-        filled = min(10, round(p.score * 10 / REGION_WAR_MIN_SCORE))
-        bar = "🟩" * filled + "⬜" * (10 - filled)
-        pct = min(100, int(p.score * 100 / REGION_WAR_MIN_SCORE))
         is_winner = war.is_finished and war.winner_clan_id == p.clan_id
         suffix = " 🏆" if is_winner else ""
-        lines.append(f"{i}. <b>{name}</b>{suffix}\n   {bar} {p.score}/{REGION_WAR_MIN_SCORE} ({pct}%)")
+        is_defender = not is_rvr and region and region.owner_clan_id == p.clan_id and not war.is_finished
+        role = " 🛡" if is_defender else ""
+        if is_rvr:
+            filled = min(10, round(p.score * 10 / max_score))
+            bar = "🟩" * filled + "⬜" * (10 - filled)
+            lines.append(f"{i}. <b>{name}</b>{role}{suffix}\n   {bar} {p.score} ОА")
+        else:
+            filled = min(10, round(p.score * 10 / REGION_WAR_MIN_SCORE))
+            bar = "🟩" * filled + "⬜" * (10 - filled)
+            pct = min(100, int(p.score * 100 / REGION_WAR_MIN_SCORE))
+            lines.append(f"{i}. <b>{name}</b>{role}{suffix}\n   {bar} {p.score}/{REGION_WAR_MIN_SCORE} ({pct}%)")
 
     if not participants:
         lines.append("Нет участников")
@@ -485,11 +585,15 @@ async def cb_rank_menu(cb: CallbackQuery, session: AsyncSession, user: User):
 
     current_rank = RANK_LABELS.get(member.rank, member.rank)
 
+    rank_order = {"owner": 0, "deputy": 1, "captain": 2, "member": 3}
+    current_order = rank_order.get(member.rank, 3)
+
     builder = InlineKeyboardBuilder()
     for rank_key, rank_name in [("deputy", "🛡 Заместитель"), ("captain", "⚔️ Капитан"), ("member", "👤 Участник")]:
         if member.rank != rank_key:
+            arrow = "⬆️" if rank_order[rank_key] < current_order else "⬇️"
             builder.row(InlineKeyboardButton(
-                text=f"Назначить {rank_name}",
+                text=f"{arrow} {rank_name}",
                 callback_data=f"clan_set_rank:{target_id}:{rank_key}",
             ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clan_manage_ranks"))
@@ -590,6 +694,126 @@ async def cb_hall_of_fame(cb: CallbackQuery, session: AsyncSession, user: User):
     builder.row(InlineKeyboardButton(text="◀️ Карта", callback_data="clan_regions_map"))
 
     await _reply(cb, "\n".join(lines), builder.as_markup())
+
+
+@router.callback_query(F.data.startswith("clan_rvr_attack:"))
+async def cb_rvr_attack(cb: CallbackQuery, session: AsyncSession, user: User):
+    region_id = int(cb.data.split(":")[1])
+    region = await clan_service.get_region_by_id(session, region_id)
+    if not region:
+        await cb.answer("Регион не найден", show_alert=True)
+        return
+
+    clan = await clan_service.get_user_clan(session, user.id)
+    if not clan:
+        await cb.answer("Вы не в клане", show_alert=True)
+        return
+
+    result = await clan_service.start_region_vs_region_war(session, clan, region, user.id)
+    if not result["ok"]:
+        await cb.answer(f"❌ {result['reason']}", show_alert=True)
+        return
+
+    await session.commit()
+
+    ends_at = result["ends_at"]
+    h, m = divmod(int((ends_at - datetime.now(timezone.utc)).total_seconds()) // 60, 60)
+    defender_name = result.get("defender_clan_name", "?")
+
+    score_guide = (
+        f"🎯 <b>Очки активности (макс на игрока: 152):</b>\n"
+        f"  🗺 Завершить поход — <b>+4</b> × 3 = 12\n"
+        f"  ⚔️ Атака Fist — <b>+4</b> × 3 = 12\n"
+        f"  💀 Рейд-босс / Дуэль / Босс / King — <b>+3</b> × 5 = 15 каждое\n"
+        f"  🏙 Атака Gang / Аукцион / Задание — <b>+2</b> × 5 = 10 каждое\n"
+        f"  🏋 Тренировка / Найм — <b>+1</b> × 10 = 10 каждое\n"
+        f"  🛒 Биржа / Банк — <b>+1</b> × 5 = 5 каждое"
+    )
+
+    from app.config.game_balance import REGION_VS_REGION_CD_HOURS, REGION_VS_REGION_WIN_MULTIPLIER
+    text = (
+        f"⚔️ <b>Война регионов!</b>\n\n"
+        f"🏯 <b>{html.escape(clan.name)}</b>  vs  <b>{html.escape(defender_name)}</b>\n"
+        f"Регион: {region.emoji} {region.name}\n\n"
+        f"⏰ Длится: {h}ч {m}м\n\n"
+        f"{score_guide}\n\n"
+        f"🏆 Победитель получит <b>×{REGION_VS_REGION_WIN_MULTIPLIER} ОА</b> в казну\n"
+        f"😤 Проигравший сохранит заработанные ОА\n"
+        f"⏳ Оба клана получат КД <b>{REGION_VS_REGION_CD_HOURS}ч</b> после битвы"
+    )
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text="📊 Статус войны",
+        callback_data=f"clan_region_war_status:{result['war_id']}",
+    ))
+    builder.row(InlineKeyboardButton(text="◀️ Карта", callback_data="clan_regions_map"))
+
+    await _reply(cb, text, builder.as_markup())
+
+    from app.bot_instance import get_bot
+    from app.scheduler.tasks.notifications import _send_notifications
+    bot = get_bot()
+    if bot:
+        notif = (
+            f"⚔️ <b>Война регионов!</b>\n\n"
+            f"Клан <b>{html.escape(clan.name)}</b> объявил войну <b>{html.escape(defender_name)}</b>!\n\n"
+            f"Набирайте ОА — победитель получает ×{REGION_VS_REGION_WIN_MULTIPLIER}!"
+        )
+        members = await clan_service.get_clan_members(session, clan.id)
+        other_ids = [m.user_id for m in members if m.user_id != user.id]
+        tg_ids = list((await session.execute(
+            select(User.tg_id).where(User.id.in_(other_ids))
+        )).scalars().all()) if other_ids else []
+        await _send_notifications(bot, tg_ids, notif)
+
+        defender_clan_id = result.get("defender_clan_id")
+        if defender_clan_id:
+            def_members = await clan_service.get_clan_members(session, defender_clan_id)
+            def_uids = [m.user_id for m in def_members]
+            def_tg_ids = list((await session.execute(
+                select(User.tg_id).where(User.id.in_(def_uids))
+            )).scalars().all()) if def_uids else []
+            await _send_notifications(bot, def_tg_ids, (
+                f"🚨 <b>Вашему региону объявлена война!</b>\n\n"
+                f"Клан <b>{html.escape(clan.name)}</b> атакует "
+                f"{region.emoji} <b>{region.name}</b>!\n\n"
+                f"Набирайте ОА — победитель получает ×{REGION_VS_REGION_WIN_MULTIPLIER}!"
+            ))
+
+
+@router.callback_query(F.data.startswith("clan_shield_activate:"))
+async def cb_shield_activate(cb: CallbackQuery, session: AsyncSession, user: User):
+    region_id = int(cb.data.split(":")[1])
+    region = await clan_service.get_region_by_id(session, region_id)
+    if not region:
+        await cb.answer("Регион не найден", show_alert=True)
+        return
+
+    clan = await clan_service.get_user_clan(session, user.id)
+    if not clan:
+        await cb.answer("Вы не в клане", show_alert=True)
+        return
+
+    member = await session.scalar(
+        select(ClanMember).where(ClanMember.clan_id == clan.id, ClanMember.user_id == user.id)
+    )
+    if not member or member.rank not in ("owner", "deputy"):
+        await cb.answer("Только владелец или заместитель может активировать щит", show_alert=True)
+        return
+
+    result = await clan_service.activate_region_shield(session, clan, region)
+    if not result["ok"]:
+        await cb.answer(f"❌ {result['reason']}", show_alert=True)
+        return
+
+    await session.commit()
+
+    shield_until = result["shield_until"]
+    h, m = divmod(int((shield_until - datetime.now(timezone.utc)).total_seconds()) // 60, 60)
+    await cb.answer(f"🛡 Щит активирован на {h}ч {m}м!", show_alert=True)
+
+    await _show_region_view(cb, session, user, region_id)
 
 
 @router.callback_query(F.data == "region_top_active")

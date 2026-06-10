@@ -81,11 +81,37 @@ async def _show_business_main(
         circ_per_min = info.get("circ_passive_per_min", 0) or circ_passive
         circ_line = f"\n💸 Пассивный доход: +{fmt_num(circ_per_min)}/мин"
 
-    # Доход от зданий клана в регионе
+    # Доход от зданий клана в регионе (с бонусами владельца)
     clan_bld_line = ""
     clan_bld_income = getattr(user, "clan_region_income", 0)
     if clan_bld_income:
-        clan_bld_line = f"\n🏗 Здания клана: +{fmt_num(clan_bld_income)}/мин"
+        from sqlalchemy import select as sa_select
+        from app.models.clan import Clan, ClanMember
+        effective_bld = clan_bld_income
+        try:
+            cm = await session.scalar(
+                sa_select(ClanMember).where(ClanMember.user_id == user.id)
+            )
+            if cm:
+                clan = await session.scalar(sa_select(Clan).where(Clan.id == cm.clan_id))
+                if clan:
+                    from app.models.user import User as UserModel
+                    owner = await session.scalar(
+                        sa_select(UserModel).where(UserModel.id == clan.owner_id)
+                    )
+                    if owner:
+                        owner_bonus = (
+                            (owner.income_bonus_percent or 0)
+                            + (owner.prestige_income_bonus or 0)
+                            + (owner.clan_income_bonus or 0)
+                            + (owner.clan_donat_income_bonus or 0)
+                            + (owner.region_income_pct or 0)
+                            + (owner.region_income_building_pct or 0)
+                        )
+                        effective_bld = max(0, int(clan_bld_income * (1 + owner_bonus / 100)))
+        except Exception:
+            pass
+        clan_bld_line = f"\n🏗 Здания клана: +{fmt_num(effective_bld)}/мин"
 
     # Таймер ежедневного города Архангела (круг 10)
     archangel_timer_line = ""
@@ -93,18 +119,22 @@ async def _show_business_main(
         last_at = getattr(user, "circ_daily_districts_at", None)
         now = datetime.now(timezone.utc)
         if last_at is None:
-            archangel_timer_line = "\n👼 Ежедневный город (64р.): <b>скоро!</b>"
+            next_midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            remaining_first = (next_midnight - now).total_seconds()
+            h0, rem0 = divmod(int(remaining_first), 3600)
+            m0, s0 = divmod(rem0, 60)
+            archangel_timer_line = f"\n👼 Город Архангела (64р.): через <b>{h0}ч {m0}м {s0}с</b>"
         else:
             if last_at.tzinfo is None:
                 last_at = last_at.replace(tzinfo=timezone.utc)
             next_at = last_at + timedelta(hours=24)
             remaining = (next_at - now).total_seconds()
             if remaining <= 0:
-                archangel_timer_line = "\n👼 Ежедневный город (64р.): <b>готово!</b>"
+                archangel_timer_line = "\n👼 Город Архангела (64р.): <b>готово!</b>"
             else:
                 h, rem = divmod(int(remaining), 3600)
                 m, s = divmod(rem, 60)
-                archangel_timer_line = f"\n👼 Ежедневный город (64р.): через <b>{h}ч {m}м {s}с</b>"
+                archangel_timer_line = f"\n👼 Город Архангела (64р.): через <b>{h}ч {m}м {s}с</b>"
 
     from app.constants.raid import BIZ_GENIUS_LEVEL_LABELS, BIZ_GENIUS_DISCOUNT, BIZ_GENIUS_INCOME_BONUS
     genius_label = BIZ_GENIUS_LEVEL_LABELS.get(biz_genius, "") if biz_genius > 0 else "не открыт"

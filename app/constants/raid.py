@@ -198,14 +198,14 @@ PATH_LEVEL_MAX = 5
 
 # Бонус за каждый уровень пути (накопительный)
 PATH_LEVEL_BONUSES: dict[str, dict] = {
-    "businessman": {"income_bonus_percent": 5},
-    "romantic":    {"ticket_chance": 3},
-    "monster":     {"train_bonus_percent": 5},
+    "businessman": {"income_bonus_percent": 2},
+    "romantic":    {"recruit_count_bonus": 10},
+    "monster":     {"squad_power_bonus": 5},
 }
 
 # Бонус за Пробуждение (получение всех навыков основного пути)
 PATH_AWAKENING_BONUSES: dict[str, dict] = {
-    "businessman": {"income_bonus_percent": 20},
-    "romantic":    {"max_tickets": 1, "ticket_chance": 5},
-    "monster":     {"train_bonus_percent": 20},
+    "businessman": {"income_bonus_percent": 10},
+    "romantic":    {"recruit_count_bonus": 30},
+    "monster":     {"squad_power_bonus": 25},
 }

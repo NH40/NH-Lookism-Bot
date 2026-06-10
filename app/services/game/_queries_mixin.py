@@ -70,21 +70,20 @@ class CityQueriesMixin:
         if not user.double_attack:
             return 0
         from app.models.skill import UserPathSkills
-        path_skill_r = await session.execute(
-            select(UserPathSkills).where(
+        from app.data.skills import PATH_SKILLS
+        all_skills = {s.skill_id: s for skills in PATH_SKILLS.values() for s in skills}
+        extra_atk_ids = [sid for sid, s in all_skills.items() if "extra_attack_count" in s.effect]
+        owned_r = await session.execute(
+            select(UserPathSkills.skill_id).where(
                 UserPathSkills.user_id == user.id,
-                UserPathSkills.skill_id == "mon_dattack",
+                UserPathSkills.skill_id.in_(extra_atk_ids),
             )
         )
-        has_path_attack = path_skill_r.scalar_one_or_none() is not None
+        count = sum(all_skills[sid].effect["extra_attack_count"] for sid in owned_r.scalars().all())
         from app.repositories.title_repo import title_repo
-        has_monster_set = await title_repo.has_set(session, user.id, "monster")
-        count = 0
-        if has_path_attack:
+        if await title_repo.has_set(session, user.id, "monster"):
             count += 1
-        if has_monster_set:
-            count += 1
-        return count
+        return max(count, 1)
 
     async def _handle_attack_cd(
         self, session: AsyncSession, user: User, cd_key: str, phase: str

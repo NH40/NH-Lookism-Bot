@@ -80,7 +80,7 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
     builder = InlineKeyboardBuilder()
 
     # Ряд 1: приглашение + участники
-    if is_owner:
+    if can_manage:
         builder.row(
             InlineKeyboardButton(text="📨 Пригласить", callback_data="clan_invite"),
             InlineKeyboardButton(text="👥 Участники",  callback_data="clan_members"),
@@ -211,16 +211,17 @@ async def cb_clan_members(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer("Вы не в клане", show_alert=True)
         return
 
+    from app.services.clan.region import RANK_LABELS
     members = await clan_service.get_clan_members(session, clan.id)
     lines = [f"👥 <b>Участники клана {html.escape(clan.name)}</b>\n"]
     for m in members:
         target = await session.scalar(select(User).where(User.id == m.user_id))
         if not target:
             continue
-        crown = "👑 " if clan.owner_id == target.id else ""
+        rank_label = RANK_LABELS.get(m.rank, m.rank)
         username_str = f" @{target.username}" if target.username else ""
         lines.append(
-            f"{crown}<b>{html.escape(target.full_name)}</b>{username_str}\n"
+            f"{rank_label} <b>{html.escape(target.full_name)}</b>{username_str}\n"
             f"  💪 {fmt_num(target.combat_power)}"
         )
 

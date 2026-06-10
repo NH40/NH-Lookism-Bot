@@ -96,7 +96,7 @@ class AdminBackupMixin:
         from app.models.clan import Clan, ClanMember
         from app.models.market import MarketListing
         from app.services.clan import clan_service
-        from sqlalchemy import select, update, delete as sa_delete, update as sa_update
+        from sqlalchemy import select, update, delete as sa_delete, update as sa_update, func
         from app.models.user import User
 
         result = await session.execute(select(User))
@@ -180,16 +180,39 @@ class AdminBackupMixin:
                 user.tickets = min(user.tickets + extra, user.max_tickets)
 
         # ── Сброс казны и улучшений кланов (кроме доната) ПОСЛЕ сброса ───────────
+        from app.models.clan_building import ClanRegionBuilding
+        from app.models.clan_region import KoreanRegion
+
+        # Удаляем все здания регионов
+        await session.execute(sa_delete(ClanRegionBuilding))
+
+        # Снимаем владение регионами
+        await session.execute(sa_update(KoreanRegion).values(owner_clan_id=None))
+
         all_clans_r = await session.execute(select(Clan))
         all_clans = all_clans_r.scalars().all()
+        clans_to_delete = []
         for clan in all_clans:
+            member_count = await session.scalar(
+                select(func.count(ClanMember.user_id)).where(ClanMember.clan_id == clan.id)
+            )
+            if member_count == 0:
+                clans_to_delete.append(clan.id)
+                continue
             clan.treasury = 0
+            clan.treasury_ap = 0
             clan.bonus_max_members = 0
             clan.bonus_income_pct = 0
             clan.bonus_ticket_pct = 0
             clan.bonus_train_pct = 0
+            clan.ap_income_circles = 0
+            clan.ap_train_circles = 0
+            clan.ap_ticket_circles = 0
             clan.max_members = 5
             await clan_service.recalc_power(session, clan)
+
+        if clans_to_delete:
+            await session.execute(sa_delete(Clan).where(Clan.id.in_(clans_to_delete)))
 
         # ── Сброс всех кредитов банка (патч очищает долги) ───────────────────────
         from app.services.bank.credits_service import credits_service as bank_credits

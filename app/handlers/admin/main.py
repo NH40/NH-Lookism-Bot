@@ -123,6 +123,62 @@ async def cb_admin_real_top(cb: CallbackQuery, session: AsyncSession, user: User
     await cb.answer()
 
 
+@router.callback_query(F.data == "admin_delete_zeros")
+async def cb_admin_delete_zeros(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not is_admin(user.tg_id):
+        await cb.answer("Нет доступа", show_alert=True)
+        return
+    count = await admin_service.count_zero_accounts(session)
+    builder = InlineKeyboardBuilder()
+    if count > 0:
+        builder.row(
+            InlineKeyboardButton(
+                text=f"⚠️ Удалить {count} аккаунтов",
+                callback_data="admin_delete_zeros_confirm",
+            )
+        )
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="admin_main"))
+    try:
+        await cb.message.edit_text(
+            f"🗑 <b>Удаление нулевых аккаунтов</b>\n\n"
+            f"Критерии удаления:\n"
+            f"• Боевая мощь = 0\n"
+            f"• Нет престижа\n"
+            f"• Нет доната (NHDonate, UI-донат, донат зелий, донат КД, МГ-донат)\n"
+            f"• Нет донатных титулов\n\n"
+            f"Подходящих аккаунтов: <b>{count}</b>",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    await cb.answer()
+
+
+@router.callback_query(F.data == "admin_delete_zeros_confirm")
+async def cb_admin_delete_zeros_confirm(cb: CallbackQuery, session: AsyncSession, user: User):
+    if not is_admin(user.tg_id):
+        await cb.answer("Нет доступа", show_alert=True)
+        return
+    deleted = await admin_service.delete_zero_accounts(session)
+    await session.commit()
+    # инвалидируем кеш статистики
+    try:
+        from app.services.cooldown_service import cooldown_service
+        await cooldown_service.redis.delete("admin:stats")
+    except Exception:
+        pass
+    try:
+        await cb.message.edit_text(
+            f"✅ <b>Удалено {deleted} аккаунтов</b> с нулевой боевой мощью без доната и престижа.",
+            reply_markup=back_kb("admin_main"),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    await cb.answer(f"Удалено {deleted} аккаунтов", show_alert=True)
+
+
 @router.callback_query(F.data == "admin_stats")
 async def cb_admin_stats(cb: CallbackQuery, session: AsyncSession, user: User):
     if not is_admin(user.tg_id):
@@ -138,11 +194,15 @@ async def cb_admin_stats(cb: CallbackQuery, session: AsyncSession, user: User):
     gv = gv_result.scalar_one_or_none()
     version_str = f"Версия: {gv.version}" if gv else "Версия: не задана"
 
+    vvip_count = stats.get("vvip_count", 0)
+    with_donate = stats.get("with_donate", 0)
     try:
         await cb.message.edit_text(
             f"📊 <b>Статистика</b>\n\n"
             f"Всего игроков: {stats['total']}\n"
             f"⚔️ С боевой мощью > 0: {stats['with_power']}\n"
+            f"💳 С донатом (NHDonate > 0): {with_donate}\n"
+            f"👑 VVIP игроков: {vvip_count}\n"
             f"🔖 {version_str}\n\n"
             f"По фазам:\n{phase_lines}",
             reply_markup=back_kb("admin_main"),

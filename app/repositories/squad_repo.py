@@ -31,6 +31,10 @@ class SquadRepo:
         region_squad_pct = getattr(user, 'region_squad_power_pct', 0)
         if region_squad_pct > 0:
             squad_power = int(squad_power * (1 + region_squad_pct / 100))
+        # Путь Романтика: +% только к силе статистов
+        statist_bonus = getattr(user, 'statist_power_bonus', 0)
+        if statist_bonus > 0:
+            squad_power = int(squad_power * (1 + statist_bonus / 100))
 
         # 2. Мощь персонажей
         char_r = await session.execute(

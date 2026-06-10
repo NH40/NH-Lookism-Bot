@@ -179,7 +179,7 @@ async def cb_emperor_gang_info(cb: CallbackQuery, session: AsyncSession, user: U
             f"💪 Мощь: <b>{fmt_num(power)}</b>{growth_str}\n"
             f"🏆 Побед: <b>{defeat_count}</b>\n\n"
             f"🎁 Награда:\n"
-            f"  💎 10–50 пыли\n"
+            f"  💎 50–150 пыли (5–15 при поражении)\n"
             f"  🃏 Шанс карточки: {cfg.drop_chance}%\n\n"
             f"{can_icon} Ваша мощь: {fmt_num(user.combat_power)} / {fmt_num(power)}",
             reply_markup=builder.as_markup(),
@@ -266,7 +266,7 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
         effective_cd = max(600, int(base_cd_seconds * (1 - speed_pct / 100)))
 
         if won:
-            dust_reward = random.randint(10, 50)
+            dust_reward = random.randint(50, 150)
             user.card_dust += dust_reward
             result_lines.append(f"🏆 <b>ПОБЕДА!</b>")
             result_lines.append(f"💎 +{dust_reward} пыли")
@@ -311,18 +311,23 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
                     dropped_char = char
 
             rec.defeat_count += 1
-            rec.cooldown_until = now + timedelta(seconds=effective_cd)
             new_power = _gang_power(cfg, rec.defeat_count)
             result_lines.append(f"\n💹 Группировка усилилась до {fmt_num(new_power)} (+20%)")
-            cd_line = f"⏳ КД: {fmt_ttl(effective_cd)}"
-            if speed_pct:
-                cd_line += f" (скорость -{speed_pct}%)"
-            result_lines.append(cd_line)
 
         else:
+            consolation_dust = random.randint(5, 15)
+            user.card_dust += consolation_dust
             result_lines.append(f"💀 <b>ПОРАЖЕНИЕ</b>")
             result_lines.append(f"Группировка оказалась сильнее. Прокачайся и попробуй снова!")
+            result_lines.append(f"💎 +{consolation_dust} пыли (утешительная)")
+
+        # Двойной удар (навык Монстра): первый удар не ставит КД — второй ставит
+        if user.emperor_gang_multi_attack and not rec.multi_attack_used:
+            rec.multi_attack_used = True
+            result_lines.append("\n⚡ <b>Двойной удар!</b> Можешь атаковать снова!")
+        else:
             rec.cooldown_until = now + timedelta(seconds=effective_cd)
+            rec.multi_attack_used = False
             cd_line = f"⏳ КД: {fmt_ttl(effective_cd)}"
             if speed_pct:
                 cd_line += f" (скорость -{speed_pct}%)"

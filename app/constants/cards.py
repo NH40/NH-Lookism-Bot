@@ -68,7 +68,7 @@ def calc_dust(rank: str, level: int) -> int:
     return max(1, int(base * factor))
 
 # Стоимость крафта одного тикета в пыли
-TICKET_CRAFT_COST = 50
+TICKET_CRAFT_COST = 25
 
 # ── Боты-дуэлянты ────────────────────────────────────────────────────────────
 BOT_TIERS: dict[str, dict] = {

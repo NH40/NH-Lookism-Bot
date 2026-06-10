@@ -61,11 +61,10 @@ CLAN_SHOP_CATEGORIES = {
 
 CLAN_SHOP_ITEMS: list[ClanShopItem] = [
 
-    # ── Тикеты — цены БЕЗ ИЗМЕНЕНИЙ (барьер накопления богатства) ─────────────
-    ClanShopItem("tickets_1_all",  "🎟 1 тикет всем",   "Выдать 1 тикет всем",    15_000_000,  "tickets", "tickets", 1),
-    ClanShopItem("tickets_3_all",  "🎟 3 тикета всем",  "Выдать 3 тикета всем",   40_000_000,  "tickets", "tickets", 3),
-    ClanShopItem("tickets_5_all",  "🎟 5 тикетов всем", "Выдать 5 тикетов всем",  55_000_000,  "tickets", "tickets", 5),
-    ClanShopItem("tickets_10_all", "🎟 10 тикетов всем","Выдать 10 тикетов всем",100_000_000,  "tickets", "tickets", 10),
+    ClanShopItem("tickets_1_all",  "🎟 1 тикет всем",   "Выдать 1 тикет всем",    8_000_000,  "tickets", "tickets", 1),
+    ClanShopItem("tickets_3_all",  "🎟 3 тикета всем",  "Выдать 3 тикета всем",   20_000_000,  "tickets", "tickets", 3),
+    ClanShopItem("tickets_5_all",  "🎟 5 тикетов всем", "Выдать 5 тикетов всем",  30_000_000,  "tickets", "tickets", 5),
+    ClanShopItem("tickets_10_all", "🎟 10 тикетов всем","Выдать 10 тикетов всем", 80_000_000,  "tickets", "tickets", 10),
 
     # ── Зелья (÷3 — ежедневный расходник, должен быть доступен) ──────────────
     ClanShopItem("cpotion_mg_power_1",   "⚔️ Зелье силы I всем",        "Мощь +20%, 30 мин всем",           33_000, "potions", "potion", "mg_power_1"),

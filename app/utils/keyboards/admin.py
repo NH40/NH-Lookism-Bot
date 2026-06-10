@@ -25,6 +25,9 @@ def admin_main_kb(maintenance_on: bool = False):
     builder.row(
         InlineKeyboardButton(text="👁 Реальный топ (вкл. скрытых)", callback_data="admin_real_top"),
     )
+    builder.row(
+        InlineKeyboardButton(text="🗑 Удалить нулевые аккаунты", callback_data="admin_delete_zeros"),
+    )
     return builder.as_markup()
 
 

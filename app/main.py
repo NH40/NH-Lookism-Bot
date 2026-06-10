@@ -176,10 +176,8 @@ async def _sync_region_bonuses_on_startup():
     """
     from app.database import AsyncSessionFactory
     from app.models.clan_region import KoreanRegion
-    from app.services.clan.region import ClanRegionService
+    from app.services.clan import clan_service as svc
     from sqlalchemy import select
-
-    svc = ClanRegionService()
     async with AsyncSessionFactory() as session:
         async with session.begin():
             regions = (await session.execute(

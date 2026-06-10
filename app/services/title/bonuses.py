@@ -29,6 +29,7 @@ def reset_donat_bonuses(user: User) -> None:
     user.ui_auto_pull = False
     user.donat_duel_cd = False
     user.all_cd_reduction = 0
+    user.trainer_cd_reduction = 0
     user.med_genius_donat = False
     # Уровни 1-5 заработаны фрагментами — НЕ сбрасываем.
     # Уровень 6 — только от доната — откатываем до 5 если был 6.

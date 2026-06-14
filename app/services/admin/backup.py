@@ -170,8 +170,15 @@ class AdminBackupMixin:
         await session.flush()
 
         # ── Сброс прогресса ───────────────────────────────────────────────────────
+        import logging as _logging
+        _patch_log = _logging.getLogger(__name__)
         for user in users:
-            await prestige_service._reset_progress(session, user, keep_ui=False)
+            try:
+                async with session.begin_nested():
+                    await prestige_service._reset_progress(session, user, keep_ui=False)
+            except Exception as _e:
+                _patch_log.error("patch_reset_progress: failed for user %s: %s", user.id, _e)
+                session.expunge(user)
 
         # ── Применяем бонусные тикеты ПОСЛЕ сброса ───────────────────────────────
         for user in users:

@@ -79,35 +79,29 @@ class SquadRepo:
             total = int(total * prestige_mult)
 
         # Зелье боевой мощи
-        try:
-            from app.services.potion_service import potion_service
-            potion_bonus = await potion_service.get_power_bonus(session, user.id)
-            if potion_bonus > 0:
-                total = int(total * (1 + potion_bonus / 100))
-        except Exception:
-            pass
+        from app.services.potion_service import potion_service
+        potion_bonus = await potion_service.get_power_bonus(session, user.id)
+        if potion_bonus > 0:
+            total = int(total * (1 + potion_bonus / 100))
 
         # Ограничиваем разумным максимумом (BIGINT safe)
         total = min(total, 9_000_000_000_000)
         old_power = user.combat_power or 0
         user.combat_power = total
 
-        try:
-            from app.models.clan import ClanMember, Clan
-            clan_id = await session.scalar(
-                select(ClanMember.clan_id).where(ClanMember.user_id == user.id)
-            )
-            if clan_id:
-                delta = total - old_power
-                if delta != 0:
-                    # Delta-апдейт вместо пересчёта SUM по всем членам клана
-                    await session.execute(
-                        sa_update(Clan)
-                        .where(Clan.id == clan_id)
-                        .values(combat_power=Clan.combat_power + delta)
-                    )
-        except Exception:
-            pass
+        from app.models.clan import ClanMember, Clan
+        clan_id = await session.scalar(
+            select(ClanMember.clan_id).where(ClanMember.user_id == user.id)
+        )
+        if clan_id:
+            delta = total - old_power
+            if delta != 0:
+                # Delta-апдейт вместо пересчёта SUM по всем членам клана
+                await session.execute(
+                    sa_update(Clan)
+                    .where(Clan.id == clan_id)
+                    .values(combat_power=Clan.combat_power + delta)
+                )
 
         await session.flush()
         return total

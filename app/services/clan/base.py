@@ -103,11 +103,17 @@ class ClanBaseService:
         await session.flush()
         return {"ok": True}
 
-    async def kick_member(self, session: AsyncSession, clan: Clan, owner: User, target_user_id: int) -> dict:
-        if clan.owner_id != owner.id:
-            return {"ok": False, "reason": "Только владелец может выгонять"}
-        if target_user_id == owner.id:
+    async def kick_member(self, session: AsyncSession, clan: Clan, acting_user: User, target_user_id: int) -> dict:
+        acting_member = await session.scalar(
+            select(ClanMember).where(ClanMember.clan_id == clan.id, ClanMember.user_id == acting_user.id)
+        )
+        acting_rank = acting_member.rank if acting_member else "member"
+        if acting_rank not in ("owner", "deputy"):
+            return {"ok": False, "reason": "Только владелец или заместитель может выгонять"}
+        if target_user_id == acting_user.id:
             return {"ok": False, "reason": "Нельзя выгнать себя"}
+        if acting_rank == "deputy" and target_user_id == clan.owner_id:
+            return {"ok": False, "reason": "Заместитель не может выгнать владельца"}
         member = await session.scalar(
             select(ClanMember).where(ClanMember.clan_id == clan.id, ClanMember.user_id == target_user_id)
         )

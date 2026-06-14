@@ -85,6 +85,46 @@ async def msg_clan_rename(message: Message, session: AsyncSession, user: User, s
         await message.answer(f"❌ {result['reason']}")
 
 
+@router.callback_query(F.data == "clan_kick_menu")
+async def cb_clan_kick_menu(cb: CallbackQuery, session: AsyncSession, user: User):
+    clan = await clan_service.get_user_clan(session, user.id)
+    if not clan:
+        await cb.answer("Вы не в клане", show_alert=True)
+        return
+    my_member = await session.scalar(
+        select(ClanMember).where(ClanMember.clan_id == clan.id, ClanMember.user_id == user.id)
+    )
+    my_rank = my_member.rank if my_member else "member"
+    if my_rank not in ("owner", "deputy"):
+        await cb.answer("Недостаточно прав", show_alert=True)
+        return
+
+    members = await clan_service.get_clan_members(session, clan.id)
+    builder = InlineKeyboardBuilder()
+    for m in members:
+        if m.user_id == user.id:
+            continue
+        if my_rank == "deputy" and m.user_id == clan.owner_id:
+            continue
+        target = await session.scalar(select(User).where(User.id == m.user_id))
+        if target:
+            builder.row(InlineKeyboardButton(
+                text=f"🚫 {html.escape(target.full_name)}",
+                callback_data=f"clan_kick:{target.id}"
+            ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clans_menu"))
+
+    try:
+        await cb.message.edit_text(
+            f"🚫 <b>Исключить участника</b>\n\n"
+            f"👥 В клане: {len(members)}/{clan.max_members}",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
 @router.callback_query(F.data.startswith("clan_kick:"))
 async def cb_clan_kick(cb: CallbackQuery, session: AsyncSession, user: User):
     target_id = int(cb.data.split(":")[1])
@@ -107,7 +147,14 @@ async def cb_clan_kick(cb: CallbackQuery, session: AsyncSession, user: User):
                 )
             except Exception:
                 pass
-        await cb_clan_edit(cb, session, user)
+        my_member = await session.scalar(
+            select(ClanMember).where(ClanMember.clan_id == clan.id, ClanMember.user_id == user.id)
+        )
+        my_rank = my_member.rank if my_member else "member"
+        if my_rank == "owner":
+            await cb_clan_edit(cb, session, user)
+        else:
+            await cb_clan_kick_menu(cb, session, user)
     else:
         await cb.answer(result["reason"], show_alert=True)
 

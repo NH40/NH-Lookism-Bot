@@ -86,17 +86,20 @@ class SquadRepo:
 
         # Ограничиваем разумным максимумом (BIGINT safe)
         total = min(total, 9_000_000_000_000)
-        old_power = user.combat_power or 0
-        user.combat_power = total
 
+        # Получаем clan_id ДО мутации user, чтобы SELECT не вызвал autoflush
+        # и не залочил строку раньше времени (причина deadlock при concurrent обменах)
         from app.models.clan import ClanMember, Clan
         clan_id = await session.scalar(
             select(ClanMember.clan_id).where(ClanMember.user_id == user.id)
         )
+
+        old_power = user.combat_power or 0
+        user.combat_power = total
+
         if clan_id:
             delta = total - old_power
             if delta != 0:
-                # Delta-апдейт вместо пересчёта SUM по всем членам клана
                 await session.execute(
                     sa_update(Clan)
                     .where(Clan.id == clan_id)

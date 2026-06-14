@@ -233,6 +233,6 @@ class ClanExchangeService(ClanBaseService):
 
     async def _recalc_power(self, session, *users):
         from app.repositories.squad_repo import squad_repo
-        for u in users:
+        for u in sorted(set(users), key=lambda x: x.id):
             await squad_repo.update_user_combat_power(session, u)
         await session.flush()

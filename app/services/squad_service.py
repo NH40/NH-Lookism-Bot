@@ -235,8 +235,10 @@ class SquadService:
             else:
                 failed += 1
 
-        # Один bulk UPDATE вместо N индивидуальных flush-апдейтов
+        # Один bulk UPDATE вместо N индивидуальных flush-апдейтов.
+        # Сортировка по id — обязательна для предотвращения дедлоков при конкурентных тренировках.
         if updates:
+            updates.sort(key=lambda x: x["id"])
             await session.execute(
                 sa_update(SquadMember),
                 updates,

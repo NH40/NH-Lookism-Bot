@@ -73,7 +73,10 @@ async def cb_squad(cb: CallbackQuery, session: AsyncSession, user: User):
         f"<i>Больше влияния → больше статистов за вербовку</i>\n\n"
         f"Выбери действие:"
     )
-    await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    try:
+        await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data == "do_recruit")

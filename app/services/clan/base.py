@@ -79,6 +79,11 @@ class ClanBaseService:
             return {"ok": False, "reason": "Игрок не в клане"}
         clan.owner_id = new_owner_id
         await session.flush()
+        # Переприменяем бонусы региона: новый владелец получает owner-бонусы
+        from app.services.clan.region import ClanRegionService
+        region = await ClanRegionService().get_clan_region(session, clan.id)
+        if region:
+            await ClanRegionService().apply_region_bonuses_for_clan(session, clan.id, region)
         return {"ok": True}
 
     async def rename_clan(self, session: AsyncSession, clan: Clan, owner: User, new_name: str) -> dict:

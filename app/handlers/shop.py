@@ -40,7 +40,10 @@ async def cb_shop(cb: CallbackQuery, session: AsyncSession, user: User):
 @router.callback_query(F.data == "shop_craft")
 async def cb_shop_craft(cb: CallbackQuery, session: AsyncSession, user: User):
     dust = getattr(user, "card_dust", 0)
-    overflow = getattr(user, "circ_ticket_overflow", False)
+    overflow = (
+        getattr(user, "circ_ticket_overflow", False)
+        or getattr(user, "region_ticket_overflow", False)
+    )
     ticket_cap = user.max_tickets * 2 if overflow else user.max_tickets
     ticket_space = max(0, ticket_cap - user.tickets)
     can_craft = dust // TICKET_CRAFT_COST
@@ -89,10 +92,15 @@ async def cb_craft_ticket_1(cb: CallbackQuery, session: AsyncSession, user: User
     if not result["ok"]:
         await cb.answer(result["reason"], show_alert=True)
         return
+    overflow = (
+        getattr(user, "circ_ticket_overflow", False)
+        or getattr(user, "region_ticket_overflow", False)
+    )
+    ticket_cap = user.max_tickets * 2 if overflow else user.max_tickets
     await cb.answer(
         f"⚗️ Тикет скрафтен!\n"
         f"💎 Пыль осталась: {result['dust_left']}\n"
-        f"🎟 Тикеты: {result['tickets']}/{user.max_tickets}",
+        f"🎟 Тикеты: {result['tickets']}/{ticket_cap}",
         show_alert=True,
     )
     await cb_shop_craft(cb, session, user)
@@ -100,7 +108,10 @@ async def cb_craft_ticket_1(cb: CallbackQuery, session: AsyncSession, user: User
 
 @router.callback_query(F.data == "craft_ticket_max")
 async def cb_craft_ticket_max(cb: CallbackQuery, session: AsyncSession, user: User):
-    overflow = getattr(user, "circ_ticket_overflow", False)
+    overflow = (
+        getattr(user, "circ_ticket_overflow", False)
+        or getattr(user, "region_ticket_overflow", False)
+    )
     ticket_cap = user.max_tickets * 2 if overflow else user.max_tickets
     space = ticket_cap - user.tickets
     dust = getattr(user, "card_dust", 0)
@@ -121,7 +132,7 @@ async def cb_craft_ticket_max(cb: CallbackQuery, session: AsyncSession, user: Us
     await cb.answer(
         f"⚗️ Скрафтено {result['crafted']} тикетов!\n"
         f"💎 Пыль осталась: {result['dust_left']}\n"
-        f"🎟 Тикеты: {result['tickets']}/{user.max_tickets}",
+        f"🎟 Тикеты: {result['tickets']}/{ticket_cap}",
         show_alert=True,
     )
     await cb_shop_craft(cb, session, user)

@@ -36,8 +36,8 @@ TICKET_HARD_CAP_OVERFLOW: int = 1000
 
 
 def ticket_hard_cap(user) -> int:
-    """500 без доната Хозяина горы, 1000 с ним."""
-    if getattr(user, "circ_ticket_overflow", False):
+    """500 без переполнения, 1000 с ним (донат или регион)."""
+    if getattr(user, "circ_ticket_overflow", False) or getattr(user, "region_ticket_overflow", False):
         return TICKET_HARD_CAP_OVERFLOW
     return TICKET_HARD_CAP
 

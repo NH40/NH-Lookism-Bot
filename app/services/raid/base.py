@@ -383,7 +383,7 @@ class RaidService:
         reward_type = boss.get("reward_fragments", "ui")
         from app.services.potion_service import potion_service
         drop_bonus = await potion_service.get_raid_drop_bonus(session, user.id)
-        frag_bonus = getattr(user, "fragment_bonus_pct", 0) + getattr(user, "region_fragment_pct", 0)
+        frag_bonus = getattr(user, "fragment_bonus_pct", 0)  # region_fragment_pct disabled
         total_drop = drop_bonus + frag_bonus
         fragments = calc_fragments(raid.damage_dealt, effective_hp, reward_type, total_drop)
         # Круговой донат «Корейский дьявол» круг 6: шанс удвоения наград

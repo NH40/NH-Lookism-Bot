@@ -55,10 +55,8 @@ async def _auto_attack_for_user(session, user_id: int, user=None) -> None:
     if not user:
         return
 
-    war_genius = max(
-        getattr(user, "war_genius_level", 0),
-        getattr(user, "region_war_genius", 0),
-    )
+    # region_war_genius стакается с навыком (Ульсан даёт +N уровней, Сеул даёт MAX 5)
+    war_genius = min(5, getattr(user, "war_genius_level", 0) + getattr(user, "region_war_genius", 0))
     if war_genius == 0:
         return
 

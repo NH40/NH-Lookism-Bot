@@ -16,8 +16,10 @@ class CraftService:
                 "ok": False,
                 "reason": f"Нужно {TICKET_CRAFT_COST} 💎 пыли (у тебя {dust})"
             }
-        # Круговой донат «Повелитель гор» круг 4: переполнение — лимит ×2
-        overflow = getattr(user, "circ_ticket_overflow", False)
+        overflow = (
+            getattr(user, "circ_ticket_overflow", False)
+            or getattr(user, "region_ticket_overflow", False)
+        )
         ticket_cap = user.max_tickets * 2 if overflow else user.max_tickets
         if user.tickets >= ticket_cap:
             return {
@@ -32,8 +34,10 @@ class CraftService:
     async def craft_ticket_bulk(self, session: AsyncSession, user: User, count: int) -> dict:
         """Скрафтить несколько тикетов сразу."""
         dust = getattr(user, "card_dust", 0)
-        # Круговой донат «Повелитель гор» круг 4: переполнение — лимит ×2
-        overflow = getattr(user, "circ_ticket_overflow", False)
+        overflow = (
+            getattr(user, "circ_ticket_overflow", False)
+            or getattr(user, "region_ticket_overflow", False)
+        )
         ticket_cap = user.max_tickets * 2 if overflow else user.max_tickets
         space = ticket_cap - user.tickets
         can_craft = min(count, space, dust // TICKET_CRAFT_COST)

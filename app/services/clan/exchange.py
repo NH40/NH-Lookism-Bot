@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete as sa_delete, update as sa_update
 from app.models.user import User
 from app.models.clan import ClanMember
 from app.services.clan.base import ClanBaseService
@@ -128,16 +128,19 @@ class ClanExchangeService(ClanBaseService):
     async def _exchange_squad(self, session, from_user, to_user, amount, meta):
         from app.models.squad_member import SquadMember
         rank = meta.get("rank") if meta else None
-        q = select(SquadMember).where(SquadMember.user_id == from_user.id)
+        id_q = select(SquadMember.id).where(SquadMember.user_id == from_user.id)
         if rank:
-            q = q.where(SquadMember.rank == rank)
-        q = q.limit(amount)
-        result = await session.execute(q)
-        members = result.scalars().all()
-        if len(members) < amount:
-            return {"ok": False, "reason": f"Недостаточно статистов (есть {len(members)})"}
-        for m in members:
-            m.user_id = to_user.id
+            id_q = id_q.where(SquadMember.rank == rank)
+        id_q = id_q.limit(amount)
+        ids = (await session.scalars(id_q)).all()
+        if len(ids) < amount:
+            return {"ok": False, "reason": f"Недостаточно статистов (есть {len(ids)})"}
+        await session.execute(
+            sa_update(SquadMember)
+            .where(SquadMember.id.in_(ids))
+            .values(user_id=to_user.id)
+            .execution_options(synchronize_session=False)
+        )
         await self._recalc_power(session, from_user, to_user)
         return {"ok": True}
 
@@ -146,15 +149,19 @@ class ClanExchangeService(ClanBaseService):
         rank = meta.get("rank") if meta else None
         if not rank:
             return {"ok": False, "reason": "Не указан ранг"}
-        result = await session.execute(
-            select(SquadMember)
+        from sqlalchemy import func
+        count = await session.scalar(
+            select(func.count(SquadMember.id))
             .where(SquadMember.user_id == from_user.id, SquadMember.rank == rank)
         )
-        members = result.scalars().all()
-        if not members:
+        if not count:
             return {"ok": False, "reason": f"Нет статистов ранга {rank}"}
-        for m in members:
-            m.user_id = to_user.id
+        await session.execute(
+            sa_update(SquadMember)
+            .where(SquadMember.user_id == from_user.id, SquadMember.rank == rank)
+            .values(user_id=to_user.id)
+            .execution_options(synchronize_session=False)
+        )
         await self._recalc_power(session, from_user, to_user)
         return {"ok": True}
 
@@ -165,14 +172,12 @@ class ClanExchangeService(ClanBaseService):
         from app.models.card_deck import UserDeck
         if not char_ids:
             return
-        rows = (await session.execute(
-            select(UserDeck).where(
+        await session.execute(
+            sa_delete(UserDeck).where(
                 UserDeck.user_id == user_id,
                 UserDeck.char_id.in_(char_ids),
-            )
-        )).scalars().all()
-        for row in rows:
-            await session.delete(row)
+            ).execution_options(synchronize_session=False)
+        )
 
     async def _exchange_character(self, session, from_user, to_user, meta):
         char_id = meta.get("char_id") if meta else None
@@ -197,17 +202,20 @@ class ClanExchangeService(ClanBaseService):
         if not char_name:
             return {"ok": False, "reason": "Не указан персонаж"}
         from app.models.character import UserCharacter
-        result = await session.execute(
-            select(UserCharacter)
+        ids = (await session.scalars(
+            select(UserCharacter.id)
             .where(UserCharacter.user_id == from_user.id, UserCharacter.character_id == char_name)
             .limit(amount)
+        )).all()
+        if len(ids) < amount:
+            return {"ok": False, "reason": f"Недостаточно «{char_name}» (есть {len(ids)})"}
+        await self._remove_from_deck(session, from_user.id, ids)
+        await session.execute(
+            sa_update(UserCharacter)
+            .where(UserCharacter.id.in_(ids))
+            .values(user_id=to_user.id)
+            .execution_options(synchronize_session=False)
         )
-        chars = result.scalars().all()
-        if len(chars) < amount:
-            return {"ok": False, "reason": f"Недостаточно «{char_name}» (есть {len(chars)})"}
-        await self._remove_from_deck(session, from_user.id, [c.id for c in chars])
-        for c in chars:
-            c.user_id = to_user.id
         await self._recalc_power(session, from_user, to_user)
         return {"ok": True}
 
@@ -216,16 +224,19 @@ class ClanExchangeService(ClanBaseService):
         if not rank:
             return {"ok": False, "reason": "Не указан ранг"}
         from app.models.character import UserCharacter
-        result = await session.execute(
-            select(UserCharacter)
+        ids = (await session.scalars(
+            select(UserCharacter.id)
             .where(UserCharacter.user_id == from_user.id, UserCharacter.rank == rank)
-        )
-        chars = result.scalars().all()
-        if not chars:
+        )).all()
+        if not ids:
             return {"ok": False, "reason": f"Нет персонажей ранга {rank}"}
-        await self._remove_from_deck(session, from_user.id, [c.id for c in chars])
-        for c in chars:
-            c.user_id = to_user.id
+        await self._remove_from_deck(session, from_user.id, ids)
+        await session.execute(
+            sa_update(UserCharacter)
+            .where(UserCharacter.id.in_(ids))
+            .values(user_id=to_user.id)
+            .execution_options(synchronize_session=False)
+        )
         await self._recalc_power(session, from_user, to_user)
         return {"ok": True}
 

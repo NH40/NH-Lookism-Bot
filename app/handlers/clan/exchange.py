@@ -450,6 +450,13 @@ async def msg_exchange_amount(message: Message, session: AsyncSession, user: Use
         await message.answer("❌ Игрок не найден")
         return
 
+    # Оба должны быть в одном клане в момент передачи
+    sender_clan = await clan_service.get_user_clan(session, user.id)
+    target_clan = await clan_service.get_user_clan(session, target.id)
+    if not sender_clan or not target_clan or sender_clan.id != target_clan.id:
+        await message.answer("❌ Игрок больше не в вашем клане")
+        return
+
     try:
         amount = int(message.text.strip())
     except ValueError:
@@ -458,6 +465,17 @@ async def msg_exchange_amount(message: Message, session: AsyncSession, user: Use
 
     result = await clan_service.exchange_resource(session, user, target, resource, amount, meta=meta)
     if result["ok"]:
-        await message.answer(f"✅ Ресурс передан {html.escape(target.full_name)}!", parse_mode="HTML")
+        actual = result.get("amount", amount)
+        if actual != amount:
+            await message.answer(
+                f"✅ Передано {fmt_num(actual)} → <b>{html.escape(target.full_name)}</b> "
+                f"(запрошено {fmt_num(amount)}, хранилище получателя заполнено)",
+                parse_mode="HTML",
+            )
+        else:
+            await message.answer(
+                f"✅ Передано <b>{fmt_num(actual)}</b> → <b>{html.escape(target.full_name)}</b>",
+                parse_mode="HTML",
+            )
     else:
         await message.answer(f"❌ {result['reason']}")

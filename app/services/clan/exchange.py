@@ -1,8 +1,11 @@
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete as sa_delete, update as sa_update
 from app.models.user import User
 from app.models.clan import ClanMember
 from app.services.clan.base import ClanBaseService
+
+logger = logging.getLogger(__name__)
 
 
 class ClanExchangeService(ClanBaseService):
@@ -33,6 +36,7 @@ class ClanExchangeService(ClanBaseService):
             actual = min(amount, cap - to_user.tickets)
             from_user.tickets -= actual
             to_user.tickets += actual
+            amount = actual
 
         elif resource_type == "mastery_points":
             if amount <= 0:
@@ -121,7 +125,11 @@ class ClanExchangeService(ClanBaseService):
             return {"ok": False, "reason": "Неизвестный тип ресурса"}
 
         await session.flush()
-        return {"ok": True}
+        logger.info(
+            "exchange: from_user=%d to_user=%d resource=%s amount=%d",
+            from_user.id, to_user.id, resource_type, amount,
+        )
+        return {"ok": True, "amount": amount}
 
     # ── Статисты ────────────────────────────────────────────────────────────
 
@@ -142,6 +150,7 @@ class ClanExchangeService(ClanBaseService):
             .execution_options(synchronize_session=False)
         )
         await self._recalc_power(session, from_user, to_user)
+        logger.info("exchange: from_user=%d to_user=%d resource=squad amount=%d", from_user.id, to_user.id, amount)
         return {"ok": True}
 
     async def _exchange_squad_all(self, session, from_user, to_user, meta):
@@ -163,6 +172,7 @@ class ClanExchangeService(ClanBaseService):
             .execution_options(synchronize_session=False)
         )
         await self._recalc_power(session, from_user, to_user)
+        logger.info("exchange: from_user=%d to_user=%d resource=squad_all rank=%s count=%d", from_user.id, to_user.id, rank, count)
         return {"ok": True}
 
     # ── Персонажи ───────────────────────────────────────────────────────────
@@ -195,6 +205,7 @@ class ClanExchangeService(ClanBaseService):
         await self._remove_from_deck(session, from_user.id, [char.id])
         char.user_id = to_user.id
         await self._recalc_power(session, from_user, to_user)
+        logger.info("exchange: from_user=%d to_user=%d resource=character char_id=%d", from_user.id, to_user.id, char_id)
         return {"ok": True}
 
     async def _exchange_characters_by_name(self, session, from_user, to_user, amount, meta):
@@ -217,6 +228,7 @@ class ClanExchangeService(ClanBaseService):
             .execution_options(synchronize_session=False)
         )
         await self._recalc_power(session, from_user, to_user)
+        logger.info("exchange: from_user=%d to_user=%d resource=character_name char=%s amount=%d", from_user.id, to_user.id, char_name, len(ids))
         return {"ok": True}
 
     async def _exchange_characters_by_rank(self, session, from_user, to_user, meta):
@@ -238,6 +250,7 @@ class ClanExchangeService(ClanBaseService):
             .execution_options(synchronize_session=False)
         )
         await self._recalc_power(session, from_user, to_user)
+        logger.info("exchange: from_user=%d to_user=%d resource=character_rank rank=%s count=%d", from_user.id, to_user.id, rank, len(ids))
         return {"ok": True}
 
     # ── Вспомогательные ─────────────────────────────────────────────────────

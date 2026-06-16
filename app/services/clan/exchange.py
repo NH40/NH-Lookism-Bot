@@ -135,17 +135,22 @@ class ClanExchangeService(ClanBaseService):
 
     async def _exchange_squad(self, session, from_user, to_user, amount, meta):
         from app.models.squad_member import SquadMember
+        from sqlalchemy import func as sqla_func
         rank = meta.get("rank") if meta else None
-        id_q = select(SquadMember.id).where(SquadMember.user_id == from_user.id)
+
+        cond = SquadMember.user_id == from_user.id
         if rank:
-            id_q = id_q.where(SquadMember.rank == rank)
-        id_q = id_q.limit(amount)
-        ids = (await session.scalars(id_q)).all()
-        if len(ids) < amount:
-            return {"ok": False, "reason": f"Недостаточно статистов (есть {len(ids)})"}
+            cond = cond & (SquadMember.rank == rank)
+
+        available = await session.scalar(select(sqla_func.count(SquadMember.id)).where(cond))
+        if (available or 0) < amount:
+            return {"ok": False, "reason": f"Недостаточно статистов (есть {available or 0})"}
+
+        # Subquery вместо материализации ID в Python — нет огромного IN-списка
+        subq = select(SquadMember.id).where(cond).limit(amount)
         await session.execute(
             sa_update(SquadMember)
-            .where(SquadMember.id.in_(ids))
+            .where(SquadMember.id.in_(subq))
             .values(user_id=to_user.id)
             .execution_options(synchronize_session=False)
         )

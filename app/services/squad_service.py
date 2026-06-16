@@ -1,6 +1,6 @@
 import random
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, insert, update as sa_update
+from sqlalchemy import select, insert, update as sa_update, func, text
 from app.models.user import User
 from app.models.squad_member import SquadMember
 from app.models.skill import UserMastery
@@ -161,11 +161,14 @@ class SquadService:
         user.nh_coins -= total
         user.coins_spent += total
 
-        row = {"user_id": user.id, "rank": rank, "stars": 0, "base_power": rank_cfg.base_power}
-        _BATCH = 5_000
-        for offset in range(0, count, _BATCH):
-            batch = [row] * min(_BATCH, count - offset)
-            await session.execute(insert(SquadMember), batch)
+        # Один INSERT вместо N батч-запросов — PostgreSQL итерирует generate_series внутри
+        await session.execute(
+            text(
+                "INSERT INTO squad_members (user_id, rank, stars, base_power) "
+                "SELECT :uid, :rank, 0, :bp FROM generate_series(1, :cnt)"
+            ),
+            {"uid": user.id, "rank": rank, "bp": rank_cfg.base_power, "cnt": count},
+        )
 
         user.total_statists_recruited = (user.total_statists_recruited or 0) + count
 
@@ -200,13 +203,12 @@ class SquadService:
             ttl = await cooldown_service.get_ttl(cd_key)
             return {"ok": False, "reason": f"Тренировка через {cooldown_service.format_ttl(ttl)}"}
 
-        # Загружаем только (id, stars) — без полных ORM-объектов
-        cand_rows = (await session.execute(
-            select(SquadMember.id, SquadMember.stars)
+        # Считаем кандидатов одним скалярным запросом
+        cand_count = await session.scalar(
+            select(func.count(SquadMember.id))
             .where(SquadMember.user_id == user.id, SquadMember.stars < 5)
-        )).all()
-
-        if not cand_rows:
+        )
+        if not cand_count:
             return {"ok": False, "reason": "Все статисты уже имеют 5 звёзд или отряд пуст"}
 
         # Охват тренировки (% от кандидатов)
@@ -214,39 +216,50 @@ class SquadService:
         clan_train = getattr(user, 'clan_train_bonus', 0) + getattr(user, 'clan_donat_train_bonus', 0)
         region_train = getattr(user, 'region_train_pct', 0)
         coverage_pct = min(100, TRAIN_BASE_COVERAGE + train_bonus + clan_train + region_train)
-        count_to_train = max(1, int(len(cand_rows) * coverage_pct / 100))
-
-        to_train = random.sample(cand_rows, min(count_to_train, len(cand_rows)))
+        count_to_train = max(1, int(cand_count * coverage_pct / 100))
 
         success_chance = min(TRAIN_MAX_SUCCESS_CHANCE, TRAIN_BASE_SUCCESS_CHANCE + user.train_quality_bonus)
 
-        upgraded = 0
-        failed = 0
-        stars_added_total = 0
-        updates: list[dict] = []
-
-        for row_id, row_stars in to_train:
-            if random.randint(1, 100) <= success_chance:
-                max_add = 5 - row_stars
-                stars_add = random.randint(1, min(3, max_add))
-                updates.append({"id": row_id, "stars": row_stars + stars_add})
-                stars_added_total += stars_add
-                upgraded += 1
-            else:
-                failed += 1
-
-        # Один bulk UPDATE вместо N индивидуальных flush-апдейтов.
-        # Сортировка по id — обязательна для предотвращения дедлоков при конкурентных тренировках.
-        if updates:
-            updates.sort(key=lambda x: x["id"])
-            await session.execute(
-                sa_update(SquadMember),
-                updates,
+        # Один SQL-запрос: случайный отбор + апдейт + агрегат.
+        # ORDER BY random() LIMIT N в PostgreSQL использует heap-select O(N·log K),
+        # не передаёт строки в Python и не шлёт N отдельных UPDATE.
+        row = (await session.execute(text("""
+            WITH candidates AS MATERIALIZED (
+                SELECT id, stars
+                FROM squad_members
+                WHERE user_id = :user_id AND stars < 5
+                ORDER BY random()
+                LIMIT :limit
+            ),
+            chosen AS MATERIALIZED (
+                SELECT id, stars,
+                    CASE WHEN floor(random() * 100 + 1)::int <= :chance
+                         THEN LEAST(stars + floor(random() * 3 + 1)::int, 5)
+                         ELSE stars
+                    END AS new_stars
+                FROM candidates
+            ),
+            upd AS (
+                UPDATE squad_members sm
+                SET stars = c.new_stars
+                FROM chosen c
+                WHERE sm.id = c.id AND c.new_stars > c.stars
+                RETURNING c.new_stars - c.stars AS delta
             )
-        await session.flush()
+            SELECT
+                COUNT(*) AS upgraded,
+                COALESCE(SUM(delta), 0) AS stars_added
+            FROM upd
+        """), {"user_id": user.id, "limit": count_to_train, "chance": success_chance})
+        ).one()
+
+        upgraded = int(row.upgraded)
+        stars_added_total = int(row.stars_added)
+        failed = count_to_train - upgraded
 
         from app.repositories.squad_repo import squad_repo
         await squad_repo.update_user_combat_power(session, user)
+        await session.flush()
 
         # КД тренировки с учётом скорости и focus
         mastery = await _get_mastery(session, user.id)
@@ -267,7 +280,7 @@ class SquadService:
 
         return {
             "ok": True,
-            "trained": len(to_train),
+            "trained": count_to_train,
             "upgraded": upgraded,
             "failed": failed,
             "stars_added": stars_added_total,
@@ -281,37 +294,41 @@ class SquadService:
     # ════════════════════════════════════════════════════════════════════════
 
     async def get_squad_summary(self, session: AsyncSession, user_id: int) -> str:
-        result = await session.execute(
-            select(SquadMember).where(SquadMember.user_id == user_id)
-        )
-        members = result.scalars().all()
-        if not members:
+        agg_rows = (await session.execute(
+            select(SquadMember.rank, SquadMember.stars, func.count().label("cnt"))
+            .where(SquadMember.user_id == user_id)
+            .group_by(SquadMember.rank, SquadMember.stars)
+        )).all()
+
+        if not agg_rows:
             return "Отряд пуст"
 
-        from collections import Counter
         rank_order = ["ERROR","DX","XXX","XX","X","MP","LR","UR","SSR","SR","SSS","SS","S","A","B","C","D","E","F"]
 
+        rank_data: dict[str, dict[int, int]] = {}
+        total = 0
+        five_star = 0
+        for rank, stars, cnt in agg_rows:
+            rank_data.setdefault(rank, {})[stars] = cnt
+            total += cnt
+            if stars == 5:
+                five_star += cnt
+
         lines = []
-        total = len(members)
-        five_star = sum(1 for m in members if m.stars == 5)
-
         for rank in rank_order:
-            rank_members = [m for m in members if m.rank == rank]
-            if not rank_members:
+            star_counts = rank_data.get(rank)
+            if not star_counts:
                 continue
-
-            # Группируем по звёздам
-            star_counts = Counter(m.stars for m in rank_members)
+            rank_total = sum(star_counts.values())
+            rank_cfg = RANKS_BY_ID.get(rank)
             star_parts = []
             for stars in range(5, -1, -1):
                 c = star_counts.get(stars, 0)
                 if c:
                     star_str = "⭐" * stars if stars > 0 else "☆"
                     star_parts.append(f"{star_str}×{c}")
-
-            rank_cfg = RANKS_BY_ID.get(rank)
             lines.append(
-                f"[{rank}] {rank_cfg.base_power:,} силы — {len(rank_members)} чел.\n"
+                f"[{rank}] {rank_cfg.base_power:,} силы — {rank_total} чел.\n"
                 f"  {' | '.join(star_parts)}"
             )
 

@@ -99,8 +99,8 @@ async def cb_path_menu(cb: CallbackQuery, session: AsyncSession, user: User):
                 )
     builder.adjust(1)
 
-    # Кнопка скрытности для пути Тень
-    if user.skill_path == "shadow" and getattr(user, "path_unique_2", False):
+    # Кнопка скрытности — показываем всем у кого куплен навык (в т.ч. через слияние)
+    if getattr(user, "path_unique_2", False):
         stealth_on = getattr(user, "shadow_stealth_active", False)
         stealth_label = "🫥 Скрытность: ВКЛ ✅" if stealth_on else "👁 Скрытность: ВЫКЛ ❌"
         builder.row(InlineKeyboardButton(

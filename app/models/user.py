@@ -120,6 +120,7 @@ class User(Base):
     # ── Статистика ────────────────────────────────────────────────────────
     total_wins: Mapped[int] = mapped_column(Integer, default=0)
     coins_spent: Mapped[int] = mapped_column(BigInteger, default=0)
+    all_time_combat_power: Mapped[int] = mapped_column(BigInteger, default=0, index=True)  # суммарная мощь за все сезоны
     auction_wins: Mapped[int] = mapped_column(Integer, default=0)
     settings_opened: Mapped[int] = mapped_column(Integer, default=0)
     raid_boss_wins: Mapped[int] = mapped_column(Integer, default=0)           # убийства рейд-боссов

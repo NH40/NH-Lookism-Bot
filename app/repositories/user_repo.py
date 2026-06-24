@@ -82,6 +82,36 @@ class UserRepo:
         )
         return result.all()
 
+    async def get_top_by_all_time_power(
+        self, session: AsyncSession, limit: int = 10
+    ) -> list:
+        """Топ по суммарной мощи за все сезоны (all_time + текущий)."""
+        total_power = (User.all_time_combat_power + User.combat_power).label("total_power")
+        result = await session.execute(
+            select(User.full_name, User.prestige_level, User.phase, User.ultra_instinct, total_power)
+            .order_by(total_power.desc())
+            .limit(limit)
+        )
+        return result.all()
+
+    async def get_all_time_rank(
+        self, session: AsyncSession, user_id: int
+    ) -> int:
+        """Место игрока в рейтинге всех времён."""
+        row = await session.execute(
+            select(User.all_time_combat_power, User.combat_power).where(User.id == user_id)
+        )
+        r = row.one_or_none()
+        if not r:
+            return 1
+        my_total = (r.all_time_combat_power or 0) + (r.combat_power or 0)
+        rank = await session.scalar(
+            select(func.count(User.id)).where(
+                (User.all_time_combat_power + User.combat_power) > my_total
+            )
+        )
+        return (rank or 0) + 1
+
     async def get_rank_by_power(
         self, session: AsyncSession, user_id: int
     ) -> int:

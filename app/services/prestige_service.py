@@ -8,6 +8,7 @@ from app.models.city import District, FistBot
 from app.models.king_bot import KingBot
 from app.models.skill import UserMastery, UserPathSkills
 from app.models.potion import ActivePotion
+from app.models.campaign import Campaign
 
 # Убираем MAX_PRESTIGE = 10 и добавляем вверху:
 from app.constants.prestige import (
@@ -55,7 +56,9 @@ class PrestigeService:
         user.nh_coins = 0
         user.card_dust = 0
         user.influence = DEFAULT_INFLUENCE
+        user.all_time_combat_power += user.combat_power
         user.combat_power = 0
+        user.raid_unlocked_tiers = ""
         # Сбрасываем накопленный бонус от учителя; связь referred_by сохраняется,
         # шедулер пересчитает бонус от новой мощи учителя.
         from app.config.game_balance import REFERRAL_STUDENT_POWER_BONUS
@@ -169,6 +172,9 @@ class PrestigeService:
         from app.models.emperor_gang import EmperorGangRecord
         await session.execute(
             delete(EmperorGangRecord).where(EmperorGangRecord.user_id == user.id)
+        )
+        await session.execute(
+            delete(Campaign).where(Campaign.user_id == user.id)
         )
 
         # ── Мастерство — только при полном сбросе ────────────────────────

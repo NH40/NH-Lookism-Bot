@@ -8,6 +8,7 @@ from app.models.user import User
 
 _TOP_TTL = 30      # секунды
 _PAGE_TTL = 30
+_SLAVA_TTL = 60
 
 PAGE_SIZE = 10
 
@@ -35,6 +36,27 @@ async def _get_top_cached(session: AsyncSession) -> list:
         for row in result.all()
     ]
     await r.setex("cache:top10", _TOP_TTL, json.dumps(data, ensure_ascii=False))
+    return [SimpleNamespace(**d) for d in data]
+
+
+async def _get_slava_top_cached(session: AsyncSession) -> list:
+    r = _redis()
+    raw = await r.get("cache:slava10")
+    if raw:
+        return [SimpleNamespace(**d) for d in json.loads(raw)]
+    from app.repositories.user_repo import user_repo
+    rows = await user_repo.get_top_by_all_time_power(session, limit=10)
+    data = [
+        {
+            "full_name": row.full_name,
+            "total_power": row.total_power,
+            "prestige_level": row.prestige_level,
+            "phase": row.phase,
+            "ultra_instinct": row.ultra_instinct,
+        }
+        for row in rows
+    ]
+    await r.setex("cache:slava10", _SLAVA_TTL, json.dumps(data, ensure_ascii=False))
     return [SimpleNamespace(**d) for d in data]
 
 

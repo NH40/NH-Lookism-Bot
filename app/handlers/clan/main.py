@@ -131,14 +131,12 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
     # Ряд 6: зал славы (отдельно — широкая)
     builder.row(InlineKeyboardButton(text="🏆 Зал Славы", callback_data="region_hall_of_fame"))
 
-    # Для владельца: управление
-    if is_owner:
+    # Для владельца и заместителя: управление
+    if my_rank in ("owner", "deputy"):
         builder.row(
             InlineKeyboardButton(text="🎖 Ранги", callback_data="clan_manage_ranks"),
             InlineKeyboardButton(text="✏️ Редактировать", callback_data="clan_edit"),
         )
-    elif my_rank == "deputy":
-        builder.row(InlineKeyboardButton(text="🚫 Выгнать участника", callback_data="clan_kick_menu"))
 
     builder.row(
         InlineKeyboardButton(text="🚪 Покинуть", callback_data="clan_leave"),

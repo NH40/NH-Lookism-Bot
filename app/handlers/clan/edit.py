@@ -19,29 +19,35 @@ class EditFSM(StatesGroup):
     waiting_rename = State()
 
 
+async def _get_my_rank(session: AsyncSession, clan_id: int, user_id: int) -> str:
+    member = await session.scalar(
+        select(ClanMember).where(ClanMember.clan_id == clan_id, ClanMember.user_id == user_id)
+    )
+    return member.rank if member else "member"
+
+
 @router.callback_query(F.data == "clan_edit")
 async def cb_clan_edit(cb: CallbackQuery, session: AsyncSession, user: User):
     clan = await clan_service.get_user_clan(session, user.id)
-    if not clan or clan.owner_id != user.id:
-        await cb.answer("Только для владельца", show_alert=True)
+    if not clan:
+        await cb.answer("Вы не в клане", show_alert=True)
+        return
+
+    my_rank = await _get_my_rank(session, clan.id, user.id)
+    is_owner = clan.owner_id == user.id
+
+    if my_rank not in ("owner", "deputy"):
+        await cb.answer("Только для владельца или заместителя", show_alert=True)
         return
 
     members = await clan_service.get_clan_members(session, clan.id)
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="✏️ Переименовать", callback_data="clan_rename"))
-    builder.row(InlineKeyboardButton(text="👤 Передать права", callback_data="clan_transfer"))
-
-    for m in members:
-        if m.user_id == user.id:
-            continue
-        target = await session.scalar(select(User).where(User.id == m.user_id))
-        if target:
-            builder.row(InlineKeyboardButton(
-                text=f"🚫 Выгнать {html.escape(target.full_name)}",
-                callback_data=f"clan_kick:{target.id}"
-            ))
-
-    builder.row(InlineKeyboardButton(text="🗑 Удалить клан", callback_data="clan_delete"))
+    if is_owner:
+        builder.row(InlineKeyboardButton(text="👤 Передать права", callback_data="clan_transfer"))
+    builder.row(InlineKeyboardButton(text="🚫 Исключить участника", callback_data="clan_kick_menu"))
+    if is_owner:
+        builder.row(InlineKeyboardButton(text="🗑 Удалить клан", callback_data="clan_delete"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clans_menu"))
 
     try:
@@ -91,10 +97,7 @@ async def cb_clan_kick_menu(cb: CallbackQuery, session: AsyncSession, user: User
     if not clan:
         await cb.answer("Вы не в клане", show_alert=True)
         return
-    my_member = await session.scalar(
-        select(ClanMember).where(ClanMember.clan_id == clan.id, ClanMember.user_id == user.id)
-    )
-    my_rank = my_member.rank if my_member else "member"
+    my_rank = await _get_my_rank(session, clan.id, user.id)
     if my_rank not in ("owner", "deputy"):
         await cb.answer("Недостаточно прав", show_alert=True)
         return
@@ -147,14 +150,7 @@ async def cb_clan_kick(cb: CallbackQuery, session: AsyncSession, user: User):
                 )
             except Exception:
                 pass
-        my_member = await session.scalar(
-            select(ClanMember).where(ClanMember.clan_id == clan.id, ClanMember.user_id == user.id)
-        )
-        my_rank = my_member.rank if my_member else "member"
-        if my_rank == "owner":
-            await cb_clan_edit(cb, session, user)
-        else:
-            await cb_clan_kick_menu(cb, session, user)
+        await cb_clan_kick_menu(cb, session, user)
     else:
         await cb.answer(result["reason"], show_alert=True)
 
@@ -192,7 +188,38 @@ async def cb_clan_transfer(cb: CallbackQuery, session: AsyncSession, user: User)
 async def cb_clan_transfer_to(cb: CallbackQuery, session: AsyncSession, user: User):
     new_owner_id = int(cb.data.split(":")[1])
     clan = await clan_service.get_user_clan(session, user.id)
-    if not clan:
+    if not clan or clan.owner_id != user.id:
+        return
+
+    new_owner = await session.scalar(select(User).where(User.id == new_owner_id))
+    if not new_owner:
+        await cb.answer("Игрок не найден", show_alert=True)
+        return
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text="✅ Подтвердить передачу",
+        callback_data=f"clan_transfer_confirm:{new_owner_id}"
+    ))
+    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="clan_transfer"))
+
+    try:
+        await cb.message.edit_text(
+            f"👑 Передать права владельца игроку\n"
+            f"<b>{html.escape(new_owner.full_name)}</b>?\n\n"
+            f"Вы станете обычным участником клана.",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("clan_transfer_confirm:"))
+async def cb_clan_transfer_confirm(cb: CallbackQuery, session: AsyncSession, user: User):
+    new_owner_id = int(cb.data.split(":")[1])
+    clan = await clan_service.get_user_clan(session, user.id)
+    if not clan or clan.owner_id != user.id:
         return
 
     result = await clan_service.transfer_ownership(session, clan, user, new_owner_id)
@@ -202,7 +229,6 @@ async def cb_clan_transfer_to(cb: CallbackQuery, session: AsyncSession, user: Us
             f"✅ Права переданы {html.escape(new_owner.full_name) if new_owner else ''}!",
             show_alert=True
         )
-        # Показываем меню клана через импорт
         from app.handlers.clan.main import cb_clans_menu
         await cb_clans_menu(cb, session, user)
     else:
@@ -296,6 +322,25 @@ async def cb_clan_leave(cb: CallbackQuery, session: AsyncSession, user: User):
                 pass
             return
 
+    # Показываем подтверждение выхода
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text="✅ Да, покинуть клан",
+        callback_data="clan_leave_confirm"
+    ))
+    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="clans_menu"))
+    try:
+        await cb.message.edit_text(
+            f"🚪 Вы уверены, что хотите покинуть клан <b>{html.escape(clan.name)}</b>?",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data == "clan_leave_confirm")
+async def cb_clan_leave_confirm(cb: CallbackQuery, session: AsyncSession, user: User):
     result = await clan_service.leave_clan(session, user)
     if result["ok"]:
         await cb.answer("✅ Вы покинули клан", show_alert=True)

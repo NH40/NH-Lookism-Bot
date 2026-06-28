@@ -526,12 +526,26 @@ async def _show_war_status(cb: CallbackQuery, session: AsyncSession, war_id: int
 @router.callback_query(F.data == "clan_manage_ranks")
 async def cb_manage_ranks(cb: CallbackQuery, session: AsyncSession, user: User):
     clan = await clan_service.get_user_clan(session, user.id)
-    if not clan or clan.owner_id != user.id:
-        await cb.answer("Только владелец клана может управлять рангами", show_alert=True)
+    if not clan:
+        await cb.answer("Вы не в клане", show_alert=True)
+        return
+
+    my_member = await session.scalar(
+        select(ClanMember).where(ClanMember.clan_id == clan.id, ClanMember.user_id == user.id)
+    )
+    my_rank = my_member.rank if my_member else "member"
+    is_owner = clan.owner_id == user.id
+
+    if not is_owner and my_rank != "deputy":
+        await cb.answer("Только владелец или заместитель может управлять рангами", show_alert=True)
         return
 
     members = await clan_service.get_clan_members(session, clan.id)
-    other_member_ids = [m.user_id for m in members if m.user_id != user.id]
+    # Deputy не может менять ранг владельца — исключаем его из списка
+    other_member_ids = [
+        m.user_id for m in members
+        if m.user_id != user.id and (is_owner or m.user_id != clan.owner_id)
+    ]
     if other_member_ids:
         users_map = {u.id: u for u in (await session.execute(
             select(User.id, User.full_name).where(User.id.in_(other_member_ids))
@@ -564,8 +578,15 @@ async def cb_manage_ranks(cb: CallbackQuery, session: AsyncSession, user: User):
 async def cb_rank_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     target_id = int(cb.data.split(":")[1])
     clan = await clan_service.get_user_clan(session, user.id)
-    if not clan or clan.owner_id != user.id:
-        await cb.answer("Только владелец клана может управлять рангами", show_alert=True)
+    if not clan:
+        await cb.answer("Вы не в клане", show_alert=True)
+        return
+    my_member = await session.scalar(
+        select(ClanMember).where(ClanMember.clan_id == clan.id, ClanMember.user_id == user.id)
+    )
+    my_rank = my_member.rank if my_member else "member"
+    if clan.owner_id != user.id and my_rank != "deputy":
+        await cb.answer("Только владелец или заместитель может управлять рангами", show_alert=True)
         return
 
     target = await session.scalar(select(User).where(User.id == target_id))

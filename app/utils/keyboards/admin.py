@@ -19,6 +19,9 @@ def admin_main_kb(maintenance_on: bool = False):
     )
     builder.row(
         InlineKeyboardButton(text="🏯 Клан-донат", callback_data="admin_clan_donat"),
+        InlineKeyboardButton(text="👑 Глава клана", callback_data="admin_clan_owner"),
+    )
+    builder.row(
         InlineKeyboardButton(text="📢 Рассылка", callback_data="admin_broadcast"),
         InlineKeyboardButton(text="👥 Все игроки", callback_data="admin_bulk"),
     )

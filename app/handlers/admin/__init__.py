@@ -12,6 +12,7 @@ from app.handlers.admin.patch import router as patch_router
 from app.handlers.admin.clan_donat import router as clan_donat_router
 from app.handlers.admin.circular_donat import router as circular_donat_router
 from app.handlers.admin.ban import router as ban_router
+from app.handlers.admin.clan_owner import router as clan_owner_router
 
 router = Router()
 router.include_router(main_router)
@@ -26,5 +27,6 @@ router.include_router(patch_router)
 router.include_router(clan_donat_router)
 router.include_router(circular_donat_router)
 router.include_router(ban_router)
+router.include_router(clan_owner_router)
 
 __all__ = ["router"]

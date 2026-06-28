@@ -130,12 +130,22 @@ class ClanRegionService(ClanBaseService):
         if new_rank not in ("deputy", "captain", "member"):
             return {"ok": False, "reason": "Недопустимый ранг"}
 
-        # Только владелец клана может менять ранги
-        if clan.owner_id != requester_id:
-            return {"ok": False, "reason": "Только владелец может менять ранги"}
+        # Проверяем ранг запрашивающего
+        requester_member = await session.scalar(
+            select(ClanMember).where(ClanMember.clan_id == clan.id, ClanMember.user_id == requester_id)
+        )
+        requester_rank = requester_member.rank if requester_member else "member"
+        is_owner = clan.owner_id == requester_id
+
+        if not is_owner and requester_rank != "deputy":
+            return {"ok": False, "reason": "Только владелец или заместитель может менять ранги"}
 
         if target_user_id == requester_id:
             return {"ok": False, "reason": "Нельзя изменить собственный ранг"}
+
+        # Нельзя менять ранг владельца
+        if target_user_id == clan.owner_id:
+            return {"ok": False, "reason": "Нельзя изменить ранг владельца клана"}
 
         member = await session.scalar(
             select(ClanMember).where(
@@ -145,6 +155,18 @@ class ClanRegionService(ClanBaseService):
         )
         if not member:
             return {"ok": False, "reason": "Игрок не в вашем клане"}
+
+        # Только 1 заместитель: понижаем текущего deputy до captain
+        if new_rank == "deputy":
+            existing_deputies = (await session.execute(
+                select(ClanMember).where(
+                    ClanMember.clan_id == clan.id,
+                    ClanMember.rank == "deputy",
+                    ClanMember.user_id != target_user_id,
+                )
+            )).scalars().all()
+            for dep in existing_deputies:
+                dep.rank = "captain"
 
         member.rank = new_rank
         await session.flush()

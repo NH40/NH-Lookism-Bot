@@ -77,6 +77,13 @@ class ClanBaseService:
         )
         if not member:
             return {"ok": False, "reason": "Игрок не в клане"}
+        # Старый владелец становится участником
+        old_owner_member = await session.scalar(
+            select(ClanMember).where(ClanMember.clan_id == clan.id, ClanMember.user_id == owner.id)
+        )
+        if old_owner_member:
+            old_owner_member.rank = "member"
+        member.rank = "owner"
         clan.owner_id = new_owner_id
         await session.flush()
         # Переприменяем бонусы региона: новый владелец получает owner-бонусы
@@ -86,9 +93,34 @@ class ClanBaseService:
             await ClanRegionService().apply_region_bonuses_for_clan(session, clan.id, region)
         return {"ok": True}
 
-    async def rename_clan(self, session: AsyncSession, clan: Clan, owner: User, new_name: str) -> dict:
-        if clan.owner_id != owner.id:
-            return {"ok": False, "reason": "Только владелец может переименовать"}
+    async def admin_transfer_ownership(self, session: AsyncSession, clan: Clan, new_owner_id: int) -> dict:
+        """Смена владельца клана администратором без проверки прав."""
+        member = await session.scalar(
+            select(ClanMember).where(ClanMember.clan_id == clan.id, ClanMember.user_id == new_owner_id)
+        )
+        if not member:
+            return {"ok": False, "reason": "Игрок не в клане"}
+        old_owner_member = await session.scalar(
+            select(ClanMember).where(ClanMember.clan_id == clan.id, ClanMember.user_id == clan.owner_id)
+        )
+        if old_owner_member:
+            old_owner_member.rank = "member"
+        member.rank = "owner"
+        clan.owner_id = new_owner_id
+        await session.flush()
+        from app.services.clan.region import ClanRegionService
+        region = await ClanRegionService().get_clan_region(session, clan.id)
+        if region:
+            await ClanRegionService().apply_region_bonuses_for_clan(session, clan.id, region)
+        return {"ok": True}
+
+    async def rename_clan(self, session: AsyncSession, clan: Clan, user: User, new_name: str) -> dict:
+        member = await session.scalar(
+            select(ClanMember).where(ClanMember.clan_id == clan.id, ClanMember.user_id == user.id)
+        )
+        rank = member.rank if member else "member"
+        if clan.owner_id != user.id and rank != "deputy":
+            return {"ok": False, "reason": "Только владелец или заместитель может переименовать"}
         new_name = new_name.strip()
         if len(new_name) < 2 or len(new_name) > 32:
             return {"ok": False, "reason": "Название от 2 до 32 символов"}

@@ -135,6 +135,7 @@ def _apply_one_donat(user: User, donat_id: str, circles: int) -> None:
         # Base per-circle bonuses
         base_power_per = 20
         base_income_per = 10
+        base_building_income_per = 5
         base_passive_per = 400
         base_recruit_per = 30
 
@@ -147,6 +148,7 @@ def _apply_one_donat(user: User, donat_id: str, circles: int) -> None:
 
         user.squad_power_bonus += int(base_power_per * circles * multiplier)
         user.income_bonus_percent += int(base_income_per * circles * multiplier)
+        user.income_bonus_percent += int(base_building_income_per * circles * multiplier)
         user.circ_passive_income += int(base_passive_per * circles * multiplier)
         user.recruit_count_bonus += int(base_recruit_per * circles * multiplier)
         user.circ_trainer_discount += int(2 * circles * multiplier)

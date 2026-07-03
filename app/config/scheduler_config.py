@@ -7,7 +7,7 @@
 INCOME_TICK_MINUTES: int = 1
 
 # Тик Ultra Instinct (авто-действия)
-UI_TICK_MINUTES: int = 1
+UI_TICK_MINUTES: int = 2
 
 # Тик раундов аукциона (проверка завершения раунда)
 AUCTION_ROUND_TICK_SECONDS: int = 10

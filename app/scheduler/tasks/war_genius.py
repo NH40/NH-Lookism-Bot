@@ -8,6 +8,7 @@ war_genius_tick — авто-атака рейдов для пользовате
   - Уровень Гения войны определяет, на каких боссов работает авто-атака.
 """
 import logging
+from datetime import datetime, timezone
 from sqlalchemy import select
 
 from app.database import AsyncSessionFactory
@@ -75,6 +76,10 @@ async def _auto_attack_for_user(session, user_id: int, user=None) -> None:
     )
     raid = result.scalars().first()
     if not raid:
+        return
+
+    # Рейд истёк — пользователь должен забрать награду вручную
+    if datetime.now(timezone.utc) >= raid.ends_at:
         return
 
     # Проверяем, что этот босс покрыт текущим уровнем Гения войны

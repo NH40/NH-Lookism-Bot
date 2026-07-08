@@ -10,7 +10,8 @@ from datetime import datetime
 BACKUP_DIR = "./backups"
 # Сколько последних бэкапов хранить — auto_backup_loop копит их каждые 6ч
 # бесконечно, без чистки диск через пару месяцев забивается дампами.
-BACKUP_KEEP = 14
+# ~650МБ на дамп, 5 держит ~30ч истории при ~3.2ГБ на диске.
+BACKUP_KEEP = 5
 
 
 def prune_backups(keep: int = BACKUP_KEEP) -> None:

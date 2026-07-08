@@ -34,7 +34,7 @@ class AdminBackupMixin:
             return {"ok": True, "filename": filename, "size_kb": size}
         return {"ok": False, "filename": filename}
 
-    def _prune_backups(self, keep: int = 14) -> None:
+    def _prune_backups(self, keep: int = 5) -> None:
         """Оставляет последние `keep` бэкапов — без этого /app/backups
         растёт бесконечно (auto_backup_loop создаёт дамп каждые 6ч)."""
         import os

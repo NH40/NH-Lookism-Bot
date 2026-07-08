@@ -1,11 +1,16 @@
 from datetime import datetime
-from sqlalchemy import BigInteger, DateTime, Integer, String, func
+from sqlalchemy import BigInteger, DateTime, Index, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 
 class UserCharacter(Base):
     __tablename__ = "user_characters"
+    __table_args__ = (
+        # Обмен/колода/слияние/походы фильтруют по (user_id, rank) и (user_id, character_id)
+        Index("ix_user_characters_user_rank", "user_id", "rank"),
+        Index("ix_user_characters_user_charid", "user_id", "character_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)

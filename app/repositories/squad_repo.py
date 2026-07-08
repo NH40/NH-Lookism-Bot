@@ -42,7 +42,9 @@ class SquadRepo:
                 UserCharacter.user_id == user.id
             )
         )
-        char_power = char_r.scalar() or 0
+        # sum(BIGINT) в Postgres возвращает NUMERIC → Decimal в asyncpg;
+        # приводим к int сразу, иначе Decimal * float ниже упадёт с TypeError
+        char_power = int(char_r.scalar() or 0)
         # Регион: +% только к силе персонажей
         region_char_pct = getattr(user, 'region_char_power_pct', 0)
         if region_char_pct > 0:

@@ -1,3 +1,9 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -15,6 +21,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    logging: *default-logging
 
   redis:
     image: redis:7-alpine
@@ -24,6 +31,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    logging: *default-logging
 
   bot:
     build: .
@@ -43,6 +51,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     command: python -m app.main
+    logging: *default-logging
 
   manager:
     build: .
@@ -59,6 +68,7 @@ services:
         condition: service_healthy
     restart: always
     command: python manager.py
+    logging: *default-logging
 
 volumes:
   postgres_data:

@@ -8,6 +8,25 @@ import os
 from datetime import datetime
 
 BACKUP_DIR = "./backups"
+# Сколько последних бэкапов хранить — auto_backup_loop копит их каждые 6ч
+# бесконечно, без чистки диск через пару месяцев забивается дампами.
+BACKUP_KEEP = 14
+
+
+def prune_backups(keep: int = BACKUP_KEEP) -> None:
+    """Удаляет старые бэкапы, оставляя последние `keep` файлов."""
+    if not os.path.isdir(BACKUP_DIR):
+        return
+    files = sorted(
+        (f for f in os.listdir(BACKUP_DIR) if f.startswith("backup_") and f.endswith(".sql")),
+        reverse=True,
+    )
+    for f in files[keep:]:
+        try:
+            os.remove(os.path.join(BACKUP_DIR, f))
+            print(f"🗑 Старый бэкап удалён: {f}")
+        except OSError:
+            pass
 
 
 async def backup():
@@ -34,6 +53,7 @@ async def backup():
     if ret == 0:
         size = os.path.getsize(filename) // 1024
         print(f"✅ Бэкап создан: {filename} ({size} KB)")
+        prune_backups()
     else:
         print(f"❌ Ошибка создания бэкапа (код {ret})")
 

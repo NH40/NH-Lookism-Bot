@@ -110,14 +110,16 @@ class RaidService:
                     SquadMember.user_id == user.id
                 )
             )
-            power = result or 0
+            # sum(BIGINT) возвращает NUMERIC (Decimal) — приводим к int сразу,
+            # иначе умножение на float ниже упадёт с TypeError
+            power = int(result or 0)
         elif damage_source == "characters":
             result = await session.scalar(
                 select(func.sum(UserCharacter.power)).where(
                     UserCharacter.user_id == user.id
                 )
             )
-            power = result or 0
+            power = int(result or 0)
         elif damage_source == "combat_power":
             power = user.combat_power // divisor
         else:

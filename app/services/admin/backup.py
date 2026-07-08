@@ -30,8 +30,26 @@ class AdminBackupMixin:
         ret = os.system(cmd)
         if ret == 0 and os.path.exists(filename):
             size = os.path.getsize(filename) // 1024
+            self._prune_backups()
             return {"ok": True, "filename": filename, "size_kb": size}
         return {"ok": False, "filename": filename}
+
+    def _prune_backups(self, keep: int = 14) -> None:
+        """Оставляет последние `keep` бэкапов — без этого /app/backups
+        растёт бесконечно (auto_backup_loop создаёт дамп каждые 6ч)."""
+        import os
+        backup_dir = "/app/backups"
+        if not os.path.isdir(backup_dir):
+            return
+        files = sorted(
+            (f for f in os.listdir(backup_dir) if f.startswith("backup_") and f.endswith(".sql")),
+            reverse=True,
+        )
+        for f in files[keep:]:
+            try:
+                os.remove(os.path.join(backup_dir, f))
+            except OSError:
+                pass
 
     async def list_backups(self) -> list[dict]:
         import os

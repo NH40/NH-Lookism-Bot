@@ -14,7 +14,8 @@ class CharacterRepo:
                 UserCharacter.user_id == user_id
             )
         )
-        return result or 0
+        # sum(BIGINT) возвращает NUMERIC (Decimal) — приводим к int
+        return int(result or 0)
 
     async def get_collection(
         self, session: AsyncSession, user_id: int

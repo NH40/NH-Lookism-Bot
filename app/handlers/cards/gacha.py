@@ -1,5 +1,6 @@
 """Тикеты и прокрутки (pull_one / pull_10)."""
 import asyncio
+import logging
 from aiogram import Router, F
 from aiogram.types import CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -18,6 +19,7 @@ from app.database import AsyncSessionFactory
 from app.bot_instance import get_bot
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 RANK_ORDER = [
     "perfection", "absolute", "peak", "legend", "new_legend",
@@ -106,6 +108,7 @@ async def _pull_one_bg(chat_id: int, msg_id: int, user_db_id: int, lock_key: str
                 pass
 
     except Exception:
+        logger.error(f"pull error for user_db_id={user_db_id}", exc_info=True)
         try:
             await bot.edit_message_text(
                 "⚠️ Ошибка при прокрутке, попробуй снова.",
@@ -175,6 +178,7 @@ async def _pull_10_bg(chat_id: int, msg_id: int, user_db_id: int, lock_key: str)
                 pass
 
     except Exception:
+        logger.error(f"pull error for user_db_id={user_db_id}", exc_info=True)
         try:
             await bot.edit_message_text(
                 "⚠️ Ошибка при прокрутке, попробуй снова.",

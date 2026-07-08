@@ -135,8 +135,8 @@ async def _campaigns_text_kb(session: AsyncSession, user: User):
         lines.append("Нет активных походов.\nОтправляй статистов за ресурсами!")
 
     # Доступные статисты
-    available = await campaign_service.get_available_statists(session, user.id)
-    lines.append(f"\n👥 Свободных статистов: <b>{len(available)}</b>")
+    available_count = await campaign_service.count_available_statists(session, user.id)
+    lines.append(f"\n👥 Свободных статистов: <b>{available_count}</b>")
     lines.append(f"💪 Боевая мощь: <b>{fmt_num(user.combat_power)}</b>")
 
     builder = InlineKeyboardBuilder()
@@ -210,8 +210,8 @@ async def cb_campaigns_new(cb: CallbackQuery, session: AsyncSession, user: User)
         await cb.answer(reason, show_alert=True)
         return
 
-    available = await campaign_service.get_available_statists(session, user.id)
-    if not available:
+    available_count = await campaign_service.count_available_statists(session, user.id)
+    if not available_count:
         await cb.answer("Нет свободных статистов для похода!", show_alert=True)
         return
 
@@ -248,15 +248,14 @@ async def cb_campaigns_res(cb: CallbackQuery, session: AsyncSession, user: User)
         await cb.answer("Ошибка: неизвестный ресурс", show_alert=True)
         return
 
-    available = await campaign_service.get_available_statists(session, user.id)
-    avg_all = int(sum(m.base_power for m in available) / len(available)) if available else 0
+    avail_count, avg_all = await campaign_service.get_available_stats(session, user.id)
 
     res_cfg = CAMPAIGN_RESOURCE_MAP[resource_id]
     builder = InlineKeyboardBuilder()
 
     lines = [
         f"🗺 <b>Новый поход</b> — {res_cfg.emoji} {res_cfg.label}\n",
-        f"👥 Доступно статистов: <b>{len(available)}</b>",
+        f"👥 Доступно статистов: <b>{avail_count}</b>",
         f"💪 Средняя мощь: <b>{fmt_num(avg_all)}</b>\n",
         "Выбери ранг задания:\n",
         "─" * 20,
@@ -298,8 +297,7 @@ async def cb_campaigns_rank(cb: CallbackQuery, session: AsyncSession, user: User
 
     res_cfg = CAMPAIGN_RESOURCE_MAP[resource_id]
     rank_cfg = CAMPAIGN_RANK_MAP[task_rank]
-    available = await campaign_service.get_available_statists(session, user.id)
-    avg_all = int(sum(m.base_power for m in available) / len(available)) if available else 0
+    avail_count, avg_all = await campaign_service.get_available_stats(session, user.id)
 
     builder = InlineKeyboardBuilder()
     lines = [
@@ -309,7 +307,7 @@ async def cb_campaigns_rank(cb: CallbackQuery, session: AsyncSession, user: User
     ]
 
     for h in CAMPAIGN_DURATIONS_HOURS:
-        preview = campaign_service.calc_preview(avg_all, task_rank, resource_id, h, len(available) or 1)
+        preview = campaign_service.calc_preview(avg_all, task_rank, resource_id, h, avail_count or 1)
         max_res = preview["resource_max"]
         builder.row(InlineKeyboardButton(
             text=f"⏱ {_duration_label(h)}  →  до {fmt_num(max_res)} {res_cfg.emoji}",
@@ -356,9 +354,9 @@ async def cb_campaigns_dur(cb: CallbackQuery, session: AsyncSession, user: User)
     res_cfg = CAMPAIGN_RESOURCE_MAP[resource_id]
     rank_cfg = CAMPAIGN_RANK_MAP[task_rank]
 
-    # Группируем доступных статистов по рангу
-    by_rank = await campaign_service.get_available_by_rank(session, user.id)
-    total_available = sum(len(v) for v in by_rank.values())
+    # Группируем доступных статистов по рангу (count, avg_power) одним запросом
+    by_rank = await campaign_service.get_available_stats_by_rank(session, user.id)
+    total_available = sum(cnt for cnt, _ in by_rank.values())
 
     if total_available == 0:
         await cb.answer("Нет свободных статистов!", show_alert=True)
@@ -374,11 +372,9 @@ async def cb_campaigns_dur(cb: CallbackQuery, session: AsyncSession, user: User)
 
     res_cfg_dur = CAMPAIGN_RESOURCE_MAP[resource_id]
     for sr in STATIST_RANK_ORDER:
-        members = by_rank.get(sr, [])
-        if not members:
+        count, avg_p = by_rank.get(sr, (0, 0))
+        if not count:
             continue
-        count = len(members)
-        avg_p = int(sum(m.base_power for m in members) / count)
         prev = campaign_service.calc_preview(avg_p, task_rank, resource_id, hours, count, sr)
         chance = prev["success_chance"]
         icon = "✅" if chance >= 50 else ("⚠️" if chance >= 20 else "❌")
@@ -428,14 +424,12 @@ async def cb_campaigns_srank(cb: CallbackQuery, session: AsyncSession, user: Use
         return
 
     # Статисты выбранного ранга
-    available = await campaign_service.get_available_statists(session, user.id, statist_rank)
-    avail_count = len(available)
+    avail_count, avg_power = await campaign_service.get_available_stats(session, user.id, statist_rank)
 
     if avail_count == 0:
         await cb.answer(f"Нет свободных статистов ранга {statist_rank}!", show_alert=True)
         return
 
-    avg_power = int(sum(m.base_power for m in available) / avail_count)
     res_cfg = CAMPAIGN_RESOURCE_MAP[resource_id]
     rank_cfg = CAMPAIGN_RANK_MAP[task_rank]
 
@@ -514,16 +508,15 @@ async def cb_campaigns_cnt(cb: CallbackQuery, session: AsyncSession, user: User)
         await cb.answer("Неизвестный ранг статистов", show_alert=True)
         return
 
-    available = await campaign_service.get_available_statists(session, user.id, statist_rank)
-    avail_count = len(available)
+    avail_count = await campaign_service.count_available_statists(session, user.id, statist_rank)
     if cnt > avail_count:
         await cb.answer(
             f"Недостаточно статистов {statist_rank}: только {avail_count}", show_alert=True
         )
         return
 
-    # Средняя мощь слабейших из выбранного ранга
-    chosen = sorted(available, key=lambda m: m.base_power)[:cnt]
+    # Средняя мощь слабейших из выбранного ранга — ORDER BY + LIMIT на стороне БД
+    chosen = await campaign_service.get_weakest_available(session, user.id, statist_rank, cnt)
     avg_power = int(sum(m.base_power for m in chosen) / cnt) if cnt else 0
 
     res_cfg = CAMPAIGN_RESOURCE_MAP[resource_id]
@@ -652,8 +645,7 @@ async def cb_campaigns_custom(cb: CallbackQuery, session: AsyncSession, user: Us
         await cb.answer("Ошибка", show_alert=True)
         return
 
-    available = await campaign_service.get_available_statists(session, user.id, statist_rank)
-    avail_count = len(available)
+    avail_count = await campaign_service.count_available_statists(session, user.id, statist_rank)
     if avail_count == 0:
         await cb.answer(f"Нет свободных статистов ранга {statist_rank}!", show_alert=True)
         return
@@ -702,13 +694,12 @@ async def msg_campaigns_custom_count(msg: Message, session: AsyncSession, user: 
     await state.clear()
 
     # Проверяем актуальное наличие статистов
-    available = await campaign_service.get_available_statists(session, user.id, statist_rank)
-    if cnt > len(available):
-        await msg.answer(f"❌ Недостаточно свободных статистов {statist_rank}: доступно {len(available)}")
+    real_avail = await campaign_service.count_available_statists(session, user.id, statist_rank)
+    if cnt > real_avail:
+        await msg.answer(f"❌ Недостаточно свободных статистов {statist_rank}: доступно {real_avail}")
         return
 
-    avg_power = int(sum(m.base_power for m in available) / len(available)) if available else 0
-    chosen = sorted(available, key=lambda m: m.base_power)[:cnt]
+    chosen = await campaign_service.get_weakest_available(session, user.id, statist_rank, cnt)
     avg_power = int(sum(m.base_power for m in chosen) / cnt) if cnt else 0
 
     res_cfg = CAMPAIGN_RESOURCE_MAP[resource_id]

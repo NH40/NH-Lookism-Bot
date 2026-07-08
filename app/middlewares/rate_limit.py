@@ -113,6 +113,14 @@ class RateLimitMiddleware(BaseMiddleware):
                     )
                 except Exception:
                     pass
+            elif isinstance(event, Message):
+                try:
+                    await event.answer(
+                        "⛔ Вы временно заблокированы за использование скриптов.\n"
+                        "Попробуйте через несколько минут."
+                    )
+                except Exception:
+                    pass
             return None
 
         count = await self._record_request(uid)
@@ -127,6 +135,13 @@ class RateLimitMiddleware(BaseMiddleware):
             if isinstance(event, CallbackQuery):
                 try:
                     await event.answer()
+                except Exception:
+                    pass
+            elif isinstance(event, Message):
+                # Раньше Message-события (напр. /start) тут молча дропались без
+                # ответа — игрок думал что бот завис. Хотя бы раз в окно даём знать.
+                try:
+                    await event.answer("⏳ Слишком много запросов, подожди секунду...")
                 except Exception:
                     pass
             return None

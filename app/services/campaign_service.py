@@ -24,7 +24,7 @@ import random
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants.campaigns import (
@@ -122,13 +122,8 @@ class CampaignService:
             return False, f"Уже активно {count}/{MAX_ACTIVE_CAMPAIGNS} походов"
         return True, ""
 
-    async def get_available_statists(
-        self,
-        session: AsyncSession,
-        user_id: int,
-        statist_rank: str | None = None,
-    ) -> list[SquadMember]:
-        """Статисты, НЕ занятые в активных походах. Опционально — только указанного ранга."""
+    async def _get_busy_ids(self, session: AsyncSession, user_id: int) -> set[int]:
+        """ID статистов, занятых в активных походах (максимум 3 похода × 200 = 600)."""
         active = await campaign_repo.get_active(session, user_id)
         busy_ids: set[int] = set()
         for c in active:
@@ -136,25 +131,81 @@ class CampaignService:
                 busy_ids.update(json.loads(c.statist_ids))
             except Exception:
                 pass
+        return busy_ids
 
-        q = select(SquadMember).where(SquadMember.user_id == user_id)
-        if statist_rank:
-            q = q.where(SquadMember.rank == statist_rank)
-        result = await session.execute(q)
-        all_members = list(result.scalars().all())
-        return [m for m in all_members if m.id not in busy_ids]
-
-    async def get_available_by_rank(
+    async def count_available_statists(
         self,
         session: AsyncSession,
         user_id: int,
-    ) -> dict[str, list[SquadMember]]:
-        """Свободные статисты, сгруппированные по рангу."""
-        all_available = await self.get_available_statists(session, user_id)
-        grouped: dict[str, list[SquadMember]] = {}
-        for m in all_available:
-            grouped.setdefault(m.rank, []).append(m)
-        return grouped
+        statist_rank: str | None = None,
+    ) -> int:
+        """Количество доступных статистов — COUNT на стороне БД, без загрузки строк
+        (игрок может держать сотни тысяч статистов — грузить их все в Python нельзя,
+        это блокирует event loop и вешает бота для всех остальных)."""
+        busy_ids = await self._get_busy_ids(session, user_id)
+        q = select(func.count(SquadMember.id)).where(SquadMember.user_id == user_id)
+        if statist_rank:
+            q = q.where(SquadMember.rank == statist_rank)
+        if busy_ids:
+            q = q.where(SquadMember.id.notin_(busy_ids))
+        return await session.scalar(q) or 0
+
+    async def get_available_stats(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        statist_rank: str | None = None,
+    ) -> tuple[int, int]:
+        """(количество, средняя base_power) среди доступных — один агрегирующий запрос."""
+        busy_ids = await self._get_busy_ids(session, user_id)
+        q = select(
+            func.count(SquadMember.id), func.avg(SquadMember.base_power)
+        ).where(SquadMember.user_id == user_id)
+        if statist_rank:
+            q = q.where(SquadMember.rank == statist_rank)
+        if busy_ids:
+            q = q.where(SquadMember.id.notin_(busy_ids))
+        count, avg_power = (await session.execute(q)).one()
+        return count or 0, int(avg_power) if avg_power is not None else 0
+
+    async def get_available_stats_by_rank(
+        self,
+        session: AsyncSession,
+        user_id: int,
+    ) -> dict[str, tuple[int, int]]:
+        """{ранг: (количество, средняя base_power)} среди доступных — один GROUP BY."""
+        busy_ids = await self._get_busy_ids(session, user_id)
+        q = (
+            select(SquadMember.rank, func.count(SquadMember.id), func.avg(SquadMember.base_power))
+            .where(SquadMember.user_id == user_id)
+            .group_by(SquadMember.rank)
+        )
+        if busy_ids:
+            q = q.where(SquadMember.id.notin_(busy_ids))
+        rows = (await session.execute(q)).all()
+        return {
+            rank: (cnt or 0, int(avg_p) if avg_p is not None else 0)
+            for rank, cnt, avg_p in rows
+        }
+
+    async def get_weakest_available(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        statist_rank: str | None,
+        limit: int,
+    ) -> list[SquadMember]:
+        """Слабейшие `limit` доступных статистов — ORDER BY + LIMIT на стороне БД.
+        Не грузит всю коллекцию игрока в Python (см. count_available_statists)."""
+        busy_ids = await self._get_busy_ids(session, user_id)
+        q = select(SquadMember).where(SquadMember.user_id == user_id)
+        if statist_rank:
+            q = q.where(SquadMember.rank == statist_rank)
+        if busy_ids:
+            q = q.where(SquadMember.id.notin_(busy_ids))
+        q = q.order_by(SquadMember.base_power.asc()).limit(limit)
+        result = await session.execute(q)
+        return list(result.scalars().all())
 
     async def start_campaign(
         self,
@@ -197,19 +248,19 @@ class CampaignService:
                 "campaign": None,
             }
 
-        available = await self.get_available_statists(session, locked_user.id, statist_rank)
-        if statist_count > len(available):
+        count_available = await self.count_available_statists(session, locked_user.id, statist_rank)
+        if statist_count > count_available:
             rank_label = f" ранга {statist_rank}" if statist_rank else ""
             return {
                 "ok": False,
-                "reason": f"Недостаточно свободных статистов{rank_label} (доступно {len(available)})",
+                "reason": f"Недостаточно свободных статистов{rank_label} (доступно {count_available})",
                 "campaign": None,
             }
         statist_count = min(statist_count, MAX_STATISTS_PER_CAMPAIGN)
 
-        # Берём самых слабых (по base_power) — чтобы сильных не трогать
-        available_sorted = sorted(available, key=lambda m: m.base_power)
-        chosen = available_sorted[:statist_count]
+        # Берём самых слабых (по base_power) — чтобы сильных не трогать.
+        # ORDER BY + LIMIT на стороне БД — не грузим всю коллекцию игрока в Python.
+        chosen = await self.get_weakest_available(session, locked_user.id, statist_rank, statist_count)
         chosen_ids = [m.id for m in chosen]
 
         avg_power = int(sum(m.base_power for m in chosen) / len(chosen)) if chosen else 0

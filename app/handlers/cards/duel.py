@@ -68,6 +68,7 @@ async def cb_duel_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     pvp_mark = " ⏳" if pvp_ttl > 0 else ""
     builder.row(InlineKeyboardButton(text=f"⚔️ Против игрока{pvp_mark}", callback_data="duel_pvp"))
     builder.row(InlineKeyboardButton(text="⚡ Авто-колода (5 сильнейших)", callback_data="duel_auto_deck"))
+    builder.row(InlineKeyboardButton(text="🗑 Освободить колоду", callback_data="deck_clear_all"))
     builder.row(InlineKeyboardButton(text="◀️ К колоде", callback_data="deck"))
 
     text = (

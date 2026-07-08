@@ -16,6 +16,8 @@ async def campaign_tick() -> None:
     from app.models.user import User
     from sqlalchemy import select
 
+    to_notify: list[tuple[int, object, dict]] = []
+
     async with AsyncSessionFactory() as session:
         async with session.begin():
             expired = await campaign_repo.get_expired_active(session)
@@ -24,15 +26,27 @@ async def campaign_tick() -> None:
 
             logger.info(f"campaign_tick: обрабатываем {len(expired)} походов")
 
+            user_ids = {camp.user_id for camp in expired}
+            users_r = await session.execute(
+                select(User.id, User.tg_id, User.notifications_enabled).where(
+                    User.id.in_(user_ids)
+                )
+            )
+            users_map = {row.id: (row.tg_id, row.notifications_enabled) for row in users_r.all()}
+
             for camp in expired:
                 try:
                     result = await campaign_service.process_expired(session, camp)
-                    # Уведомляем игрока
-                    user = await session.get(User, camp.user_id)
-                    if user and getattr(user, "notifications_enabled", True):
-                        await _notify_player(user.tg_id, camp, result)
+                    info = users_map.get(camp.user_id)
+                    if info and info[1]:
+                        to_notify.append((info[0], camp, result))
                 except Exception as exc:
                     logger.error(f"campaign_tick error camp_id={camp.id}: {exc}")
+        # ← транзакция закрыта; соединение с БД освобождено
+
+    # Отправляем уведомления ПОСЛЕ коммита
+    for tg_id, camp, result in to_notify:
+        await _notify_player(tg_id, camp, result)
 
 
 async def _notify_player(tg_id: int, camp, result: dict) -> None:

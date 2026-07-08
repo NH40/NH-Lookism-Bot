@@ -183,6 +183,12 @@ async def cb_market_item(cb: CallbackQuery, session: AsyncSession, user: User):
 
 @router.callback_query(F.data.startswith("market_buy:"))
 async def cb_market_buy(cb: CallbackQuery, session: AsyncSession, user: User):
+    from app.services.cooldown_service import cooldown_service
+    lock_key = cooldown_service.market_buy_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("⏳ Подожди...", show_alert=False)
+        return
+
     listing_id = int(cb.data.split(":")[1])
     result = await market_service.buy_listing(session, user, listing_id)
 

@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import DateTime, Integer, String, func
+from sqlalchemy import BigInteger, DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
@@ -13,10 +13,10 @@ class UserCharacter(Base):
     rank: Mapped[str] = mapped_column(String(32), nullable=False)
 
     # base_power — оригинальная мощь из таблицы CHARACTERS (не изменяется)
-    base_power: Mapped[int] = mapped_column(Integer, default=0)
+    base_power: Mapped[int] = mapped_column(BigInteger, default=0)
     # power — эффективная мощь с учётом уровня (= base_power * LEVEL_MULTIPLIERS[level])
     # используется для расчёта боевой мощи в squad_repo
-    power: Mapped[int] = mapped_column(Integer, default=0)
+    power: Mapped[int] = mapped_column(BigInteger, default=0)
 
     # Уровень карточки: 0-3
     level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

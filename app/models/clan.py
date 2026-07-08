@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Index, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
@@ -72,6 +72,9 @@ class ClanInvite(Base):
 
 class ClanWar(Base):
     __tablename__ = "clan_wars"
+    __table_args__ = (
+        Index("ix_clan_wars_finished_ends_at", "is_finished", "ends_at"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     clan1_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)

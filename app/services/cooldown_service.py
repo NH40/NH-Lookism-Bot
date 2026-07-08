@@ -138,6 +138,10 @@ class CooldownService:
     def campaign_collect_lock_key(campaign_id: int) -> str:
         return f"lock:campaign_collect:{campaign_id}"
 
+    @staticmethod
+    def campaign_collect_all_lock_key(user_id: int) -> str:
+        return f"lock:campaign_collect_all:{user_id}"
+
     # ── Новые локи (защита от race condition) ──────────────────────────────
 
     @staticmethod
@@ -173,6 +177,10 @@ class CooldownService:
     @staticmethod
     def clan_shop_lock_key(clan_id: int) -> str:
         return f"lock:clan_shop:{clan_id}"
+
+    @staticmethod
+    def market_buy_lock_key(user_id: int) -> str:
+        return f"lock:market_buy:{user_id}"
 
     async def acquire_lock(self, key: str, ttl: int = 5) -> bool:
         """Returns True if lock acquired, False if already locked.

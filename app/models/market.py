@@ -1,11 +1,14 @@
 from datetime import datetime
-from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Index, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 
 class MarketListing(Base):
     __tablename__ = "market_listings"
+    __table_args__ = (
+        Index("ix_market_listings_active", "is_sold", "is_cancelled", "item_type"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     seller_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)

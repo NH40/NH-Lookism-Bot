@@ -141,12 +141,23 @@ async def _campaigns_text_kb(session: AsyncSession, user: User):
 
     builder = InlineKeyboardBuilder()
 
-    # Кнопки «Забрать» для завершённых
+    # Кнопки «Забрать» + «Повторить» для завершённых
     for c in finished:
         res_emoji = _resource_emoji(c.resource_type)
+        sr = getattr(c, "statist_rank", None) or "ERROR"
         builder.row(InlineKeyboardButton(
             text=f"🎁 Забрать: Ранг {c.rank} {res_emoji} +{fmt_num(c.resource_gained)}",
             callback_data=f"campaigns_collect:{c.id}",
+        ))
+        builder.row(InlineKeyboardButton(
+            text=f"🔁 Повторить (Ранг {c.rank}, {c.statist_count} стат.)",
+            callback_data=f"campaigns_repeat:{c.resource_type}:{c.rank}:{c.duration_hours}:{sr}:{c.statist_count}",
+        ))
+
+    if len(finished) > 1:
+        builder.row(InlineKeyboardButton(
+            text=f"📦 Собрать всё ({len(finished)})",
+            callback_data="campaigns_collect_all",
         ))
 
     # Кнопка нового похода
@@ -797,5 +808,76 @@ async def cb_campaigns_collect(cb: CallbackQuery, session: AsyncSession, user: U
     except Exception:
         pass
     await cb.answer("Результат получен!")
+
+
+@router.callback_query(F.data == "campaigns_collect_all")
+async def cb_campaigns_collect_all(cb: CallbackQuery, session: AsyncSession, user: User):
+    from app.services.cooldown_service import cooldown_service
+    lock_key = cooldown_service.campaign_collect_all_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
+        await cb.answer("⏳ Подождите...", show_alert=False)
+        return
+
+    result = await campaign_service.collect_all_finished(session, user)
+    if not result["ok"]:
+        await cb.answer(result.get("reason", "Нечего собирать"), show_alert=True)
+        return
+
+    from app.utils.region_activity import record
+    for _ in range(result["count"]):
+        await record(session, user.id, "campaign")
+
+    lines = [f"📦 <b>Собрано походов: {result['count']}</b>\n"]
+    for res_type, amount in result["totals"].items():
+        res_cfg = CAMPAIGN_RESOURCE_MAP.get(res_type)
+        emoji = res_cfg.emoji if res_cfg else "📦"
+        label = res_cfg.label if res_cfg else res_type
+        lines.append(f"{emoji} +{fmt_num(amount)} {label}")
+    lines.append(f"\n👤 Вернулось статистов: <b>{result['statists_returned']}</b>")
+    if result["statists_lost"]:
+        lines.append(f"💀 Погибло: <b>{result['statists_lost']}</b>")
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="🗺 К походам", callback_data="campaigns_menu"))
+    builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
+
+    try:
+        await cb.message.edit_text("\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML")
+    except Exception:
+        pass
+    await cb.answer("Собрано!")
+
+
+# ── Повтор похода ─────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data.startswith("campaigns_repeat:"))
+async def cb_campaigns_repeat(cb: CallbackQuery, session: AsyncSession, user: User):
+    parts = cb.data.split(":")
+    resource_id, task_rank, hours_str, statist_rank, cnt_str = (
+        parts[1], parts[2], parts[3], parts[4], parts[5]
+    )
+    hours, cnt = int(hours_str), int(cnt_str)
+
+    from app.services.cooldown_service import cooldown_service
+    lock_key = cooldown_service.campaign_launch_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
+        await cb.answer("⏳ Подождите...", show_alert=False)
+        return
+
+    result = await campaign_service.start_campaign(
+        session=session, user=user,
+        resource_type=resource_id, rank=task_rank,
+        duration_hours=hours, statist_count=cnt,
+        statist_rank=None if statist_rank == "ERROR" else statist_rank,
+    )
+    if not result["ok"]:
+        await cb.answer(result["reason"], show_alert=True)
+        return
+
+    from app.utils.region_activity import record
+    await record(session, user.id, "campaign")
+
+    await cb.answer("🔁 Поход повторён!", show_alert=True)
+    await cb_campaigns_menu(cb, session, user)
 
 

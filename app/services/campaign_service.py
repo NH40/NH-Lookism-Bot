@@ -293,6 +293,41 @@ class CampaignService:
         await campaign_repo.delete(session, camp)
         return result
 
+    async def collect_all_finished(
+        self, session: AsyncSession, user: User
+    ) -> dict:
+        """Собирает разом все завершённые походы игрока (кнопка «Собрать всё»)."""
+        finished = await campaign_repo.get_finished(session, user.id)
+        if not finished:
+            return {"ok": False, "reason": "Нечего собирать"}
+
+        totals: dict[str, int] = {}
+        statists_returned = 0
+        statists_lost = 0
+        count = 0
+
+        for camp in finished:
+            result = await self.collect_campaign(session, user, camp.id)
+            if not result["ok"]:
+                continue
+            count += 1
+            totals[result["resource_type"]] = (
+                totals.get(result["resource_type"], 0) + result["resource_gained"]
+            )
+            statists_returned += result["statists_returned"]
+            statists_lost += result["statists_lost"]
+
+        if count == 0:
+            return {"ok": False, "reason": "Нечего собирать"}
+
+        return {
+            "ok": True,
+            "count": count,
+            "totals": totals,
+            "statists_returned": statists_returned,
+            "statists_lost": statists_lost,
+        }
+
     # ── Вызывается планировщиком ──────────────────────────────────────────────
 
     async def process_expired(self, session: AsyncSession, camp: Campaign) -> dict:

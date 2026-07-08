@@ -248,6 +248,7 @@ class User(Base):
     notif_cities: Mapped[bool] = mapped_column(Boolean, default=True)
     notif_clan_war: Mapped[bool] = mapped_column(Boolean, default=True)
     notif_boss: Mapped[bool] = mapped_column(Boolean, default=True)
+    notif_achievements: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

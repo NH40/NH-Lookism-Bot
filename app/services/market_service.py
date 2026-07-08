@@ -154,13 +154,25 @@ class MarketService:
             return {"ok": False, "reason": "Товар уже куплен или не найден"}
         if listing.seller_id == buyer.id:
             return {"ok": False, "reason": "Нельзя купить свой товар"}
-        if buyer.nh_coins < listing.price:
+
+        # Блокируем строки покупателя и продавца перед изменением баланса —
+        # без этого два одновременных запроса на покупку РАЗНЫХ лотов одним
+        # покупателем (или продажа двух лотов одному продавцу) читают старый
+        # nh_coins под READ COMMITTED, и один из коммитов затирает другой
+        # (lost update — баланс "теряется" или дублируется).
+        locked_buyer = await session.scalar(
+            select(User).where(User.id == buyer.id).with_for_update()
+        )
+        if not locked_buyer:
+            return {"ok": False, "reason": "Пользователь не найден"}
+        if locked_buyer.nh_coins < listing.price:
             return {"ok": False, "reason": f"Недостаточно NHCoin (нужно {listing.price:,})"}
 
-        buyer.nh_coins -= listing.price
+        locked_buyer.nh_coins -= listing.price
 
-        from app.repositories.user_repo import user_repo
-        seller = await user_repo.get_by_id(session, listing.seller_id)
+        seller = await session.scalar(
+            select(User).where(User.id == listing.seller_id).with_for_update()
+        )
         if seller:
             seller.nh_coins += listing.price
 

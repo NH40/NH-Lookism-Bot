@@ -44,8 +44,13 @@ _ACH_CATEGORIES = [
     ("💸 Траты",         ["spend_100k", "spend_1m", "spend_5m"]),
     ("⚔️ Победы",        ["wins_10", "wins_100", "wins_500", "wins_1000"]),
     ("🏛 Аукцион",       ["auction_win_1", "auction_win_5"]),
+    ("👹 Рейды",         ["raid_boss_1", "raid_boss_10", "raid_boss_100"]),
+    ("🪖 Армия",         ["army_100k", "army_1m"]),
+    ("🌀 Путь и УИ",     ["path_max", "ui_master", "med_genius_master"]),
+    ("📋 Задания",       ["quests_100", "quests_500", "quests_1000"]),
+    ("💱 Биржа",         ["market_10", "market_100"]),
     ("🎯 Особые",        ["future_masterpiece", "shadow_syndicate"]),
-    ("📦 Коллекция",     ["all_achievements", "absolute"]),
+    ("📦 Коллекция",     ["collect_rank_complete", "all_achievements", "absolute"]),
     ("🔐 Секретные",     ["settings_100", "settings_500"]),
 ]
 _ACH_PAGE_SIZE = 5  # категорий на странице

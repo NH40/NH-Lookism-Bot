@@ -131,6 +131,7 @@ async def _notify_boss_result(result: dict) -> None:
 
         # Уведомление для всех участников
         rewards_map: dict[int, dict] = {r["user_id"]: r for r in result["rewards"]}
+        personal_notifs: list[tuple[int, str]] = []
 
         async with AsyncSessionFactory() as session:
             if rewards_map:
@@ -174,10 +175,7 @@ async def _notify_boss_result(result: dict) -> None:
                     if coins_delta:
                         sign = "+" if coins_delta > 0 else ""
                         personal_text += f"\n💰 Монеты: <b>{sign}{fcoins(abs(coins_delta))}</b>"
-                    try:
-                        await bot.send_message(u.tg_id, personal_text, parse_mode="HTML")
-                    except Exception:
-                        pass
+                    personal_notifs.append((u.tg_id, personal_text))
 
             # Глобальное уведомление (всем с нотификациями о боссах)
             next_spawn_at = result.get("next_spawn_at")
@@ -202,6 +200,19 @@ async def _notify_boss_result(result: dict) -> None:
                 )
             )
             all_tg_ids = list(all_result.scalars().all())
+        # ← сессия закрыта; дальше только сеть, без удержания соединения с БД
+
+        import asyncio
+        from app.scheduler.tasks.notifications import _NOTIF_SEM
+
+        async def _send_personal(tg_id: int, text: str) -> None:
+            async with _NOTIF_SEM:
+                try:
+                    await bot.send_message(tg_id, text, parse_mode="HTML")
+                except Exception:
+                    pass
+
+        await asyncio.gather(*[_send_personal(tg_id, text) for tg_id, text in personal_notifs])
 
         await _send_notifications(bot, all_tg_ids, global_text)
         logger.info(f"boss_tick: уведомление о финале отправлено {len(all_tg_ids)} игрокам")

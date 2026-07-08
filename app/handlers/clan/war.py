@@ -75,21 +75,28 @@ async def cb_clan_war_type(cb: CallbackQuery, session: AsyncSession, user: User,
     clans = await clan_service.get_top_clans(session, limit=20)
     my_clan = await clan_service.get_user_clan(session, user.id)
 
+    # Один запрос вместо N: клан ID уже занятых войной
+    clan_ids = [clan.id for clan in clans]
+    busy_wars_r = await session.execute(
+        select(ClanWar.clan1_id, ClanWar.clan2_id).where(
+            ClanWar.is_finished == False,
+            (ClanWar.clan1_id.in_(clan_ids)) | (ClanWar.clan2_id.in_(clan_ids)),
+        )
+    )
+    busy_clan_ids: set[int] = set()
+    for c1, c2 in busy_wars_r.all():
+        busy_clan_ids.add(c1)
+        busy_clan_ids.add(c2)
+
     builder = InlineKeyboardBuilder()
     for clan in clans:
         if my_clan and clan.id == my_clan.id:
             continue
-        # Проверяем не в войне ли противник
-        enemy_war = await session.scalar(
-            select(ClanWar).where(
-                ClanWar.is_finished == False,
-                (ClanWar.clan1_id == clan.id) | (ClanWar.clan2_id == clan.id)
-            )
-        )
-        icon = "⚔️" if not enemy_war else "🔒"
+        is_busy = clan.id in busy_clan_ids
+        icon = "⚔️" if not is_busy else "🔒"
         builder.row(InlineKeyboardButton(
             text=f"{icon} {html.escape(clan.name)} | 💪{fmt_num(clan.combat_power)}",
-            callback_data=f"clan_war_start:{clan.id}:{war_type}" if not enemy_war else "noop_clan"
+            callback_data=f"clan_war_start:{clan.id}:{war_type}" if not is_busy else "noop_clan"
         ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clan_war"))
 
@@ -131,26 +138,24 @@ async def cb_clan_war_start(cb: CallbackQuery, session: AsyncSession, user: User
     # Уведомляем врага
     from app.bot_instance import get_bot
     bot = get_bot()
-    enemy_owner = await session.scalar(select(User).where(User.id == target_clan.owner_id))
-    if bot and enemy_owner:
+    if bot:
         type_name = "вооружения" if war_type == "power" else "богатств"
-        # Уведомляем всех участников вражеского клана
+        # Уведомляем всех участников вражеского клана (один запрос вместо N)
         from app.models.clan import ClanMember
-        members_r = await session.execute(select(ClanMember).where(ClanMember.clan_id == target_clan.id))
-        for m in members_r.scalars().all():
-            target_user = await session.scalar(select(User).where(User.id == m.user_id))
-            if target_user:
-                try:
-                    await bot.send_message(
-                        target_user.tg_id,
-                        f"⚔️ <b>Война началась!</b>\n\n"
-                        f"Клан <b>{html.escape(my_clan.name)}</b> объявил войну вашему клану!\n"
-                        f"Тип: война {type_name}\n"
-                        f"Длится {h} часов.",
-                        parse_mode="HTML",
-                    )
-                except Exception:
-                    pass
+        from app.scheduler.tasks.notifications import _send_notifications
+        tg_ids_r = await session.execute(
+            select(User.tg_id)
+            .join(ClanMember, ClanMember.user_id == User.id)
+            .where(ClanMember.clan_id == target_clan.id)
+        )
+        tg_ids = list(tg_ids_r.scalars())
+        await _send_notifications(
+            bot, tg_ids,
+            f"⚔️ <b>Война началась!</b>\n\n"
+            f"Клан <b>{html.escape(my_clan.name)}</b> объявил войну вашему клану!\n"
+            f"Тип: война {type_name}\n"
+            f"Длится {h} часов.",
+        )
 
     from app.handlers.clan.main import cb_clans_menu
     await cb_clans_menu(cb, session, user)

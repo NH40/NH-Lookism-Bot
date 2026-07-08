@@ -157,6 +157,7 @@ async def cb_notifications_menu(cb: CallbackQuery, session: AsyncSession, user: 
     cities    = getattr(user, "notif_cities",   True)
     clan_war  = getattr(user, "notif_clan_war", True)
     boss      = getattr(user, "notif_boss",     True)
+    ach       = getattr(user, "notif_achievements", True)
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
@@ -187,6 +188,10 @@ async def cb_notifications_menu(cb: CallbackQuery, session: AsyncSession, user: 
             text=f"{_notif_icon(boss)} ⚔️ Боссы (спавн/финал): {_on_off(boss)}",
             callback_data="toggle_notif:boss"
         ))
+        builder.row(InlineKeyboardButton(
+            text=f"{_notif_icon(ach)} 🥇 Достижения: {_on_off(ach)}",
+            callback_data="toggle_notif:achievements"
+        ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="settings"))
 
     lines = [
@@ -201,6 +206,7 @@ async def cb_notifications_menu(cb: CallbackQuery, session: AsyncSession, user: 
             f"🏙 Прогресс городов: <b>{_on_off(cities)}</b>",
             f"🏯 Клановые войны: <b>{_on_off(clan_war)}</b>",
             f"⚔️ Боссы: <b>{_on_off(boss)}</b>",
+            f"🥇 Достижения: <b>{_on_off(ach)}</b>",
         ]
     else:
         lines.append(f"\n<i>Включи мастер-переключатель чтобы настроить категории</i>")
@@ -227,6 +233,8 @@ async def cb_toggle_notif(cb: CallbackQuery, session: AsyncSession, user: User):
         user.notif_clan_war = not getattr(user, "notif_clan_war", True)
     elif key == "boss":
         user.notif_boss = not getattr(user, "notif_boss", True)
+    elif key == "achievements":
+        user.notif_achievements = not getattr(user, "notif_achievements", True)
     await session.flush()
     await cb_notifications_menu(cb, session, user)
 

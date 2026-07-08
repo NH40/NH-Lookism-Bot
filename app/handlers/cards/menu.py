@@ -6,10 +6,13 @@ from aiogram.types import InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
 from collections import defaultdict
 
+from sqlalchemy import select
+
 from app.models.user import User
+from app.models.character import UserCharacter
 from app.services.cooldown_service import cooldown_service
 from app.repositories.character_repo import character_repo
-from app.utils.formatters import fmt_num, fmt_ttl
+from app.utils.formatters import fmt_num, fmt_ttl, fmt_power
 from app.data.characters import RANK_CONFIG_MAP, RANK_EMOJI, CHARACTERS
 from app.services.potion_service import potion_service
 from app.constants.cards import TICKET_CRAFT_COST
@@ -152,7 +155,7 @@ async def cb_deck_rates(cb: CallbackQuery, session: AsyncSession, user: User):
 
 
 @router.callback_query(F.data.startswith("deck_rates_rank:"))
-async def cb_deck_rates_rank(cb: CallbackQuery):
+async def cb_deck_rates_rank(cb: CallbackQuery, session: AsyncSession, user: User):
     rank = cb.data.split(":")[1]
     rank_weights, rank_chars, total_weight = _build_rank_weights()
 
@@ -162,11 +165,17 @@ async def cb_deck_rates_rank(cb: CallbackQuery):
     label = cfg.label if cfg else rank
     pct = rank_weights.get(rank, 0) / total_weight * 100 if total_weight else 0
 
+    owned_r = await session.execute(
+        select(UserCharacter.character_id).where(UserCharacter.user_id == user.id).distinct()
+    )
+    owned = set(owned_r.scalars().all())
+
     lines = [f"{emoji} <b>{label}</b> — {pct:.2f}%\n"]
     lines.append(f"Всего персонажей: <b>{len(chars)}</b>\n")
 
     for i, char in enumerate(chars, 1):
-        lines.append(f"{i}. {char['name']}")
+        power_str = fmt_power(char["power"]) if char["name"] in owned else "???"
+        lines.append(f"{i}. {char['name']} — 💪 {power_str}")
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="◀️ К шансам", callback_data="deck_rates"))

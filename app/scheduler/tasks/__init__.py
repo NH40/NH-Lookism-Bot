@@ -14,6 +14,7 @@ from app.scheduler.tasks.bank import (
 from app.scheduler.tasks.campaign import campaign_tick
 from app.scheduler.tasks.boss import boss_tick
 from app.scheduler.tasks.war_genius import war_genius_tick
+from app.scheduler.tasks.achievements import achievement_tick
 
 __all__ = [
     "income_tick",
@@ -33,4 +34,5 @@ __all__ = [
     "campaign_tick",
     "boss_tick",
     "war_genius_tick",
+    "achievement_tick",
 ]

@@ -87,10 +87,20 @@ async def cb_my_deck(cb: CallbackQuery, session: AsyncSession, user: User):
         lines.append(f"\n💪 Мощь колоды: {fmt_power(total_power)}")
 
     builder.adjust(1)
+    if deck_slots:
+        builder.row(InlineKeyboardButton(text="🗑 Освободить колоду", callback_data="deck_clear_all"))
     builder.row(InlineKeyboardButton(text="◀️ К колоде", callback_data="deck"))
 
     await _safe_edit(cb, "\n".join(lines), reply_markup=builder.as_markup())
     await cb.answer()
+
+
+@router.callback_query(F.data == "deck_clear_all")
+async def cb_deck_clear_all(cb: CallbackQuery, session: AsyncSession, user: User):
+    await deck_slot_service.clear_all_slots(session, user.id)
+    await session.commit()
+    await cb.answer("🗑 Колода освобождена — все карточки доступны для слияния")
+    await cb_my_deck(cb, session, user)
 
 
 # ── Управление конкретным слотом ──────────────────────────────────────────────

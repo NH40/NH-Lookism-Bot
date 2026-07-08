@@ -2,7 +2,7 @@
 Банк: кредиты, хранилища, инвестиции.
 """
 from datetime import datetime
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, Integer, String, Text, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
@@ -12,6 +12,10 @@ from app.database import Base
 class BankCredit(Base):
     """Кредит игрока. Сохраняется через снос банды и престиж; удаляется только патчем."""
     __tablename__ = "bank_credits"
+    __table_args__ = (
+        Index("ix_bank_credits_block", "is_paid", "notif_block_sent", "block_at"),
+        Index("ix_bank_credits_delete", "is_paid", "notif_delete_sent", "delete_at"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)

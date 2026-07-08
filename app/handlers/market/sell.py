@@ -185,6 +185,8 @@ async def cb_market_create_type(
         balance_str = f"У вас: <b>{user.ui_fragments}</b> фрагментов УИ"
     elif item_type == "alchemy_fragments":
         balance_str = f"У вас: <b>{user.alchemy_fragments}</b> фрагментов алхимии"
+    elif item_type == "path_fragments":
+        balance_str = f"У вас: <b>{user.path_fragments or 0}</b> фрагментов Пути"
     elif item_type == "business_fragments":
         balance_str = f"У вас: <b>{user.business_fragments or 0}</b> фрагментов бизнеса"
     elif item_type == "war_points":

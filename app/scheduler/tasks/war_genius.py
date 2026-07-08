@@ -39,15 +39,28 @@ async def war_genius_tick() -> None:
             )
             users_map = {u.id: u for u in users_result.scalars().all()}
 
+            # Батч-загрузка активных рейдов одним запросом вместо N SELECT в цикле
+            raids_result = await session.execute(
+                select(RaidSession).where(
+                    RaidSession.user_id.in_(user_ids),
+                    RaidSession.is_finished == False,
+                )
+            )
+            raids_map: dict[int, RaidSession] = {}
+            for raid in raids_result.scalars().all():
+                raids_map.setdefault(raid.user_id, raid)
+
             for user_id in user_ids:
                 try:
                     async with session.begin_nested():
-                        await _auto_attack_for_user(session, user_id, users_map.get(user_id))
+                        await _auto_attack_for_user(
+                            session, user_id, users_map.get(user_id), raids_map.get(user_id)
+                        )
                 except Exception as exc:
                     logger.error(f"war_genius_tick: user_id={user_id} error: {exc}")
 
 
-async def _auto_attack_for_user(session, user_id: int, user=None) -> None:
+async def _auto_attack_for_user(session, user_id: int, user=None, raid=None) -> None:
     from app.services.cooldown_service import cooldown_service
     from app.services.raid_service import raid_service
 
@@ -67,14 +80,6 @@ async def _auto_attack_for_user(session, user_id: int, user=None) -> None:
         if pair:
             allowed_pairs.add(pair)
 
-    # Ищем активный рейд пользователя — берём первый (scalar_one_or_none упадёт при дубликатах в БД)
-    result = await session.execute(
-        select(RaidSession).where(
-            RaidSession.user_id == user_id,
-            RaidSession.is_finished == False,
-        )
-    )
-    raid = result.scalars().first()
     if not raid:
         return
 

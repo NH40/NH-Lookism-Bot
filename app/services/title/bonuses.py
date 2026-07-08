@@ -190,6 +190,14 @@ async def rebuild_base_bonuses(
                     current = getattr(user, field, 0)
                     setattr(user, field, current + int(value * multiplier))
 
+    # double_attack без extra_attack_count (например, только mon_dattack без
+    # mon_extra_atk1/2/3) должен давать минимум 1 бонусную атаку — иначе
+    # следующий reapply_all_titles обнулит extra_attack_count и игрок
+    # молча теряет одну атаку до пересчёта в _handle_attack_cd.
+    if user.double_attack:
+        from app.services.skill.path import _update_extra_attack
+        _update_extra_attack(user)
+
     _income_keys: dict[str, int] = {
         "coins_and_income": 5,
         "coins_and_income_2": 2,

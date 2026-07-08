@@ -157,15 +157,15 @@ class TitleService:
         self, session: AsyncSession, user: User
     ) -> list[dict]:
         granted = []
-        for ach in ACHIEVEMENTS:
-            already = await session.execute(
-                select(UserAchievement).where(
-                    UserAchievement.user_id == user.id,
-                    UserAchievement.achievement_id == ach.achievement_id,
-                    UserAchievement.claimed == True,
-                )
+        claimed_r = await session.execute(
+            select(UserAchievement.achievement_id).where(
+                UserAchievement.user_id == user.id,
+                UserAchievement.claimed == True,
             )
-            if already.scalars().first():
+        )
+        claimed_ids = set(claimed_r.scalars().all())
+        for ach in ACHIEVEMENTS:
+            if ach.achievement_id in claimed_ids:
                 continue
             if await self._check_condition_new(session, user, ach):
                 await self._grant_achievement_new(session, user, ach)

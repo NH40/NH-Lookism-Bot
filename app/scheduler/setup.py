@@ -14,6 +14,7 @@ from app.config.scheduler_config import (
     CAMPAIGN_TICK_MINUTES,
     BOSS_TICK_SECONDS,
     REGION_WAR_TICK_MINUTES,
+    ACHIEVEMENT_TICK_MINUTES,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ def setup_scheduler() -> AsyncIOScheduler:
         campaign_tick,
         boss_tick,
         war_genius_tick,
+        achievement_tick,
     )
 
     scheduler = AsyncIOScheduler()
@@ -176,5 +178,15 @@ def setup_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=60,
     )
 
-    logger.info("Scheduler configured with 15 jobs")
+    # ── Достижения: авто-проверка для недавно активных игроков ──────────────
+    scheduler.add_job(
+        achievement_tick,
+        trigger=IntervalTrigger(minutes=ACHIEVEMENT_TICK_MINUTES),
+        id="achievement_tick",
+        name="achievement_tick",
+        max_instances=1,
+        misfire_grace_time=60,
+    )
+
+    logger.info("Scheduler configured with 16 jobs")
     return scheduler

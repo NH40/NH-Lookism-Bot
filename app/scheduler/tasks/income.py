@@ -43,8 +43,17 @@ def _bulk_update_sql(deltas: dict[int, int]) -> str:
     Пример: UPDATE users SET nh_coins = nh_coins + v.delta
             FROM (VALUES (1,100),(2,200)) AS v(uid,delta)
             WHERE users.id = v.uid
+
+    Строки VALUES отсортированы по uid — Postgres блокирует затрагиваемые
+    строки users примерно в этом порядке. Без сортировки порядок блокировок
+    произвольный (порядок Python dict) и может отличаться от порядка,
+    в котором обычные одиночные UPDATE users SET ... WHERE id=X (покупки,
+    награды и т.д.) берут блокировку на то же множество строк — при
+    пересечении это даёт "deadlock detected" под нагрузкой (падало в проде).
     """
-    rows = ", ".join(f"({int(uid)}, {int(delta)})" for uid, delta in deltas.items())
+    rows = ", ".join(
+        f"({int(uid)}, {int(delta)})" for uid, delta in sorted(deltas.items())
+    )
     return f"""
         UPDATE users
         SET nh_coins = users.nh_coins + v.delta
@@ -218,8 +227,9 @@ async def _track_income_quests(user_deltas: dict[int, int]) -> None:
     if not active_deltas:
         return
 
-    # VALUES (uid, delta) — целые числа, SQL-инъекция невозможна
-    rows = ", ".join(f"({int(uid)}, {int(d)})" for uid, d in active_deltas.items())
+    # VALUES (uid, delta) — целые числа, SQL-инъекция невозможна.
+    # Сортировка по uid — тот же приём против дедлоков, см. _bulk_update_sql.
+    rows = ", ".join(f"({int(uid)}, {int(d)})" for uid, d in sorted(active_deltas.items()))
 
     try:
         async with AsyncSessionFactory() as session:

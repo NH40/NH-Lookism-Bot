@@ -15,16 +15,60 @@ CREDIT_DELETE_HOURS: int = 6
 # Максимальная сумма одного кредита: доход за CREDIT_INCOME_MINUTES минут
 CREDIT_INCOME_MINUTES: int = 60
 
-# ── Казино ────────────────────────────────────────────────────────────────────
-# Шанс победы (%)
-CASINO_WIN_CHANCE: int = 30
-# Множитель выплаты при победе (ставка × CASINO_WIN_MULTIPLIER)
-CASINO_WIN_MULTIPLIER: float = 2.0
+# ── Казино: общее ────────────────────────────────────────────────────────────
 # TTL истории ставок в Redis для детектора стратегии x3 (секунды)
 CASINO_HISTORY_TTL: int = 3_600
 # Граница детектора x3: ставка в диапазоне [ratio_min, ratio_max] от предыдущей считается x3
 CASINO_X3_RATIO_MIN: float = 2.7
 CASINO_X3_RATIO_MAX: float = 3.3
+
+# ── Слоты ─────────────────────────────────────────────────────────────────────
+# Порядок символов барабана
+SLOTS_SYMBOLS: list[str] = ["cherry", "lemon", "money", "diamond", "crown", "star"]
+SLOTS_SYMBOL_EMOJI: dict[str, str] = {
+    "cherry":  "🍒",
+    "lemon":   "🍋",
+    "money":   "💰",
+    "diamond": "💎",
+    "crown":   "👑",
+    "star":    "⭐️",
+}
+# Веса выпадения символа (чем больше — тем чаще выпадает)
+SLOTS_WEIGHTS: dict[str, int] = {
+    "cherry":  42,
+    "lemon":   24,
+    "money":   17,
+    "diamond": 10,
+    "crown":   5,
+    "star":    2,
+}
+# Множитель выплаты за тройку одинаковых символов
+SLOTS_MULTIPLIERS: dict[str, int] = {
+    "cherry":  2,
+    "lemon":   3,
+    "money":   5,
+    "diamond": 10,
+    "crown":   25,
+    "star":    100,
+}
+# Множитель при ровно 2 одинаковых символах (возврат ставки)
+SLOTS_PAIR_MULTIPLIER: float = 1.0
+
+# ── Блэкджек ──────────────────────────────────────────────────────────────────
+# Порог, на котором дилер обязан остановиться
+BLACKJACK_DEALER_STAND: int = 17
+# Множитель выплаты при обычной победе
+BLACKJACK_WIN_MULTIPLIER: float = 2.0
+# Множитель выплаты за блэкджек с двух карт
+BLACKJACK_NATURAL_MULTIPLIER: float = 2.5
+
+# ── Недельный рейтинг казино ────────────────────────────────────────────────
+# Награды топ-3 (только NHCoin + тикеты)
+CASINO_RATING_REWARDS: dict[int, dict[str, int]] = {
+    1: {"nh_coins": 200_000, "tickets": 15},
+    2: {"nh_coins": 100_000, "tickets": 10},
+    3: {"nh_coins": 50_000,  "tickets": 5},
+}
 
 # ── Ячейки хранилища ──────────────────────────────────────────────────────────
 # Максимальное число ячеек на игрока

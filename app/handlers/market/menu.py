@@ -21,6 +21,7 @@ async def cb_market_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="🛒 Покупатель", callback_data="market_buyer"))
     builder.row(InlineKeyboardButton(text="💰 Продавец", callback_data="market_seller"))
+    builder.row(InlineKeyboardButton(text="🔨 Аукционы", callback_data="market_auction_menu"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
     try:
         await cb.message.edit_text(

@@ -35,3 +35,12 @@ REGION_WAR_TICK_MINUTES: int = 5
 
 # Тик проверки новых достижений (только недавно активные игроки)
 ACHIEVEMENT_TICK_MINUTES: int = 15
+
+# Тик покерных столов (старт раздач, авто-действия по таймауту хода)
+POKER_TICK_SECONDS: int = 10
+
+# Тик аукционов биржи (завершение истёкших)
+MARKET_AUCTION_TICK_SECONDS: int = 60
+
+# Тик сверки Clan.combat_power с SUM(участников) — чинит дрейф от дельта-обновлений
+CLAN_POWER_RECONCILE_TICK_MINUTES: int = 60

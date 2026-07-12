@@ -127,6 +127,9 @@ class User(Base):
     total_statists_recruited: Mapped[int] = mapped_column(BigInteger, default=0)  # статистов завербовано всего
     daily_quests_completed: Mapped[int] = mapped_column(Integer, default=0)   # выполненных ежедневок
     market_sells: Mapped[int] = mapped_column(Integer, default=0)             # продаж на бирже
+    casino_weekly_coins_won: Mapped[int] = mapped_column(BigInteger, default=0)  # чистая прибыль казино в NHCoin за неделю (для рейтинга)
+    fame_alltime_points: Mapped[int] = mapped_column(BigInteger, default=0, index=True)  # Алея славы — активность за всё время, не сбрасывается
+    fame_patch_points: Mapped[int] = mapped_column(BigInteger, default=0, index=True)    # Зал славы — активность текущего патча, сброс при admin_patch_confirm
 
     # ── Учитель/Ученик ────────────────────────────────────────────────────
     referred_by: Mapped[int | None] = mapped_column(Integer)
@@ -249,6 +252,8 @@ class User(Base):
     notif_clan_war: Mapped[bool] = mapped_column(Boolean, default=True)
     notif_boss: Mapped[bool] = mapped_column(Boolean, default=True)
     notif_achievements: Mapped[bool] = mapped_column(Boolean, default=True)
+    notif_market_buy: Mapped[bool] = mapped_column(Boolean, default=True)
+    notif_market_sell: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update
 from app.models.user import User
 from app.models.market import MarketListing
+from app.services.bank.casino.common import CASINO_RESOURCES, get_balance, set_balance
 
 
 class MarketService:
@@ -42,7 +43,8 @@ class MarketService:
 
     async def create_listing(
         self, session: AsyncSession, user: User,
-        item_type: str, amount: int, price: int, meta: dict | None = None
+        item_type: str, amount: int, price: int, meta: dict | None = None,
+        resource: str = "nh_coins",
     ) -> dict:
         if item_type not in ITEM_TYPES:
             return {"ok": False, "reason": "Неизвестный тип товара"}
@@ -50,6 +52,8 @@ class MarketService:
             return {"ok": False, "reason": "Количество должно быть больше 0"}
         if price <= 0:
             return {"ok": False, "reason": "Цена должна быть больше 0"}
+        if resource not in CASINO_RESOURCES:
+            return {"ok": False, "reason": "Неизвестный ресурс оплаты"}
 
         # Блокируем строку пользователя на время операции.
         # Это предотвращает race condition: если два запроса
@@ -84,6 +88,7 @@ class MarketService:
             item_type=item_type,
             item_amount=amount,
             price=price,
+            resource=resource,
             item_meta=json.dumps(meta) if meta else None,
         )
         session.add(listing)
@@ -165,16 +170,19 @@ class MarketService:
         )
         if not locked_buyer:
             return {"ok": False, "reason": "Пользователь не найден"}
-        if locked_buyer.nh_coins < listing.price:
-            return {"ok": False, "reason": f"Недостаточно NHCoin (нужно {listing.price:,})"}
 
-        locked_buyer.nh_coins -= listing.price
+        resource = listing.resource or "nh_coins"
+        buyer_balance = get_balance(locked_buyer, resource)
+        if buyer_balance < listing.price:
+            return {"ok": False, "reason": f"Недостаточно {CASINO_RESOURCES.get(resource, resource)} (нужно {listing.price:,})"}
+
+        set_balance(locked_buyer, resource, buyer_balance - listing.price)
 
         seller = await session.scalar(
             select(User).where(User.id == listing.seller_id).with_for_update()
         )
         if seller:
-            seller.nh_coins += listing.price
+            set_balance(seller, resource, get_balance(seller, resource) + listing.price)
 
         meta = json.loads(listing.item_meta) if listing.item_meta else {}
         await self._give_resource(session, buyer, listing.item_type, listing.item_amount, meta)
@@ -193,7 +201,23 @@ class MarketService:
             "item_type": listing.item_type,
             "amount": listing.item_amount,
             "price": listing.price,
+            "resource": resource,
+            "seller_id": listing.seller_id,
         }
+
+    async def take_resource(
+        self, session: AsyncSession, user: User,
+        item_type: str, amount: int, meta: dict
+    ) -> dict:
+        """Публичная обёртка _take_resource — для переиспользования другими сервисами (аукционы)."""
+        return await self._take_resource(session, user, item_type, amount, meta)
+
+    async def give_resource(
+        self, session: AsyncSession, user: User,
+        item_type: str, amount: int, meta: dict
+    ) -> None:
+        """Публичная обёртка _give_resource — для переиспользования другими сервисами (аукционы)."""
+        await self._give_resource(session, user, item_type, amount, meta)
 
     async def _take_resource(
         self, session: AsyncSession, user: User,
@@ -250,15 +274,19 @@ class MarketService:
 
         elif item_type == "squad_member":
             from app.models.squad_member import SquadMember
+            from app.services.campaign_service import campaign_service
             rank = meta.get("rank") if meta else None
+            busy_ids = await campaign_service.get_busy_squad_ids(session, user.id)
             q = select(SquadMember).where(SquadMember.user_id == user.id)
+            if busy_ids:
+                q = q.where(SquadMember.id.notin_(busy_ids))
             if rank:
                 q = q.where(SquadMember.rank == rank)
             q = q.limit(amount)
             result = await session.execute(q)
             members = result.scalars().all()
             if len(members) < amount:
-                return {"ok": False, "reason": f"Недостаточно статистов (есть {len(members)})"}
+                return {"ok": False, "reason": f"Недостаточно статистов (есть {len(members)}, часть могут быть в походе)"}
             avg_power = int(sum(m.base_power for m in members) / len(members)) if members else 1000
             meta["power"] = avg_power
             for m in members:

@@ -58,8 +58,11 @@ async def cb_squad(cb: CallbackQuery, session: AsyncSession, user: User):
     builder.row(InlineKeyboardButton(text="🗒 Состав армии", callback_data="squad_list"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
 
+    from app.services.potion_service import potion_service
+    effective_influence = await potion_service.get_effective_influence(session, user)
+
     ranks_str = _phase_ranks_str(user.phase)
-    expected_recruits = _calc_recruit_count(user.influence, user.recruit_count_bonus)
+    expected_recruits = _calc_recruit_count(effective_influence, user.recruit_count_bonus)
     if user.double_recruit:
         expected_recruits *= 2
 

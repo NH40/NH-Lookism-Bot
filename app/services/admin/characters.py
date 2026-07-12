@@ -16,6 +16,7 @@ class AdminCharactersMixin:
             user_id=user.id,
             character_id=char_data["name"],
             rank=char_data["rank"],
+            base_power=char_data["power"],
             power=char_data["power"],
         )
         session.add(char)
@@ -38,6 +39,7 @@ class AdminCharactersMixin:
             user_id=user.id,
             character_id=char_data["name"],
             rank=char_data["rank"],
+            base_power=char_data["power"],
             power=char_data["power"],
         )
         session.add(char)

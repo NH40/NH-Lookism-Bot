@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.models.user import User
 from app.models.skill import UserMastery
-from app.utils.formatters import skill_path_label
+from app.utils.formatters import skill_path_label, progress_bar, pair_lines
 from app.constants.training import WAR_GENIUS_LEVEL_COSTS, WAR_GENIUS_BOSS_LABELS
 
 router = Router()
@@ -49,16 +49,25 @@ async def cb_skills(cb: CallbackQuery, session: AsyncSession, user: User):
 
     text = (
         f"⚡ <b>Навыки</b>\n\n"
-        f"💎 Очки пути: <b>{user.skill_path_points}</b>\n"
-        f"⚔️ Очки войны: <b>{war_points}</b>\n\n"
+        f"💎 Очков пути: <b>{user.skill_path_points}</b>   ⚔️ Очков войны: <b>{war_points}</b>\n\n"
+        f"━━━ 📊 Статус ━━━\n"
         f"🗺 Путь: {path_emoji} <b>{skill_path_label(user.skill_path)}</b>\n"
         f"👁 Ультра Инстинкт: {ui_status}\n"
         f"🩺 Гений медицины: <b>{mg_status}</b>\n"
-        f"⚔️ Гений войны: <b>{wg_status}</b>\n"
-        f"🎖 Гений бизнеса: <b>{bg_status}</b>\n\n"
+        f"⚔️ Гений войны {progress_bar(war_genius, 5)} {war_genius}/5\n"
+        f"🎖 Гений бизнеса {progress_bar(biz_genius, 5)} {biz_genius}/5\n\n"
         f"Выбери раздел:"
     )
-    await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    if cb.message.photo:
+        # Раздел «Путь» отправляет фото (caption), а не текст — edit_text на таком
+        # сообщении падает с "there is no text in the message to edit".
+        try:
+            await cb.message.delete()
+        except Exception:
+            pass
+        await cb.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    else:
+        await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
 
 @router.callback_query(F.data == "war_genius_menu")
@@ -87,23 +96,26 @@ async def cb_war_genius_menu(cb: CallbackQuery, session: AsyncSession, user: Use
         "🎖 <b>Гений войны</b>",
         "",
         f"⚔️ Очков войны: <b>{war_points}</b>",
-        f"Уровень: <b>{war_genius}/5</b>",
+        f"Уровень {progress_bar(war_genius, 5)} <b>{war_genius}/5</b>",
         "",
-        "<b>Что даёт каждый уровень:</b>",
+        "━━━ 📖 Что даёт ━━━",
         "<i>Авто-атака по рейд-боссу по кулдауну.</i>",
         "<i>Запусти рейд вручную — дальше атаки идут сами!</i>",
         "",
+        "━━━ 🎯 Уровни ━━━",
     ]
 
+    level_bits = []
     for lvl in range(1, 6):
         cost = WAR_GENIUS_LEVEL_COSTS[lvl - 1]
         boss_lbl = WAR_GENIUS_BOSS_LABELS.get(lvl, "")
         if war_genius >= lvl:
-            lines.append(f"✅ Ур.{lvl}: {boss_lbl}")
+            level_bits.append(f"✅ Ур.{lvl}: {boss_lbl}")
         elif war_genius + 1 == lvl:
-            lines.append(f"🔓 Ур.{lvl}: {boss_lbl} — {cost} ⚔️")
+            level_bits.append(f"🔓 Ур.{lvl}: {boss_lbl} — {cost}⚔️")
         else:
-            lines.append(f"🔒 Ур.{lvl}: {boss_lbl} — {cost} ⚔️")
+            level_bits.append(f"🔒 Ур.{lvl}: {boss_lbl} — {cost}⚔️")
+    lines.extend(pair_lines(level_bits))
 
     lines.append("")
     lines.append("<i>Очки войны — у тренера Менеджер Ким</i>")

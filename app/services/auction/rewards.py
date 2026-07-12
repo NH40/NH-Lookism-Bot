@@ -86,6 +86,7 @@ async def _deliver_reward(
             user_id=user.id,
             character_id=data["character"],
             rank=data["rank"],
+            base_power=data["power"],
             power=data["power"],
         )
         session.add(char)

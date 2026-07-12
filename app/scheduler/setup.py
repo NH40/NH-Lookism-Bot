@@ -15,6 +15,9 @@ from app.config.scheduler_config import (
     BOSS_TICK_SECONDS,
     REGION_WAR_TICK_MINUTES,
     ACHIEVEMENT_TICK_MINUTES,
+    POKER_TICK_SECONDS,
+    MARKET_AUCTION_TICK_SECONDS,
+    CLAN_POWER_RECONCILE_TICK_MINUTES,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,6 +41,10 @@ def setup_scheduler() -> AsyncIOScheduler:
         boss_tick,
         war_genius_tick,
         achievement_tick,
+        poker_tick,
+        casino_rating_tick,
+        market_auction_tick,
+        clan_power_reconcile_tick,
     )
 
     scheduler = AsyncIOScheduler()
@@ -188,5 +195,45 @@ def setup_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=60,
     )
 
-    logger.info("Scheduler configured with 16 jobs")
+    # ── Покер: старт раздач по таймеру, авто-действия по таймауту хода ────────
+    scheduler.add_job(
+        poker_tick,
+        trigger=IntervalTrigger(seconds=POKER_TICK_SECONDS),
+        id="poker_tick",
+        name="poker_tick",
+        max_instances=1,
+        misfire_grace_time=10,
+    )
+
+    # ── Казино: еженедельный рейтинг (сброс и награды, каждый понедельник) ───
+    scheduler.add_job(
+        casino_rating_tick,
+        trigger=CronTrigger(day_of_week="mon", hour=0, minute=0, timezone="UTC"),
+        id="casino_rating_tick",
+        name="casino_rating_tick",
+        max_instances=1,
+        misfire_grace_time=300,
+    )
+
+    # ── Биржа: завершение истёкших аукционов ──────────────────────────────────
+    scheduler.add_job(
+        market_auction_tick,
+        trigger=IntervalTrigger(seconds=MARKET_AUCTION_TICK_SECONDS),
+        id="market_auction_tick",
+        name="market_auction_tick",
+        max_instances=1,
+        misfire_grace_time=30,
+    )
+
+    # ── Кланы: сверка Clan.combat_power с SUM(участников), раз в час ─────────
+    scheduler.add_job(
+        clan_power_reconcile_tick,
+        trigger=IntervalTrigger(minutes=CLAN_POWER_RECONCILE_TICK_MINUTES),
+        id="clan_power_reconcile_tick",
+        name="clan_power_reconcile_tick",
+        max_instances=1,
+        misfire_grace_time=300,
+    )
+
+    logger.info("Scheduler configured with 20 jobs")
     return scheduler

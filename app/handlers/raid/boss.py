@@ -10,7 +10,7 @@ from app.services.raid_service import raid_service
 from app.services.cooldown_service import cooldown_service
 from app.services.quest_service import quest_service
 from app.utils.keyboards.common import back_kb
-from app.utils.formatters import fmt_num
+from app.utils.formatters import fmt_num, progress_bar
 from app.constants.raid import (
     BOSS_TIER_HP_MULT,
     BOSS_TIER_UNLOCK_COST,
@@ -302,15 +302,17 @@ async def cb_craft_boss_tier_menu(cb: CallbackQuery, session: AsyncSession, user
         hp_mult = BOSS_TIER_HP_MULT[t]
         prev_ok = t == 1 or (t - 1) in unlocked
         if t in unlocked:
-            lines.append(f"{t_emoji} Уровень {t}: {t_name} (HP ×{hp_mult}) ✅")
+            lines.append(f"{t_emoji} Ур.{t}: {t_name} (HP ×{hp_mult}) ✅")
         elif not prev_ok:
-            lines.append(f"{t_emoji} Уровень {t}: {t_name} (HP ×{hp_mult}) — 🔒 (нужен ур.{t - 1})")
+            lines.append(f"{t_emoji} Ур.{t}: {t_name} (HP ×{hp_mult}) — 🔒 ур.{t - 1}")
         else:
-            lines.append(f"{t_emoji} Уровень {t}: {t_name} (HP ×{hp_mult}) — {cost}⚔️")
+            lines.append(f"{t_emoji} Ур.{t}: {t_name} (HP ×{hp_mult}) — {cost}⚔️")
 
     text = (
         f"⚔️ <b>Уровни рейд-боссов</b>\n\n"
-        f"Очков войны: <b>{war_pts}</b>\n\n"
+        f"Очков войны: <b>{war_pts}</b>\n"
+        f"Открыто {progress_bar(len(unlocked), 5)} {len(unlocked)}/5\n\n"
+        f"━━━ 🎯 Уровни ━━━\n"
         + "\n".join(lines) + "\n\n"
         f"<i>Выбери уровень для разблокировки:</i>"
     )

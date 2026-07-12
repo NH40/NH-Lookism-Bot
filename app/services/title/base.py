@@ -218,6 +218,8 @@ class TitleService:
             return user.king_cities_count >= val
         elif key == "prestige_level":
             return user.prestige_level >= val
+        elif key == "skill_path_level":
+            return (user.skill_path_level or 0) >= val
         elif key == "mastery_points":
             return user.mastery_points >= val
         elif key == "achievements_count":

@@ -133,6 +133,12 @@ class CampaignService:
                 pass
         return busy_ids
 
+    async def get_busy_squad_ids(self, session: AsyncSession, user_id: int) -> set[int]:
+        """Публичная обёртка _get_busy_ids — для переиспользования вне похода
+        (биржа, клановый обмен), чтобы нельзя было продать/передать статистов,
+        которые сейчас в активном походе."""
+        return await self._get_busy_ids(session, user_id)
+
     async def count_available_statists(
         self,
         session: AsyncSession,

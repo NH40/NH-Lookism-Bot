@@ -7,6 +7,7 @@ from sqlalchemy import select
 from app.models.user import User
 from app.models.skill import UserMastery
 from app.data.skills import MASTERY_BY_ID
+from app.utils.formatters import progress_bar
 
 router = Router()
 
@@ -45,11 +46,12 @@ async def cb_mastery_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     war_points = getattr(user, "war_points", 0)
     war_genius = getattr(user, "war_genius_level", 0)
     lines = [
-        f"⚔️ <b>Мастерство</b>\n\n"
-        f"⭐ Очков мастерства: <b>{user.mastery_points}</b>\n"
-        f"⚔️ Очков войны: <b>{war_points}</b> | 🎖 Гений войны: <b>{war_genius}/5</b>\n"
-        f"<i>Мастерство — у Тома Ли | Очки войны — у Менеджера Кима</i>\n"
-        f"<i>Стоимость мастерства: уровень = кол-во очков (1→2 = 2 очка)</i>\n\n"
+        f"⚔️ <b>Мастерство</b>\n",
+        f"⭐ Очков мастерства: <b>{user.mastery_points}</b>",
+        f"⚔️ Очков войны: <b>{war_points}</b>   🎖 Гений войны {progress_bar(war_genius, 5)} {war_genius}/5",
+        f"<i>Мастерство — у Тома Ли | Очки войны — у Менеджера Кима</i>",
+        f"",
+        f"━━━ 📊 Ветки ━━━",
     ]
 
     builder = InlineKeyboardBuilder()
@@ -58,26 +60,22 @@ async def cb_mastery_menu(cb: CallbackQuery, session: AsyncSession, user: User):
         bonus = bmap(skill_id)
         level_name = MASTERY_LEVEL_NAMES.get(cur, str(cur))
         max_level = 4
+        bar = progress_bar(cur, max_level)
 
         if cur < max_level:
             next_level = cur + 1
             cost = next_level
             can_buy = user.mastery_points >= cost
             afford = "✅" if can_buy else "❌"
-            lines.append(
-                f"{afford} {label} — {level_name} (+{bonus}%)\n"
-                f"  └ {desc}\n"
-                f"  └ Следующий уровень: {cost} ⭐\n"
-            )
+            lines.append(f"{afford} {label} {bar} {level_name} (+{bonus}%)")
+            lines.append(f"   {desc} · след: {cost}⭐")
             builder.button(
                 text=f"{label} [{level_name}→{next_level}] | ⭐ {cost}",
                 callback_data=f"mastery_upgrade:{skill_id}"
             )
         else:
-            lines.append(
-                f"✅ {label} — MAX (+{bonus}%)\n"
-                f"  └ {desc}\n"
-            )
+            lines.append(f"✅ {label} {bar} MAX (+{bonus}%)")
+            lines.append(f"   {desc}")
 
     builder.adjust(1)
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="skills"))

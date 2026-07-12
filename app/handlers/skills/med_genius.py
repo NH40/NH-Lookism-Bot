@@ -18,7 +18,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
-from app.utils.formatters import fmt_num
+from app.utils.formatters import fmt_num, progress_bar
 
 router = Router()
 
@@ -120,15 +120,15 @@ async def cb_med_genius(cb: CallbackQuery, session: AsyncSession, user: User):
     if donat:
         lines.append("✨ <b>Донат активен</b> — все зелья на максимальном уровне (Ур.6)\n")
     else:
-        lines.append(f"📊 Открыто зелий: <b>{unlocked}/{len(MG_POTIONS)}</b>")
+        lines.append(f"📊 Открыто {progress_bar(unlocked, len(MG_POTIONS))} <b>{unlocked}/{len(MG_POTIONS)}</b>")
         lines.append(f"<i>Открыть уровни: Рейды → Крафт → Гений медицины</i>\n")
 
-    lines.append("<b>Авто-зелья:</b>")
+    lines.append("━━━ 🧪 Авто-зелья ━━━")
     has_any = False
     for p in MG_POTIONS:
         max_lvl = MG_MAX_LEVEL if donat else getattr(user, p["level_field"], 0)
         if max_lvl == 0:
-            lines.append(f"  🔒 {p['name']} — не открыто")
+            lines.append(f"🔒 {p['name']} — не открыто")
         else:
             has_any = True
             enabled  = getattr(user, p["toggle_field"], True)
@@ -137,8 +137,8 @@ async def cb_med_genius(cb: CallbackQuery, session: AsyncSession, user: User):
             auto_lvl = pref_lvl if pref_lvl > 0 else max_lvl
             tier     = MG_TIERS[p["type"]][auto_lvl - 1]
             lines.append(
-                f"  {status} {p['name']} [авто Ур.{auto_lvl} / макс Ур.{max_lvl}] — "
-                f"+{tier.effect_value}% | {fmt_num(tier.price)} монет"
+                f"{status} {p['name']} {progress_bar(auto_lvl, max_lvl)} Ур.{auto_lvl}/{max_lvl} — "
+                f"+{tier.effect_value}% · {fmt_num(tier.price)} монет"
             )
 
     builder = InlineKeyboardBuilder()
@@ -182,7 +182,9 @@ async def cb_mg_toggles(cb: CallbackQuery, session: AsyncSession, user: User):
     builder = InlineKeyboardBuilder()
     lines = [
         "⚙️ <b>Авто-зелья — настройки</b>\n",
-        "Нажмите на зелье чтобы включить/выключить авто-покупку:\n",
+        "<i>Нажмите на зелье чтобы включить/выключить авто-покупку</i>",
+        "",
+        "━━━ 🧪 Зелья ━━━",
     ]
 
     for p in MG_POTIONS:
@@ -193,8 +195,8 @@ async def cb_mg_toggles(cb: CallbackQuery, session: AsyncSession, user: User):
         status  = "✅" if enabled else "❌"
         tier    = MG_TIERS[p["type"]][lvl - 1]
         lines.append(
-            f"  {status} {p['name']} [Ур.{lvl}] "
-            f"+{tier.effect_value}% | {fmt_num(tier.price)}"
+            f"{status} {p['name']} [Ур.{lvl}] "
+            f"+{tier.effect_value}% · {fmt_num(tier.price)}"
         )
         builder.row(InlineKeyboardButton(
             text=f"{status} {p['name']}",
@@ -244,7 +246,12 @@ async def cb_mg_buy_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     from app.data.shop import MG_TIERS
 
     builder = InlineKeyboardBuilder()
-    lines = ["🔢 <b>Уровень авто-зелья</b>\n", "Выберите зелье для настройки авто-уровня:\n"]
+    lines = [
+        "🔢 <b>Уровень авто-зелья</b>\n",
+        "<i>Выберите зелье для настройки авто-уровня</i>",
+        "",
+        "━━━ 🧪 Зелья ━━━",
+    ]
 
     for p in MG_POTIONS:
         max_lvl = MG_MAX_LEVEL if is_donat(user) else getattr(user, p["level_field"], 0)
@@ -256,7 +263,7 @@ async def cb_mg_buy_menu(cb: CallbackQuery, session: AsyncSession, user: User):
             text=f"{p['name']} [авто: Ур.{cur_auto}]",
             callback_data=f"mg_buy:{p['type']}",
         ))
-        lines.append(f"  {p['name']} — авто Ур.{cur_auto} из макс Ур.{max_lvl}")
+        lines.append(f"{p['name']} {progress_bar(cur_auto, max_lvl)} Ур.{cur_auto}/{max_lvl}")
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="med_genius"))
 

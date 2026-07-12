@@ -102,10 +102,15 @@ class SquadRepo:
         if clan_id:
             delta = total - old_power
             if delta != 0:
+                # greatest(0, ...) — защита от ухода в минус: дельта считается от
+                # last-known user.combat_power, и если где-то в цепочке накопился
+                # дрейф (см. clan_power_reconcile_tick, который его периодически
+                # чинит полным пересчётом), клан не должен показывать отрицательную
+                # мощь даже временно.
                 await session.execute(
                     sa_update(Clan)
                     .where(Clan.id == clan_id)
-                    .values(combat_power=Clan.combat_power + delta)
+                    .values(combat_power=func.greatest(0, Clan.combat_power + delta))
                 )
 
         await session.flush()

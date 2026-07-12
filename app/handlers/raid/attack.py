@@ -104,15 +104,9 @@ async def cb_raid_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         return
 
     if result.get("boss_killed"):
-        # Засчитываем активность в войне за регион
-        from app.models.clan import ClanMember
-        from sqlalchemy import select as _select
-        from app.services.clan import clan_service
-        clan_member = await session.scalar(
-            _select(ClanMember).where(ClanMember.user_id == user.id)
-        )
-        if clan_member:
-            await clan_service.record_activity(session, user.id, clan_member.clan_id, "raid")
+        # Личная активность (Алея/Зал славы) + активность в войне за регион
+        from app.utils.region_activity import record as record_activity
+        await record_activity(session, user.id, "raid")
 
         rt = result.get("reward_type")
         if rt == "alchemy":

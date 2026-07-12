@@ -112,6 +112,50 @@ class UserRepo:
         )
         return (rank or 0) + 1
 
+    async def get_top_by_fame_alltime(
+        self, session: AsyncSession, limit: int = 10
+    ) -> list:
+        """Топ по личной активности за всё время (Алея славы)."""
+        result = await session.execute(
+            select(User.full_name, User.phase, User.ultra_instinct, User.fame_alltime_points)
+            .order_by(User.fame_alltime_points.desc())
+            .limit(limit)
+        )
+        return result.all()
+
+    async def get_fame_alltime_rank(
+        self, session: AsyncSession, user_id: int
+    ) -> int:
+        my_points = await session.scalar(
+            select(User.fame_alltime_points).where(User.id == user_id)
+        ) or 0
+        rank = await session.scalar(
+            select(func.count(User.id)).where(User.fame_alltime_points > my_points)
+        )
+        return (rank or 0) + 1
+
+    async def get_top_by_fame_patch(
+        self, session: AsyncSession, limit: int = 10
+    ) -> list:
+        """Топ по личной активности за текущий патч (Зал славы)."""
+        result = await session.execute(
+            select(User.full_name, User.phase, User.ultra_instinct, User.fame_patch_points)
+            .order_by(User.fame_patch_points.desc())
+            .limit(limit)
+        )
+        return result.all()
+
+    async def get_fame_patch_rank(
+        self, session: AsyncSession, user_id: int
+    ) -> int:
+        my_points = await session.scalar(
+            select(User.fame_patch_points).where(User.id == user_id)
+        ) or 0
+        rank = await session.scalar(
+            select(func.count(User.id)).where(User.fame_patch_points > my_points)
+        )
+        return (rank or 0) + 1
+
     async def get_rank_by_power(
         self, session: AsyncSession, user_id: int
     ) -> int:

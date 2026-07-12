@@ -9,7 +9,9 @@ import html
 from app.models.user import User
 from app.models.market import MarketListing
 from app.services.market_service import market_service
+from app.services.market_notify import notify_market_sale, notify_market_purchase
 from app.services.quest_service import quest_service
+from app.services.bank.casino.common import CASINO_RESOURCES, get_balance
 from app.constants.market import ITEM_TYPES
 from app.utils.formatters import fmt_num
 
@@ -88,8 +90,9 @@ async def cb_market_browse(cb: CallbackQuery, session: AsyncSession, user: User)
             from app.constants.cards import LEVEL_LABELS
             lvl = meta["level"]
             level_str = f"[{LEVEL_LABELS.get(lvl, 'Ур.' + str(lvl))}] "
+        res_label = CASINO_RESOURCES.get(listing.resource, listing.resource)
         builder.row(InlineKeyboardButton(
-            text=f"{rank_str}{level_str}{char_str}x{listing.item_amount} — {fmt_num(listing.price)} | {seller_name}",
+            text=f"{rank_str}{level_str}{char_str}x{listing.item_amount} — {fmt_num(listing.price)} {res_label} | {seller_name}",
             callback_data=f"market_item:{listing.id}"
         ))
 
@@ -152,12 +155,14 @@ async def cb_market_item(cb: CallbackQuery, session: AsyncSession, user: User):
     if meta.get("power"):
         meta_str += f"\nМощь: <b>{fmt_num(meta['power'])}</b>"
 
-    can_afford = "✅" if user.nh_coins >= listing.price else "❌"
+    res_label = CASINO_RESOURCES.get(listing.resource, listing.resource)
+    user_balance = get_balance(user, listing.resource)
+    can_afford = "✅" if user_balance >= listing.price else "❌"
 
     builder = InlineKeyboardBuilder()
-    if user.nh_coins >= listing.price:
+    if user_balance >= listing.price:
         builder.row(InlineKeyboardButton(
-            text=f"💰 Купить за {fmt_num(listing.price)} NHCoin",
+            text=f"💰 Купить за {fmt_num(listing.price)} {res_label}",
             callback_data=f"market_buy:{listing_id}"
         ))
     builder.row(InlineKeyboardButton(
@@ -171,9 +176,9 @@ async def cb_market_item(cb: CallbackQuery, session: AsyncSession, user: User):
             f"Тип: {label}\n"
             f"Количество: <b>{listing.item_amount}</b>"
             f"{meta_str}\n\n"
-            f"💰 Цена: <b>{fmt_num(listing.price)} NHCoin</b>\n"
+            f"💰 Цена: <b>{fmt_num(listing.price)} {res_label}</b>\n"
             f"👤 Продавец: {seller_name} ({seller_username})\n\n"
-            f"{can_afford} У вас: {fmt_num(user.nh_coins)} NHCoin",
+            f"{can_afford} У вас: {fmt_num(user_balance)} {res_label}",
             reply_markup=builder.as_markup(),
             parse_mode="HTML",
         )
@@ -201,9 +206,17 @@ async def cb_market_buy(cb: CallbackQuery, session: AsyncSession, user: User):
     await record(session, user.id, "market")
 
     label = market_service.get_item_label(result["item_type"])
+    res_label = CASINO_RESOURCES.get(result["resource"], result["resource"])
     await cb.answer(
         f"✅ Куплено!\n{label} x{result['amount']}\n"
-        f"Заплачено: {fmt_num(result['price'])} NHCoin",
+        f"Заплачено: {fmt_num(result['price'])} {res_label}",
         show_alert=True
     )
+
+    from app.repositories.user_repo import user_repo
+    seller = await user_repo.get_by_id(session, result["seller_id"])
+    if seller:
+        await notify_market_sale(seller, label, result["amount"], result["price"], result["resource"])
+    await notify_market_purchase(user, label, result["amount"], result["price"], result["resource"])
+
     await cb_market_buyer(cb, session, user)

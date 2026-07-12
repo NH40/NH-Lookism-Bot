@@ -60,12 +60,15 @@ class SquadService:
         # Доступные ранги и их веса для текущей фазы
         phase_weights = dict(PHASE_RANK_WEIGHTS.get(user.phase, PHASE_RANK_WEIGHTS["gang"]))
 
+        # Эффективное влияние с учётом зелья влияния
+        effective_influence = await potion_service.get_effective_influence(session, user)
+
         # Проверяем влияние — минимум для вербовки
-        if user.influence < 10:
+        if effective_influence < 10:
             return {"ok": False, "reason": "Недостаточно влияния (минимум 10)"}
 
         # Количество завербованных
-        count = _calc_recruit_count(user.influence, user.recruit_count_bonus)
+        count = _calc_recruit_count(effective_influence, user.recruit_count_bonus)
 
         # double_recruit — удваивает
         if user.double_recruit:
@@ -105,13 +108,9 @@ class SquadService:
         # Счётчик достижений
         user.total_statists_recruited = (user.total_statists_recruited or 0) + len(recruited)
 
-        # Активность в войне за регион
-        from app.models.clan import ClanMember
-        from sqlalchemy import select as _sel
-        from app.services.clan import clan_service
-        clan_member = await session.scalar(_sel(ClanMember).where(ClanMember.user_id == user.id))
-        if clan_member:
-            await clan_service.record_activity(session, user.id, clan_member.clan_id, "recruit")
+        # Личная активность (Алея/Зал славы) + активность в войне за регион
+        from app.utils.region_activity import record as record_activity
+        await record_activity(session, user.id, "recruit")
 
         # Пересчёт боевой мощи
         from app.repositories.squad_repo import squad_repo

@@ -2,11 +2,40 @@ import logging
 from sqlalchemy import select
 from app.database import AsyncSessionFactory
 from app.models.user import User
-from app.models.clan import ClanMember
+from app.models.clan import Clan, ClanMember
 from app.utils.formatters import fmt_num
 from app.scheduler.tasks.notifications import _send_notifications
 
 logger = logging.getLogger(__name__)
+
+
+async def clan_power_reconcile_tick():
+    """Периодически пересчитывает Clan.combat_power = SUM(members.combat_power).
+
+    Обычно клан обновляется инкрементально (squad_repo.update_user_combat_power
+    применяет дельту при каждом изменении силы игрока) — это дёшево, но любая
+    ошибка в дельте (например, экстремальный кратковременный скачок силы одного
+    игрока, упирающийся в защитный кап) накапливается в Clan.combat_power
+    навсегда, так как полный пересчёт иначе делается только при вступлении/выходе
+    из клана. Этот тик — страховка: раз в час чинит дрейф с нуля, per-клан
+    в своей транзакции, чтобы ошибка на одном клане не блокировала остальные.
+    """
+    try:
+        async with AsyncSessionFactory() as session:
+            clan_ids = list((await session.execute(select(Clan.id))).scalars().all())
+
+        for clan_id in clan_ids:
+            try:
+                async with AsyncSessionFactory() as session:
+                    async with session.begin():
+                        clan = await session.get(Clan, clan_id)
+                        if clan:
+                            from app.services.clan import clan_service
+                            await clan_service.recalc_power(session, clan)
+            except Exception as e:
+                logger.error(f"clan_power_reconcile_tick error for clan {clan_id}: {e}", exc_info=True)
+    except Exception as e:
+        logger.error(f"clan_power_reconcile_tick error: {e}", exc_info=True)
 
 
 async def clan_war_tick():

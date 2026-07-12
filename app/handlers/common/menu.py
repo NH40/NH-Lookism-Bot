@@ -5,8 +5,11 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
-from app.utils.keyboards.common import main_menu_kb, back_kb
-from app.utils.formatters import fmt_num, phase_label
+from app.utils.keyboards.common import (
+    main_menu_kb, back_kb,
+    menu_combat_kb, menu_economy_kb, menu_progress_kb, menu_social_kb, menu_other_kb,
+)
+from app.utils.formatters import fmt_num, phase_label, progress_bar
 from ._common import _main_menu_text, _phase_emoji
 
 router = Router()
@@ -27,20 +30,18 @@ async def cmd_start(message: Message, session: AsyncSession, user: User, is_new_
         except Exception:
             pass
 
-    from app.repositories.title_repo import title_repo
-    has_vvip = await title_repo.has_all_sets(session, user.id)
     if is_new_user:
         await message.answer(
             f"👋 Добро пожаловать, <b>{html.escape(user.full_name)}</b>!\n\n"
             f"Ты начинаешь путь уличного бойца.\n"
             f"Цель — стать Императором!\n\n"
             f"🏴 Банда → 👑 Король → ✊ Кулак → 🏛 Император",
-            reply_markup=main_menu_kb(has_vvip=has_vvip),
+            reply_markup=main_menu_kb(),
             parse_mode="HTML",
         )
     else:
         text = await _main_menu_text(session, user)
-        await message.answer(text, reply_markup=main_menu_kb(has_vvip=has_vvip), parse_mode="HTML")
+        await message.answer(text, reply_markup=main_menu_kb(), parse_mode="HTML")
 
 
 # ── Главное меню ────────────────────────────────────────────────────────────
@@ -48,9 +49,7 @@ async def cmd_start(message: Message, session: AsyncSession, user: User, is_new_
 @router.callback_query(F.data == "main_menu")
 async def cb_main_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     text = await _main_menu_text(session, user)
-    from app.repositories.title_repo import title_repo
-    has_vvip = await title_repo.has_all_sets(session, user.id)
-    kb = main_menu_kb(has_vvip=has_vvip)
+    kb = main_menu_kb()
     try:
         await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     except Exception:
@@ -60,6 +59,51 @@ async def cb_main_menu(cb: CallbackQuery, session: AsyncSession, user: User):
         except Exception:
             pass
         await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
+    await cb.answer()
+
+
+# ── Подменю категорий ──────────────────────────────────────────────────────
+
+async def _edit_or_resend(cb: CallbackQuery, text: str, kb) -> None:
+    try:
+        await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    except Exception:
+        try:
+            await cb.message.delete()
+        except Exception:
+            pass
+        await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
+
+
+@router.callback_query(F.data == "menu_combat")
+async def cb_menu_combat(cb: CallbackQuery):
+    await _edit_or_resend(cb, "⚔️ <b>Бой</b>\n\nВыбери действие:", menu_combat_kb())
+    await cb.answer()
+
+
+@router.callback_query(F.data == "menu_economy")
+async def cb_menu_economy(cb: CallbackQuery):
+    await _edit_or_resend(cb, "💰 <b>Экономика</b>\n\nВыбери раздел:", menu_economy_kb())
+    await cb.answer()
+
+
+@router.callback_query(F.data == "menu_progress")
+async def cb_menu_progress(cb: CallbackQuery):
+    await _edit_or_resend(cb, "📈 <b>Прогресс</b>\n\nВыбери раздел:", menu_progress_kb())
+    await cb.answer()
+
+
+@router.callback_query(F.data == "menu_social")
+async def cb_menu_social(cb: CallbackQuery):
+    await _edit_or_resend(cb, "🏯 <b>Социальное</b>\n\nВыбери раздел:", menu_social_kb())
+    await cb.answer()
+
+
+@router.callback_query(F.data == "menu_other")
+async def cb_menu_other(cb: CallbackQuery, session: AsyncSession, user: User):
+    from app.repositories.title_repo import title_repo
+    has_vvip = await title_repo.has_all_sets(session, user.id)
+    await _edit_or_resend(cb, "⚙️ <b>Прочее</b>\n\nВыбери раздел:", menu_other_kb(has_vvip=has_vvip))
     await cb.answer()
 
 
@@ -79,7 +123,7 @@ async def cb_profile(cb: CallbackQuery, session: AsyncSession, user: User):
     if user.prestige_level > 0:
         prestige_str = (
             f"\n━━━ 🌟 Пробуждение ━━━\n"
-            f"Уровень: {user.prestige_level}/10\n"
+            f"{progress_bar(user.prestige_level, 10)} {user.prestige_level}/10\n"
             f"  +{user.prestige_level * 5}% мощь | "
             f"+{user.prestige_income_bonus}% доход | "
             f"+{user.prestige_ticket_bonus}% тикет"
@@ -99,7 +143,7 @@ async def cb_profile(cb: CallbackQuery, session: AsyncSession, user: User):
     )
     if has_skills:
         from app.handlers.skills.med_genius import any_unlocked, _unlocked_count, MG_POTIONS, is_donat as _mg_is_donat
-        ui_level_label = "Донат (макс)" if user.ui_is_donat else f"Уровень {user.ui_level}/4"
+        ui_level_label = "Донат (макс)" if user.ui_is_donat else f"{progress_bar(user.ui_level, 4)} {user.ui_level}/4"
         if _mg_is_donat(user):
             mg_label = " ✅ Донат (все Ур.6)"
         elif any_unlocked(user):
@@ -113,8 +157,9 @@ async def cb_profile(cb: CallbackQuery, session: AsyncSession, user: User):
             f"🧪 Фрагменты алхимии: {user.alchemy_fragments}\n"
             f"🔷 Фрагменты Пути: {path_frags}\n"
             f"🏢 Бизнес-фрагменты: {biz_frags}\n"
-            f"⚔️ Очки войны: {war_points} | 🎖 Гений войны: {war_genius}/5\n"
-            f"🎖 Гений бизнеса: {biz_genius}/5\n"
+            f"⚔️ Очки войны: {war_points}\n"
+            f"🎖 Гений войны: {progress_bar(war_genius, 5)} {war_genius}/5\n"
+            f"🎖 Гений бизнеса: {progress_bar(biz_genius, 5)} {biz_genius}/5\n"
             f"🩺 Гений медицины:{mg_label}"
         )
     else:

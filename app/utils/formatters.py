@@ -10,6 +10,13 @@ def fmt_power(n: int) -> str:
     return str(n)
 
 
+def progress_bar(current: int, maximum: int, length: int = 10) -> str:
+    if maximum <= 0:
+        return ""
+    filled = min(length, round(length * current / maximum))
+    return "▓" * filled + "░" * (length - filled)
+
+
 def fmt_ttl(seconds: int) -> str:
     if seconds <= 0:
         return "готово"
@@ -56,3 +63,20 @@ def skill_path_label(path: str | None) -> str:
         "monster":     "Монстр",
         "shadow":      "Тень",
     }.get(path, path)
+
+
+def pair_lines(items: list[str], max_len: int = 38) -> list[str]:
+    """Группирует пункты по 2 в строку через пробелы, но только если пара
+    умещается в max_len символов — иначе длинный пункт переносится и ломает
+    видимость колонок, поэтому такие пункты остаются по одному на строку."""
+    out = []
+    i = 0
+    while i < len(items):
+        item = items[i]
+        if i + 1 < len(items) and len(item) + 3 + len(items[i + 1]) <= max_len:
+            out.append(f"{item}   {items[i + 1]}")
+            i += 2
+        else:
+            out.append(item)
+            i += 1
+    return out

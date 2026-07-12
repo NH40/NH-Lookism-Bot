@@ -56,13 +56,12 @@ ACHIEVEMENTS: list[Achievement] = [
         "+3 очка пути", "path_points", 3),
 
     # ─── Престиж ───
-    Achievement("prestige_1", "Первое пробуждение",
-        "Достигни первого уровня пробуждения", "prestige_level", 1,
-        "+3 очка пути", "path_points", 3),
+    # "Первое пробуждение" (prestige_level>=1, +3 очка пути) убрано:
+    # твинки достигают prestige_level 1 и фармят очки пути бесплатно,
+    # затем сливают их на основной аккаунт через клановый обмен (fee-less).
     Achievement("prestige_3", "Трижды рождённый",
         "Достигни третьего уровня пробуждения", "prestige_level", 3,
-        "+30,000 NHCoin + +5% к доходу", "coins_and_income", 30_000,
-        parent_id="prestige_1"),
+        "+30,000 NHCoin + +5% к доходу", "coins_and_income", 30_000),
 
     # ─── Топ ───
     Achievement("top_10", "Осталось выбить девятого",

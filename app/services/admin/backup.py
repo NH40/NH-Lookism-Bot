@@ -187,6 +187,10 @@ class AdminBackupMixin:
         await session.execute(sa_delete(Investment))
         await session.flush()
 
+        # Зал славы: активность текущего патча обнуляется, Алея славы (всё время) — нет
+        await session.execute(sa_update(User).values(fame_patch_points=0))
+        await session.flush()
+
         # ── Сброс прогресса ───────────────────────────────────────────────────────
         import logging as _logging
         _patch_log = _logging.getLogger(__name__)

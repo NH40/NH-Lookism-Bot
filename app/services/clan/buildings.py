@@ -120,6 +120,9 @@ class ClanBuildingsService(ClanBaseService):
     async def buy_ap_upgrade(
         self, session: AsyncSession, clan: Clan, user: User, upgrade_type: str
     ) -> dict:
+        new_treasury_ap = None
+        new_ap_income_circles = new_ap_train_circles = new_ap_ticket_circles = None
+
         if upgrade_type == "income":
             if clan.ap_income_circles >= CLAN_AP_INCOME_MAX:
                 return {
@@ -129,8 +132,8 @@ class ClanBuildingsService(ClanBaseService):
             cost = CLAN_AP_INCOME_COST
             if clan.treasury_ap < cost:
                 return {"ok": False, "reason": f"Недостаточно ОА (нужно {cost}, есть {clan.treasury_ap})"}
-            clan.treasury_ap -= cost
-            clan.ap_income_circles += 1
+            new_treasury_ap = clan.treasury_ap - cost
+            new_ap_income_circles = clan.ap_income_circles + 1
         elif upgrade_type == "train":
             if clan.ap_train_circles >= CLAN_AP_TRAIN_MAX:
                 return {
@@ -140,8 +143,8 @@ class ClanBuildingsService(ClanBaseService):
             cost = CLAN_AP_TRAIN_COST
             if clan.treasury_ap < cost:
                 return {"ok": False, "reason": f"Недостаточно ОА (нужно {cost}, есть {clan.treasury_ap})"}
-            clan.treasury_ap -= cost
-            clan.ap_train_circles += 1
+            new_treasury_ap = clan.treasury_ap - cost
+            new_ap_train_circles = clan.ap_train_circles + 1
         elif upgrade_type == "ticket":
             if clan.ap_ticket_circles >= CLAN_AP_TICKET_MAX:
                 return {
@@ -151,11 +154,29 @@ class ClanBuildingsService(ClanBaseService):
             cost = CLAN_AP_TICKET_COST
             if clan.treasury_ap < cost:
                 return {"ok": False, "reason": f"Недостаточно ОА (нужно {cost}, есть {clan.treasury_ap})"}
-            clan.treasury_ap -= cost
-            clan.ap_ticket_circles += 1
+            new_treasury_ap = clan.treasury_ap - cost
+            new_ap_ticket_circles = clan.ap_ticket_circles + 1
         else:
             return {"ok": False, "reason": "Неизвестное улучшение"}
 
+        # Сначала применяем бонусы к users (через override, ещё до мутации clan),
+        # затем мутируем clan — порядок блокировок users->clan, как везде
+        # (см. _apply_clan_bonuses — иначе deadlock с конкурентными операциями,
+        # которые тоже трогают users+clan, например emperor.py при дропе карты).
+        await self._apply_clan_bonuses(
+            session, clan,
+            ap_income_circles=new_ap_income_circles,
+            ap_train_circles=new_ap_train_circles,
+            ap_ticket_circles=new_ap_ticket_circles,
+        )
+
+        clan.treasury_ap = new_treasury_ap
+        if new_ap_income_circles is not None:
+            clan.ap_income_circles = new_ap_income_circles
+        if new_ap_train_circles is not None:
+            clan.ap_train_circles = new_ap_train_circles
+        if new_ap_ticket_circles is not None:
+            clan.ap_ticket_circles = new_ap_ticket_circles
+
         await session.flush()
-        await self._apply_clan_bonuses(session, clan)
         return {"ok": True, "upgrade_type": upgrade_type}

@@ -209,3 +209,10 @@ PATH_AWAKENING_BONUSES: dict[str, dict] = {
     "romantic":    {"recruit_count_bonus": 30},
     "monster":     {"squad_power_bonus": 25},
 }
+
+# Человекочитаемые подписи для ключей бонусов выше (иначе в текст попадает "squad_power_bonus")
+PATH_BONUS_LABELS: dict[str, str] = {
+    "income_bonus_percent": "% дохода",
+    "recruit_count_bonus":  "% вербовка",
+    "squad_power_bonus":    "% боевая мощь",
+}

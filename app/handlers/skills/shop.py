@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.utils.keyboards.common import back_kb
+from app.utils.formatters import progress_bar, pair_lines
 
 router = Router()
 
@@ -75,16 +76,26 @@ async def cb_ui_settings(cb: CallbackQuery, session: AsyncSession, user: User):
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="skills"))
 
-    ui_level_str = "Донат (макс)" if user.ui_is_donat else f"Уровень {user.ui_level}/4"
-    tui_str = " | TUI 🔱" if user.true_ultra_instinct else ""
+    ui_level_str = "Донат (макс)" if user.ui_is_donat else f"{progress_bar(user.ui_level, 4)} Уровень {user.ui_level}/4"
+    tui_str = "  |  TUI 🔱" if user.true_ultra_instinct else ""
+
+    def _perk_line(has: bool, label: str, enabled: bool, req: str) -> str:
+        if not has:
+            return f"🔒 {label} ({req})"
+        return f"✅ {label}: {'✅' if enabled else '❌'}"
+
+    perks = [
+        _perk_line(has_1, "Авто-вербовка", user.ui_auto_recruit, "УИ I"),
+        _perk_line(has_2, "Авто-тренировка", user.ui_auto_train, "УИ II"),
+        _perk_line(has_3, "Авто-тикеты", user.ui_auto_ticket, "УИ III"),
+        _perk_line(has_4, "Авто-прокрутка", user.ui_auto_pull, "УИ IV"),
+    ]
+    perk_rows = pair_lines(perks)
 
     text = (
         f"👁 <b>Ультра Инстинкт</b> — {ui_level_str}{tui_str}\n\n"
-        f"Настройки автоматизации:\n"
-        f"{'✅' if has_1 else '🔒'} Авто-вербовка" + (f": {'✅' if user.ui_auto_recruit else '❌'}" if has_1 else " (УИ I)") + "\n"
-        + f"{'✅' if has_2 else '🔒'} Авто-тренировка" + (f": {'✅' if user.ui_auto_train else '❌'}" if has_2 else " (УИ II)") + "\n"
-        + f"{'✅' if has_3 else '🔒'} Авто-тикеты" + (f": {'✅' if user.ui_auto_ticket else '❌'}" if has_3 else " (УИ III)") + "\n"
-        + f"{'✅' if has_4 else '🔒'} Авто-прокрутка" + (f": {'✅' if user.ui_auto_pull else '❌'}" if has_4 else " (УИ IV)")
+        f"━━━ ⚙️ Автоматизация ━━━\n"
+        + "\n".join(perk_rows)
     )
 
     try:

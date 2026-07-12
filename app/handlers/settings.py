@@ -158,6 +158,8 @@ async def cb_notifications_menu(cb: CallbackQuery, session: AsyncSession, user: 
     clan_war  = getattr(user, "notif_clan_war", True)
     boss      = getattr(user, "notif_boss",     True)
     ach       = getattr(user, "notif_achievements", True)
+    mkt_buy   = getattr(user, "notif_market_buy", True)
+    mkt_sell  = getattr(user, "notif_market_sell", True)
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
@@ -192,6 +194,14 @@ async def cb_notifications_menu(cb: CallbackQuery, session: AsyncSession, user: 
             text=f"{_notif_icon(ach)} 🥇 Достижения: {_on_off(ach)}",
             callback_data="toggle_notif:achievements"
         ))
+        builder.row(InlineKeyboardButton(
+            text=f"{_notif_icon(mkt_buy)} 🛒 Покупки на бирже: {_on_off(mkt_buy)}",
+            callback_data="toggle_notif:market_buy"
+        ))
+        builder.row(InlineKeyboardButton(
+            text=f"{_notif_icon(mkt_sell)} 💰 Продажи на бирже: {_on_off(mkt_sell)}",
+            callback_data="toggle_notif:market_sell"
+        ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="settings"))
 
     lines = [
@@ -207,6 +217,8 @@ async def cb_notifications_menu(cb: CallbackQuery, session: AsyncSession, user: 
             f"🏯 Клановые войны: <b>{_on_off(clan_war)}</b>",
             f"⚔️ Боссы: <b>{_on_off(boss)}</b>",
             f"🥇 Достижения: <b>{_on_off(ach)}</b>",
+            f"🛒 Покупки на бирже: <b>{_on_off(mkt_buy)}</b>",
+            f"💰 Продажи на бирже: <b>{_on_off(mkt_sell)}</b>",
         ]
     else:
         lines.append(f"\n<i>Включи мастер-переключатель чтобы настроить категории</i>")
@@ -235,6 +247,10 @@ async def cb_toggle_notif(cb: CallbackQuery, session: AsyncSession, user: User):
         user.notif_boss = not getattr(user, "notif_boss", True)
     elif key == "achievements":
         user.notif_achievements = not getattr(user, "notif_achievements", True)
+    elif key == "market_buy":
+        user.notif_market_buy = not getattr(user, "notif_market_buy", True)
+    elif key == "market_sell":
+        user.notif_market_sell = not getattr(user, "notif_market_sell", True)
     await session.flush()
     await cb_notifications_menu(cb, session, user)
 

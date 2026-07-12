@@ -57,7 +57,11 @@ class PrestigeService:
         user.card_dust = 0
         user.influence = DEFAULT_INFLUENCE
         user.all_time_combat_power += user.combat_power
-        user.combat_power = 0
+        # user.combat_power НЕ обнуляем напрямую — это в обход клановой дельты
+        # в squad_repo.update_user_combat_power (единственное место, которое
+        # корректно применяет изменение к Clan.combat_power). Ниже, после удаления
+        # SquadMember/UserCharacter, title_service.reapply_all_titles сама вызовет
+        # update_user_combat_power и пересчитает всё с нуля, включая дельту клану.
         user.raid_unlocked_tiers = ""
         # Сбрасываем накопленный бонус от учителя; связь referred_by сохраняется,
         # шедулер пересчитает бонус от новой мощи учителя.

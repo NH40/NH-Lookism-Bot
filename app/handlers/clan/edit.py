@@ -357,7 +357,11 @@ async def cb_clan_leave_transfer(cb: CallbackQuery, session: AsyncSession, user:
     if not clan:
         return
 
-    await clan_service.transfer_ownership(session, clan, user, new_owner_id)
+    transfer_result = await clan_service.transfer_ownership(session, clan, user, new_owner_id)
+    if not transfer_result["ok"]:
+        await cb.answer(transfer_result["reason"], show_alert=True)
+        return
+
     result = await clan_service.leave_clan(session, user)
 
     if result["ok"]:

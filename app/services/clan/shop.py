@@ -16,16 +16,16 @@ class ClanShopService(ClanBaseService):
         if clan.treasury < item.price:
             return {"ok": False, "reason": f"Недостаточно в казне (нужно {item.price:,})"}
 
-        # Check before modifying treasury to prevent autoflush from committing the deduction
         if item.item_type == "auction":
             existing = await self.get_active_auction(session, clan.id)
             if existing:
                 return {"ok": False, "reason": "В клане уже идёт аукцион"}
 
-        clan.treasury -= item.price
         members = await self.get_clan_members(session, clan.id)
         user_ids = [m.user_id for m in members]
-        users = (await session.execute(select(User).where(User.id.in_(user_ids)))).scalars().all()
+        users = (await session.execute(
+            select(User).where(User.id.in_(user_ids)).order_by(User.id)
+        )).scalars().all()
 
         if item.item_type == "tickets":
             from app.config.game_balance import ticket_hard_cap
@@ -56,7 +56,7 @@ class ClanShopService(ClanBaseService):
             from app.models.character import UserCharacter
             for u in users:
                 char = random.choice(pool)
-                session.add(UserCharacter(user_id=u.id, character_id=char["name"], rank=char["rank"], power=char["power"]))
+                session.add(UserCharacter(user_id=u.id, character_id=char["name"], rank=char["rank"], base_power=char["power"], power=char["power"]))
 
         elif item.item_type == "auction":
             from datetime import datetime, timezone, timedelta
@@ -71,6 +71,11 @@ class ClanShopService(ClanBaseService):
             )
             session.add(auction)
 
+        # Казну списываем ПОСЛЕ всех per-user операций (squad_repo.update_user_combat_power
+        # трогает users, затем clan) — иначе списание тут заранее лочит clan и при
+        # конкурентной операции, которая лочит users->clan в этом порядке (например,
+        # emperor.py при дропе карты), возникает deadlock (users->clan vs clan->users).
+        clan.treasury -= item.price
         await session.flush()
 
         import asyncio
@@ -110,25 +115,48 @@ class ClanShopService(ClanBaseService):
         if clan.treasury < upgrade.price:
             return {"ok": False, "reason": f"Недостаточно в казне (нужно {upgrade.price:,})"}
 
+        new_bonus_max_members = new_max_members = None
+        new_bonus_income_pct = new_bonus_ticket_pct = new_bonus_train_pct = None
+
         if upgrade.upgrade_type == "slots":
             if clan.bonus_max_members + upgrade.value > upgrade.max_total:
                 return {"ok": False, "reason": f"Лимит +{upgrade.max_total} мест"}
-            clan.bonus_max_members += upgrade.value
-            clan.max_members = 5 + clan.bonus_max_members
+            new_bonus_max_members = clan.bonus_max_members + upgrade.value
+            new_max_members = 5 + new_bonus_max_members
         elif upgrade.upgrade_type == "income":
             if clan.bonus_income_pct > 0:
                 return {"ok": False, "reason": "Уже куплено"}
-            clan.bonus_income_pct += upgrade.value
+            new_bonus_income_pct = clan.bonus_income_pct + upgrade.value
         elif upgrade.upgrade_type == "ticket":
             if clan.bonus_ticket_pct > 0:
                 return {"ok": False, "reason": "Уже куплено"}
-            clan.bonus_ticket_pct += upgrade.value
+            new_bonus_ticket_pct = clan.bonus_ticket_pct + upgrade.value
         elif upgrade.upgrade_type == "train":
             if clan.bonus_train_pct > 0:
                 return {"ok": False, "reason": "Уже куплено"}
-            clan.bonus_train_pct += upgrade.value
+            new_bonus_train_pct = clan.bonus_train_pct + upgrade.value
 
+        # Сначала применяем бонусы к users (передавая ещё не сохранённые новые
+        # значения через override-параметры), и только потом мутируем сам clan —
+        # порядок блокировок users->clan, единообразно со squad_repo и emperor.py
+        # (иначе deadlock с конкурентными операциями по тем же двум строкам).
+        await self._apply_clan_bonuses(
+            session, clan,
+            bonus_income_pct=new_bonus_income_pct,
+            bonus_ticket_pct=new_bonus_ticket_pct,
+            bonus_train_pct=new_bonus_train_pct,
+        )
+
+        if new_bonus_max_members is not None:
+            clan.bonus_max_members = new_bonus_max_members
+            clan.max_members = new_max_members
+        if new_bonus_income_pct is not None:
+            clan.bonus_income_pct = new_bonus_income_pct
+        if new_bonus_ticket_pct is not None:
+            clan.bonus_ticket_pct = new_bonus_ticket_pct
+        if new_bonus_train_pct is not None:
+            clan.bonus_train_pct = new_bonus_train_pct
         clan.treasury -= upgrade.price
-        await self._apply_clan_bonuses(session, clan)
+
         await session.flush()
         return {"ok": True, "upgrade": upgrade}

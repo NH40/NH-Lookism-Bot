@@ -4,10 +4,17 @@ from sqlalchemy import select
 
 
 async def record(session: AsyncSession, user_id: int, action: str) -> None:
-    """Записывает активность игрока если его клан участвует в войне за регион.
+    """Записывает личную активность игрока (Алея/Зал славы) и, если применимо,
+    активность в войне за регион клана.
 
-    Безопасно вызывать из любого хендлера — молча игнорирует если нет войны.
+    Безопасно вызывать из любого хендлера — молча игнорирует ошибки/отсутствие войны.
     """
+    from app.services.activity_service import record as record_fame
+    try:
+        await record_fame(session, user_id, action)
+    except Exception:
+        pass
+
     try:
         from app.models.clan import ClanMember
         from app.services.clan import clan_service

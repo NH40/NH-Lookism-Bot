@@ -182,6 +182,30 @@ class CooldownService:
     def market_buy_lock_key(user_id: int) -> str:
         return f"lock:market_buy:{user_id}"
 
+    @staticmethod
+    def slots_lock_key(user_id: int) -> str:
+        return f"lock:slots:{user_id}"
+
+    @staticmethod
+    def blackjack_lock_key(user_id: int) -> str:
+        return f"lock:blackjack:{user_id}"
+
+    @staticmethod
+    def poker_create_lock_key(user_id: int) -> str:
+        return f"lock:poker_create:{user_id}"
+
+    @staticmethod
+    def poker_join_lock_key(table_id: int) -> str:
+        return f"lock:poker_join:{table_id}"
+
+    @staticmethod
+    def poker_action_lock_key(table_id: int) -> str:
+        return f"lock:poker_action:{table_id}"
+
+    @staticmethod
+    def market_auction_bid_lock_key(user_id: int) -> str:
+        return f"lock:market_auction_bid:{user_id}"
+
     async def acquire_lock(self, key: str, ttl: int = 5) -> bool:
         """Returns True if lock acquired, False if already locked.
         Uses atomic SET NX EX — single round-trip, no race window."""

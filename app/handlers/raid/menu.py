@@ -18,7 +18,7 @@ from app.constants.raid import (
     BUSINESS_DISTRICT_COST,
     BUSINESS_DISTRICTS_MAX,
 )
-from app.utils.formatters import fmt_num
+from app.utils.formatters import fmt_num, progress_bar
 from app.handlers.raid.boss import _send_or_edit_raid_photo
 
 router = Router()
@@ -172,18 +172,18 @@ async def cb_raid_craft(cb: CallbackQuery, session: AsyncSession, user: User):
     war_genius = getattr(user, "war_genius_level", 0)
     craft_text = (
         f"🔨 <b>Крафт</b>\n\n"
-        f"<b>Ресурсы:</b>\n"
+        f"━━━ 💎 Ресурсы ━━━\n"
         f"🔮 УИ: <b>{user.ui_fragments}</b>   "
         f"🧪 Алхимия: <b>{user.alchemy_fragments}</b>\n"
         f"🔷 Путь: <b>{path_frags}</b>   "
         f"🏢 Бизнес: <b>{biz_frags}</b>\n"
         f"⚔️ Очки войны: <b>{war_points}</b>\n\n"
-        f"<b>Прогресс:</b>\n"
-        f"👁 УИ: <b>{ui_str}</b>   "
-        f"⚔️ Гений войны: <b>{war_genius}/5</b>\n"
+        f"━━━ 📊 Прогресс ━━━\n"
+        f"👁 УИ: <b>{ui_str}</b>\n"
+        f"⚔️ Гений войны {progress_bar(war_genius, 5)} {war_genius}/5\n"
         f"🩺 Гений медицины: <b>{mg_str}</b>\n"
-        f"🔷 Уровень пути: <b>{path_level}/{PATH_LEVEL_MAX}</b>   "
-        f"🏘 Районов: <b>{bonus_districts}/{BUSINESS_DISTRICTS_MAX}</b>\n\n"
+        f"🔷 Путь {progress_bar(path_level, PATH_LEVEL_MAX)} {path_level}/{PATH_LEVEL_MAX}\n"
+        f"🏘 Районов {progress_bar(bonus_districts, BUSINESS_DISTRICTS_MAX)} {bonus_districts}/{BUSINESS_DISTRICTS_MAX}\n\n"
         f"Выбери раздел:"
     )
     await _send_or_edit_raid_photo(cb, None, craft_text, builder.as_markup())

@@ -9,6 +9,7 @@ from app.models.user import User
 _TOP_TTL = 30      # секунды
 _PAGE_TTL = 30
 _SLAVA_TTL = 60
+_FAME_TTL = 60
 
 PAGE_SIZE = 10
 
@@ -57,6 +58,46 @@ async def _get_slava_top_cached(session: AsyncSession) -> list:
         for row in rows
     ]
     await r.setex("cache:slava10", _SLAVA_TTL, json.dumps(data, ensure_ascii=False))
+    return [SimpleNamespace(**d) for d in data]
+
+
+async def _get_fame_alltime_top_cached(session: AsyncSession) -> list:
+    r = _redis()
+    raw = await r.get("cache:fame_alltime10")
+    if raw:
+        return [SimpleNamespace(**d) for d in json.loads(raw)]
+    from app.repositories.user_repo import user_repo
+    rows = await user_repo.get_top_by_fame_alltime(session, limit=10)
+    data = [
+        {
+            "full_name": row.full_name,
+            "fame_alltime_points": row.fame_alltime_points,
+            "phase": row.phase,
+            "ultra_instinct": row.ultra_instinct,
+        }
+        for row in rows
+    ]
+    await r.setex("cache:fame_alltime10", _FAME_TTL, json.dumps(data, ensure_ascii=False))
+    return [SimpleNamespace(**d) for d in data]
+
+
+async def _get_fame_patch_top_cached(session: AsyncSession) -> list:
+    r = _redis()
+    raw = await r.get("cache:fame_patch10")
+    if raw:
+        return [SimpleNamespace(**d) for d in json.loads(raw)]
+    from app.repositories.user_repo import user_repo
+    rows = await user_repo.get_top_by_fame_patch(session, limit=10)
+    data = [
+        {
+            "full_name": row.full_name,
+            "fame_patch_points": row.fame_patch_points,
+            "phase": row.phase,
+            "ultra_instinct": row.ultra_instinct,
+        }
+        for row in rows
+    ]
+    await r.setex("cache:fame_patch10", _FAME_TTL, json.dumps(data, ensure_ascii=False))
     return [SimpleNamespace(**d) for d in data]
 
 
@@ -115,16 +156,18 @@ async def _main_menu_text(session: AsyncSession, user: User) -> str:
     bonus_map = {0: 0, 1: 5, 2: 10, 3: 20, 4: 30}
     speed_map = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
 
+    from app.utils.formatters import progress_bar as _pbar
+
     mastery_lines = []
     if mastery:
         if mastery.strength > 0:
-            mastery_lines.append(f"  💪 Сила {mastery.strength}/4 (+{bonus_map[mastery.strength]}% мощи)")
+            mastery_lines.append(f"  💪 Сила {_pbar(mastery.strength, 4)} {mastery.strength}/4 (+{bonus_map[mastery.strength]}% мощи)")
         if mastery.speed > 0:
-            mastery_lines.append(f"  ⚡ Скорость {mastery.speed}/4 (-{speed_map[mastery.speed]}% КД)")
+            mastery_lines.append(f"  ⚡ Скорость {_pbar(mastery.speed, 4)} {mastery.speed}/4 (-{speed_map[mastery.speed]}% КД)")
         if mastery.endurance > 0:
-            mastery_lines.append(f"  🛡 Выносливость {mastery.endurance}/4 (+{speed_map[mastery.endurance]}% порог)")
+            mastery_lines.append(f"  🛡 Выносливость {_pbar(mastery.endurance, 4)} {mastery.endurance}/4 (+{speed_map[mastery.endurance]}% порог)")
         if mastery.technique > 0:
-            mastery_lines.append(f"  🏋 Техника {mastery.technique}/4 (+{bonus_map[mastery.technique]}% трен./доход)")
+            mastery_lines.append(f"  🏋 Техника {_pbar(mastery.technique, 4)} {mastery.technique}/4 (+{bonus_map[mastery.technique]}% трен./доход)")
 
     path_emoji = {"businessman": "💼", "romantic": "💝", "monster": "👹", "shadow": "🌑"}
     path_name  = {"businessman": "Бизнесмен", "romantic": "Романтик", "monster": "Монстр", "shadow": "Тень"}

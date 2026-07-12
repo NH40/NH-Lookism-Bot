@@ -187,21 +187,49 @@ class ClanBaseService:
         await session.flush()
         return {"ok": True, "clan_deleted": False}
 
-    async def _apply_clan_bonuses(self, session: AsyncSession, clan: Clan) -> None:
+    async def _apply_clan_bonuses(
+        self, session: AsyncSession, clan: Clan,
+        bonus_income_pct: int | None = None,
+        bonus_ticket_pct: int | None = None,
+        bonus_train_pct: int | None = None,
+        ap_income_circles: int | None = None,
+        ap_train_circles: int | None = None,
+        ap_ticket_circles: int | None = None,
+    ) -> None:
+        """Применяет клановые бонусы ко всем участникам.
+
+        Опциональные override-параметры позволяют вызвать это ДО того как
+        соответствующие поля clan будут физически изменены — тогда порядок
+        блокировок при флаше остаётся users->clan (как и everywhere else,
+        см. squad_repo.update_user_combat_power), а не clan->users, что
+        вызывало deadlock с конкурентными операциями по тем же двум строкам
+        (например, emperor.py при дропе карты). Если параметр не передан —
+        читается текущее значение clan.* как раньше.
+        """
         from app.services.business_service import business_service
         from app.config.game_balance import CLAN_AP_INCOME_BONUS, CLAN_AP_TRAIN_BONUS, CLAN_AP_TICKET_BONUS
         # Загружаем только user_id — без полных ORM-объектов
         user_ids = await self.get_clan_member_ids(session, clan.id)
         if not user_ids:
             return
-        users = (await session.execute(select(User).where(User.id.in_(user_ids)))).scalars().all()
-        ap_income = getattr(clan, "ap_income_circles", 0) * CLAN_AP_INCOME_BONUS
-        ap_train = getattr(clan, "ap_train_circles", 0) * CLAN_AP_TRAIN_BONUS
-        ap_ticket = getattr(clan, "ap_ticket_circles", 0) * CLAN_AP_TICKET_BONUS
+        users = (await session.execute(
+            select(User).where(User.id.in_(user_ids)).order_by(User.id)
+        )).scalars().all()
+
+        income_pct = clan.bonus_income_pct if bonus_income_pct is None else bonus_income_pct
+        ticket_pct = clan.bonus_ticket_pct if bonus_ticket_pct is None else bonus_ticket_pct
+        train_pct = clan.bonus_train_pct if bonus_train_pct is None else bonus_train_pct
+        income_circles = getattr(clan, "ap_income_circles", 0) if ap_income_circles is None else ap_income_circles
+        train_circles = getattr(clan, "ap_train_circles", 0) if ap_train_circles is None else ap_train_circles
+        ticket_circles = getattr(clan, "ap_ticket_circles", 0) if ap_ticket_circles is None else ap_ticket_circles
+
+        ap_income = income_circles * CLAN_AP_INCOME_BONUS
+        ap_train = train_circles * CLAN_AP_TRAIN_BONUS
+        ap_ticket = ticket_circles * CLAN_AP_TICKET_BONUS
         for u in users:
-            u.clan_income_bonus = clan.bonus_income_pct + ap_income
-            u.clan_ticket_bonus = clan.bonus_ticket_pct + ap_ticket
-            u.clan_train_bonus = clan.bonus_train_pct + ap_train
+            u.clan_income_bonus = income_pct + ap_income
+            u.clan_ticket_bonus = ticket_pct + ap_ticket
+            u.clan_train_bonus = train_pct + ap_train
             u.clan_donat_income_bonus = clan.donat_income_pct
             u.clan_donat_ticket_bonus = clan.donat_ticket_pct
             u.clan_donat_train_bonus = clan.donat_train_pct

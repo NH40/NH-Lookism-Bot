@@ -136,15 +136,19 @@ class ClanExchangeService(ClanBaseService):
     async def _exchange_squad(self, session, from_user, to_user, amount, meta):
         from app.models.squad_member import SquadMember
         from sqlalchemy import func as sqla_func
+        from app.services.campaign_service import campaign_service
         rank = meta.get("rank") if meta else None
 
+        busy_ids = await campaign_service.get_busy_squad_ids(session, from_user.id)
         cond = SquadMember.user_id == from_user.id
+        if busy_ids:
+            cond = cond & SquadMember.id.notin_(busy_ids)
         if rank:
             cond = cond & (SquadMember.rank == rank)
 
         available = await session.scalar(select(sqla_func.count(SquadMember.id)).where(cond))
         if (available or 0) < amount:
-            return {"ok": False, "reason": f"Недостаточно статистов (есть {available or 0})"}
+            return {"ok": False, "reason": f"Недостаточно статистов (есть {available or 0}, часть могут быть в походе)"}
 
         # Subquery вместо материализации ID в Python — нет огромного IN-списка
         subq = select(SquadMember.id).where(cond).limit(amount)
@@ -160,19 +164,21 @@ class ClanExchangeService(ClanBaseService):
 
     async def _exchange_squad_all(self, session, from_user, to_user, meta):
         from app.models.squad_member import SquadMember
+        from app.services.campaign_service import campaign_service
         rank = meta.get("rank") if meta else None
         if not rank:
             return {"ok": False, "reason": "Не указан ранг"}
         from sqlalchemy import func
-        count = await session.scalar(
-            select(func.count(SquadMember.id))
-            .where(SquadMember.user_id == from_user.id, SquadMember.rank == rank)
-        )
+        busy_ids = await campaign_service.get_busy_squad_ids(session, from_user.id)
+        cond = (SquadMember.user_id == from_user.id) & (SquadMember.rank == rank)
+        if busy_ids:
+            cond = cond & SquadMember.id.notin_(busy_ids)
+        count = await session.scalar(select(func.count(SquadMember.id)).where(cond))
         if not count:
-            return {"ok": False, "reason": f"Нет статистов ранга {rank}"}
+            return {"ok": False, "reason": f"Нет статистов ранга {rank} (часть могут быть в походе)"}
         await session.execute(
             sa_update(SquadMember)
-            .where(SquadMember.user_id == from_user.id, SquadMember.rank == rank)
+            .where(cond)
             .values(user_id=to_user.id)
             .execution_options(synchronize_session=False)
         )

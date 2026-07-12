@@ -15,6 +15,7 @@ from app.constants.raid import (
     PATH_LEVEL_MAX,
     PATH_LEVEL_COSTS,
     PATH_LEVEL_BONUSES,
+    PATH_BONUS_LABELS,
     UI_CRAFT_COST,
     UI_LEVEL_PERKS,
     BIZ_GENIUS_COSTS,
@@ -24,7 +25,7 @@ from app.constants.raid import (
     BUSINESS_DISTRICTS_MAX,
 )
 from app.utils.keyboards.common import back_kb
-from app.utils.formatters import fmt_num
+from app.utils.formatters import fmt_num, progress_bar, pair_lines
 from app.handlers.raid.boss import _raid_boss_photo, _send_or_edit_raid_photo
 
 router = Router()
@@ -95,16 +96,20 @@ async def cb_craft_ui_menu(cb: CallbackQuery, session: AsyncSession, user: User)
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="raid_craft"))
 
-    ui_str = f"УИ {user.ui_level} уровень" if user.ui_level > 0 else ("Донат 🔱" if user.ui_is_donat else "нет")
+    ui_str = "Донат 🔱 (макс)" if user.ui_is_donat else f"{progress_bar(user.ui_level, 4)} {user.ui_level}/4"
     lines = [
         f"👁 <b>Крафт УИ</b>\n",
         f"🔮 Фрагменты УИ: <b>{user.ui_fragments}</b>",
-        f"Текущий УИ: <b>{ui_str}</b>\n",
+        f"Уровень: <b>{ui_str}</b>",
+        f"",
+        f"━━━ 🎯 Уровни ━━━",
     ]
+    perk_bits = []
     for lvl, perk in UI_LEVEL_PERKS.items():
         cost = UI_CRAFT_COST[lvl]
-        st = "✅" if user.ui_level >= lvl else f"{cost} фр."
-        lines.append(f"  {perk['name']}: {perk['perk']} [{st}]")
+        st = "✅" if user.ui_level >= lvl else f"{cost}фр."
+        perk_bits.append(f"{perk['name']}: {perk['perk']} [{st}]")
+    lines.extend(pair_lines(perk_bits))
 
     await cb.message.edit_text(
         "\n".join(lines),
@@ -147,7 +152,7 @@ async def cb_craft_mg_menu(cb: CallbackQuery, session: AsyncSession, user: User)
         f"🧪 Фрагменты алхимии: <b>{frags}</b>",
         "<i>Фрагменты получаются у босса Джинен</i>",
         "",
-        "<b>Зелья:</b>",
+        "━━━ 🧪 Зелья ━━━",
     ]
 
     if donat:
@@ -273,7 +278,7 @@ async def cb_craft_path_menu(cb: CallbackQuery, session: AsyncSession, user: Use
     if user.skill_path:
         bonuses = PATH_LEVEL_BONUSES.get(user.skill_path, {})
         if bonuses:
-            parts = [f"+{v} {k.replace('_', ' ')}" for k, v in bonuses.items()]
+            parts = [f"+{v} {PATH_BONUS_LABELS.get(k, k)}" for k, v in bonuses.items()]
             level_bonus_info = f"\n<i>Бонус за уровень: {', '.join(parts)}</i>"
 
     next_cost_str = (
@@ -287,10 +292,10 @@ async def cb_craft_path_menu(cb: CallbackQuery, session: AsyncSession, user: Use
     await cb.message.edit_text(
         f"🔷 <b>Крафт Пути</b>\n\n"
         f"🔷 Фрагменты Пути: <b>{path_frags}</b>\n\n"
-        f"<b>── Уровень пути ──</b>\n"
-        f"Текущий: <b>{path_level}/{PATH_LEVEL_MAX}</b>{level_bonus_info}\n"
+        f"━━━ 📈 Уровень пути ━━━\n"
+        f"{progress_bar(path_level, PATH_LEVEL_MAX)} <b>{path_level}/{PATH_LEVEL_MAX}</b>{level_bonus_info}\n"
         f"Следующий уровень: <b>{next_cost_str}</b>\n\n"
-        f"<b>── Слияние путей ──</b>\n"
+        f"━━━ 🌐 Слияние путей ━━━\n"
         f"Слоты: <b>{extra_count}/{slots}</b>\n"
         f"Стоимость прокрутки: <b>{spin_status}</b>\n"
         f"<i>Случайный навык из другого пути</i>",
@@ -307,7 +312,7 @@ async def cb_craft_path_level(cb: CallbackQuery, session: AsyncSession, user: Us
         return
 
     bonuses = result["bonuses"]
-    bonus_str = ", ".join(f"+{v} {k.replace('_', ' ')}" for k, v in bonuses.items()) if bonuses else ""
+    bonus_str = ", ".join(f"+{v} {PATH_BONUS_LABELS.get(k, k)}" for k, v in bonuses.items()) if bonuses else ""
     await cb.answer(
         f"⭐ Уровень пути повышен до {result['new_level']}!\n{bonus_str}",
         show_alert=True
@@ -387,9 +392,9 @@ async def _biz_genius_page(cb: CallbackQuery, session: AsyncSession, user: User,
         "<i>Фрагменты — у Элиты (Нулевое поколение)</i>",
         "",
         f"🏢 Бизнес-фрагменты: <b>{biz_frags}</b>",
-        f"🎖 Уровень: <b>{biz_genius}/5</b>",
+        f"🎖 Уровень {progress_bar(biz_genius, 5)} {biz_genius}/5",
         "",
-        "<b>── Уровни Гения бизнеса ──</b>",
+        "━━━ 📈 Уровни Гения бизнеса ━━━",
         "<i>Каждый уровень: новые здания + бонус к доходу + скидка на строительство</i>",
         "",
     ]
@@ -408,11 +413,11 @@ async def _biz_genius_page(cb: CallbackQuery, session: AsyncSession, user: User,
 
     lines += [
         "",
-        "<b>── Бизнес-экспансия ──</b>",
+        "━━━ 🏘 Бизнес-экспансия ━━━",
         "<i>Бонусные районы для строительства без захвата городов</i>",
-        f"🏘 Куплено: <b>{bonus_districts}/{BUSINESS_DISTRICTS_MAX}</b>",
-        f"  Тир 1 (1–{BUSINESS_DISTRICTS_TIER1_MAX}): {BUSINESS_DISTRICT_COST} 🏢/р.",
-        f"  Тир 2 ({BUSINESS_DISTRICTS_TIER1_MAX + 1}–{BUSINESS_DISTRICTS_MAX}): {BUSINESS_DISTRICT_COST_TIER2} 🏢/р.",
+        f"Куплено {progress_bar(bonus_districts, BUSINESS_DISTRICTS_MAX)} {bonus_districts}/{BUSINESS_DISTRICTS_MAX}",
+        f"Тир 1 (1–{BUSINESS_DISTRICTS_TIER1_MAX}): {BUSINESS_DISTRICT_COST} 🏢/р.   "
+        f"Тир 2 ({BUSINESS_DISTRICTS_TIER1_MAX + 1}–{BUSINESS_DISTRICTS_MAX}): {BUSINESS_DISTRICT_COST_TIER2} 🏢/р.",
     ]
 
     try:

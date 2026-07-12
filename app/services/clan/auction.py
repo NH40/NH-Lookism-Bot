@@ -118,7 +118,7 @@ class ClanAuctionService(ClanBaseService):
                 import random
                 char = random.choice(pool)
                 from app.models.character import UserCharacter
-                session.add(UserCharacter(user_id=winner.id, character_id=char["name"], rank=char["rank"], power=char["power"]))
+                session.add(UserCharacter(user_id=winner.id, character_id=char["name"], rank=char["rank"], base_power=char["power"], power=char["power"]))
 
         auction.is_finished = True
 

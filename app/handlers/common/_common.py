@@ -158,16 +158,22 @@ async def _main_menu_text(session: AsyncSession, user: User) -> str:
 
     from app.utils.formatters import progress_bar as _pbar
 
+    land_power_bonus = getattr(user, "clan_land_power_mastery_bonus", 0)
+    land_speed_bonus = getattr(user, "clan_land_speed_mastery_bonus", 0)
+    eff_strength = min(4, (mastery.strength if mastery else 0) + land_power_bonus)
+    eff_speed = min(4, (mastery.speed if mastery else 0) + land_speed_bonus)
+
     mastery_lines = []
-    if mastery:
-        if mastery.strength > 0:
-            mastery_lines.append(f"  💪 Сила {_pbar(mastery.strength, 4)} {mastery.strength}/4 (+{bonus_map[mastery.strength]}% мощи)")
-        if mastery.speed > 0:
-            mastery_lines.append(f"  ⚡ Скорость {_pbar(mastery.speed, 4)} {mastery.speed}/4 (-{speed_map[mastery.speed]}% КД)")
-        if mastery.endurance > 0:
-            mastery_lines.append(f"  🛡 Выносливость {_pbar(mastery.endurance, 4)} {mastery.endurance}/4 (+{speed_map[mastery.endurance]}% порог)")
-        if mastery.technique > 0:
-            mastery_lines.append(f"  🏋 Техника {_pbar(mastery.technique, 4)} {mastery.technique}/4 (+{bonus_map[mastery.technique]}% трен./доход)")
+    if eff_strength > 0:
+        land_str = f" 🏰+{land_power_bonus}" if land_power_bonus else ""
+        mastery_lines.append(f"  💪 Сила {_pbar(eff_strength, 4)} {eff_strength}/4{land_str} (+{bonus_map[eff_strength]}% мощи)")
+    if eff_speed > 0:
+        land_str = f" 🏰+{land_speed_bonus}" if land_speed_bonus else ""
+        mastery_lines.append(f"  ⚡ Скорость {_pbar(eff_speed, 4)} {eff_speed}/4{land_str} (-{speed_map[eff_speed]}% КД)")
+    if mastery and mastery.endurance > 0:
+        mastery_lines.append(f"  🛡 Выносливость {_pbar(mastery.endurance, 4)} {mastery.endurance}/4 (+{speed_map[mastery.endurance]}% порог)")
+    if mastery and mastery.technique > 0:
+        mastery_lines.append(f"  🏋 Техника {_pbar(mastery.technique, 4)} {mastery.technique}/4 (+{bonus_map[mastery.technique]}% трен./доход)")
 
     path_emoji = {"businessman": "💼", "romantic": "💝", "monster": "👹", "shadow": "🌑"}
     path_name  = {"businessman": "Бизнесмен", "romantic": "Романтик", "monster": "Монстр", "shadow": "Тень"}

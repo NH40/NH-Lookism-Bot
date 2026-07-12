@@ -4,7 +4,76 @@ from app.models.user import User
 from app.models.clan import Clan, ClanMember
 
 
+RANK_LABELS = {
+    "owner": "👑 Владелец",
+    "deputy": "🛡 Заместитель",
+    "captain": "⚔️ Капитан",
+    "member": "👤 Участник",
+}
+
+# Ранги, которые могут управлять войной (начать/отменить)
+WAR_ALLOWED_RANKS = {"owner", "deputy"}
+
+
 class ClanBaseService:
+
+    async def get_member_rank(self, session: AsyncSession, clan_id: int, user_id: int) -> str | None:
+        """Возвращает ранг участника или None если не в клане."""
+        member = await session.scalar(
+            select(ClanMember).where(
+                ClanMember.clan_id == clan_id,
+                ClanMember.user_id == user_id,
+            )
+        )
+        return member.rank if member else None
+
+    async def set_member_rank(
+        self, session: AsyncSession, clan: Clan, requester_id: int, target_user_id: int, new_rank: str
+    ) -> dict:
+        if new_rank not in ("deputy", "captain", "member"):
+            return {"ok": False, "reason": "Недопустимый ранг"}
+
+        # Проверяем ранг запрашивающего
+        requester_member = await session.scalar(
+            select(ClanMember).where(ClanMember.clan_id == clan.id, ClanMember.user_id == requester_id)
+        )
+        requester_rank = requester_member.rank if requester_member else "member"
+        is_owner = clan.owner_id == requester_id
+
+        if not is_owner and requester_rank != "deputy":
+            return {"ok": False, "reason": "Только владелец или заместитель может менять ранги"}
+
+        if target_user_id == requester_id:
+            return {"ok": False, "reason": "Нельзя изменить собственный ранг"}
+
+        # Нельзя менять ранг владельца
+        if target_user_id == clan.owner_id:
+            return {"ok": False, "reason": "Нельзя изменить ранг владельца клана"}
+
+        member = await session.scalar(
+            select(ClanMember).where(
+                ClanMember.clan_id == clan.id,
+                ClanMember.user_id == target_user_id,
+            )
+        )
+        if not member:
+            return {"ok": False, "reason": "Игрок не в вашем клане"}
+
+        # Только 1 заместитель: понижаем текущего deputy до captain
+        if new_rank == "deputy":
+            existing_deputies = (await session.execute(
+                select(ClanMember).where(
+                    ClanMember.clan_id == clan.id,
+                    ClanMember.rank == "deputy",
+                    ClanMember.user_id != target_user_id,
+                )
+            )).scalars().all()
+            for dep in existing_deputies:
+                dep.rank = "captain"
+
+        member.rank = new_rank
+        await session.flush()
+        return {"ok": True, "rank": new_rank}
 
     async def get_user_clan(self, session: AsyncSession, user_id: int) -> Clan | None:
         # Single JOIN instead of 2 separate queries
@@ -86,11 +155,9 @@ class ClanBaseService:
         member.rank = "owner"
         clan.owner_id = new_owner_id
         await session.flush()
-        # Переприменяем бонусы региона: новый владелец получает owner-бонусы
-        from app.services.clan.region import ClanRegionService
-        region = await ClanRegionService().get_clan_region(session, clan.id)
-        if region:
-            await ClanRegionService().apply_region_bonuses_for_clan(session, clan.id, region)
+        # Переприменяем бонусы земель клана: новый владелец получает owner-бонус x2 к доходу
+        from app.services.clan.land import ClanLandService
+        await ClanLandService().recalc_land_bonuses(session, clan.id)
         return {"ok": True}
 
     async def admin_transfer_ownership(self, session: AsyncSession, clan: Clan, new_owner_id: int) -> dict:
@@ -108,10 +175,8 @@ class ClanBaseService:
         member.rank = "owner"
         clan.owner_id = new_owner_id
         await session.flush()
-        from app.services.clan.region import ClanRegionService
-        region = await ClanRegionService().get_clan_region(session, clan.id)
-        if region:
-            await ClanRegionService().apply_region_bonuses_for_clan(session, clan.id, region)
+        from app.services.clan.land import ClanLandService
+        await ClanLandService().recalc_land_bonuses(session, clan.id)
         return {"ok": True}
 
     async def rename_clan(self, session: AsyncSession, clan: Clan, user: User, new_name: str) -> dict:
@@ -192,9 +257,6 @@ class ClanBaseService:
         bonus_income_pct: int | None = None,
         bonus_ticket_pct: int | None = None,
         bonus_train_pct: int | None = None,
-        ap_income_circles: int | None = None,
-        ap_train_circles: int | None = None,
-        ap_ticket_circles: int | None = None,
     ) -> None:
         """Применяет клановые бонусы ко всем участникам.
 
@@ -207,7 +269,6 @@ class ClanBaseService:
         читается текущее значение clan.* как раньше.
         """
         from app.services.business_service import business_service
-        from app.config.game_balance import CLAN_AP_INCOME_BONUS, CLAN_AP_TRAIN_BONUS, CLAN_AP_TICKET_BONUS
         # Загружаем только user_id — без полных ORM-объектов
         user_ids = await self.get_clan_member_ids(session, clan.id)
         if not user_ids:
@@ -219,17 +280,11 @@ class ClanBaseService:
         income_pct = clan.bonus_income_pct if bonus_income_pct is None else bonus_income_pct
         ticket_pct = clan.bonus_ticket_pct if bonus_ticket_pct is None else bonus_ticket_pct
         train_pct = clan.bonus_train_pct if bonus_train_pct is None else bonus_train_pct
-        income_circles = getattr(clan, "ap_income_circles", 0) if ap_income_circles is None else ap_income_circles
-        train_circles = getattr(clan, "ap_train_circles", 0) if ap_train_circles is None else ap_train_circles
-        ticket_circles = getattr(clan, "ap_ticket_circles", 0) if ap_ticket_circles is None else ap_ticket_circles
 
-        ap_income = income_circles * CLAN_AP_INCOME_BONUS
-        ap_train = train_circles * CLAN_AP_TRAIN_BONUS
-        ap_ticket = ticket_circles * CLAN_AP_TICKET_BONUS
         for u in users:
-            u.clan_income_bonus = income_pct + ap_income
-            u.clan_ticket_bonus = ticket_pct + ap_ticket
-            u.clan_train_bonus = train_pct + ap_train
+            u.clan_income_bonus = income_pct
+            u.clan_ticket_bonus = ticket_pct
+            u.clan_train_bonus = train_pct
             u.clan_donat_income_bonus = clan.donat_income_pct
             u.clan_donat_ticket_bonus = clan.donat_ticket_pct
             u.clan_donat_train_bonus = clan.donat_train_pct
@@ -237,7 +292,6 @@ class ClanBaseService:
 
     async def _remove_clan_bonuses_from_user(self, session: AsyncSession, user: User) -> None:
         from app.services.business_service import business_service
-        from app.services.clan.region import ClanRegionService
         user.clan_income_bonus = 0
         user.clan_ticket_bonus = 0
         user.clan_train_bonus = 0
@@ -245,31 +299,23 @@ class ClanBaseService:
         user.clan_donat_ticket_bonus = 0
         user.clan_donat_train_bonus = 0
         user.clan_vvip_level = 0
-        user.clan_region_income = 0
-        await ClanRegionService().clear_region_bonuses_for_user(user)
+        user.clan_land_income_pct = 0
+        user.clan_land_power_pct = 0
+        user.clan_land_fragment_pct = 0
+        user.clan_land_mastery_pct = 0
+        user.clan_land_power_mastery_bonus = 0
+        user.clan_land_speed_mastery_bonus = 0
         await business_service._recalc_income(session, user)
 
     async def _add_clan_bonuses_to_user(self, session: AsyncSession, clan: Clan, user: User) -> None:
         from app.services.business_service import business_service
-        from app.services.clan.region import ClanRegionService
-        from app.services.clan.buildings import ClanBuildingsService
-        from app.config.game_balance import CLAN_AP_INCOME_BONUS, CLAN_AP_TRAIN_BONUS, CLAN_AP_TICKET_BONUS
-        ap_income = getattr(clan, "ap_income_circles", 0) * CLAN_AP_INCOME_BONUS
-        ap_train = getattr(clan, "ap_train_circles", 0) * CLAN_AP_TRAIN_BONUS
-        ap_ticket = getattr(clan, "ap_ticket_circles", 0) * CLAN_AP_TICKET_BONUS
-        user.clan_income_bonus = clan.bonus_income_pct + ap_income
-        user.clan_ticket_bonus = clan.bonus_ticket_pct + ap_ticket
-        user.clan_train_bonus = clan.bonus_train_pct + ap_train
+        from app.services.clan.land import ClanLandService
+        user.clan_income_bonus = clan.bonus_income_pct
+        user.clan_ticket_bonus = clan.bonus_ticket_pct
+        user.clan_train_bonus = clan.bonus_train_pct
         user.clan_donat_income_bonus = clan.donat_income_pct
         user.clan_donat_ticket_bonus = clan.donat_ticket_pct
         user.clan_donat_train_bonus = clan.donat_train_pct
         user.clan_vvip_level = getattr(clan, "vvip_level", 0)
-        await ClanRegionService().apply_region_bonuses_for_user(session, user, clan.id)
-        region = await ClanRegionService().get_clan_region(session, clan.id)
-        if region:
-            bld_svc = ClanBuildingsService()
-            buildings = await bld_svc.get_clan_buildings(session, clan.id)
-            user.clan_region_income = bld_svc.calc_total_income_per_member(buildings)
-        else:
-            user.clan_region_income = 0
+        await ClanLandService().apply_land_bonuses_to_user(session, user, clan)
         await business_service._recalc_income(session, user)

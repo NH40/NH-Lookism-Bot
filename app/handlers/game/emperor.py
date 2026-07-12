@@ -54,7 +54,8 @@ async def _compute_speed_pct(session: AsyncSession, user: User) -> int:
     speed = await session.scalar(
         select(UserMastery.speed).where(UserMastery.user_id == user.id)
     )
-    raw = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed or 0, 0)
+    speed_level = min(4, (speed or 0) + getattr(user, "clan_land_speed_mastery_bonus", 0))
+    raw = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed_level, 0)
     speed_pct = int(raw * getattr(user, "skill_path_bonus_multiplier", 1.0))
 
     title_ids = set(await title_repo.get_user_titles(session, user.id))

@@ -66,10 +66,7 @@ async def cb_deck(cb: CallbackQuery, session: AsyncSession, user: User):
     builder.row(InlineKeyboardButton(text="📊 Шансы", callback_data="deck_rates"))
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
 
-    _overflow = (
-        getattr(user, "circ_ticket_overflow", False)
-        or getattr(user, "region_ticket_overflow", False)
-    )
+    _overflow = getattr(user, "circ_ticket_overflow", False)
     _ticket_cap = user.max_tickets * 2 if _overflow else user.max_tickets
     text = (
         f"🃏 <b>Колода</b>\n\n"

@@ -50,7 +50,6 @@ python manager.py stats           # Show player statistics
 | `auction_start_tick`  | 2 min     | Start new auctions                                    |
 | `clan_war_tick`       | 5 min     | Finish expired clan wars, distribute treasury rewards |
 | `clan_auction_tick`   | 1 min     | Finish expired clan auctions                          |
-| `region_war_tick`     | 5 min     | Finish expired Korean region wars, transfer ownership |
 | `campaign_tick`       | 2 min     | Complete expired campaigns                            |
 | `boss_tick`           | 60 sec    | Spawn/expire raid bosses                              |
 | `referral_power_tick` | 30 min    | Recalculate teacher referral power bonuses            |
@@ -66,7 +65,7 @@ Scheduler tasks get the bot reference via `app/bot_instance.get_bot()`.
 
 | File                               | Purpose                                                                                                               |
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `app/main.py`                      | Entry point: DB init, city/region init, router registration, scheduler start, polling                                 |
+| `app/main.py`                      | Entry point: DB init, city init, router registration, scheduler start, polling                                        |
 | `app/models/user.py`               | Central User model (160+ columns — stats, bonuses, phase progress, all denormalized for performance)                  |
 | `app/config/game_balance.py`       | **All numeric balance constants** (costs, multipliers, war durations, thresholds) — change here, not in service logic |
 | `app/config/scheduler_config.py`   | Scheduler intervals                                                                                                   |
@@ -88,11 +87,11 @@ Scheduler tasks get the bot reference via `app/bot_instance.get_bot()`.
 
 ## Clan System
 
-`ClanService` is a composite of 10 service mixins (base/invite/war/exchange/shop/auction/treasury/upgrades/donat/region) merged in `app/services/clan/__init__.py`.
+`ClanService` is a composite of 9 service mixins (base/invite/war/exchange/shop/auction/treasury/upgrades/donat/land) merged in `app/services/clan/__init__.py`.
 
-**Clan member ranks:** `owner` / `deputy` / `captain` / `member` — stored in `ClanMember.rank`. Deputies and owners can start wars and auctions; only owners can change ranks.
+**Clan member ranks:** `owner` / `deputy` / `captain` / `member` — stored in `ClanMember.rank`. Deputies and owners can start wars and auctions; only owners can change ranks. `RANK_LABELS`/`get_member_rank`/`set_member_rank` live in `app/services/clan/base.py`; the rank-management UI is `app/handlers/clan/ranks.py`.
 
-**Region wars** (`app/services/clan/region.py`): Clans with ≤15 members compete for one of 16 Korean regions over 6 hours. Score = sum of per-player activity flags (train/attack_gang/attack_king/attack_fist/spend — max 5 per player). Minimum 10 points needed to capture. Call `clan_service.record_activity(session, user_id, clan_id, action)` from any handler where activity should count.
+**Clan Lands** (`app/services/clan/land.py`, patch 4): a clan buys land levels (1–5, NHCoin from `clan.treasury`) via `buy_land_upgrade`, unlocking building slots (3/5/10/15/25). Each of 7 building types (`CLAN_LAND_BUILDINGS` in `app/config/game_balance.py`) is bought per-unit via `buy_land_building` and grants a clan-wide buff (income %, power %, fragment %, mastery/path point %, shop discount %, or +1 level to power/speed mastery — the latter two capped at 4 units each). Buffs are cached on `User.clan_land_*` columns, recalculated by `ClanLandService.recalc_land_bonuses()` whenever buildings change; the clan owner's income contribution is doubled.
 
 ## Cooldown Pattern
 
@@ -131,7 +130,7 @@ await _send_notifications(bot, tg_ids, text)
 
 Tables are created on startup via `metadata.create_all()` in `app/database.py`. New schema changes are applied **manually** via `migration.sql` — there is no Alembic migration history; Alembic is present but unused for versioned migrations.
 
-`app/main.py` runs `init_cities()` and `init_regions()` on every startup (idempotent — skips if data already exists).
+`app/main.py` runs `init_cities()` on every startup (idempotent — skips if data already exists).
 
 ## Configuration
 

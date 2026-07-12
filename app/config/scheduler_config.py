@@ -30,9 +30,6 @@ CAMPAIGN_TICK_MINUTES: int = 2
 # Тик боссов (спавн/завершение, каждую минуту)
 BOSS_TICK_SECONDS: int = 60
 
-# Тик войн за регионы Кореи (завершение истёкших, каждые 5 минут)
-REGION_WAR_TICK_MINUTES: int = 5
-
 # Тик проверки новых достижений (только недавно активные игроки)
 ACHIEVEMENT_TICK_MINUTES: int = 15
 

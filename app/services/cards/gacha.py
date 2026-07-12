@@ -36,10 +36,7 @@ class GachaService:
             ttl = await cooldown_service.get_ttl(cd_key)
             return {"ok": False, "reason": cooldown_service.format_ttl(ttl)}
 
-        overflow = (
-            getattr(user, "circ_ticket_overflow", False)
-            or getattr(user, "region_ticket_overflow", False)
-        )
+        overflow = getattr(user, "circ_ticket_overflow", False)
         ticket_cap = user.max_tickets * 2 if overflow else user.max_tickets
         if user.tickets >= ticket_cap:
             return {"ok": False, "reason": f"Хранилище полно ({user.tickets}/{ticket_cap})"}
@@ -56,9 +53,8 @@ class GachaService:
         got = roll <= chance
 
         mastery = await _get_mastery(session, user.id)
-        raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(
-            mastery.speed if mastery else 0, 0
-        )
+        speed_level = min(4, (mastery.speed if mastery else 0) + getattr(user, "clan_land_speed_mastery_bonus", 0))
+        raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed_level, 0)
         speed_pct = int(raw_speed * getattr(user, "skill_path_bonus_multiplier", 1.0))
         cd_seconds = max(60, cooldown_service.apply_speed_reduction(
             5 * 60, speed_pct, getattr(user, "ticket_cd_reduction", 0)
@@ -66,11 +62,7 @@ class GachaService:
         await cooldown_service.set_cooldown(cd_key, cd_seconds)
 
         if got:
-            region_double_chance = 50 if getattr(user, "region_double_ticket", False) else 0
-            double = (
-                getattr(user, "double_ticket", False)
-                or (region_double_chance > 0 and random.randint(1, 100) <= region_double_chance)
-            )
+            double = getattr(user, "double_ticket", False)
             gained = 2 if double and (user.tickets + 1 < ticket_cap) else 1
             user.tickets = min(ticket_cap, user.tickets + gained)
             await session.flush()

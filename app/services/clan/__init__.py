@@ -7,8 +7,7 @@ from app.services.clan.auction import ClanAuctionService
 from app.services.clan.treasury import ClanTreasuryService
 from app.services.clan.upgrades import ClanUpgradesService
 from app.services.clan.donat import ClanDonatService
-from app.services.clan.region import ClanRegionService
-from app.services.clan.buildings import ClanBuildingsService
+from app.services.clan.land import ClanLandService
 
 
 class ClanService(
@@ -20,8 +19,7 @@ class ClanService(
     ClanTreasuryService,
     ClanUpgradesService,
     ClanDonatService,
-    ClanBuildingsService,
-    ClanRegionService,
+    ClanLandService,
 ):
     """Единый сервис кланов."""
     pass

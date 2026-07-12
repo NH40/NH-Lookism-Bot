@@ -33,37 +33,6 @@ class AdminResourcesMixin:
         user.war_points = getattr(user, "war_points", 0) + amount
         await session.flush()
 
-    async def give_activity_points(self, session: AsyncSession, user: User, amount: int) -> dict:
-        from app.models.clan import ClanMember
-        from app.models.clan_region import KoreanRegionWar, KoreanRegionWarParticipant
-        from datetime import datetime, timezone
-
-        user.activity_points = (user.activity_points or 0) + amount
-        await session.flush()
-
-        clan_member = await session.scalar(
-            select(ClanMember).where(ClanMember.user_id == user.id)
-        )
-        if not clan_member:
-            return {"ok": True, "war_updated": False}
-
-        now = datetime.now(timezone.utc)
-        participant = await session.scalar(
-            select(KoreanRegionWarParticipant)
-            .join(KoreanRegionWar, KoreanRegionWar.id == KoreanRegionWarParticipant.war_id)
-            .where(
-                KoreanRegionWarParticipant.clan_id == clan_member.clan_id,
-                KoreanRegionWar.is_finished == False,
-                KoreanRegionWar.ends_at > now,
-            )
-        )
-        if participant:
-            participant.score += amount
-            await session.flush()
-            return {"ok": True, "war_updated": True}
-
-        return {"ok": True, "war_updated": False}
-
     async def give_donate(self, session: AsyncSession, user: User, amount: int) -> None:
         user.nh_donate = getattr(user, "nh_donate", 0) + amount
         await session.flush()

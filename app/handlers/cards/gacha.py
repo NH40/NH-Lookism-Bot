@@ -83,7 +83,7 @@ async def _pull_one_bg(chat_id: int, msg_id: int, user_db_id: int, lock_key: str
             f"Ранг: {result['rank_label']}\n"
             f"Мощь: {fmt_num(result['power'])}\n\n"
             f"<i>{char.get('desc', '')}</i>\n\n"
-            f"🎟 Осталось: {u.tickets}/{ u.max_tickets * 2 if (getattr(u, 'circ_ticket_overflow', False) or getattr(u, 'region_ticket_overflow', False)) else u.max_tickets}"
+            f"🎟 Осталось: {u.tickets}/{ u.max_tickets * 2 if getattr(u, 'circ_ticket_overflow', False) else u.max_tickets}"
         )
 
         # ── Попытка отправить фото ────────────────────────────────────────────

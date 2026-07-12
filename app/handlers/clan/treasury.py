@@ -26,13 +26,11 @@ async def cb_clan_treasury(cb: CallbackQuery, session: AsyncSession, user: User)
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="💰 Пополнить NHCoin", callback_data="clan_treasury_deposit_coin"))
-    builder.row(InlineKeyboardButton(text="🎯 Пополнить ОА", callback_data="clan_deposit_ap"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clans_menu"))
 
     text = (
         f"🏦 <b>Казна клана {html.escape(clan.name)}</b>\n\n"
-        f"💰 NHCoin: <b>{fmt_num(clan.treasury)}</b>   (у вас: {fmt_num(user.nh_coins)})\n"
-        f"🎯 ОА:     <b>{clan.treasury_ap}</b>          (у вас: {user.activity_points})\n\n"
+        f"💰 NHCoin: <b>{fmt_num(clan.treasury)}</b>   (у вас: {fmt_num(user.nh_coins)})\n\n"
         f"Что хотите пополнить?"
     )
     try:

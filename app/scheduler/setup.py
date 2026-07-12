@@ -13,7 +13,6 @@ from app.config.scheduler_config import (
     CLAN_AUCTION_TICK_MINUTES,
     CAMPAIGN_TICK_MINUTES,
     BOSS_TICK_SECONDS,
-    REGION_WAR_TICK_MINUTES,
     ACHIEVEMENT_TICK_MINUTES,
     POKER_TICK_SECONDS,
     MARKET_AUCTION_TICK_SECONDS,
@@ -31,7 +30,6 @@ def setup_scheduler() -> AsyncIOScheduler:
         auction_start_tick,
         clan_war_tick,
         clan_auction_tick,
-        region_war_tick,
         referral_power_tick,
         daily_tick,
         bank_credit_tick,
@@ -175,16 +173,6 @@ def setup_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=30,
     )
 
-    # ── Войны за регионы Кореи ────────────────────────────────────────────────
-    scheduler.add_job(
-        region_war_tick,
-        trigger=IntervalTrigger(minutes=REGION_WAR_TICK_MINUTES),
-        id="region_war_tick",
-        name="region_war_tick",
-        max_instances=1,
-        misfire_grace_time=60,
-    )
-
     # ── Достижения: авто-проверка для недавно активных игроков ──────────────
     scheduler.add_job(
         achievement_tick,
@@ -235,5 +223,5 @@ def setup_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=300,
     )
 
-    logger.info("Scheduler configured with 20 jobs")
+    logger.info("Scheduler configured with 19 jobs")
     return scheduler

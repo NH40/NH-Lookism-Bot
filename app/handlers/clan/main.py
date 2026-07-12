@@ -54,7 +54,7 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
     now = datetime.now(timezone.utc)
 
     from app.models.clan import ClanWar, ClanMember
-    from app.services.clan.region import RANK_LABELS
+    from app.services.clan.base import RANK_LABELS
 
     active_war = await session.scalar(
         select(ClanWar).where(
@@ -63,8 +63,6 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
         )
     )
     active_auction = await clan_service.get_active_auction(session, clan.id)
-    active_region_war = await clan_service.get_active_war_for_clan(session, clan.id)
-    own_region = await clan_service.get_clan_region(session, clan.id)
 
     # Ранг текущего пользователя
     my_member = await session.scalar(
@@ -107,7 +105,7 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
         auction_btn,
     )
 
-    # Ряд 4: война клановая + война за регион
+    # Ряд 4: война клановая + клановые земли
     war_btn = (
         InlineKeyboardButton(
             text=f"⚔️ Война ⏳{divmod(max(0, int((active_war.ends_at - now).total_seconds())) // 60, 60)[0]}ч",
@@ -115,21 +113,8 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
         ) if active_war else
         InlineKeyboardButton(text="⚔️ Война", callback_data="clan_war")
     )
-    region_btn = (
-        InlineKeyboardButton(
-            text=f"🗺 Регион ⏳{divmod(max(0, int((active_region_war.ends_at - now).total_seconds())) // 60, 60)[0]}ч",
-            callback_data=f"clan_region_war_status:{active_region_war.id}",
-        ) if active_region_war else
-        InlineKeyboardButton(text="🗺 Регионы", callback_data="clan_regions_map")
-    )
-    builder.row(war_btn, region_btn)
-
-    # Ряд 5: здания региона (если клан владеет регионом)
-    if own_region:
-        builder.row(InlineKeyboardButton(text="🏗 Здания региона", callback_data="clan_region_buildings"))
-
-    # Ряд 6: зал славы (отдельно — широкая)
-    builder.row(InlineKeyboardButton(text="🏆 Зал Славы", callback_data="region_hall_of_fame"))
+    land_btn = InlineKeyboardButton(text=f"🏰 Земли Ур.{clan.land_level}", callback_data="clan_land")
+    builder.row(war_btn, land_btn)
 
     # Для владельца и заместителя: управление
     if my_rank in ("owner", "deputy"):
@@ -143,15 +128,11 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
         InlineKeyboardButton(text="◀️ Назад",    callback_data="main_menu"),
     )
 
-    # Улучшения клана (из казны NHCoin + ОА)
+    # Улучшения клана (из казны NHCoin)
     upgrade_lines = []
     if clan.bonus_income_pct: upgrade_lines.append(f"💰 +{clan.bonus_income_pct}%")
     if clan.bonus_ticket_pct: upgrade_lines.append(f"🎟 +{clan.bonus_ticket_pct}%")
     if clan.bonus_train_pct:  upgrade_lines.append(f"🏋 +{clan.bonus_train_pct}%")
-    ap_inc = getattr(clan, "ap_income_circles", 0)
-    ap_tr  = getattr(clan, "ap_train_circles", 0)
-    if ap_inc: upgrade_lines.append(f"🎯💰 +{ap_inc * 5}%")
-    if ap_tr:  upgrade_lines.append(f"🎯🏋 +{ap_tr * 3}%")
     upgrade_str = "\n⚙️ Улучшения: " + " | ".join(upgrade_lines) if upgrade_lines else ""
 
     # Донат-бонусы
@@ -166,13 +147,12 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
 
     war_str = "\n⚔️ Идёт клановая война!" if active_war else ""
 
-    region_str = ""
-    if own_region:
-        region_str = f"\n🗺 Регион: {own_region.emoji} {own_region.name}"
-        if user.clan_region_income > 0:
-            region_str += f"\n🏗 Доход зданий: +{fmt_num(user.clan_region_income)}/мин"
-
-    ap_str = f"\n🎯 Казна ОА: {clan.treasury_ap}" if getattr(clan, "treasury_ap", 0) > 0 else ""
+    land_slots_used = await clan_service.get_slots_used(session, clan.id)
+    from app.config.game_balance import CLAN_LAND_SLOTS
+    land_total_slots = CLAN_LAND_SLOTS.get(clan.land_level, 0)
+    land_str = f"\n🏰 Земли: Ур.{clan.land_level} ({land_slots_used}/{land_total_slots} зданий)"
+    if user.clan_land_income_pct > 0:
+        land_str += f"\n💰 Бонус дохода от земель: +{user.clan_land_income_pct}%"
 
     text = (
         f"🏯 <b>{html.escape(clan.name)}</b>  {my_rank_label}\n\n"
@@ -180,8 +160,7 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
         f"👥 Участников: {len(members)}/{clan.max_members}\n"
         f"💪 Боевая мощь: {fmt_num(clan.combat_power)}\n"
         f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin"
-        f"{ap_str}"
-        f"{region_str}"
+        f"{land_str}"
         f"{upgrade_str}"
         f"{donat_str}"
         f"{vvip_str}"
@@ -211,7 +190,7 @@ async def cb_clan_members(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer("Вы не в клане", show_alert=True)
         return
 
-    from app.services.clan.region import RANK_LABELS
+    from app.services.clan.base import RANK_LABELS
     members = await clan_service.get_clan_members(session, clan.id)
     lines = [f"👥 <b>Участники клана {html.escape(clan.name)}</b>\n"]
     for m in members:

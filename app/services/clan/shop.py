@@ -13,8 +13,10 @@ class ClanShopService(ClanBaseService):
         item = CLAN_SHOP_MAP.get(item_id)
         if not item:
             return {"ok": False, "reason": "Товар не найден"}
-        if clan.treasury < item.price:
-            return {"ok": False, "reason": f"Недостаточно в казне (нужно {item.price:,})"}
+        discount_pct = await self.get_shop_discount_pct(session, clan.id)
+        price = int(item.price * (1 - discount_pct / 100))
+        if clan.treasury < price:
+            return {"ok": False, "reason": f"Недостаточно в казне (нужно {price:,})"}
 
         if item.item_type == "auction":
             existing = await self.get_active_auction(session, clan.id)
@@ -75,18 +77,18 @@ class ClanShopService(ClanBaseService):
         # трогает users, затем clan) — иначе списание тут заранее лочит clan и при
         # конкурентной операции, которая лочит users->clan в этом порядке (например,
         # emperor.py при дропе карты), возникает deadlock (users->clan vs clan->users).
-        clan.treasury -= item.price
+        clan.treasury -= price
         await session.flush()
 
         import asyncio
         tg_ids = [u.tg_id for u in users if u.id != buyer.id]
         clan_name = clan.name
         buyer_name = buyer.full_name
-        asyncio.create_task(self._notify_shop_purchase(clan_name, buyer_name, item, tg_ids))
+        asyncio.create_task(self._notify_shop_purchase(clan_name, buyer_name, item, price, tg_ids))
 
-        return {"ok": True, "item": item}
+        return {"ok": True, "item": item, "price": price}
 
-    async def _notify_shop_purchase(self, clan_name: str, buyer_name: str, item, tg_ids: list) -> None:
+    async def _notify_shop_purchase(self, clan_name: str, buyer_name: str, item, price: int, tg_ids: list) -> None:
         try:
             from app.bot_instance import get_bot
             import asyncio
@@ -98,7 +100,7 @@ class ClanShopService(ClanBaseService):
                 f"🏯 Клан: {clan_name}\n"
                 f"👤 Куплено: {buyer_name}\n"
                 f"🎁 {item.name}\n"
-                f"💰 Потрачено из казны: {item.price:,} NHCoin"
+                f"💰 Потрачено из казны: {price:,} NHCoin"
             )
             for tg_id in tg_ids:
                 try:
@@ -112,8 +114,10 @@ class ClanShopService(ClanBaseService):
         upgrade = CLAN_UPGRADES_MAP.get(upgrade_id)
         if not upgrade:
             return {"ok": False, "reason": "Улучшение не найдено"}
-        if clan.treasury < upgrade.price:
-            return {"ok": False, "reason": f"Недостаточно в казне (нужно {upgrade.price:,})"}
+        discount_pct = await self.get_shop_discount_pct(session, clan.id)
+        price = int(upgrade.price * (1 - discount_pct / 100))
+        if clan.treasury < price:
+            return {"ok": False, "reason": f"Недостаточно в казне (нужно {price:,})"}
 
         new_bonus_max_members = new_max_members = None
         new_bonus_income_pct = new_bonus_ticket_pct = new_bonus_train_pct = None
@@ -156,7 +160,7 @@ class ClanShopService(ClanBaseService):
             clan.bonus_ticket_pct = new_bonus_ticket_pct
         if new_bonus_train_pct is not None:
             clan.bonus_train_pct = new_bonus_train_pct
-        clan.treasury -= upgrade.price
+        clan.treasury -= price
 
         await session.flush()
-        return {"ok": True, "upgrade": upgrade}
+        return {"ok": True, "upgrade": upgrade, "price": price}

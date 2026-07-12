@@ -194,28 +194,13 @@ class User(Base):
     circ_mountain_extra: Mapped[bool] = mapped_column(Boolean, default=False)    # +районов при захвате (Хозяин горы ≥2)
     circ_trainer_discount: Mapped[int] = mapped_column(Integer, default=0)       # % скидка у Тома Ли/Чон Гона (Император)
 
-    # ── Бонусы региона (обновляются при смене владельца) ─────────────────────
-    region_income_pct: Mapped[int] = mapped_column(Integer, default=0)
-    region_train_pct: Mapped[int] = mapped_column(Integer, default=0)
-    region_ticket_pct: Mapped[int] = mapped_column(Integer, default=0)
-    region_power_pct: Mapped[int] = mapped_column(Integer, default=0)
-    # Уникальные механики региона
-    region_passive_income: Mapped[int] = mapped_column(BigInteger, default=0)
-    region_war_genius: Mapped[int] = mapped_column(Integer, default=0)
-    region_train_cd_pct: Mapped[int] = mapped_column(Integer, default=0)
-    region_raid_cd_pct: Mapped[int] = mapped_column(Integer, default=0)
-    region_fragment_pct: Mapped[int] = mapped_column(Integer, default=0)
-    region_squad_power_pct: Mapped[int] = mapped_column(Integer, default=0)    # +% только к силе статистов
-    region_char_power_pct: Mapped[int] = mapped_column(Integer, default=0)     # +% только к силе персонажей
-    region_ticket_overflow: Mapped[bool] = mapped_column(Boolean, default=False)  # лимит тикетов ×2
-    region_double_ticket: Mapped[bool] = mapped_column(Boolean, default=False)    # шанс +1 тикет при прокрутке
-    region_raid_damage_pct: Mapped[int] = mapped_column(Integer, default=0)    # +% урона в рейдах
-    region_income_building_pct: Mapped[int] = mapped_column(Integer, default=0) # +% к доходу зданий
-    region_trainer_discount: Mapped[int] = mapped_column(Integer, default=0)   # % скидка у тренеров
-
-    # ── Клан: очки активности и доход от зданий региона ──────────────────────
-    activity_points: Mapped[int] = mapped_column(Integer, default=0)
-    clan_region_income: Mapped[int] = mapped_column(Integer, default=0)
+    # ── Клановые земли (патч 4, пересчитываются при изменении зданий клана) ──
+    clan_land_income_pct: Mapped[int] = mapped_column(Integer, default=0)          # +% дохода (владельцу x2)
+    clan_land_power_pct: Mapped[int] = mapped_column(Integer, default=0)           # +% боевой мощи
+    clan_land_fragment_pct: Mapped[int] = mapped_column(Integer, default=0)        # +% фрагментов с рейд-боссов
+    clan_land_mastery_pct: Mapped[int] = mapped_column(Integer, default=0)         # +% очков мастерства/пути с тренировок
+    clan_land_power_mastery_bonus: Mapped[int] = mapped_column(Integer, default=0) # +уровней к мастерству силы (макс 4)
+    clan_land_speed_mastery_bonus: Mapped[int] = mapped_column(Integer, default=0) # +уровней к мастерству скорости (макс 4)
 
     # ── Донат-валюта (NHDonate) ──────────────────────────────────────────────
     nh_donate: Mapped[int] = mapped_column(Integer, default=0)  # 1 NHDonate = 1 рубль

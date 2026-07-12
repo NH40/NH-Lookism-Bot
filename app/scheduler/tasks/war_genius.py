@@ -21,11 +21,8 @@ logger = logging.getLogger(__name__)
 
 async def war_genius_tick() -> None:
     async with AsyncSessionFactory() as session:
-        from sqlalchemy import or_
         user_ids = list((await session.execute(
-            select(User.id).where(
-                or_(User.war_genius_level > 0, User.region_war_genius > 0)
-            )
+            select(User.id).where(User.war_genius_level > 0)
         )).scalars())
 
     if not user_ids:
@@ -69,8 +66,7 @@ async def _auto_attack_for_user(session, user_id: int, user=None, raid=None) -> 
     if not user:
         return
 
-    # region_war_genius стакается с навыком (Ульсан даёт +N уровней, Сеул даёт MAX 5)
-    war_genius = min(5, getattr(user, "war_genius_level", 0) + getattr(user, "region_war_genius", 0))
+    war_genius = min(5, getattr(user, "war_genius_level", 0))
     if war_genius == 0:
         return
 

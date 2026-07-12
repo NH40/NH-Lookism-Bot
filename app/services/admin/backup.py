@@ -209,14 +209,10 @@ class AdminBackupMixin:
                 user.tickets = min(user.tickets + extra, user.max_tickets)
 
         # ── Сброс казны и улучшений кланов (кроме доната) ПОСЛЕ сброса ───────────
-        from app.models.clan_building import ClanRegionBuilding
-        from app.models.clan_region import KoreanRegion
+        from app.models.clan_land import ClanLandBuilding
 
-        # Удаляем все здания регионов
-        await session.execute(sa_delete(ClanRegionBuilding))
-
-        # Снимаем владение регионами
-        await session.execute(sa_update(KoreanRegion).values(owner_clan_id=None))
+        # Удаляем все клановые земли/здания
+        await session.execute(sa_delete(ClanLandBuilding))
 
         all_clans_r = await session.execute(select(Clan))
         all_clans = all_clans_r.scalars().all()
@@ -229,14 +225,11 @@ class AdminBackupMixin:
                 clans_to_delete.append(clan.id)
                 continue
             clan.treasury = 0
-            clan.treasury_ap = 0
             clan.bonus_max_members = 0
             clan.bonus_income_pct = 0
             clan.bonus_ticket_pct = 0
             clan.bonus_train_pct = 0
-            clan.ap_income_circles = 0
-            clan.ap_train_circles = 0
-            clan.ap_ticket_circles = 0
+            clan.land_level = 0
             clan.max_members = 5
             await clan_service.recalc_power(session, clan)
 

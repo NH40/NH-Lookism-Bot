@@ -40,7 +40,8 @@ async def cb_duel_menu(cb: CallbackQuery, session: AsyncSession, user: User):
         sa_select(UserMastery).where(UserMastery.user_id == user.id)
     )
     speed_levels = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
-    raw_speed = speed_levels.get(mastery.speed if mastery else 0, 0)
+    speed_level = min(4, (mastery.speed if mastery else 0) + getattr(user, "clan_land_speed_mastery_bonus", 0))
+    raw_speed = speed_levels.get(speed_level, 0)
     speed_pct = int(raw_speed * getattr(user, "skill_path_bonus_multiplier", 1.0))
     from app.constants.cards import DUEL_BOT_CD_BASE, DUEL_PVP_CD_BASE, DUEL_DONAT_CD_REDUCTION, DUEL_MIN_CD
     donat_pct = DUEL_DONAT_CD_REDUCTION if getattr(user, "donat_duel_cd", False) else 0

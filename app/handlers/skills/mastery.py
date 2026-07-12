@@ -30,11 +30,17 @@ async def cb_mastery_menu(cb: CallbackQuery, session: AsyncSession, user: User):
 
     bonus_map = {0: 0, 1: 5, 2: 10, 3: 20, 4: 30}
     speed_map = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
+    land_bonus_map = {
+        "strength": getattr(user, "clan_land_power_mastery_bonus", 0),
+        "speed": getattr(user, "clan_land_speed_mastery_bonus", 0),
+    }
 
     def lvl(attr): return getattr(mastery, attr, 0) if mastery else 0
+    def effective_lvl(attr): return min(4, lvl(attr) + land_bonus_map.get(attr, 0))
     def bmap(attr):
-        return speed_map.get(lvl(attr), 0) if attr in ("speed", "endurance") \
-            else bonus_map.get(lvl(attr), 0)
+        eff = effective_lvl(attr)
+        return speed_map.get(eff, 0) if attr in ("speed", "endurance") \
+            else bonus_map.get(eff, 0)
 
     skills_info = [
         ("strength",  "⚔️ Сила",        "Повышает общую боевую мощь"),
@@ -62,19 +68,22 @@ async def cb_mastery_menu(cb: CallbackQuery, session: AsyncSession, user: User):
         max_level = 4
         bar = progress_bar(cur, max_level)
 
+        land_bonus = land_bonus_map.get(skill_id, 0)
+        land_str = f" 🏰+{land_bonus}" if land_bonus else ""
+
         if cur < max_level:
             next_level = cur + 1
             cost = next_level
             can_buy = user.mastery_points >= cost
             afford = "✅" if can_buy else "❌"
-            lines.append(f"{afford} {label} {bar} {level_name} (+{bonus}%)")
+            lines.append(f"{afford} {label} {bar} {level_name}{land_str} (+{bonus}%)")
             lines.append(f"   {desc} · след: {cost}⭐")
             builder.button(
                 text=f"{label} [{level_name}→{next_level}] | ⭐ {cost}",
                 callback_data=f"mastery_upgrade:{skill_id}"
             )
         else:
-            lines.append(f"✅ {label} {bar} MAX (+{bonus}%)")
+            lines.append(f"✅ {label} {bar} MAX{land_str} (+{bonus}%)")
             lines.append(f"   {desc}")
 
     builder.adjust(1)

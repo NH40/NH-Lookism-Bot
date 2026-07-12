@@ -79,38 +79,6 @@ async def _show_business_main(
         circ_per_min = info.get("circ_passive_per_min", 0) or circ_passive
         circ_line = f"\n💸 Пассивный: +{fmt_num(circ_per_min)}/мин"
 
-    # Доход от зданий клана в регионе (с бонусами владельца)
-    clan_bld_line = ""
-    clan_bld_income = getattr(user, "clan_region_income", 0)
-    if clan_bld_income:
-        from sqlalchemy import select as sa_select
-        from app.models.clan import Clan, ClanMember
-        effective_bld = clan_bld_income
-        try:
-            cm = await session.scalar(
-                sa_select(ClanMember).where(ClanMember.user_id == user.id)
-            )
-            if cm:
-                clan = await session.scalar(sa_select(Clan).where(Clan.id == cm.clan_id))
-                if clan:
-                    from app.models.user import User as UserModel
-                    owner = await session.scalar(
-                        sa_select(UserModel).where(UserModel.id == clan.owner_id)
-                    )
-                    if owner:
-                        owner_bonus = (
-                            (owner.income_bonus_percent or 0)
-                            + (owner.prestige_income_bonus or 0)
-                            + (owner.clan_income_bonus or 0)
-                            + (owner.clan_donat_income_bonus or 0)
-                            + (owner.region_income_pct or 0)
-                            + (owner.region_income_building_pct or 0)
-                        )
-                        effective_bld = max(0, int(clan_bld_income * (1 + owner_bonus / 100)))
-        except Exception:
-            pass
-        clan_bld_line = f"\n🏗 Здания клана: +{fmt_num(effective_bld)}/мин"
-
     # Таймер ежедневного города Архангела (круг 10)
     archangel_timer_line = ""
     if getattr(user, "circ_daily_districts", 0) > 0:
@@ -154,8 +122,8 @@ async def _show_business_main(
         extra_bits.append(f"🧩 Фрагментов: {biz_frags}")
     extra_line = f"\n{' | '.join(extra_bits)}" if extra_bits else ""
 
-    # Дополнительный доход (пассивный/клан/архангел) — отдельным блоком
-    extra_income_lines = [l for l in (circ_line, clan_bld_line, archangel_timer_line) if l]
+    # Дополнительный доход (пассивный/архангел) — отдельным блоком
+    extra_income_lines = [l for l in (circ_line, archangel_timer_line) if l]
     extra_income_section = ""
     if extra_income_lines:
         extra_income_section = "\n\n━━━ 🌐 Доп. доход ━━━" + "".join(extra_income_lines)

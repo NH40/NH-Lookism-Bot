@@ -99,7 +99,8 @@ class CityQueriesMixin:
         mastery = mr.scalar_one_or_none()
         speed_pct = 0
         if mastery:
-            raw = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(mastery.speed, 0)
+            speed_level = min(4, mastery.speed + getattr(user, "clan_land_speed_mastery_bonus", 0))
+            raw = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed_level, 0)
             speed_pct = int(raw * user.skill_path_bonus_multiplier)
         from app.repositories.title_repo import title_repo
         title_ids = set(await title_repo.get_user_titles(session, user.id))

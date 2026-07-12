@@ -27,10 +27,6 @@ class SquadRepo:
             .where(SquadMember.user_id == user.id)
         )
         squad_power = int(squad_power_raw or 0)
-        # Регион: +% только к силе статистов
-        region_squad_pct = getattr(user, 'region_squad_power_pct', 0)
-        if region_squad_pct > 0:
-            squad_power = int(squad_power * (1 + region_squad_pct / 100))
         # Путь Романтика: +% только к силе статистов
         statist_bonus = getattr(user, 'statist_power_bonus', 0)
         if statist_bonus > 0:
@@ -45,10 +41,6 @@ class SquadRepo:
         # sum(BIGINT) в Postgres возвращает NUMERIC → Decimal в asyncpg;
         # приводим к int сразу, иначе Decimal * float ниже упадёт с TypeError
         char_power = int(char_r.scalar() or 0)
-        # Регион: +% только к силе персонажей
-        region_char_pct = getattr(user, 'region_char_power_pct', 0)
-        if region_char_pct > 0:
-            char_power = int(char_power * (1 + region_char_pct / 100))
 
         # 3. Бонус от учителя (обновляется scheduler'ом каждые 30 мин)
         teacher_bonus = user.teacher_power_bonus if user.referred_by else 0
@@ -60,11 +52,17 @@ class SquadRepo:
         strength = await session.scalar(
             select(UserMastery.strength).where(UserMastery.user_id == user.id)
         )
-        if strength:
+        strength_level = min(4, (strength or 0) + getattr(user, 'clan_land_power_mastery_bonus', 0))
+        if strength_level:
             strength_bonus = {0: 0, 1: 5, 2: 10, 3: 20, 4: 30}
-            raw = strength_bonus.get(strength, 0)
+            raw = strength_bonus.get(strength_level, 0)
             effective = raw * user.skill_path_bonus_multiplier
             total = int(total * (1 + effective / 100))
+
+        # Клановые земли: +% боевой мощи
+        land_power_pct = getattr(user, 'clan_land_power_pct', 0)
+        if land_power_pct > 0:
+            total = int(total * (1 + land_power_pct / 100))
 
         # Бонус навыков пути (squad_power_bonus): mon_power_1 / mon_power_2
         if user.squad_power_bonus > 0:

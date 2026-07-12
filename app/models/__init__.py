@@ -14,8 +14,7 @@ from app.models.king_bot import KingBot
 from app.models.promo import PromoCode, PromoUse
 from app.models.daily_quest import DailyQuest
 from app.models.clan import Clan, ClanMember, ClanInvite, ClanWar, ClanAuction
-from app.models.clan_region import KoreanRegion, KoreanRegionWar, KoreanRegionWarParticipant, KoreanRegionActivity
-from app.models.clan_building import ClanRegionBuilding
+from app.models.clan_land import ClanLandBuilding
 from app.models.payment import Payment
 from app.models.poker import PokerTable, PokerPlayer
 
@@ -27,8 +26,7 @@ __all__ = [
     "Referral", "Auction", "AuctionLot", "AuctionBid",
     "GameVersion", "MarketListing", "MarketAuction", "MarketAuctionBid", "KingBot", "PromoCode", "PromoUse", "DailyQuest",
     "Clan", "ClanMember", "ClanInvite", "ClanWar", "ClanAuction",
-    "KoreanRegion", "KoreanRegionWar", "KoreanRegionWarParticipant", "KoreanRegionActivity",
-    "ClanRegionBuilding",
+    "ClanLandBuilding",
     "Payment",
     "PokerTable", "PokerPlayer",
 ]

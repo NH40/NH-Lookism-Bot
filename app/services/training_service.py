@@ -37,7 +37,7 @@ class TrainingService:
                 "cd": ttl,
             }
 
-        discount = getattr(user, 'circ_trainer_discount', 0) + getattr(user, 'region_trainer_discount', 0)
+        discount = getattr(user, 'circ_trainer_discount', 0)
         effective_cost = max(1, int(TOM_LEE_COST * (1 - discount / 100)))
         if user.nh_coins < effective_cost:
             return {
@@ -49,12 +49,13 @@ class TrainingService:
         user.coins_spent += effective_cost
 
         points = random.randint(TOM_LEE_POINTS_MIN, TOM_LEE_POINTS_MAX)
+        points = int(points * (1 + getattr(user, 'clan_land_mastery_pct', 0) / 100))
         user.mastery_points += points
 
         speed = await session.scalar(select(UserMastery.speed).where(UserMastery.user_id == user.id))
-        raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed or 0, 0)
-        extra = (getattr(user, 'trainer_cd_reduction', 0) + getattr(user, 'ticket_cd_reduction', 0)
-                 + getattr(user, 'region_train_cd_pct', 0))
+        speed_level = min(4, (speed or 0) + getattr(user, 'clan_land_speed_mastery_bonus', 0))
+        raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed_level, 0)
+        extra = (getattr(user, 'trainer_cd_reduction', 0) + getattr(user, 'ticket_cd_reduction', 0))
         cd = cooldown_service.apply_speed_reduction(TOM_LEE_CD_SECONDS, raw_speed, extra_pct=extra)
         await cooldown_service.set_cooldown(cd_key, cd)
 
@@ -79,7 +80,7 @@ class TrainingService:
                 "cd": ttl,
             }
 
-        discount = getattr(user, 'circ_trainer_discount', 0) + getattr(user, 'region_trainer_discount', 0)
+        discount = getattr(user, 'circ_trainer_discount', 0)
         effective_cost = max(1, int(JEON_GON_COST * (1 - discount / 100)))
         if user.nh_coins < effective_cost:
             return {
@@ -97,12 +98,13 @@ class TrainingService:
         user.coins_spent += effective_cost
 
         points = random.randint(JEON_GON_POINTS_MIN, JEON_GON_POINTS_MAX)
+        points = int(points * (1 + getattr(user, 'clan_land_mastery_pct', 0) / 100))
         user.skill_path_points += points
 
         speed = await session.scalar(select(UserMastery.speed).where(UserMastery.user_id == user.id))
-        raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed or 0, 0)
-        extra = (getattr(user, 'trainer_cd_reduction', 0) + getattr(user, 'ticket_cd_reduction', 0)
-                 + getattr(user, 'region_train_cd_pct', 0))
+        speed_level = min(4, (speed or 0) + getattr(user, 'clan_land_speed_mastery_bonus', 0))
+        raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed_level, 0)
+        extra = (getattr(user, 'trainer_cd_reduction', 0) + getattr(user, 'ticket_cd_reduction', 0))
         cd = cooldown_service.apply_speed_reduction(JEON_GON_CD_SECONDS, raw_speed, extra_pct=extra)
         await cooldown_service.set_cooldown(cd_key, cd)
 
@@ -141,9 +143,9 @@ class TrainingService:
         user.war_points = getattr(user, "war_points", 0) + points
 
         speed = await session.scalar(select(UserMastery.speed).where(UserMastery.user_id == user.id))
-        raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed or 0, 0)
-        extra = (getattr(user, 'trainer_cd_reduction', 0) + getattr(user, 'ticket_cd_reduction', 0)
-                 + getattr(user, 'region_train_cd_pct', 0))
+        speed_level = min(4, (speed or 0) + getattr(user, 'clan_land_speed_mastery_bonus', 0))
+        raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed_level, 0)
+        extra = (getattr(user, 'trainer_cd_reduction', 0) + getattr(user, 'ticket_cd_reduction', 0))
         cd = cooldown_service.apply_speed_reduction(MANAGER_KIM_CD_SECONDS, raw_speed, extra_pct=extra)
         await cooldown_service.set_cooldown(cd_key, cd)
 

@@ -46,7 +46,6 @@ class AdminFSM(StatesGroup):
     waiting_path_fragments = State()
     waiting_business_fragments = State()
     waiting_war_points = State()
-    waiting_activity_points = State()
     # Карточки (старый поток — оставлен для совместимости)
     waiting_card_char = State()
     waiting_card_level = State()

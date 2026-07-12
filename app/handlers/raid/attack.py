@@ -104,7 +104,7 @@ async def cb_raid_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         return
 
     if result.get("boss_killed"):
-        # Личная активность (Алея/Зал славы) + активность в войне за регион
+        # Личная активность (Алея/Зал славы)
         from app.utils.region_activity import record as record_activity
         await record_activity(session, user.id, "raid")
 

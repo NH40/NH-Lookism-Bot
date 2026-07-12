@@ -31,7 +31,6 @@ from sqlalchemy import select, text, func, or_
 from app.database import AsyncSessionFactory
 from app.models.user import User
 from app.models.potion import ActivePotion
-from app.models.clan import Clan, ClanMember
 
 logger = logging.getLogger(__name__)
 
@@ -79,13 +78,9 @@ async def income_tick():
                     User.prestige_income_bonus,
                     User.clan_income_bonus,
                     User.clan_donat_income_bonus,
-                    User.region_income_pct,
-                    User.region_passive_income,
-                    User.region_income_building_pct,
-                    User.clan_region_income,
+                    User.clan_land_income_pct,
                 ).where(
-                    or_(User.income_per_minute > 0, User.circ_passive_income > 0,
-                        User.region_passive_income > 0, User.clan_region_income > 0)
+                    or_(User.income_per_minute > 0, User.circ_passive_income > 0)
                 )
             )
             users = result.all()
@@ -110,31 +105,6 @@ async def income_tick():
                 row.user_id: row.total_bonus for row in pot_result.all()
             }
 
-            # ── 2b. Бонусы владельца клана для дохода зданий региона ─────────
-            # user_id -> суммарный бонус % владельца его клана
-            clan_bld_users = [u.id for u in users if (u.clan_region_income or 0) > 0]
-            owner_bonus_map: dict[int, int] = {}
-            if clan_bld_users:
-                from sqlalchemy.orm import aliased
-                OwnerUser = aliased(User, name="owner_user")
-                ob_result = await session.execute(
-                    select(
-                        ClanMember.user_id,
-                        (
-                            func.coalesce(OwnerUser.income_bonus_percent, 0)
-                            + func.coalesce(OwnerUser.prestige_income_bonus, 0)
-                            + func.coalesce(OwnerUser.clan_income_bonus, 0)
-                            + func.coalesce(OwnerUser.clan_donat_income_bonus, 0)
-                            + func.coalesce(OwnerUser.region_income_pct, 0)
-                            + func.coalesce(OwnerUser.region_income_building_pct, 0)
-                        ).label("owner_bonus"),
-                    )
-                    .join(Clan, Clan.id == ClanMember.clan_id)
-                    .join(OwnerUser, OwnerUser.id == Clan.owner_id)
-                    .where(ClanMember.user_id.in_(clan_bld_users))
-                )
-                owner_bonus_map = {row.user_id: int(row.owner_bonus or 0) for row in ob_result.all()}
-
             # ── 3. Считаем дельты в Python ──────────────────────────────────
             user_deltas: dict[int, int] = {}    # user_id -> монеты к зачислению
             teacher_deltas: dict[int, int] = {} # teacher_id -> монеты к зачислению
@@ -144,8 +114,7 @@ async def income_tick():
                 potion_bonus = income_bonuses.get(u.id, 0)
 
                 if u.income_per_minute > 0:
-                    building_bonus = (u.region_income_building_pct or 0)
-                    total = int(u.income_per_minute * (1 + (potion_bonus + building_bonus) / 100))
+                    total = int(u.income_per_minute * (1 + potion_bonus / 100))
 
                     if total > 0:
                         if u.referred_by:
@@ -158,19 +127,12 @@ async def income_tick():
                         else:
                             earned += total
 
-                # Доход от зданий клана — умножается на бонусы владельца клана
-                clan_bld = u.clan_region_income or 0
-                if clan_bld > 0:
-                    owner_bonus = owner_bonus_map.get(u.id, 0)
-                    earned += max(0, int(clan_bld * (1 + owner_bonus / 100)))
-
-                # Пассивный доход: circ-донаты + регион-бонус
-                circ = (u.circ_passive_income or 0) + (u.region_passive_income or 0)
+                # Пассивный доход: circ-донаты
+                circ = u.circ_passive_income or 0
                 if circ > 0:
                     skills_bonus = (u.income_bonus_percent or 0) + (u.prestige_income_bonus or 0)
-                    clan_bonus   = (u.clan_income_bonus or 0) + (u.clan_donat_income_bonus or 0)
-                    region_bonus = (u.region_income_pct or 0)
-                    circ_total_bonus = skills_bonus + clan_bonus + region_bonus + potion_bonus
+                    clan_bonus   = (u.clan_income_bonus or 0) + (u.clan_donat_income_bonus or 0) + (u.clan_land_income_pct or 0)
+                    circ_total_bonus = skills_bonus + clan_bonus + potion_bonus
                     per_tick = max(0, int(circ * (1 + circ_total_bonus / 100)))
                     if per_tick > 0:
                         earned += per_tick

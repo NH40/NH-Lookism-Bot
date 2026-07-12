@@ -18,11 +18,8 @@ class Clan(Base):
     bonus_income_pct: Mapped[int] = mapped_column(Integer, default=0)
     bonus_ticket_pct: Mapped[int] = mapped_column(Integer, default=0)
     bonus_train_pct: Mapped[int] = mapped_column(Integer, default=0)
-    # Казна очков активности (ОА) и улучшения за ОА
-    treasury_ap: Mapped[int] = mapped_column(Integer, default=0)
-    ap_income_circles: Mapped[int] = mapped_column(Integer, default=0)
-    ap_train_circles: Mapped[int] = mapped_column(Integer, default=0)
-    ap_ticket_circles: Mapped[int] = mapped_column(Integer, default=0)
+    # Клановые земли (патч 4): уровень земли определяет число слотов под здания
+    land_level: Mapped[int] = mapped_column(Integer, default=0)
     # Донат-бонусы (выдаются администратором)
     donat_income_pct: Mapped[int] = mapped_column(Integer, default=0)
     donat_ticket_pct: Mapped[int] = mapped_column(Integer, default=0)
@@ -34,8 +31,6 @@ class Clan(Base):
     donat_school_circles: Mapped[int] = mapped_column(Integer, default=0)
     donat_war_circles: Mapped[int] = mapped_column(Integer, default=0)
     donat_premium_circles: Mapped[int] = mapped_column(Integer, default=0)
-    # КД после войны регион-vs-регион (4 часа, нельзя вызывать/быть вызванным)
-    region_war_cd_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

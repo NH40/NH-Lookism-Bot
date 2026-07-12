@@ -134,11 +134,6 @@ class RaidService:
         if power > 0 and getattr(user, "circ_dragon_active", False):
             power = int(power * 1.15)
 
-        # Бонус урона от региона (Тэджон и др.)
-        region_dmg = getattr(user, "region_raid_damage_pct", 0)
-        if power > 0 and region_dmg > 0:
-            power = int(power * (1 + region_dmg / 100))
-
         return power
 
     async def start_raid(
@@ -210,7 +205,7 @@ class RaidService:
         if instant_chance > 0 and random.randint(1, 100) <= instant_chance:
             from app.services.potion_service import potion_service
             drop_bonus = await potion_service.get_raid_drop_bonus(session, user.id)
-            frag_bonus = getattr(user, "fragment_bonus_pct", 0) + getattr(user, "region_fragment_pct", 0)
+            frag_bonus = getattr(user, "fragment_bonus_pct", 0) + getattr(user, "clan_land_fragment_pct", 0)
             total_drop = drop_bonus + frag_bonus
             fragments = calc_fragments(power, effective_hp, reward_type, total_drop)
             # Круговой донат «Корейский дьявол» круг 6: шанс удвоения наград
@@ -308,7 +303,7 @@ class RaidService:
             from app.services.potion_service import potion_service
             drop_bonus = await potion_service.get_raid_drop_bonus(session, user.id)
             # Круговой донат «Повелитель подземелья»: бонус к фрагментам
-            frag_bonus = getattr(user, "fragment_bonus_pct", 0) + getattr(user, "region_fragment_pct", 0)
+            frag_bonus = getattr(user, "fragment_bonus_pct", 0) + getattr(user, "clan_land_fragment_pct", 0)
             total_drop = drop_bonus + frag_bonus
             fragments = calc_fragments(raid.damage_dealt, effective_hp, reward_type, total_drop)
             # Круговой донат «Корейский дьявол» круг 6: шанс удвоения наград
@@ -385,7 +380,7 @@ class RaidService:
         reward_type = boss.get("reward_fragments", "ui")
         from app.services.potion_service import potion_service
         drop_bonus = await potion_service.get_raid_drop_bonus(session, user.id)
-        frag_bonus = getattr(user, "fragment_bonus_pct", 0)  # region_fragment_pct disabled
+        frag_bonus = getattr(user, "fragment_bonus_pct", 0)  # clan_land_fragment_pct намеренно не применяется здесь
         total_drop = drop_bonus + frag_bonus
         fragments = calc_fragments(raid.damage_dealt, effective_hp, reward_type, total_drop)
         # Круговой донат «Корейский дьявол» круг 6: шанс удвоения наград
@@ -554,9 +549,9 @@ class RaidService:
         speed = await session.scalar(
             select(UserMastery.speed).where(UserMastery.user_id == user.id)
         )
-        raw = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed or 0, 0)
-        base = int(raw * user.skill_path_bonus_multiplier)
-        return base + getattr(user, "region_raid_cd_pct", 0)
+        speed_level = min(4, (speed or 0) + getattr(user, "clan_land_speed_mastery_bonus", 0))
+        raw = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed_level, 0)
+        return int(raw * user.skill_path_bonus_multiplier)
 
     def _apply_ui_level(self, user: User, level: int) -> None:
         user.ultra_instinct = level >= 1

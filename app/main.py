@@ -41,9 +41,6 @@ async def main():
     logger.info("Initializing cities...")
     await init_cities()
 
-    logger.info("Initializing Korean regions...")
-    await init_regions()
-
     bot = Bot(
         token=settings.BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
@@ -142,50 +139,6 @@ async def init_cities():
                             total += 1
 
             logger.info(f"Created {total} cities")
-
-
-async def init_regions():
-    from app.database import AsyncSessionFactory
-    from app.models.clan_region import KoreanRegion
-    from app.data.regions import KOREAN_REGIONS
-    from sqlalchemy import select
-
-    async with AsyncSessionFactory() as session:
-        async with session.begin():
-            logger.info("Syncing Korean regions...")
-            for r in KOREAN_REGIONS:
-                existing = await session.scalar(
-                    select(KoreanRegion).where(KoreanRegion.slug == r.slug)
-                )
-                if existing:
-                    existing.description = r.description
-                else:
-                    session.add(KoreanRegion(
-                        slug=r.slug, name=r.name, emoji=r.emoji,
-                        description=r.description,
-                    ))
-            logger.info(f"Synced {len(KOREAN_REGIONS)} Korean regions")
-
-    # Синхронизируем регион-бонусы у игроков с текущими владельцами регионов
-    await _sync_region_bonuses_on_startup()
-
-
-async def _sync_region_bonuses_on_startup():
-    """Пересинхронизирует регион-бонусы у всех игроков при старте.
-    Использует bulk UPDATE: 2 запроса на регион (владелец + участники) вместо N.
-    """
-    from app.database import AsyncSessionFactory
-    from app.models.clan_region import KoreanRegion
-    from app.services.clan import clan_service as svc
-    from sqlalchemy import select
-    async with AsyncSessionFactory() as session:
-        async with session.begin():
-            regions = (await session.execute(
-                select(KoreanRegion).where(KoreanRegion.owner_clan_id.isnot(None))
-            )).scalars().all()
-            for region in regions:
-                await svc.apply_region_bonuses_for_clan(session, region.owner_clan_id, region)
-            logger.info(f"Synced region bonuses for {len(regions)} owned regions")
 
 
 if __name__ == "__main__":

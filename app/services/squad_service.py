@@ -31,11 +31,11 @@ async def _get_mastery(session: AsyncSession, user_id: int) -> UserMastery | Non
     return result.scalar_one_or_none()
 
 
-def _get_speed_reduction(mastery: UserMastery | None, multiplier: float = 1.0) -> int:
+def _get_speed_reduction(mastery: UserMastery | None, multiplier: float = 1.0, clan_bonus: int = 0) -> int:
     speed_levels = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
-    if not mastery:
-        return 0
-    return int(speed_levels.get(mastery.speed, 0) * multiplier)
+    raw = mastery.speed if mastery else 0
+    speed_level = min(4, raw + clan_bonus)
+    return int(speed_levels.get(speed_level, 0) * multiplier)
 
 
 class SquadService:
@@ -108,7 +108,7 @@ class SquadService:
         # Счётчик достижений
         user.total_statists_recruited = (user.total_statists_recruited or 0) + len(recruited)
 
-        # Личная активность (Алея/Зал славы) + активность в войне за регион
+        # Личная активность (Алея/Зал славы)
         from app.utils.region_activity import record as record_activity
         await record_activity(session, user.id, "recruit")
 
@@ -118,7 +118,10 @@ class SquadService:
 
         # КД с учётом скорости и титула focus
         mastery = await _get_mastery(session, user.id)
-        speed_pct = _get_speed_reduction(mastery, user.skill_path_bonus_multiplier)
+        speed_pct = _get_speed_reduction(
+            mastery, user.skill_path_bonus_multiplier,
+            getattr(user, 'clan_land_speed_mastery_bonus', 0),
+        )
         from app.repositories.title_repo import title_repo
         has_focus = await title_repo.has_title(session, user.id, "focus")
         extra = 20 if has_focus else 0
@@ -213,8 +216,7 @@ class SquadService:
         # Охват тренировки (% от кандидатов)
         train_bonus = await potion_service.get_effective_train_bonus(session, user)
         clan_train = getattr(user, 'clan_train_bonus', 0) + getattr(user, 'clan_donat_train_bonus', 0)
-        region_train = getattr(user, 'region_train_pct', 0)
-        coverage_pct = min(100, TRAIN_BASE_COVERAGE + train_bonus + clan_train + region_train)
+        coverage_pct = min(100, TRAIN_BASE_COVERAGE + train_bonus + clan_train)
         count_to_train = max(1, int(cand_count * coverage_pct / 100))
 
         success_chance = min(TRAIN_MAX_SUCCESS_CHANCE, TRAIN_BASE_SUCCESS_CHANCE + user.train_quality_bonus)
@@ -262,13 +264,15 @@ class SquadService:
 
         # КД тренировки с учётом скорости и focus
         mastery = await _get_mastery(session, user.id)
-        speed_pct = _get_speed_reduction(mastery, user.skill_path_bonus_multiplier)
+        speed_pct = _get_speed_reduction(
+            mastery, user.skill_path_bonus_multiplier,
+            getattr(user, 'clan_land_speed_mastery_bonus', 0),
+        )
         from app.repositories.title_repo import title_repo
         has_focus = await title_repo.has_title(session, user.id, "focus")
         extra = 20 if has_focus else 0
         clan_speed = (getattr(user, 'clan_train_bonus', 0) + getattr(user, 'clan_donat_train_bonus', 0)) // 2
-        region_train_cd = getattr(user, 'region_train_cd_pct', 0)
-        train_cd_seconds = cooldown_service.apply_speed_reduction(5 * 60, speed_pct + region_train_cd, extra + clan_speed)
+        train_cd_seconds = cooldown_service.apply_speed_reduction(5 * 60, speed_pct, extra + clan_speed)
 
         if is_second:
             await cooldown_service.set_cooldown(

@@ -36,8 +36,8 @@ TICKET_HARD_CAP_OVERFLOW: int = 1000
 
 
 def ticket_hard_cap(user) -> int:
-    """500 без переполнения, 1000 с ним (донат или регион)."""
-    if getattr(user, "circ_ticket_overflow", False) or getattr(user, "region_ticket_overflow", False):
+    """500 без переполнения, 1000 с донатом."""
+    if getattr(user, "circ_ticket_overflow", False):
         return TICKET_HARD_CAP_OVERFLOW
     return TICKET_HARD_CAP
 
@@ -104,41 +104,25 @@ CITIES_NEEDED_FOR_KING: int = 10
 # Сколько побед нужно для перехода King → Fist
 FIST_WINS_NEEDED: int = 10
 
-# ── Войны за регионы Кореи ────────────────────────────────────────────────────
-REGION_WAR_MAX_MEMBERS: int = 15
-REGION_WAR_MIN_SCORE: int = 10
-REGION_WAR_HOURS: int = 6
-# Щит региона: активируется после победы в захвате, длится 12 ч, затем КД 10 ч
-REGION_SHIELD_HOURS: int = 12
-REGION_SHIELD_CD_HOURS: int = 10
-# Война регион-vs-регион: длительность та же; КД для обоих кланов после окончания
-REGION_VS_REGION_WAR_HOURS: int = 2
-REGION_VS_REGION_CD_HOURS: int = 4
-# Множитель ОА для победителя в войне регион-vs-регион
-REGION_VS_REGION_WIN_MULTIPLIER: float = 1.5
+# ── Клановые земли (патч 4) ────────────────────────────────────────────────────
+CLAN_LAND_MAX_LEVEL: int = 5
+# Стоимость покупки уровня земли (NHCoin из казны клана), индекс = уровень
+CLAN_LAND_UPGRADE_COST: dict[int, int] = {1: 5_000_000, 2: 15_000_000, 3: 40_000_000, 4: 100_000_000, 5: 250_000_000}
+# Слотов под здания на каждом уровне земли
+CLAN_LAND_SLOTS: dict[int, int] = {0: 0, 1: 3, 2: 5, 3: 10, 4: 15, 5: 25}
 
-# ── Здания клана в захваченных регионах Кореи ────────────────────────────────
-# income_per_level[0] — не используется; [1..3] — доход NHCoin/мин на участника клана
-# ap_cost_per_level[N]  — стоимость в ОА для достижения уровня N
-CLAN_REGION_BUILDINGS: dict = {
-    "market":   {"name": "🏪 Рынок",         "income_per_level": [0,  80, 180, 350], "ap_cost_per_level": [0, 300,  500,  800]},
-    "gym":      {"name": "🏋 Спортзал",       "income_per_level": [0,  60, 140, 280], "ap_cost_per_level": [0, 250,  450,  700]},
-    "factory":  {"name": "🏭 Завод",          "income_per_level": [0, 100, 220, 420], "ap_cost_per_level": [0, 350,  600,  950]},
-    "lab":      {"name": "🔬 Лаборатория",    "income_per_level": [0, 130, 290, 550], "ap_cost_per_level": [0, 450,  750, 1200]},
-    "barracks": {"name": "🏯 Казарма",        "income_per_level": [0,  90, 200, 380], "ap_cost_per_level": [0, 300,  520,  830]},
+# Здания клановой земли: cost — цена одной единицы (NHCoin из казны клана),
+# bonus_per_unit — бафф за одну единицу (владелец клана получает x2 к income_pct),
+# max_count — лимит единиц этого типа (None = ограничено только слотами земли)
+CLAN_LAND_BUILDINGS: dict = {
+    "shop_discount": {"name": "🏷 Скидка в магазине клана", "cost": 3_000_000, "bonus_per_unit": 2, "unit": "%",   "max_count": None},
+    "fragment_gain": {"name": "🧩 Фрагменты с рейд-боссов",  "cost": 3_500_000, "bonus_per_unit": 3, "unit": "%",   "max_count": None},
+    "mastery_gain":  {"name": "⭐ Очки мастерства/пути",     "cost": 4_000_000, "bonus_per_unit": 4, "unit": "%",   "max_count": None},
+    "power":         {"name": "💪 Боевая мощь",              "cost": 4_500_000, "bonus_per_unit": 3, "unit": "%",   "max_count": None},
+    "income_pct":    {"name": "💰 Доход",                    "cost": 5_000_000, "bonus_per_unit": 2, "unit": "%",   "max_count": None},
+    "power_mastery": {"name": "🥋 Мастерство силы",          "cost": 8_000_000, "bonus_per_unit": 1, "unit": "lvl", "max_count": 4},
+    "speed_mastery": {"name": "⚡ Мастерство скорости",       "cost": 8_000_000, "bonus_per_unit": 1, "unit": "lvl", "max_count": 4},
 }
-CLAN_REGION_BUILDING_MAX_LEVEL: int = 3
-
-# ── AP-улучшения клана (тратятся из казны ОА) ─────────────────────────────────
-CLAN_AP_INCOME_BONUS: int = 5      # +5% дохода за 1 круг
-CLAN_AP_INCOME_MAX: int = 3        # макс 3 круга → +15%
-CLAN_AP_INCOME_COST: int = 500     # цена одного круга в ОА
-CLAN_AP_TRAIN_BONUS: int = 5       # +5% тренировок за 1 круг
-CLAN_AP_TRAIN_MAX: int = 3         # макс 3 круга → +15%
-CLAN_AP_TRAIN_COST: int = 400      # цена одного круга в ОА
-CLAN_AP_TICKET_BONUS: int = 3      # +3% шанс тикета за 1 круг
-CLAN_AP_TICKET_MAX: int = 3        # макс 3 круга → +9%
-CLAN_AP_TICKET_COST: int = 450     # цена одного круга в ОА
 
 # ── Патч-ревард (топ игроки/кланы при сбросе) ────────────────────────────────
 # Тикеты топ-10 игрокам при патче (индекс = место - 1)

@@ -215,6 +215,15 @@ class PrestigeService:
             user.ui_level = saved_ui_level
             rs._apply_ui_level(user, saved_ui_level)
 
+        # При полном сбросе (патч) — авто-действия УИ выключены,
+        # игрок включает их вручную после патча
+        if not keep_ui and not keep_progress:
+            user.ui_auto_recruit = False
+            user.ui_auto_train   = False
+            user.ui_auto_ticket  = False
+            user.ui_auto_pull    = False
+            user.ui_auto_potion  = False
+
         # Сбрасываем несекретные достижения — игроки могут выполнить их заново
         from app.models.title import UserAchievement
         from app.data.titles import ACHIEVEMENT_MAP

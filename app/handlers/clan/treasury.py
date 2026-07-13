@@ -31,7 +31,7 @@ async def cb_clan_treasury(cb: CallbackQuery, session: AsyncSession, user: User)
     text = (
         f"🏦 <b>Казна клана {html.escape(clan.name)}</b>\n\n"
         f"💰 NHCoin: <b>{fmt_num(clan.treasury)}</b>   (у вас: {fmt_num(user.nh_coins)})\n\n"
-        f"Что хотите пополнить?"
+        f"Что хотите сделать?"
     )
     try:
         await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")

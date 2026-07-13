@@ -111,9 +111,9 @@ class User(Base):
     # ── Ультра Инстинкт ───────────────────────────────────────────────────
     ultra_instinct: Mapped[bool] = mapped_column(Boolean, default=False)
     true_ultra_instinct: Mapped[bool] = mapped_column(Boolean, default=False)
-    ui_auto_recruit: Mapped[bool] = mapped_column(Boolean, default=True)
-    ui_auto_train: Mapped[bool] = mapped_column(Boolean, default=True)
-    ui_auto_ticket: Mapped[bool] = mapped_column(Boolean, default=True)
+    ui_auto_recruit: Mapped[bool] = mapped_column(Boolean, default=False)
+    ui_auto_train: Mapped[bool] = mapped_column(Boolean, default=False)
+    ui_auto_ticket: Mapped[bool] = mapped_column(Boolean, default=False)
     ui_auto_pull: Mapped[bool] = mapped_column(Boolean, default=False)
     donat_ui_potion: Mapped[bool] = mapped_column(Boolean, default=False)  # владение донатом
     ui_auto_potion: Mapped[bool] = mapped_column(Boolean, default=False)   # пользовательский тоггл

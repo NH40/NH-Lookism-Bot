@@ -561,22 +561,24 @@ class RaidService:
         raw = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed_level, 0)
         return int(raw * user.skill_path_bonus_multiplier)
 
-    def _apply_ui_level(self, user: User, level: int) -> None:
+    def _apply_ui_level(self, user: User, level: int, reset_toggles: bool = False) -> None:
         user.ultra_instinct = level >= 1
-        user.ui_auto_recruit = level >= 1
-        user.ui_auto_train   = level >= 2
-        user.ui_auto_ticket  = level >= 3
-        user.ui_auto_pull    = level >= 4
+        if reset_toggles:
+            user.ui_auto_recruit = False
+            user.ui_auto_train   = False
+            user.ui_auto_ticket  = False
+            user.ui_auto_pull    = False
 
-    def apply_donat_ui(self, user: User) -> None:
+    def apply_donat_ui(self, user: User, reset_toggles: bool = False) -> None:
         user.ui_is_donat = True
         user.ui_level = 4
         user.ultra_instinct = True
         user.true_ultra_instinct = True
-        user.ui_auto_recruit = True
-        user.ui_auto_train = True
-        user.ui_auto_ticket = True
-        user.ui_auto_pull = True
+        if reset_toggles:
+            user.ui_auto_recruit = False
+            user.ui_auto_train   = False
+            user.ui_auto_ticket  = False
+            user.ui_auto_pull    = False
         from app.config.game_balance import TUI_MAX_TICKETS
         user.max_tickets = TUI_MAX_TICKETS
 

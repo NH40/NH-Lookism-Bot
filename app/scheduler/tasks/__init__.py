@@ -18,6 +18,7 @@ from app.scheduler.tasks.achievements import achievement_tick
 from app.scheduler.tasks.poker import poker_tick
 from app.scheduler.tasks.casino_rating import casino_rating_tick
 from app.scheduler.tasks.market_auction import market_auction_tick
+from app.scheduler.tasks.horse_shop import horse_shop_tick
 
 __all__ = [
     "income_tick",
@@ -41,4 +42,5 @@ __all__ = [
     "poker_tick",
     "casino_rating_tick",
     "market_auction_tick",
+    "horse_shop_tick",
 ]

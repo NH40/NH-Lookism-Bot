@@ -74,6 +74,8 @@ class User(Base):
     # ── Пробуждение (Престиж) ─────────────────────────────────────────────
     prestige_level: Mapped[int] = mapped_column(Integer, default=0)
     prestige_recruit_bonus: Mapped[int] = mapped_column(Integer, default=0)
+    # Боевая мощь в момент перехода на Императора — сила Гапрёна в 1-м бою гаунтлета
+    emperor_entry_power: Mapped[int] = mapped_column(BigInteger, default=0)
 
     # ── Очки мастерства (от Тома Ли) ─────────────────────────────────────
     mastery_points: Mapped[int] = mapped_column(Integer, default=0)
@@ -239,6 +241,7 @@ class User(Base):
     notif_achievements: Mapped[bool] = mapped_column(Boolean, default=True)
     notif_market_buy: Mapped[bool] = mapped_column(Boolean, default=True)
     notif_market_sell: Mapped[bool] = mapped_column(Boolean, default=True)
+    notif_horse_shop: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

@@ -146,11 +146,16 @@ class PromotionsMixin:
     async def _promote_to_emperor(self, session: AsyncSession, user: User) -> dict:
         from sqlalchemy import delete as sql_delete
         from app.models.emperor_gang import EmperorGangRecord
+        from app.models.gapren import GaprenChallenge
         await session.execute(
             sql_delete(EmperorGangRecord).where(EmperorGangRecord.user_id == user.id)
         )
+        await session.execute(
+            sql_delete(GaprenChallenge).where(GaprenChallenge.user_id == user.id)
+        )
         user.phase = "emperor"
         user.extra_attack_count = 0
+        user.emperor_entry_power = user.combat_power
         await session.flush()
         return {
             "ok": True, "promoted": True, "new_phase": "emperor",

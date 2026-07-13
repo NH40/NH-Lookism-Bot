@@ -17,6 +17,7 @@ from app.config.scheduler_config import (
     POKER_TICK_SECONDS,
     MARKET_AUCTION_TICK_SECONDS,
     CLAN_POWER_RECONCILE_TICK_MINUTES,
+    HORSE_SHOP_TICK_SECONDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ def setup_scheduler() -> AsyncIOScheduler:
         casino_rating_tick,
         market_auction_tick,
         clan_power_reconcile_tick,
+        horse_shop_tick,
     )
 
     scheduler = AsyncIOScheduler()
@@ -223,5 +225,15 @@ def setup_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=300,
     )
 
-    logger.info("Scheduler configured with 19 jobs")
+    # ── Лавка коня: спавн/закрытие ивент-магазина ─────────────────────────────
+    scheduler.add_job(
+        horse_shop_tick,
+        trigger=IntervalTrigger(seconds=HORSE_SHOP_TICK_SECONDS),
+        id="horse_shop_tick",
+        name="horse_shop_tick",
+        max_instances=1,
+        misfire_grace_time=30,
+    )
+
+    logger.info("Scheduler configured with 20 jobs")
     return scheduler

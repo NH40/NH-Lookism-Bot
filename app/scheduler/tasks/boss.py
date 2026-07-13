@@ -160,6 +160,7 @@ async def _notify_boss_result(result: dict) -> None:
                         "path_fragments":     "🔷 Фрагменты Пути",
                         "business_fragments": "🏢 Фрагменты бизнеса",
                         "war_points":         "⚔️ Очки войны",
+                        "ui_fragments":       "🔮 Фрагменты УИ",
                     }
 
                     personal_text = (
@@ -175,6 +176,10 @@ async def _notify_boss_result(result: dict) -> None:
                     if coins_delta:
                         sign = "+" if coins_delta > 0 else ""
                         personal_text += f"\n💰 Монеты: <b>{sign}{fcoins(abs(coins_delta))}</b>"
+                    char_name = r.get("character_name")
+                    if char_name:
+                        rank_label = "⭐ Абсолют" if r.get("character_rank") == "absolute" else "🖤 Вершина"
+                        personal_text += f"\n🎴 Получен персонаж: <b>{char_name}</b> ({rank_label})"
                     personal_notifs.append((u.tg_id, personal_text))
 
             # Глобальное уведомление (всем с нотификациями о боссах)

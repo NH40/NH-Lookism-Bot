@@ -41,3 +41,6 @@ MARKET_AUCTION_TICK_SECONDS: int = 60
 
 # Тик сверки Clan.combat_power с SUM(участников) — чинит дрейф от дельта-обновлений
 CLAN_POWER_RECONCILE_TICK_MINUTES: int = 60
+
+# Тик лавки коня (спавн/закрытие ивент-магазина, каждую минуту)
+HORSE_SHOP_TICK_SECONDS: int = 60

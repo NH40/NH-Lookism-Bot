@@ -27,7 +27,7 @@ def menu_combat_kb() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def menu_economy_kb() -> InlineKeyboardMarkup:
+def menu_economy_kb(horse_shop_active: bool = False) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(text="🏢 Бизнес",       callback_data="business"),
@@ -40,6 +40,8 @@ def menu_economy_kb() -> InlineKeyboardMarkup:
     builder.row(
         InlineKeyboardButton(text="🏛 Аукцион",      callback_data="auction"),
     )
+    if horse_shop_active:
+        builder.row(InlineKeyboardButton(text="🐴 Лавка коня", callback_data="horse_shop"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
     return builder.as_markup()
 

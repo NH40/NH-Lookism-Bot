@@ -20,9 +20,9 @@ CHARACTER_RANKS: list[CharacterRankConfig] = [
     CharacterRankConfig("gen_zero",    "Нулевое поколение",     8_000,       65_000,       7.50),
     CharacterRankConfig("new_legend",  "Новая легенда",         20_000,     100_000,       3.00),
     CharacterRankConfig("legend",      "Легенда",              320_000,     990_000,       1.40),
-    CharacterRankConfig("peak",        "Вершина",            1_900_000,  12_000_000,       0.54),
-    CharacterRankConfig("absolute",    "Абсолют",            4_000_000,  40_000_000,       0.01),
-    CharacterRankConfig("perfection",  "Совершенство",      75_000_000, 100_000_000,       0.005),
+    CharacterRankConfig("peak",        "Вершина",            1_900_000,  12_000_000,       1.00),
+    CharacterRankConfig("absolute",    "Абсолют",            4_000_000,  40_000_000,       0.05),
+    CharacterRankConfig("perfection",  "Совершенство",      75_000_000, 100_000_000,       0.01),
 ]
 
 RANK_CONFIG_MAP: dict[str, CharacterRankConfig] = {
@@ -389,6 +389,10 @@ CHARACTERS: list[dict] = [
      "desc": "Прайм менеджера до травмы мизинца в 58, одним присутствием остановил войну, бойтесь его. Не забывайте покупать донаты, а то отпизжу!"},
     {"name": "Communists (Clan)",          "rank": "perfection", "power": 75_000_000,
      "desc": "Клан который построил коммунизм в мире капитала. Победители клановой войны нулевого поколения. Легендарный состав: @Marise3772, @Archangel_17, Org135, Конь Hasbulla |-|, @beknu1ov, @Absolutewater1, @kuba5555555, @adhvnsss"},
+    {"name": "Dark (Clan)",               "rank": "perfection", "power": 75_000_000,
+     "desc": "Легендарный клан первого поколения, наводивший ужас на весь сервер. "},
+    {"name": "Короли Первого поколения",            "rank": "perfection", "power": 99_000_000,
+     "desc": "Времена первого поколения: Xau Usd, Org, Конь Hasbulla, Anonim, Some Thing, Kuropatkaa, Mede. Игроки которые проявили себя в 1.2.х обновлениях и оставили след в истории."},
 ]
 
 # Суммарный вес (для совместимости) — теперь 100.0, т.к. weight = % ранга
@@ -407,3 +411,9 @@ def get_random_character() -> dict:
     chosen_rank = random.choices(ranks, weights=weights, k=1)[0]
     candidates = _RANK_CHARS.get(chosen_rank) or CHARACTERS
     return random.choice(candidates)
+
+
+def get_random_character_by_rank(rank: str) -> dict | None:
+    """Случайный персонаж конкретного ранга (без взвешивания по редкости)."""
+    candidates = _RANK_CHARS.get(rank)
+    return random.choice(candidates) if candidates else None

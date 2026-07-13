@@ -15,6 +15,8 @@ from app.models.promo import PromoCode, PromoUse
 from app.models.daily_quest import DailyQuest
 from app.models.clan import Clan, ClanMember, ClanInvite, ClanWar, ClanAuction
 from app.models.clan_land import ClanLandBuilding
+from app.models.gapren import GaprenChallenge
+from app.models.horse_shop import HorseShopEvent, HorseShopPurchase
 from app.models.payment import Payment
 from app.models.poker import PokerTable, PokerPlayer
 
@@ -27,6 +29,8 @@ __all__ = [
     "GameVersion", "MarketListing", "MarketAuction", "MarketAuctionBid", "KingBot", "PromoCode", "PromoUse", "DailyQuest",
     "Clan", "ClanMember", "ClanInvite", "ClanWar", "ClanAuction",
     "ClanLandBuilding",
+    "GaprenChallenge",
+    "HorseShopEvent", "HorseShopPurchase",
     "Payment",
     "PokerTable", "PokerPlayer",
 ]

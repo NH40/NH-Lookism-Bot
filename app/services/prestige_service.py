@@ -53,6 +53,7 @@ class PrestigeService:
         user.king_cities_count = 0
         user.fist_wins = 0
         user.fist_cities_count = 0
+        user.emperor_entry_power = 0
         user.nh_coins = 0
         user.card_dust = 0
         user.influence = DEFAULT_INFLUENCE
@@ -176,6 +177,10 @@ class PrestigeService:
         from app.models.emperor_gang import EmperorGangRecord
         await session.execute(
             delete(EmperorGangRecord).where(EmperorGangRecord.user_id == user.id)
+        )
+        from app.models.gapren import GaprenChallenge
+        await session.execute(
+            delete(GaprenChallenge).where(GaprenChallenge.user_id == user.id)
         )
         await session.execute(
             delete(Campaign).where(Campaign.user_id == user.id)

@@ -101,6 +101,7 @@ async def _build_gang_list(session: AsyncSession, user: User) -> tuple[str, any]
                 callback_data=f"emperor_gang_info:{cfg.gang_id}"
             ))
 
+    builder.row(InlineKeyboardButton(text="🌟 Пробуждения", callback_data="emperor_awakening"))
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
 
     text = (

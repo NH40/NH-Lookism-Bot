@@ -104,6 +104,35 @@ CITIES_NEEDED_FOR_KING: int = 10
 # Сколько побед нужно для перехода King → Fist
 FIST_WINS_NEEDED: int = 10
 
+# ── Гапрён (гейт пробуждения на этапе Императора) ─────────────────────────────
+# Побед подряд нужно, чтобы открыть пробуждение (поражение сбрасывает серию в 0)
+GAPREN_WINS_NEEDED: int = 3
+# Бой 2: сила Гапрёна = текущая мощь игрока + этот %
+GAPREN_FIGHT2_POWER_PCT: int = 20
+# Бой 3: сила Гапрёна = текущая мощь игрока + этот %
+GAPREN_FIGHT3_POWER_PCT: int = 25
+GAPREN_COOLDOWN_HOURS: int = 1
+
+# ── Лавка коня (случайный ивент-магазин) ───────────────────────────────────────
+# Промежуток до следующего появления лавки — случайный, от MIN до MAX часов
+HORSE_SHOP_MIN_INTERVAL_HOURS: int = 24
+HORSE_SHOP_MAX_INTERVAL_HOURS: int = 36
+# Сколько часов лавка остаётся открытой
+HORSE_SHOP_DURATION_HOURS: int = 2
+# Лимит покупки — на каждую позицию отдельно, за одно открытие лавки
+HORSE_SHOP_MAX_PER_ITEM: int = 40
+
+# item_id → (название, поле User, цена за штуку в NHCoin)
+HORSE_SHOP_ITEMS: dict = {
+    "alchemy_fragments": {"name": "🧪 Фрагмент Алхимии",  "field": "alchemy_fragments",  "price": 1_000_000},
+    "ui_fragments":      {"name": "🟣 Фрагмент УИ",        "field": "ui_fragments",       "price": 2_000_000},
+    "business_fragments":{"name": "🏢 Фрагмент Бизнеса",   "field": "business_fragments", "price": 3_000_000},
+    "path_fragments":    {"name": "🔷 Фрагмент Пути",      "field": "path_fragments",     "price": 4_000_000},
+    "skill_path_points": {"name": "💎 Очко Пути",          "field": "skill_path_points",  "price": 1_500_000},
+    "mastery_points":    {"name": "⭐ Очко Мастерства",     "field": "mastery_points",     "price": 3_500_000},
+    "war_points":        {"name": "⚔️ Очко Войны",         "field": "war_points",         "price": 6_500_000},
+}
+
 # ── Клановые земли (патч 4) ────────────────────────────────────────────────────
 CLAN_LAND_MAX_LEVEL: int = 5
 # Стоимость покупки уровня земли (NHCoin из казны клана), индекс = уровень

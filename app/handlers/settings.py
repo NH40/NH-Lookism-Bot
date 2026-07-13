@@ -160,6 +160,7 @@ async def cb_notifications_menu(cb: CallbackQuery, session: AsyncSession, user: 
     ach       = getattr(user, "notif_achievements", True)
     mkt_buy   = getattr(user, "notif_market_buy", True)
     mkt_sell  = getattr(user, "notif_market_sell", True)
+    horse     = getattr(user, "notif_horse_shop", True)
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
@@ -202,6 +203,10 @@ async def cb_notifications_menu(cb: CallbackQuery, session: AsyncSession, user: 
             text=f"{_notif_icon(mkt_sell)} 💰 Продажи на бирже: {_on_off(mkt_sell)}",
             callback_data="toggle_notif:market_sell"
         ))
+        builder.row(InlineKeyboardButton(
+            text=f"{_notif_icon(horse)} 🐴 Лавка коня: {_on_off(horse)}",
+            callback_data="toggle_notif:horse_shop"
+        ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="settings"))
 
     lines = [
@@ -219,6 +224,7 @@ async def cb_notifications_menu(cb: CallbackQuery, session: AsyncSession, user: 
             f"🥇 Достижения: <b>{_on_off(ach)}</b>",
             f"🛒 Покупки на бирже: <b>{_on_off(mkt_buy)}</b>",
             f"💰 Продажи на бирже: <b>{_on_off(mkt_sell)}</b>",
+            f"🐴 Лавка коня: <b>{_on_off(horse)}</b>",
         ]
     else:
         lines.append(f"\n<i>Включи мастер-переключатель чтобы настроить категории</i>")
@@ -251,6 +257,8 @@ async def cb_toggle_notif(cb: CallbackQuery, session: AsyncSession, user: User):
         user.notif_market_buy = not getattr(user, "notif_market_buy", True)
     elif key == "market_sell":
         user.notif_market_sell = not getattr(user, "notif_market_sell", True)
+    elif key == "horse_shop":
+        user.notif_horse_shop = not getattr(user, "notif_horse_shop", True)
     await session.flush()
     await cb_notifications_menu(cb, session, user)
 

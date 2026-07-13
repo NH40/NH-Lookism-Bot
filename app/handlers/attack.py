@@ -73,6 +73,19 @@ async def cb_do_prestige(cb: CallbackQuery, session: AsyncSession, user: User):
     if not ok:
         await cb.answer(reason, show_alert=True)
         return
+
+    from sqlalchemy import select
+    from app.models.gapren import GaprenChallenge
+    from app.config.game_balance import GAPREN_WINS_NEEDED
+    challenge = await session.scalar(
+        select(GaprenChallenge).where(GaprenChallenge.user_id == user.id)
+    )
+    if not challenge or challenge.streak < GAPREN_WINS_NEEDED:
+        await cb.answer(
+            "Сначала победи Гапрёна 3 раза подряд (Император → Атака → Пробуждения)!",
+            show_alert=True,
+        )
+        return
     await cb.message.edit_text(
         f"🌟 <b>Пробуждение</b>\n\n"
         f"Уровень: {user.prestige_level}/10\n\n"
@@ -211,9 +224,11 @@ from app.handlers.game.king import router as king_router
 from app.handlers.game.fist import router as fist_router
 from app.handlers.game.king_bots import router as king_bots_router
 from app.handlers.game.emperor import router as emperor_router
+from app.handlers.game.gapren import router as gapren_router
 
 router.include_router(gang_router)
 router.include_router(king_router)
 router.include_router(fist_router)
 router.include_router(king_bots_router)
 router.include_router(emperor_router)
+router.include_router(gapren_router)

@@ -16,7 +16,7 @@ from app.services.boss_service import (
     hp_bar,
     get_boss_attack_cd,
 )
-from app.constants.bosses import BOSS_MAP, BOSS_TOP_REWARDS, BOSS_PARTICIPANT_REWARD
+from app.constants.bosses import BOSS_MAP, BOSS_TOP_REWARDS, BOSS_PARTICIPANT_REWARD, MARIS_TOTAL_PHASES
 from app.utils.formatters import fmt_num, fmt_ttl
 
 router = Router()
@@ -28,6 +28,8 @@ BOSS_IMAGE_MAP: dict[str, str] = {
     "archangel": "images/boss/Arhangel.png",
     "manager":   "images/boss/Meneger.png",
     "brothers":  "images/boss/Brother.png",
+    "maris":     "images/boss/Marise.png",
+    "org":       "images/boss/Org.png",
 }
 
 
@@ -105,6 +107,20 @@ async def _boss_main_screen(
         healed = state.get("healed", False)
         if healed:
             extra_lines.append("💊 Менеджер уже использовал самолечение!")
+    elif boss.boss_id == "maris":
+        phase = MARIS_TOTAL_PHASES - state.get("phases_left", MARIS_TOTAL_PHASES) + 1
+        extra_lines.append(f"🌊 Фаза: <b>{phase}/{MARIS_TOTAL_PHASES}</b>")
+        if state.get("shield_active"):
+            extra_lines.append("🛡 Щит активен на следующую атаку!")
+        if state.get("swim_away_left", 0) > 0:
+            extra_lines.append(f"🌊 «Я уплыл»: <b>{state['swim_away_left']}</b> атак без урона")
+    elif boss.boss_id == "org":
+        shadow = state.get("shadow_scale", 0.0)
+        invisible = state.get("invisible_left", 0)
+        if invisible > 0:
+            extra_lines.append(f"👤 Невидим: <b>{invisible}</b> атак осталось")
+        else:
+            extra_lines.append(f"🌑 Шкала тени: <b>{shadow:.0f}%</b>")
 
     # HP бар
     display_hp = boss.hp if boss.boss_id != "brothers" else boss.hp

@@ -6,6 +6,7 @@ from __future__ import annotations
 import random
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import select, delete as sa_delete, func as sa_func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants.bosses import (
@@ -14,15 +15,23 @@ from app.constants.bosses import (
     ARCHANGEL_DONATE_WEIGHTS,
     ARCHANGEL_HEAL_PCT,
     ARCHANGEL_SHIELD_PCT,
+    BOSS_ARCHANGEL_FRAG_DIVISOR,
+    BOSS_ARCHANGEL_FRAG_MAX,
+    BOSS_ARCHANGEL_FRAG_MIN,
     BOSS_ATTACK_CD_MIN,
     BOSS_ATTACK_CD_SECONDS,
+    BOSS_BROTHERS_WAR_DIVISOR,
+    BOSS_BROTHERS_WAR_MAX,
+    BOSS_BROTHERS_WAR_MIN,
     BOSS_DURATION_HOURS,
-    BOSS_EXTRA_FRAG_PARTICIPANT,
-    BOSS_EXTRA_FRAG_TOP,
-    BOSS_EXTRA_POINTS_PARTICIPANT,
-    BOSS_EXTRA_POINTS_TOP,
-    BOSS_EXTRA_RESOURCE,
+    BOSS_MANAGER_WIN_MULTIPLIER,
     BOSS_MAP,
+    BOSS_MARIS_ABSOLUTE_CHANCE,
+    BOSS_MARIS_ABSOLUTE_THRESHOLD_DAMAGE,
+    BOSS_NIKITA_FRAG_MAX,
+    BOSS_NIKITA_FRAG_MIN,
+    BOSS_ORG_FRAG_MAX,
+    BOSS_ORG_FRAG_MIN,
     BOSS_PARTICIPANT_REWARD,
     BOSS_ROTATION,
     BOSS_SPAWN_HOURS,
@@ -32,8 +41,22 @@ from app.constants.bosses import (
     MANAGER_FAIL_PENALTY,
     MANAGER_HEAL_PHRASE,
     MANAGER_HEAL_THRESHOLD,
-    MANAGER_WIN_BONUS,
-    NIKITA_DESPAIR_PER_HIT,
+    MARIS_DEBUFF_HITS,
+    MARIS_DEBUFF_PCT,
+    MARIS_FRAG_STEAL_CHANCE,
+    MARIS_FRAG_STEAL_MAX,
+    MARIS_FRAG_STEAL_MIN,
+    MARIS_REBIRTH_PHRASE,
+    MARIS_STATIST_STEAL_CHANCE,
+    MARIS_STATIST_STEAL_MAX,
+    MARIS_STATIST_STEAL_MIN,
+    MARIS_SWIM_AWAY_CHANCE,
+    MARIS_SWIM_AWAY_HITS,
+    MARIS_TOTAL_PHASES,
+    ORG_INVISIBLE_HITS,
+    ORG_POWER_DEBUFF_MINUTES,
+    ORG_POWER_DEBUFF_PCT,
+    ORG_SHADOW_PER_HIT,
 )
 from app.models.boss import ActiveBoss
 from app.models.user import User
@@ -58,6 +81,33 @@ def get_boss_attack_cd(user: User) -> int:
     reduction_pct = getattr(user, "all_cd_reduction", 0) or 0
     cd = max(BOSS_ATTACK_CD_MIN, int(base * (1 - reduction_pct / 100)))
     return cd
+
+
+def _compute_boss_reward(boss_id: str, damage: int) -> dict | None:
+    """Награда за победу для конкретного участника (поле User + количество).
+
+    Менеджер (умножение монет) и Марис (выдача персонажа) обрабатываются
+    отдельно в finalize_boss — их награда не сводится к полю+числу.
+    """
+    if boss_id == "archangel":
+        amt = min(BOSS_ARCHANGEL_FRAG_MAX, max(BOSS_ARCHANGEL_FRAG_MIN, damage // BOSS_ARCHANGEL_FRAG_DIVISOR))
+        return {"field": "business_fragments", "amount": amt, "label": "🏢 Фрагменты бизнеса"}
+    if boss_id == "brothers":
+        amt = min(BOSS_BROTHERS_WAR_MAX, max(BOSS_BROTHERS_WAR_MIN, damage // BOSS_BROTHERS_WAR_DIVISOR))
+        return {"field": "war_points", "amount": amt, "label": "⚔️ Очки войны"}
+    if boss_id == "nikita":
+        return {
+            "field": "ui_fragments",
+            "amount": random.randint(BOSS_NIKITA_FRAG_MIN, BOSS_NIKITA_FRAG_MAX),
+            "label": "🔮 Фрагменты УИ",
+        }
+    if boss_id == "org":
+        return {
+            "field": "path_fragments",
+            "amount": random.randint(BOSS_ORG_FRAG_MIN, BOSS_ORG_FRAG_MAX),
+            "label": "🔷 Фрагменты Пути",
+        }
+    return None
 
 
 # ── Сервис ────────────────────────────────────────────────────────────────────
@@ -91,6 +141,10 @@ class BossService:
             state = {"shield_hp": 0, "debuff_attacks": 0}
         elif next_id == "manager":
             state = {"healed": False}
+        elif next_id == "maris":
+            state = {"phases_left": MARIS_TOTAL_PHASES, "shield_active": False, "debuffs": {}, "swim_away_left": 0}
+        elif next_id == "org":
+            state = {"shadow_scale": 0.0, "invisible_left": 0}
         else:
             state = {}
 
@@ -233,20 +287,137 @@ class BossService:
                     f"<i>«{MANAGER_HEAL_PHRASE}»</i>"
                 )
 
+        # ── Атака Мариса ──────────────────────────────────────────────────────
+        elif locked_boss.boss_id == "maris":
+            shield_active = state.get("shield_active", False)
+            swim_away_left = state.get("swim_away_left", 0)
+            debuffs = state.setdefault("debuffs", {})
+            user_key = str(user.id)
+
+            if shield_active:
+                damage = 0
+                state["shield_active"] = False
+                special_effects.append("🛡 Щит поглотил атаку полностью!")
+            elif swim_away_left > 0:
+                damage = 0
+                state["swim_away_left"] = swim_away_left - 1
+                special_effects.append(
+                    f"🌊 «Я уплыл!» Атака не прошла ({state['swim_away_left']} осталось)"
+                )
+            else:
+                damage = base_power
+                active_debuff = debuffs.get(user_key, 0)
+                if active_debuff > 0:
+                    damage = int(damage * (1 - MARIS_DEBUFF_PCT / 100))
+                    debuffs[user_key] = active_debuff - 1
+                else:
+                    debuffs[user_key] = MARIS_DEBUFF_HITS
+                    special_effects.append(
+                        f"⬇️ Марис снижает твою силу на {MARIS_DEBUFF_PCT}% на {MARIS_DEBUFF_HITS} ударов!"
+                    )
+                locked_boss.hp -= damage
+
+                # Редкие эффекты (независимые броски, не влияют на урон этого удара)
+                if random.randint(1, 100) <= MARIS_FRAG_STEAL_CHANCE:
+                    frag_fields = ["ui_fragments", "alchemy_fragments", "path_fragments", "business_fragments"]
+                    available = [f for f in frag_fields if getattr(user, f, 0) > 0]
+                    if available:
+                        field = random.choice(available)
+                        amt = min(getattr(user, field), random.randint(MARIS_FRAG_STEAL_MIN, MARIS_FRAG_STEAL_MAX))
+                        setattr(user, field, getattr(user, field) - amt)
+                        special_effects.append(f"🧩 Марис украл {amt} фрагментов ({field})!")
+
+                if random.randint(1, 100) <= MARIS_STATIST_STEAL_CHANCE:
+                    from app.models.squad_member import SquadMember
+                    count = random.randint(MARIS_STATIST_STEAL_MIN, MARIS_STATIST_STEAL_MAX)
+                    ids_subq = (
+                        select(SquadMember.id)
+                        .where(SquadMember.user_id == user.id)
+                        .order_by(sa_func.random())
+                        .limit(count)
+                    )
+                    del_result = await session.execute(sa_delete(SquadMember).where(SquadMember.id.in_(ids_subq)))
+                    removed = del_result.rowcount or 0
+                    if removed:
+                        from app.repositories.squad_repo import squad_repo
+                        await squad_repo.update_user_combat_power(session, user)
+                        special_effects.append(f"👥 Марис украл {removed} статистов!")
+
+                if random.randint(1, 100) <= MARIS_SWIM_AWAY_CHANCE:
+                    state["swim_away_left"] = MARIS_SWIM_AWAY_HITS
+                    special_effects.append(
+                        f"🌊 «Я уплыл!» Следующие {MARIS_SWIM_AWAY_HITS} атаки не пройдут урона!"
+                    )
+
+        # ── Атака Орга ────────────────────────────────────────────────────────
+        elif locked_boss.boss_id == "org":
+            invisible_left = state.get("invisible_left", 0)
+            shadow_scale = state.get("shadow_scale", 0.0)
+
+            if invisible_left > 0:
+                damage = 0
+                state["invisible_left"] = invisible_left - 1
+                special_effects.append(
+                    f"👤 Орг невидим! Атака не прошла ({state['invisible_left']} осталось)"
+                )
+            else:
+                damage = base_power // 2
+                locked_boss.hp -= damage
+                shadow_scale += ORG_SHADOW_PER_HIT
+                if shadow_scale >= 100:
+                    state["invisible_left"] = ORG_INVISIBLE_HITS
+                    state["shadow_scale"] = 0.0
+                    special_effects.append(
+                        f"🌑 Шкала тени 100%! Орг уходит в невидимость на {ORG_INVISIBLE_HITS} атак!"
+                    )
+                else:
+                    state["shadow_scale"] = shadow_scale
+                    special_effects.append(f"🌑 Шкала тени: {shadow_scale:.0f}%")
+
+            # Постоянные способности — на каждый удар, вне зависимости от невидимости
+            cd_multiplier = 2.0
+            from app.models.potion import ActivePotion
+            session.add(ActivePotion(
+                user_id=user.id,
+                potion_type="power",
+                bonus_value=-ORG_POWER_DEBUFF_PCT,
+                expires_at=datetime.now(timezone.utc) + timedelta(minutes=ORG_POWER_DEBUFF_MINUTES),
+            ))
+            special_effects.append(
+                f"⬇️ -{ORG_POWER_DEBUFF_PCT}% боевой мощи на {ORG_POWER_DEBUFF_MINUTES} минут!"
+            )
+
         # ── Атака Братьев ─────────────────────────────────────────────────────
         else:  # brothers
             damage = base_power
             # Братья не умирают — HP просто уходит в минус (не обрезаем до 0)
             locked_boss.hp -= damage
 
-        # ── Сохраняем состояние ────────────────────────────────────────────────
-        locked_boss.set_state(state)
-
-        # Братья не могут быть "убиты" в бою
+        # Братья не могут быть "убиты" в бою; Марис перерождается вместо смерти,
+        # пока не исчерпаны все фазы
         boss_defeated = False
-        if locked_boss.boss_id != "brothers" and locked_boss.hp <= 0:
+        if locked_boss.boss_id == "maris" and locked_boss.hp <= 0:
+            phases_left = state.get("phases_left", MARIS_TOTAL_PHASES) - 1
+            if phases_left > 0:
+                locked_boss.hp = locked_boss.base_max_hp
+                locked_boss.current_max_hp = locked_boss.base_max_hp
+                state["phases_left"] = phases_left
+                state["shield_active"] = True
+                phase_num = MARIS_TOTAL_PHASES - phases_left + 1
+                special_effects.append(
+                    f"🔁 <b>Марис перерождается!</b> Фаза {phase_num}/{MARIS_TOTAL_PHASES}. "
+                    f"Щит активен на следующую атаку!\n<i>«{MARIS_REBIRTH_PHRASE}»</i>"
+                )
+            else:
+                locked_boss.hp = 0
+                state["phases_left"] = 0
+                boss_defeated = True
+        elif locked_boss.boss_id != "brothers" and locked_boss.hp <= 0:
             locked_boss.hp = 0
             boss_defeated = True
+
+        # ── Сохраняем состояние ────────────────────────────────────────────────
+        locked_boss.set_state(state)
 
         # ── Обновляем запись атаки ────────────────────────────────────────────
         attack_rec = await boss_repo.get_or_create_attack(
@@ -303,50 +474,31 @@ class BossService:
         top_ids = {rec.user_id for rec in top}
         participant_ids = {rec.user_id for rec in all_attackers}
 
-        # Доп. ресурс только при победе
-        extra_cfg = BOSS_EXTRA_RESOURCE.get(boss.boss_id) if defeated else None
-
         rewards: list[dict] = []
 
         # Топ-5
         for i, rec in enumerate(top):
             base_tickets = BOSS_TOP_REWARDS[i] if i < len(BOSS_TOP_REWARDS) else BOSS_PARTICIPANT_REWARD
             tickets = base_tickets * 2 if defeated else base_tickets
-            extra_field: str | None = None
-            extra_amount = 0
-            if extra_cfg:
-                extra_field, rtype = extra_cfg
-                top_table = BOSS_EXTRA_FRAG_TOP if rtype == "frag" else BOSS_EXTRA_POINTS_TOP
-                fallback = BOSS_EXTRA_FRAG_PARTICIPANT if rtype == "frag" else BOSS_EXTRA_POINTS_PARTICIPANT
-                extra_amount = top_table[i] if i < len(top_table) else fallback
             rewards.append({
                 "user_id": rec.user_id,
                 "tickets": tickets,
                 "damage": rec.damage_dealt,
                 "place": i + 1,
-                "extra_field": extra_field,
-                "extra_amount": extra_amount,
             })
 
         # Остальные участники
         for rec in all_attackers:
             if rec.user_id not in top_ids:
                 tickets = BOSS_PARTICIPANT_REWARD * 2 if defeated else BOSS_PARTICIPANT_REWARD
-                extra_field = None
-                extra_amount = 0
-                if extra_cfg:
-                    extra_field, rtype = extra_cfg
-                    extra_amount = BOSS_EXTRA_FRAG_PARTICIPANT if rtype == "frag" else BOSS_EXTRA_POINTS_PARTICIPANT
                 rewards.append({
                     "user_id": rec.user_id,
                     "tickets": tickets,
                     "damage": rec.damage_dealt,
                     "place": None,
-                    "extra_field": extra_field,
-                    "extra_amount": extra_amount,
                 })
 
-        # Применяем тикеты и специальные эффекты (Менеджер)
+        # Применяем тикеты и награду за победу (своя формула на каждого босса)
         if rewards:
             from sqlalchemy import select as sa_select
             from app.models.user import User as UserModel
@@ -364,18 +516,50 @@ class BossService:
                 from app.config.game_balance import ticket_hard_cap
                 u.tickets = min(u.tickets + r["tickets"], ticket_hard_cap(u))
 
-                extra_field = r.get("extra_field")
-                extra_amount = r.get("extra_amount", 0)
-                if extra_field and extra_amount > 0:
-                    setattr(u, extra_field, (getattr(u, extra_field, 0) or 0) + extra_amount)
+                if not defeated:
+                    continue
 
-                # Менеджер: бонус при победе; штраф при провале не начисляется —
-                # монеты снимаются только у того, кто атаковал (во время боя).
-                if boss.boss_id == "manager" and defeated:
-                    u.nh_coins += MANAGER_WIN_BONUS
-                    r["coins_delta"] = MANAGER_WIN_BONUS
+                if boss.boss_id == "manager":
+                    delta = u.nh_coins
+                    u.nh_coins = u.nh_coins * BOSS_MANAGER_WIN_MULTIPLIER
+                    r["coins_delta"] = delta
+                elif boss.boss_id == "maris":
+                    from app.data.characters import get_random_character_by_rank
+                    from app.models.character import UserCharacter
+                    rank = "peak"
+                    if (
+                        r["damage"] >= BOSS_MARIS_ABSOLUTE_THRESHOLD_DAMAGE
+                        and random.randint(1, 100) <= BOSS_MARIS_ABSOLUTE_CHANCE
+                    ):
+                        rank = "absolute"
+                    char = get_random_character_by_rank(rank)
+                    if char:
+                        session.add(UserCharacter(
+                            user_id=u.id,
+                            character_id=char["name"],
+                            rank=char["rank"],
+                            base_power=char["power"],
+                            power=char["power"],
+                        ))
+                        r["character_name"] = char["name"]
+                        r["character_rank"] = char["rank"]
+                else:
+                    res = _compute_boss_reward(boss.boss_id, r["damage"])
+                    if res:
+                        setattr(u, res["field"], (getattr(u, res["field"], 0) or 0) + res["amount"])
+                        r["extra_field"] = res["field"]
+                        r["extra_amount"] = res["amount"]
 
             await session.flush()
+
+            # Персонажи Мариса меняют боевую мощь — пересчитываем после flush
+            if boss.boss_id == "maris" and defeated:
+                from app.repositories.squad_repo import squad_repo
+                for r in rewards:
+                    if r.get("character_name"):
+                        u = users_map.get(r["user_id"])
+                        if u:
+                            await squad_repo.update_user_combat_power(session, u)
 
         cfg = BOSS_MAP.get(boss.boss_id)
         if boss.boss_id == "manager":
@@ -385,6 +569,8 @@ class BossService:
         elif boss.boss_id == "brothers":
             from app.constants.bosses import BROTHERS_WIN_PHRASE, BROTHERS_FAIL_PHRASE
             outcome_phrase = BROTHERS_WIN_PHRASE if defeated else BROTHERS_FAIL_PHRASE
+        elif boss.boss_id == "maris":
+            outcome_phrase = MARIS_REBIRTH_PHRASE if defeated else None
         else:
             outcome_phrase = None
 

@@ -82,8 +82,10 @@ async def cb_menu_combat(cb: CallbackQuery):
 
 
 @router.callback_query(F.data == "menu_economy")
-async def cb_menu_economy(cb: CallbackQuery):
-    await _edit_or_resend(cb, "💰 <b>Экономика</b>\n\nВыбери раздел:", menu_economy_kb())
+async def cb_menu_economy(cb: CallbackQuery, session: AsyncSession):
+    from app.services.horse_shop_service import horse_shop_service
+    event = await horse_shop_service.get_current_event(session)
+    await _edit_or_resend(cb, "💰 <b>Экономика</b>\n\nВыбери раздел:", menu_economy_kb(horse_shop_active=bool(event)))
     await cb.answer()
 
 

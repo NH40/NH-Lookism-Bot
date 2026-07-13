@@ -190,6 +190,8 @@ CARD_IMAGE_MAP: dict[str, str] = {
     "Братья (СЧ и НХ)":            "images/card/perfection/Brother.png",
     "Менеджер (Жмот (Prime))":      "images/card/perfection/Meneger_Prime.png",
     "Communists (Clan)":            "images/card/perfection/Communists_Clan.png",
+    "Dark (Clan)":                  "images/card/perfection/Dark.png",
+    "Короли Первого поколения":     "images/card/perfection/King.png",
 }
 
 # ── Кэш file_id (персистентный через JSON) ────────────────────────────────────

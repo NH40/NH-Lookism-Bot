@@ -26,26 +26,32 @@ BOSS_TOP_REWARDS: list[int] = [100, 80, 50, 40, 25]
 # Тикеты всем участникам (игнорируют max_tickets)
 BOSS_PARTICIPANT_REWARD: int = 10
 
-# ── Дополнительные ресурсы за победу над боссом ───────────────────────────────
+# ── Дополнительные ресурсы за победу над боссом (каждому участнику) ───────────
+# Архангел → business_fragments (по урону), Братья → war_points (по урону),
+# Никита → ui_fragments (рандом), Орг → path_fragments (рандом),
+# Менеджер и Марис обрабатываются отдельно (не поле+число) — см. boss_service.py
 
-# Фрагменты (Никита → path_fragments, Менеджер → business_fragments)
-BOSS_EXTRA_FRAG_TOP: list[int] = [250, 200, 150, 100, 50]
-BOSS_EXTRA_FRAG_PARTICIPANT: int = 25
+BOSS_ARCHANGEL_FRAG_MIN: int = 10
+BOSS_ARCHANGEL_FRAG_MAX: int = 80
+BOSS_ARCHANGEL_FRAG_DIVISOR: int = 1_000_000_000   # 80 фрагментов = 80 млрд урона
 
-# Очки (Архангел → skill_path_points, Братья → war_points)
-BOSS_EXTRA_POINTS_TOP: list[int] = [50, 40, 30, 20, 10]
-BOSS_EXTRA_POINTS_PARTICIPANT: int = 5
+BOSS_BROTHERS_WAR_MIN: int = 20
+BOSS_BROTHERS_WAR_MAX: int = 200
+BOSS_BROTHERS_WAR_DIVISOR: int = 10_000_000_000    # 200 очков = 2 трлн урона
 
-# boss_id → (поле User, тип награды: "frag" | "pts")
-BOSS_EXTRA_RESOURCE: dict[str, tuple[str, str]] = {
-    "archangel": ("skill_path_points",  "pts"),
-    "nikita":    ("path_fragments",     "frag"),
-    "manager":   ("business_fragments", "frag"),
-    "brothers":  ("war_points",         "pts"),
-}
+BOSS_NIKITA_FRAG_MIN: int = 20
+BOSS_NIKITA_FRAG_MAX: int = 80
+
+BOSS_ORG_FRAG_MIN: int = 20
+BOSS_ORG_FRAG_MAX: int = 80
+
+BOSS_MANAGER_WIN_MULTIPLIER: int = 2
+
+BOSS_MARIS_ABSOLUTE_THRESHOLD_DAMAGE: int = 50_000_000_000
+BOSS_MARIS_ABSOLUTE_CHANCE: int = 8   # %
 
 # ── Ротация боссов (по порядку) ────────────────────────────────────────────────
-BOSS_ROTATION: list[str] = ["nikita", "archangel", "manager", "brothers"]
+BOSS_ROTATION: list[str] = ["nikita", "archangel", "manager", "brothers", "maris", "org"]
 
 # ── Никита ────────────────────────────────────────────────────────────────────
 
@@ -100,8 +106,7 @@ MANAGER_DRAIN_OPTIONS: list[int] = [5, 10, 15, 20]
 # Порог HP для одноразового самолечения
 MANAGER_HEAL_THRESHOLD: float = 0.10  # 10%
 
-# Монеты при победе / поражении (всем участникам)
-MANAGER_WIN_BONUS: int    = 1_000_000
+# Монеты при поражении (всем участникам); победа теперь удваивает монеты (см. BOSS_MANAGER_WIN_MULTIPLIER)
 MANAGER_FAIL_PENALTY: int = 10_000_000
 
 MANAGER_PHRASES: list[str] = [
@@ -121,6 +126,54 @@ BROTHERS_BASE_HP: int = 2_000_000_000_000  # 2 трлн
 
 BROTHERS_WIN_PHRASE: str  = "Хрень с вами, вы прикольные..."
 BROTHERS_FAIL_PHRASE: str = "Хуйтата!"
+
+# ── Марис ────────────────────────────────────────────────────────────────────
+
+MARIS_BASE_HP: int = 25_000_000_000
+MARIS_TOTAL_PHASES: int = 8
+
+# -20% урона атакующего на 5 его ударов, не стакается (стартует со следующего удара)
+MARIS_DEBUFF_HITS: int = 5
+MARIS_DEBUFF_PCT: int = 20
+
+# "Редко": снимает 1-15 случайного вида фрагментов у атакующего
+MARIS_FRAG_STEAL_CHANCE: int = 12
+MARIS_FRAG_STEAL_MIN: int = 1
+MARIS_FRAG_STEAL_MAX: int = 15
+
+# "Очень редко": ворует 10-50 статистов случайного ранга у атакующего
+MARIS_STATIST_STEAL_CHANCE: int = 4
+MARIS_STATIST_STEAL_MIN: int = 10
+MARIS_STATIST_STEAL_MAX: int = 50
+
+# "Очень редко": "Я уплыл" — следующие 3 атаки (от кого угодно) не наносят урона
+MARIS_SWIM_AWAY_CHANCE: int = 4
+MARIS_SWIM_AWAY_HITS: int = 3
+
+MARIS_PHRASES: list[str] = [
+    "Где баланс",
+    "У меня баг ёпта",
+    "Это дизабланс ёпта!",
+]
+MARIS_REBIRTH_PHRASE: str = "Это был всего лишь твинк"
+
+# ── Орг ──────────────────────────────────────────────────────────────────────
+
+ORG_BASE_HP: int = 200_000_000_000
+
+# Шкала тени: +% за удар; при 100% — невидимость на N ударов (игнорирует урон)
+ORG_SHADOW_PER_HIT: float = 5.0
+ORG_INVISIBLE_HITS: int = 10
+
+# -20% боевой мощи атакующего на 10 минут во всех режимах (зелье с отриц. бонусом)
+ORG_POWER_DEBUFF_PCT: int = 20
+ORG_POWER_DEBUFF_MINUTES: int = 10
+
+ORG_PHRASES: list[str] = [
+    "....",
+    "Орг хранит молчание",
+    "Леденящий взгляд ОРГ...",
+]
 
 # ── Описания боссов ────────────────────────────────────────────────────────────
 
@@ -206,6 +259,43 @@ BOSSES: list[BossConfig] = [
             "Если за 3 часа HP ушло в минус — признают вас достойными!"
         ),
         phrases=[BROTHERS_WIN_PHRASE, BROTHERS_FAIL_PHRASE],
+    ),
+    BossConfig(
+        boss_id="maris",
+        name="Марис",
+        emoji="🌊",
+        base_hp=MARIS_BASE_HP,
+        desc=(
+            "Легендарный воин моря, один из легенд, что были ещё до первого поколения, "
+            "участник нулевого поколения. Марис — лидер коммунистов, человек с 8 твинками "
+            "и главный сторонник поиска баланса игры."
+        ),
+        special_desc=(
+            f"🔁 <b>Перерождение</b>: у Мариса {MARIS_TOTAL_PHASES} фаз по 25 млрд HP каждая. "
+            f"После перерождения — щит на 1 следующую атаку.\n"
+            f"⬇️ Снижает урон атакующего на {MARIS_DEBUFF_PCT}% на {MARIS_DEBUFF_HITS} ударов (не стакается)\n"
+            f"🧩 Редко: ворует 1-15 фрагментов | 👥 Очень редко: ворует 10-50 статистов\n"
+            f"🌊 Очень редко: «Я уплыл» — 3 атаки без урона"
+        ),
+        phrases=MARIS_PHRASES,
+    ),
+    BossConfig(
+        boss_id="org",
+        name="Орг",
+        emoji="🌑",
+        base_hp=ORG_BASE_HP,
+        desc=(
+            "Тень LBP. Игрок, бывший почти с самого старта, был во времена войны — "
+            "он ожидал и тихо ждал, дабы сейчас засиять во всей красе. Лидер первого "
+            "поколения, лидер клана Dark."
+        ),
+        special_desc=(
+            f"🌑 <b>Шкала тени</b>: +{ORG_SHADOW_PER_HIT:.0f}% за удар. При 100% — невидимость, "
+            f"игнорирует {ORG_INVISIBLE_HITS} входящих атак.\n"
+            f"⏳ Удваивает КД атакующего | 🛡 Игнорирует половину урона\n"
+            f"⬇️ -{ORG_POWER_DEBUFF_PCT}% боевой мощи атакующего на {ORG_POWER_DEBUFF_MINUTES} минут везде"
+        ),
+        phrases=ORG_PHRASES,
     ),
 ]
 

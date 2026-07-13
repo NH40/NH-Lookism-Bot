@@ -167,3 +167,5 @@ PATCH_TOP_CLAN_REWARDS: dict[int, int] = {
 # Сколько игроков/кланов получают награды при патче
 PATCH_TOP_PLAYERS_COUNT: int = 10
 PATCH_TOP_CLANS_COUNT: int = 5
+# NHCoin на старте после патч-сброса
+PATCH_STARTING_COINS: int = 1_000

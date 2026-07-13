@@ -23,6 +23,7 @@ from app.config.game_balance import (
     DEFAULT_TICKET_CHANCE,
     DEFAULT_INFLUENCE,
     EXTRA_SKILL_SLOTS_BASE,
+    PATCH_STARTING_COINS,
 )
 
 class PrestigeService:
@@ -216,13 +217,16 @@ class PrestigeService:
             rs._apply_ui_level(user, saved_ui_level)
 
         # При полном сбросе (патч) — авто-действия УИ выключены,
-        # игрок включает их вручную после патча
+        # игрок включает их вручную после патча.
+        # nh_coins выставляется ПОСЛЕ reapply_all_titles — гарантируем ровно 1000
+        # независимо от того, что могут добавить будущие титульные бонусы.
         if not keep_ui and not keep_progress:
             user.ui_auto_recruit = False
             user.ui_auto_train   = False
             user.ui_auto_ticket  = False
             user.ui_auto_pull    = False
             user.ui_auto_potion  = False
+            user.nh_coins = PATCH_STARTING_COINS
 
         # Сбрасываем несекретные достижения — игроки могут выполнить их заново
         from app.models.title import UserAchievement

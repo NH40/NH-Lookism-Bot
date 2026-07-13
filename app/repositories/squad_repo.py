@@ -68,6 +68,17 @@ class SquadRepo:
         if user.squad_power_bonus > 0:
             total = int(total * (1 + user.squad_power_bonus / 100))
 
+        # Слава — Гана «Монстр»: +60% боевая мощь
+        if getattr(user, "fame_gana_monster", False):
+            total = int(total * 1.60)
+
+        # Слава — Гапрена, бафф сета «Преодоление»: +5% боевая мощь за стак (макс. 5 стаков)
+        if getattr(user, "fame_set_gaprena", False):
+            from app.services.fame_service import fame_service
+            overcome_pct = await fame_service.get_overcome_bonus_pct(user.id)
+            if overcome_pct > 0:
+                total = int(total * (1 + overcome_pct / 100))
+
         # 4. Донат-множители
         from app.repositories.title_repo import title_repo
         mult = await title_repo.get_combat_power_mult(session, user.id)

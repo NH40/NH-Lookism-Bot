@@ -24,6 +24,7 @@ from app.handlers import market
 from app.handlers import quests
 from app.handlers import horse_shop
 from app.handlers.clan import router as clan_router
+from app.handlers import fame as fame_handler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -41,6 +42,9 @@ async def main():
 
     logger.info("Initializing cities...")
     await init_cities()
+
+    logger.info("Initializing fame fragments...")
+    await init_fame()
 
     bot = Bot(
         token=settings.BOT_TOKEN,
@@ -86,6 +90,7 @@ async def main():
     dp.include_router(guide.router)
     dp.include_router(black_market.router)
     dp.include_router(donate.router)
+    dp.include_router(fame_handler.router)
 
     dp.include_router(admin.router)
 
@@ -105,6 +110,15 @@ async def main():
         scheduler.shutdown()
         await bot.session.close()
         logger.info("Bot stopped")
+
+
+async def init_fame():
+    from app.database import AsyncSessionFactory
+    from app.services.fame_service import fame_service
+
+    async with AsyncSessionFactory() as session:
+        async with session.begin():
+            await fame_service.seed_fragments(session)
 
 
 async def init_cities():

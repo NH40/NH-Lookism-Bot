@@ -26,6 +26,7 @@ async def ultra_instinct_tick():
                     User.mg_level_luck > 0,
                     User.mg_level_influence > 0,
                     User.mg_level_raid_drop > 0,
+                    User.fame_gana_ui_control == True,
                 )
             )
         )).scalars())
@@ -64,10 +65,17 @@ async def ultra_instinct_tick():
                             await deck_service.try_get_ticket(session, user)
                         if user.ui_auto_pull and user.tickets > 0:
                             await deck_service.pull_all(session, user)
-                        if user.ui_auto_recruit:
+                        # Слава — Гана «Контроль ультра инстинкта»: авто-вербовка/тренировка
+                        # без покупки УИ II, пока фрагмент удержан
+                        if user.ui_auto_recruit or user.fame_gana_ui_control:
                             await _ui_recruit(session, user)
-                        if user.ui_auto_train:
+                            if user.fame_set_gana:
+                                # Бафф сета «Истинный ультра инстинкт»: х2 за тик
+                                await _ui_recruit(session, user, bypass_cd=True)
+                        if user.ui_auto_train or user.fame_gana_ui_control:
                             await squad_service.train(session, user)
+                            if user.fame_set_gana:
+                                await squad_service.train(session, user, bypass_cd=True)
                         # Гений медицины: авто-зелья (используем предзагруженные зелья)
                         await _med_genius_auto_potion(
                             session, user, potions_by_user.get(user_id, [])
@@ -76,12 +84,12 @@ async def ultra_instinct_tick():
                     logger.error(f"ui_tick error for user {user_id}: {e}")
 
 
-async def _ui_recruit(session: AsyncSession, user):
+async def _ui_recruit(session: AsyncSession, user, bypass_cd: bool = False):
     from app.services.cooldown_service import cooldown_service
     cd_key = cooldown_service.recruit_key(user.id)
-    if await cooldown_service.is_on_cooldown(cd_key):
+    if not bypass_cd and await cooldown_service.is_on_cooldown(cd_key):
         return
-    await squad_service.recruit(session, user)
+    await squad_service.recruit(session, user, bypass_cd=bypass_cd)
 
 
 async def _med_genius_auto_potion(

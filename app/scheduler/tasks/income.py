@@ -31,6 +31,7 @@ from sqlalchemy import select, text, func, or_
 from app.database import AsyncSessionFactory
 from app.models.user import User
 from app.models.potion import ActivePotion
+from app.services.fame_service import fame_service
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,9 @@ async def income_tick():
                     User.clan_income_bonus,
                     User.clan_donat_income_bonus,
                     User.clan_land_income_pct,
+                    User.title_casino_jackpot,
+                    User.title_casino_blackjack,
+                    User.fame_set_gaprena,
                 ).where(
                     or_(User.income_per_minute > 0, User.circ_passive_income > 0)
                 )
@@ -113,8 +117,19 @@ async def income_tick():
                 earned = 0
                 potion_bonus = income_bonuses.get(u.id, 0)
 
+                # Игровые титулы за рейтинг казино + бафф сета «Преодоление» (Слава — Гапрена)
+                title_mult = 1.0
+                if u.title_casino_jackpot:
+                    title_mult *= 2.0
+                if u.title_casino_blackjack:
+                    title_mult *= 60 / 45  # эквивалент тика раз в 45с вместо 60с
+                if u.fame_set_gaprena:
+                    overcome_pct = await fame_service.get_overcome_bonus_pct(u.id)
+                    if overcome_pct > 0:
+                        title_mult *= 1 + overcome_pct / 100
+
                 if u.income_per_minute > 0:
-                    total = int(u.income_per_minute * (1 + potion_bonus / 100))
+                    total = int(u.income_per_minute * (1 + potion_bonus / 100) * title_mult)
 
                     if total > 0:
                         if u.referred_by:
@@ -133,7 +148,7 @@ async def income_tick():
                     skills_bonus = (u.income_bonus_percent or 0) + (u.prestige_income_bonus or 0)
                     clan_bonus   = (u.clan_income_bonus or 0) + (u.clan_donat_income_bonus or 0) + (u.clan_land_income_pct or 0)
                     circ_total_bonus = skills_bonus + clan_bonus + potion_bonus
-                    per_tick = max(0, int(circ * (1 + circ_total_bonus / 100)))
+                    per_tick = max(0, int(circ * (1 + circ_total_bonus / 100) * title_mult))
                     if per_tick > 0:
                         earned += per_tick
 

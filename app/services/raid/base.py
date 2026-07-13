@@ -453,15 +453,19 @@ class RaidService:
     ) -> dict:
         if not user.skill_path:
             return {"ok": False, "reason": "Сначала выбери путь в Навыках!"}
-        if user.path_fragments < PATH_SPIN_CRAFT_COST:
+
+        from app.services.fame_service import fame_service
+        cost = int(PATH_SPIN_CRAFT_COST * await fame_service.get_craft_cost_multiplier(user))
+
+        if user.path_fragments < cost:
             return {
                 "ok": False,
                 "reason": (
                     f"Недостаточно фрагментов Пути "
-                    f"(нужно {PATH_SPIN_CRAFT_COST}, есть {user.path_fragments})"
+                    f"(нужно {cost}, есть {user.path_fragments})"
                 ),
             }
-        user.path_fragments -= PATH_SPIN_CRAFT_COST
+        user.path_fragments -= cost
         from app.services.skill_service import skill_service
         result = await skill_service.spin_for_random_extra_skill(session, user)
         await session.flush()
@@ -483,7 +487,8 @@ class RaidService:
                 "reason": f"Сначала получи УИ {needed} уровня!",
             }
 
-        cost = UI_CRAFT_COST[target_level]
+        from app.services.fame_service import fame_service
+        cost = int(UI_CRAFT_COST[target_level] * await fame_service.get_craft_cost_multiplier(user))
 
         if user.ui_fragments < cost:
             return {
@@ -522,7 +527,8 @@ class RaidService:
         if target_level > MG_BUY_MAX_LEVEL:
             return {"ok": False, "reason": "Уровень 6 — только через донат"}
 
-        cost  = MG_LEVEL_COSTS[current]  # индекс = текущий уровень (0 = стоимость ур.1)
+        from app.services.fame_service import fame_service
+        cost  = int(MG_LEVEL_COSTS[current] * await fame_service.get_craft_cost_multiplier(user))  # индекс = текущий уровень (0 = стоимость ур.1)
         frags = getattr(user, "alchemy_fragments", 0)
         if frags < cost:
             return {
@@ -549,7 +555,9 @@ class RaidService:
         speed = await session.scalar(
             select(UserMastery.speed).where(UserMastery.user_id == user.id)
         )
-        speed_level = min(4, (speed or 0) + getattr(user, "clan_land_speed_mastery_bonus", 0))
+        speed_level = 4 if getattr(user, "fame_charles_invisible", False) else min(
+            4, (speed or 0) + getattr(user, "clan_land_speed_mastery_bonus", 0)
+        )
         raw = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed_level, 0)
         return int(raw * user.skill_path_bonus_multiplier)
 

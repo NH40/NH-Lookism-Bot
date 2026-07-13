@@ -103,6 +103,10 @@ async def cb_raid_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer(result["reason"], show_alert=True)
         return
 
+    if getattr(user, "fame_set_gaprena", False):
+        from app.services.fame_service import fame_service
+        await fame_service.gain_overcome_stack(user.id)
+
     if result.get("boss_killed"):
         # Личная активность (Алея/Зал славы)
         from app.utils.region_activity import record as record_activity

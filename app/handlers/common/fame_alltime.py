@@ -3,7 +3,8 @@ import html
 
 from aiogram import Router
 from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram.types import Message, InlineKeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -36,4 +37,7 @@ async def cmd_fame_alltime(message: Message, session: AsyncSession, user: User):
     lines.append(f"\n📍 Твоё место: #{my_rank}")
     lines.append(f"⭐ Твоя активность: {fmt_num(user.fame_alltime_points)}")
 
-    await message.answer("\n".join(lines), parse_mode="HTML")
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="🔨 Кузница славы", callback_data="fame_forge"))
+
+    await message.answer("\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML")

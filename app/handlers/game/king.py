@@ -434,6 +434,10 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer(result.get("reason", "Ошибка"), show_alert=True)
         return
 
+    if getattr(user, "fame_set_gaprena", False):
+        from app.services.fame_service import fame_service
+        await fame_service.gain_overcome_stack(user.id)
+
     from app.services.quest_service import quest_service
     await quest_service.add_progress(session, user, "attacks")
     if result["win"]:

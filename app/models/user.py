@@ -39,7 +39,7 @@ class User(Base):
 
     # ── Тикеты и гача ─────────────────────────────────────────────────────
     tickets: Mapped[int] = mapped_column(Integer, default=0)
-    max_tickets: Mapped[int] = mapped_column(Integer, default=3)
+    max_tickets: Mapped[int] = mapped_column(Integer, default=10)
     ticket_chance: Mapped[int] = mapped_column(Integer, default=25)
     ticket_cd_reduction: Mapped[int] = mapped_column(Integer, default=0)
     prestige_ticket_bonus: Mapped[int] = mapped_column(Integer, default=0)
@@ -203,6 +203,29 @@ class User(Base):
     clan_land_mastery_pct: Mapped[int] = mapped_column(Integer, default=0)         # +% очков мастерства/пути с тренировок
     clan_land_power_mastery_bonus: Mapped[int] = mapped_column(Integer, default=0) # +уровней к мастерству силы (макс 4)
     clan_land_speed_mastery_bonus: Mapped[int] = mapped_column(Integer, default=0) # +уровней к мастерству скорости (макс 4)
+    clan_land_cd_reduction_pct: Mapped[int] = mapped_column(Integer, default=0)    # +% сокращение КД (рейд-боссы, дуэли)
+
+    # ── Игровые титулы (за топ рейтинга казино, еженедельно) ─────────────────
+    title_casino_jackpot: Mapped[bool] = mapped_column(Boolean, default=False)   # Джекпот — доход x2
+    title_casino_blackjack: Mapped[bool] = mapped_column(Boolean, default=False) # Блэкджек — доход +33% (эквивалент тика раз в 45с)
+    title_casino_player: Mapped[bool] = mapped_column(Boolean, default=False)    # Игрок — крафты в рейдах -15%
+
+    # ── Кузница славы (уникальные на весь сервер фрагменты, кэш владения) ────
+    # Не сбрасываются при патче — как донатные титулы.
+    fame_gaprena_leader: Mapped[bool] = mapped_column(Boolean, default=False)
+    fame_gaprena_hero: Mapped[bool] = mapped_column(Boolean, default=False)
+    fame_gaprena_romantic: Mapped[bool] = mapped_column(Boolean, default=False)
+    fame_set_gaprena: Mapped[bool] = mapped_column(Boolean, default=False)       # весь сет собран
+
+    fame_gana_ui_control: Mapped[bool] = mapped_column(Boolean, default=False)
+    fame_gana_monster: Mapped[bool] = mapped_column(Boolean, default=False)
+    fame_gana_path: Mapped[bool] = mapped_column(Boolean, default=False)
+    fame_set_gana: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    fame_charles_geniuses: Mapped[bool] = mapped_column(Boolean, default=False)
+    fame_charles_nhn_group: Mapped[bool] = mapped_column(Boolean, default=False)
+    fame_charles_invisible: Mapped[bool] = mapped_column(Boolean, default=False)
+    fame_set_charles: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # ── Донат-валюта (NHDonate) ──────────────────────────────────────────────
     nh_donate: Mapped[int] = mapped_column(Integer, default=0)  # 1 NHDonate = 1 рубль

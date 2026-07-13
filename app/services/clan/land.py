@@ -70,6 +70,7 @@ class ClanLandService(ClanBaseService):
             "clan_land_mastery_pct": bonuses.get("mastery_gain", 0),
             "clan_land_power_mastery_bonus": bonuses.get("power_mastery", 0),
             "clan_land_speed_mastery_bonus": bonuses.get("speed_mastery", 0),
+            "clan_land_cd_reduction_pct": bonuses.get("cd_reduction", 0),
         }
 
     async def recalc_land_bonuses(self, session: AsyncSession, clan_id: int) -> None:
@@ -174,3 +175,45 @@ class ClanLandService(ClanBaseService):
         await session.flush()
 
         return {"ok": True, "name": cfg["name"], "cost": cost}
+
+    async def demolish_land_building(
+        self, session: AsyncSession, clan: Clan, user: User, building_type: str
+    ) -> dict:
+        """Сносит одно здание указанного типа, возвращая 50% его стоимости в казну.
+
+        Здания одного типа взаимозаменяемы (бонус не зависит от конкретного
+        экземпляра), поэтому сносим произвольное — так же, как строим по типу,
+        а не по id. Освобождённый слот можно сразу занять другим зданием.
+        """
+        cfg = CLAN_LAND_BUILDINGS.get(building_type)
+        if not cfg:
+            return {"ok": False, "reason": "Здание не найдено"}
+
+        rank = await self.get_member_rank(session, clan.id, user.id)
+        if rank not in ("owner", "deputy"):
+            return {"ok": False, "reason": "Только владелец или заместитель может сносить здания"}
+
+        building = await session.scalar(
+            select(ClanLandBuilding)
+            .where(
+                ClanLandBuilding.clan_id == clan.id,
+                ClanLandBuilding.building_type == building_type,
+            )
+            .limit(1)
+        )
+        if not building:
+            return {"ok": False, "reason": "Такого здания нет"}
+
+        refund = cfg["cost"] // 2
+
+        # Тот же порядок блокировок, что и в buy_land_building: сначала меняем
+        # состав зданий и users (через recalc_land_bonuses), потом clan.treasury.
+        await session.delete(building)
+        await session.flush()
+
+        await self.recalc_land_bonuses(session, clan.id)
+
+        clan.treasury += refund
+        await session.flush()
+
+        return {"ok": True, "name": cfg["name"], "refund": refund}

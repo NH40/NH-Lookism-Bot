@@ -31,10 +31,13 @@ async def _get_mastery(session: AsyncSession, user_id: int) -> UserMastery | Non
     return result.scalar_one_or_none()
 
 
-def _get_speed_reduction(mastery: UserMastery | None, multiplier: float = 1.0, clan_bonus: int = 0) -> int:
+def _get_speed_reduction(
+    mastery: UserMastery | None, multiplier: float = 1.0, clan_bonus: int = 0, force_max: bool = False
+) -> int:
     speed_levels = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
     raw = mastery.speed if mastery else 0
-    speed_level = min(4, raw + clan_bonus)
+    # force_max — Слава: Чарльз Чоя «Невидимые атаки» (авто мастерство скорости 4 ур.)
+    speed_level = 4 if force_max else min(4, raw + clan_bonus)
     return int(speed_levels.get(speed_level, 0) * multiplier)
 
 
@@ -45,15 +48,18 @@ class SquadService:
     # ════════════════════════════════════════════════════════════════════════
 
     async def recruit(
-        self, session: AsyncSession, user: User
+        self, session: AsyncSession, user: User, bypass_cd: bool = False
     ) -> dict:
         """
         Вербовка статистов.
         Количество = f(influence + recruit_count_bonus).
         Ранги = случайные по весам фазы.
+
+        bypass_cd — используется только Ультра Инстинктом при бонусе сета Гана
+        «Истинный ультра инстинкт» (х2 вербовка за тик).
         """
         cd_key = cooldown_service.recruit_key(user.id)
-        if await cooldown_service.is_on_cooldown(cd_key):
+        if not bypass_cd and await cooldown_service.is_on_cooldown(cd_key):
             ttl = await cooldown_service.get_ttl(cd_key)
             return {"ok": False, "reason": f"Вербовка через {cooldown_service.format_ttl(ttl)}"}
 
@@ -72,6 +78,10 @@ class SquadService:
 
         # double_recruit — удваивает
         if user.double_recruit:
+            count *= 2
+
+        # Слава — Гапрена «Герой»: ×2 получение статистов из любых источников
+        if getattr(user, "fame_gaprena_hero", False):
             count *= 2
 
         # Титул «Отбор» — ×3 к весам двух сильнейших (наиредких) рангов фазы
@@ -121,6 +131,7 @@ class SquadService:
         speed_pct = _get_speed_reduction(
             mastery, user.skill_path_bonus_multiplier,
             getattr(user, 'clan_land_speed_mastery_bonus', 0),
+            force_max=getattr(user, 'fame_charles_invisible', False),
         )
         from app.repositories.title_repo import title_repo
         has_focus = await title_repo.has_title(session, user.id, "focus")
@@ -163,34 +174,40 @@ class SquadService:
         user.nh_coins -= total
         user.coins_spent += total
 
+        # Слава — Гапрена «Герой»: ×2 получение статистов из любых источников (в т.ч. магазин)
+        granted = count * 2 if getattr(user, "fame_gaprena_hero", False) else count
+
         # Один INSERT вместо N батч-запросов — PostgreSQL итерирует generate_series внутри
         await session.execute(
             text(
                 "INSERT INTO squad_members (user_id, rank, stars, base_power) "
                 "SELECT :uid, :rank, 0, :bp FROM generate_series(1, :cnt)"
             ),
-            {"uid": user.id, "rank": rank, "bp": rank_cfg.base_power, "cnt": count},
+            {"uid": user.id, "rank": rank, "bp": rank_cfg.base_power, "cnt": granted},
         )
 
-        user.total_statists_recruited = (user.total_statists_recruited or 0) + count
+        user.total_statists_recruited = (user.total_statists_recruited or 0) + granted
 
         await session.flush()
         from app.repositories.squad_repo import squad_repo
         await squad_repo.update_user_combat_power(session, user)
 
-        return {"ok": True, "count": count, "total_cost": total}
+        return {"ok": True, "count": granted, "total_cost": total}
 
     # ════════════════════════════════════════════════════════════════════════
     # ТРЕНИРОВКА
     # ════════════════════════════════════════════════════════════════════════
 
-    async def train(self, session: AsyncSession, user: User) -> dict:
+    async def train(self, session: AsyncSession, user: User, bypass_cd: bool = False) -> dict:
         """
         Тренировка отряда.
         - Охват = TRAIN_BASE_COVERAGE + train_bonus_percent + prestige_train_bonus + зелье
         - Случайный выбор статистов (только те у кого < 5 звёзд)
         - Каждый получает от 1 до 3 звёзд (не превышая 5)
         - Шанс успеха: TRAIN_BASE_SUCCESS_CHANCE + train_quality_bonus (макс TRAIN_MAX_SUCCESS_CHANCE)
+
+        bypass_cd — используется только Ультра Инстинктом при бонусе сета Гана
+        «Истинный ультра инстинкт» (х2 тренировка за тик).
         """
         cd_key = cooldown_service.train_key(user.id)
 
@@ -201,7 +218,7 @@ class SquadService:
             if not await cooldown_service.is_on_cooldown(dkey):
                 is_second = True
 
-        if not is_second and await cooldown_service.is_on_cooldown(cd_key):
+        if not is_second and not bypass_cd and await cooldown_service.is_on_cooldown(cd_key):
             ttl = await cooldown_service.get_ttl(cd_key)
             return {"ok": False, "reason": f"Тренировка через {cooldown_service.format_ttl(ttl)}"}
 
@@ -267,6 +284,7 @@ class SquadService:
         speed_pct = _get_speed_reduction(
             mastery, user.skill_path_bonus_multiplier,
             getattr(user, 'clan_land_speed_mastery_bonus', 0),
+            force_max=getattr(user, 'fame_charles_invisible', False),
         )
         from app.repositories.title_repo import title_repo
         has_focus = await title_repo.has_title(session, user.id, "focus")

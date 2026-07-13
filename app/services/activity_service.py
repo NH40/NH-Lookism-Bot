@@ -3,7 +3,7 @@
 Веса совпадают с action_map клановой войны за регион (app/services/clan/region.py),
 но БЕЗ капа на количество — личная активность копится без ограничений.
 """
-from sqlalchemy import update as sa_update
+from sqlalchemy import select, update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 
@@ -32,6 +32,14 @@ async def record(session: AsyncSession, user_id: int, action: str) -> None:
     pts = ACTIVITY_POINTS.get(action)
     if not pts:
         return
+
+    # Слава — Гапрена «Лидер»: +50% очков активности
+    has_leader = await session.scalar(
+        select(User.fame_gaprena_leader).where(User.id == user_id)
+    )
+    if has_leader:
+        pts = int(pts * 1.5)
+
     await session.execute(
         sa_update(User).where(User.id == user_id).values(
             fame_alltime_points=User.fame_alltime_points + pts,

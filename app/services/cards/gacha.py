@@ -53,7 +53,9 @@ class GachaService:
         got = roll <= chance
 
         mastery = await _get_mastery(session, user.id)
-        speed_level = min(4, (mastery.speed if mastery else 0) + getattr(user, "clan_land_speed_mastery_bonus", 0))
+        speed_level = 4 if getattr(user, "fame_charles_invisible", False) else min(
+            4, (mastery.speed if mastery else 0) + getattr(user, "clan_land_speed_mastery_bonus", 0)
+        )
         raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed_level, 0)
         speed_pct = int(raw_speed * getattr(user, "skill_path_bonus_multiplier", 1.0))
         cd_seconds = max(60, cooldown_service.apply_speed_reduction(
@@ -62,7 +64,8 @@ class GachaService:
         await cooldown_service.set_cooldown(cd_key, cd_seconds)
 
         if got:
-            double = getattr(user, "double_ticket", False)
+            # Слава — бафф сета Гана «Истинный ультра инстинкт»: тикеты x2, как double_ticket
+            double = getattr(user, "double_ticket", False) or getattr(user, "fame_set_gana", False)
             gained = 2 if double and (user.tickets + 1 < ticket_cap) else 1
             user.tickets = min(ticket_cap, user.tickets + gained)
             await session.flush()

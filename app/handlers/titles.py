@@ -12,6 +12,7 @@ from app.data.titles import (
     DONAT_SETS, DONAT_SET_MAP, DONAT_TITLES, DONAT_TITLE_MAP,
     MANAGER_USERNAME,
 )
+from app.data.fame import FAME_SETS, FAME_SET_MAP, fame_fragment_key
 
 router = Router()
 
@@ -23,14 +24,73 @@ async def cb_titles(cb: CallbackQuery, session: AsyncSession, user: User):
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="🥇 Достижения",   callback_data="achievements_menu"))
     builder.row(InlineKeyboardButton(text="💎 Донатные сеты", callback_data="donat_sets_menu"))
+    builder.row(InlineKeyboardButton(text="🎮 Игровые титулы", callback_data="game_titles_menu"))
+    builder.row(InlineKeyboardButton(text="🌟 Слава",         callback_data="fame_titles_menu"))
     builder.row(InlineKeyboardButton(text="🔙 Назад",         callback_data="main_menu"))
 
     await cb.message.edit_text(
         "🏆 <b>Титулы</b>\n\n"
         "🥇 Достижения — выполняй задачи и получай бонусы\n"
-        "💎 Донатные сеты — особые привилегии за поддержку проекта",
+        "💎 Донатные сеты — особые привилегии за поддержку проекта\n"
+        "🎮 Игровые титулы — за топ рейтинга казино\n"
+        "🌟 Слава — уникальные сеты Кузницы славы",
         reply_markup=builder.as_markup(),
         parse_mode="HTML",
+    )
+
+
+# ── ИГРОВЫЕ ТИТУЛЫ (за топ рейтинга казино) ─────────────────────────────────
+
+@router.callback_query(F.data == "game_titles_menu")
+async def cb_game_titles_menu(cb: CallbackQuery, session: AsyncSession, user: User):
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+    from aiogram.types import InlineKeyboardButton
+
+    def _status(has: bool) -> str:
+        return "✅ У тебя" if has else "❌"
+
+    lines = [
+        "🎮 <b>Игровые титулы</b>\n",
+        "<i>Выдаются автоматически топ-3 еженедельного рейтинга казино и меняются каждую неделю</i>\n",
+        f"🎰 <b>Джекпот</b> (1 место) — доход ×2\n   {_status(user.title_casino_jackpot)}\n",
+        f"🃏 <b>Блэкджек</b> (2 место) — доход +33% (тик каждые 45с вместо 60с)\n   {_status(user.title_casino_blackjack)}\n",
+        f"🎲 <b>Игрок</b> (3 место) — крафты в рейдах -15%\n   {_status(user.title_casino_player)}\n",
+    ]
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="🔙 Назад", callback_data="titles"))
+
+    await cb.message.edit_text(
+        "\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML",
+    )
+
+
+# ── СЛАВА (Кузница славы — уникальные сеты) ─────────────────────────────────
+
+@router.callback_query(F.data == "fame_titles_menu")
+async def cb_fame_titles_menu(cb: CallbackQuery, session: AsyncSession, user: User):
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+    from aiogram.types import InlineKeyboardButton
+    from app.services.fame_service import fame_service
+
+    owned = await fame_service.get_owned_fragments(session, user.id)
+
+    lines = ["🌟 <b>Слава</b>\n", "<i>Куй фрагменты за очки активности в /aleya → 🔨 Кузница славы</i>\n"]
+    for s in FAME_SETS:
+        if s.stub:
+            lines.append(f"🔒 <b>{s.name}</b> — скоро")
+            continue
+        count = sum(1 for f in s.fragments if fame_fragment_key(s.set_key, f.key) in owned)
+        is_full = count == len(s.fragments)
+        status = "✅ АКТИВЕН" if is_full else f"{count}/{len(s.fragments)}"
+        lines.append(f"📦 <b>{s.name}</b> [{status}]\n   🎁 {s.bonus_name}: {s.bonus_description}")
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="🔨 Кузница славы", callback_data="fame_forge"))
+    builder.row(InlineKeyboardButton(text="🔙 Назад", callback_data="titles"))
+
+    await cb.message.edit_text(
+        "\n\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML",
     )
 
 

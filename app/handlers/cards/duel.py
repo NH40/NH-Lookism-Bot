@@ -40,12 +40,14 @@ async def cb_duel_menu(cb: CallbackQuery, session: AsyncSession, user: User):
         sa_select(UserMastery).where(UserMastery.user_id == user.id)
     )
     speed_levels = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
-    speed_level = min(4, (mastery.speed if mastery else 0) + getattr(user, "clan_land_speed_mastery_bonus", 0))
+    speed_level = 4 if getattr(user, "fame_charles_invisible", False) else min(
+        4, (mastery.speed if mastery else 0) + getattr(user, "clan_land_speed_mastery_bonus", 0)
+    )
     raw_speed = speed_levels.get(speed_level, 0)
     speed_pct = int(raw_speed * getattr(user, "skill_path_bonus_multiplier", 1.0))
     from app.constants.cards import DUEL_BOT_CD_BASE, DUEL_PVP_CD_BASE, DUEL_DONAT_CD_REDUCTION, DUEL_MIN_CD
     donat_pct = DUEL_DONAT_CD_REDUCTION if getattr(user, "donat_duel_cd", False) else 0
-    flow_pct = getattr(user, "all_cd_reduction", 0) or 0
+    flow_pct = (getattr(user, "all_cd_reduction", 0) or 0) + (getattr(user, "clan_land_cd_reduction_pct", 0) or 0)
     total_cd_reduction = speed_pct + donat_pct + flow_pct
     effective_cd = max(DUEL_MIN_CD, int(DUEL_BOT_CD_BASE * (1 - total_cd_reduction / 100)))
     effective_cd_str = fmt_ttl(effective_cd)

@@ -17,8 +17,21 @@ class CasinoRatingService:
         return list(result.scalars().all())
 
     async def reset_and_reward(self, session: AsyncSession) -> list[dict]:
-        """Награждает топ-3, обнуляет счётчик у всех. Возвращает данные для уведомлений."""
+        """Награждает топ-3, обнуляет счётчик у всех. Возвращает данные для уведомлений.
+
+        Топ-3 также получают игровые титулы (Джекпот/Блэкджек/Игрок) — держатель
+        меняется каждую неделю, у прошлого держателя титул снимается.
+        """
         top3 = await self.get_top(session, limit=3)
+
+        # Снимаем титулы со всех прежних держателей — каждую неделю ровно 1 обладатель на титул
+        await session.execute(update(User).values(
+            title_casino_jackpot=False,
+            title_casino_blackjack=False,
+            title_casino_player=False,
+        ))
+
+        title_fields = {1: "title_casino_jackpot", 2: "title_casino_blackjack", 3: "title_casino_player"}
 
         rewarded: list[dict] = []
         for rank, user in enumerate(top3, start=1):
@@ -27,6 +40,9 @@ class CasinoRatingService:
                 continue
             user.nh_coins = (user.nh_coins or 0) + reward.get("nh_coins", 0)
             user.tickets = (user.tickets or 0) + reward.get("tickets", 0)
+            field = title_fields.get(rank)
+            if field:
+                setattr(user, field, True)
             rewarded.append({
                 "tg_id": user.tg_id,
                 "rank": rank,

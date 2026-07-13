@@ -263,6 +263,10 @@ async def cb_boss_attack(cb: CallbackQuery, session: AsyncSession, user: User):
             await cb.answer(result["reason"], show_alert=True)
             return
 
+        if getattr(user, "fame_set_gaprena", False):
+            from app.services.fame_service import fame_service
+            await fame_service.gain_overcome_stack(user.id)
+
         # Устанавливаем КД (с учётом cd_multiplier от Архангела)
         base_cd = get_boss_attack_cd(user)
         final_cd = int(base_cd * result["cd_multiplier"])

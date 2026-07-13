@@ -214,6 +214,19 @@ class AdminBackupMixin:
         # Удаляем все клановые земли/здания
         await session.execute(sa_delete(ClanLandBuilding))
 
+        # Здания снесены — у всех игроков обнуляем кэш бонусов клановых земель
+        # (иначе clan_land_* поля остаются "зависшими" на users до следующего
+        # вступления/выхода из клана, который единственный их пересчитывает)
+        await session.execute(sa_update(User).values(
+            clan_land_income_pct=0,
+            clan_land_power_pct=0,
+            clan_land_fragment_pct=0,
+            clan_land_mastery_pct=0,
+            clan_land_power_mastery_bonus=0,
+            clan_land_speed_mastery_bonus=0,
+            clan_land_cd_reduction_pct=0,
+        ))
+
         all_clans_r = await session.execute(select(Clan))
         all_clans = all_clans_r.scalars().all()
         clans_to_delete = []

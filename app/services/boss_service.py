@@ -76,9 +76,9 @@ def _next_boss_id(last_boss_id: str | None) -> str:
 
 
 def get_boss_attack_cd(user: User) -> int:
-    """Вычисляет КД атаки по боссу с учётом all_cd_reduction."""
+    """Вычисляет КД атаки по боссу с учётом all_cd_reduction + бонуса земель клана."""
     base = BOSS_ATTACK_CD_SECONDS
-    reduction_pct = getattr(user, "all_cd_reduction", 0) or 0
+    reduction_pct = (getattr(user, "all_cd_reduction", 0) or 0) + (getattr(user, "clan_land_cd_reduction_pct", 0) or 0)
     cd = max(BOSS_ATTACK_CD_MIN, int(base * (1 - reduction_pct / 100)))
     return cd
 

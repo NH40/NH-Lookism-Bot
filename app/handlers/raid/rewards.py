@@ -450,7 +450,10 @@ async def cb_biz_genius_upgrade(cb: CallbackQuery, session: AsyncSession, user: 
         await cb.answer("Максимальный уровень достигнут!", show_alert=True)
         return
 
+    # Слава — Чарльз Чоя «Десять гениев»: -50% стоимость фрагментов бизнеса
     cost = BIZ_GENIUS_COSTS[biz_genius]
+    if getattr(user, "fame_charles_geniuses", False):
+        cost = cost // 2
     if biz_frags < cost:
         await cb.answer(f"Нужно {cost} 🏢 фрагментов", show_alert=True)
         return
@@ -487,6 +490,8 @@ async def cb_craft_biz_district(cb: CallbackQuery, session: AsyncSession, user: 
         await cb.answer("Достигнут максимум бонусных районов!", show_alert=True)
         return
     cost = BUSINESS_DISTRICT_COST if bonus_districts < BUSINESS_DISTRICTS_TIER1_MAX else BUSINESS_DISTRICT_COST_TIER2
+    if getattr(user, "fame_charles_geniuses", False):
+        cost = cost // 2
     if biz_frags < cost:
         await cb.answer(f"Нужно {cost} 🏢 фрагментов", show_alert=True)
         return
@@ -508,6 +513,8 @@ async def cb_craft_biz_district_5(cb: CallbackQuery, session: AsyncSession, user
         await cb.answer("Достигнут максимум!", show_alert=True)
         return
     # Считаем реальную стоимость с учётом тира (районы могут пересекать границу)
+    # Слава — Чарльз Чоя «Десять гениев»: -50% стоимость фрагментов бизнеса
+    geniuses = getattr(user, "fame_charles_geniuses", False)
     total_cost = 0
     add = 0
     cur = bonus_districts
@@ -515,6 +522,8 @@ async def cb_craft_biz_district_5(cb: CallbackQuery, session: AsyncSession, user
         if cur >= BUSINESS_DISTRICTS_MAX:
             break
         c = BUSINESS_DISTRICT_COST if cur < BUSINESS_DISTRICTS_TIER1_MAX else BUSINESS_DISTRICT_COST_TIER2
+        if geniuses:
+            c = c // 2
         if biz_frags < total_cost + c:
             break
         total_cost += c

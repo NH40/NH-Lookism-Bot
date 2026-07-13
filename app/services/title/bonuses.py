@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
+from app.config.game_balance import DEFAULT_MAX_TICKETS
 
 
 def reset_donat_bonuses(user: User) -> None:
@@ -15,7 +16,7 @@ def reset_donat_bonuses(user: User) -> None:
     user.train_quality_bonus = 0
     user.income_bonus_percent = 0
     user.building_discount_percent = 0
-    user.max_tickets = 3
+    user.max_tickets = DEFAULT_MAX_TICKETS
     user.ticket_chance = 25
     user.skill_path_bonus_multiplier = 1.0
     user.extra_path_skill_slots = 1

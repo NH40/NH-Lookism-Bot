@@ -81,6 +81,11 @@ def admin_user_kb(tg_id: int, donat_duel_cd: bool = False, is_banned: bool = Fal
         InlineKeyboardButton(text="🔄 Круговые донаты", callback_data=f"adm_circ_menu:{tg_id}"),
     )
 
+    # ── Кузница славы ────────────────────────────────────────────────────────
+    builder.row(
+        InlineKeyboardButton(text="🌟 Слава", callback_data=f"adm_fame_menu:{tg_id}"),
+    )
+
     # ── Очистка ──────────────────────────────────────────────────────────────
     builder.row(
         InlineKeyboardButton(text="🏗 Здания", callback_data=f"adm_clear_buildings:{tg_id}"),

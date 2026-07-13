@@ -19,6 +19,7 @@ from app.models.gapren import GaprenChallenge
 from app.models.horse_shop import HorseShopEvent, HorseShopPurchase
 from app.models.payment import Payment
 from app.models.poker import PokerTable, PokerPlayer
+from app.models.fame import FameFragment
 
 __all__ = [
     "User", "City", "District", "FistBot",
@@ -33,4 +34,5 @@ __all__ = [
     "HorseShopEvent", "HorseShopPurchase",
     "Payment",
     "PokerTable", "PokerPlayer",
+    "FameFragment",
 ]

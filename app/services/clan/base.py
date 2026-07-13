@@ -305,6 +305,7 @@ class ClanBaseService:
         user.clan_land_mastery_pct = 0
         user.clan_land_power_mastery_bonus = 0
         user.clan_land_speed_mastery_bonus = 0
+        user.clan_land_cd_reduction_pct = 0
         await business_service._recalc_income(session, user)
 
     async def _add_clan_bonuses_to_user(self, session: AsyncSession, clan: Clan, user: User) -> None:

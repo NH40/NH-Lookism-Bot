@@ -29,6 +29,20 @@ class BusinessService:
         ) or 0
         return min(50, (count // 10) * 10)
 
+    @staticmethod
+    async def _nhn_group_bonus(session: AsyncSession, user: User) -> int:
+        """Слава — Чарльз Чоя «NHN Групп»: +10% за каждые 10 построенных зданий
+        (любого типа), макс +80% на 80 зданиях."""
+        if not getattr(user, "fame_charles_nhn_group", False):
+            return 0
+        count = await session.scalar(
+            select(func.sum(UserBuilding.count)).where(
+                UserBuilding.user_id == user.id,
+                UserBuilding.is_active == True,
+            )
+        ) or 0
+        return min(80, (count // 10) * 10)
+
     async def _recalc_income(self, session: AsyncSession, user: User) -> None:
         result = await session.execute(
             select(
@@ -43,7 +57,13 @@ class BusinessService:
         clan_bonus = getattr(user, 'clan_income_bonus', 0) + getattr(user, 'clan_donat_income_bonus', 0)
         biz_genius_bonus = self._biz_genius_bonus(user)
         network_bonus = await self._digital_network_bonus(session, user)
-        total_bonus = user.income_bonus_percent + user.prestige_income_bonus + clan_bonus + biz_genius_bonus + network_bonus
+        nhn_bonus = await self._nhn_group_bonus(session, user)
+        # Слава — Чарльз Чоя «Десять гениев»: +30% дохода с каждого здания
+        geniuses_bonus = 30 if getattr(user, "fame_charles_geniuses", False) else 0
+        total_bonus = (
+            user.income_bonus_percent + user.prestige_income_bonus + clan_bonus
+            + biz_genius_bonus + network_bonus + nhn_bonus + geniuses_bonus
+        )
         effective_income = int(
             base_income * (1 + total_bonus / 100) * user.district_multiplier
         )

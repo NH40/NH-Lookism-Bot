@@ -37,7 +37,10 @@ async def upgrade_path_level(session: AsyncSession, user: User) -> dict:
     if current >= PATH_LEVEL_MAX:
         return {"ok": False, "reason": "Максимальный уровень пути достигнут"}
 
+    # Слава — Гана «Построение пути»: -50% стоимость крафтов уровня пути
     cost = PATH_LEVEL_COSTS[current]
+    if getattr(user, "fame_gana_path", False):
+        cost = cost // 2
     path_frags = getattr(user, "path_fragments", 0)
     if path_frags < cost:
         return {"ok": False, "reason": f"Нужно {cost} 🔷 фрагментов Пути (у вас {path_frags})"}
@@ -134,6 +137,9 @@ def _update_extra_attack(user: User) -> None:
 
 async def _apply_path_skill(session: AsyncSession, user: User, skill) -> None:
     multiplier = user.skill_path_bonus_multiplier
+    # Слава — Гапрена «Романтик»: ×2 к баффам пути Романтика
+    if user.skill_path == "romantic" and getattr(user, "fame_gaprena_romantic", False):
+        multiplier *= 2
     for field, value in skill.effect.items():
         if isinstance(value, bool):
             setattr(user, field, value)
@@ -187,13 +193,16 @@ async def buy_path_skill(
     if current_path_level < required_level:
         return {"ok": False, "reason": f"Нужен уровень пути {required_level} (у вас {current_path_level})"}
 
-    if user.skill_path_points < skill.cost:
+    # Слава — Гана «Построение пути»: -50% стоимость навыков пути
+    cost = skill.cost // 2 if getattr(user, "fame_gana_path", False) else skill.cost
+
+    if user.skill_path_points < cost:
         return {
             "ok": False,
-            "reason": f"Нужно {skill.cost} очков пути (у вас {user.skill_path_points})",
+            "reason": f"Нужно {cost} очков пути (у вас {user.skill_path_points})",
         }
 
-    user.skill_path_points -= skill.cost
+    user.skill_path_points -= cost
 
     record = UserPathSkills(user_id=user.id, skill_id=skill_id)
     session.add(record)

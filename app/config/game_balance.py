@@ -24,7 +24,7 @@ REFERRAL_STUDENT_POWER_BONUS: int = 75_000
 
 # ── Тикеты ────────────────────────────────────────────────────────────────────
 # Начальное максимальное количество тикетов у игрока
-DEFAULT_MAX_TICKETS: int = 3
+DEFAULT_MAX_TICKETS: int = 10
 # Начальный шанс тикета (%)
 DEFAULT_TICKET_CHANCE: int = 30
 # Максимальное число тикетов при Ultra Instinct (TUI)
@@ -149,6 +149,7 @@ CLAN_LAND_BUILDINGS: dict = {
     "mastery_gain":  {"name": "⭐ Очки мастерства/пути",     "cost": 4_000_000, "bonus_per_unit": 4, "unit": "%",   "max_count": None},
     "power":         {"name": "💪 Боевая мощь",              "cost": 4_500_000, "bonus_per_unit": 3, "unit": "%",   "max_count": None},
     "income_pct":    {"name": "💰 Доход",                    "cost": 5_000_000, "bonus_per_unit": 2, "unit": "%",   "max_count": None},
+    "cd_reduction":  {"name": "⏱ Скорость восстановления КД", "cost": 6_000_000, "bonus_per_unit": 2, "unit": "%",   "max_count": 10},
     "power_mastery": {"name": "🥋 Мастерство силы",          "cost": 8_000_000, "bonus_per_unit": 1, "unit": "lvl", "max_count": 4},
     "speed_mastery": {"name": "⚡ Мастерство скорости",       "cost": 8_000_000, "bonus_per_unit": 1, "unit": "lvl", "max_count": 4},
 }

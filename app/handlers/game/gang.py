@@ -210,6 +210,10 @@ async def cb_do_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer(result.get("reason", "Ошибка"), show_alert=True)
         return
 
+    if getattr(user, "fame_set_gaprena", False):
+        from app.services.fame_service import fame_service
+        await fame_service.gain_overcome_stack(user.id)
+
     extra_left = result.get("extra_attacks_left", 0)
     extra_str = f"\n⚡ Ещё атак без КД: {extra_left}" if extra_left > 0 else ""
 
@@ -287,6 +291,10 @@ async def cb_gang_pvp(cb: CallbackQuery, session: AsyncSession, user: User):
     if not result["ok"]:
         await cb.answer(result.get("reason", "Ошибка"), show_alert=True)
         return
+
+    if getattr(user, "fame_set_gaprena", False):
+        from app.services.fame_service import fame_service
+        await fame_service.gain_overcome_stack(user.id)
 
     crit_str = " ⚡КРИТ!" if result.get("is_crit") else ""
     if result["win"]:

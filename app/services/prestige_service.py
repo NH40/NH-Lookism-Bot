@@ -41,12 +41,19 @@ class PrestigeService:
         user: User,
         keep_ui: bool = False,
         keep_progress: bool = False,
+        bulk_precleaned: bool = False,
     ) -> None:
         """Сброс прогресса кроме донатов, пробуждений и достижений.
 
         keep_progress=True — при уничтожении банды: сохраняет ui_fragments,
         ui_level, mastery_points, UserMastery-статы, skill_path_points.
         keep_ui=True      — при престиже: сохраняет ui_fragments и ui_level.
+        bulk_precleaned=True — вызывающий код (массовый патч-сброс) уже сам
+        одним bulk-запросом на ВСЕХ пользователей почистил рыночные лоты,
+        Squad/Building/Character/Potion/PathSkills/KingBot/FistBot/
+        EmperorGangRecord/GaprenChallenge/Campaign, личные business-города,
+        UserMastery и несекретные достижения — повторять то же самое по
+        одному пользователю за раз не нужно (это и есть тот самый N+1).
         """
         user.phase = "gang"
         user.sector = None
@@ -112,15 +119,16 @@ class PrestigeService:
         user.bonus_business_districts = 0
         user.business_genius_level = 0
 
-        # Удаляем личный город бонусных районов
-        from app.models.city import City
-        bonus_city_row = await session.execute(
-            select(City).where(City.phase == "business", City.owner_id == user.id)
-        )
-        bonus_city = bonus_city_row.scalar_one_or_none()
-        if bonus_city:
-            await session.execute(delete(District).where(District.city_id == bonus_city.id))
-            await session.delete(bonus_city)
+        if not bulk_precleaned:
+            # Удаляем личный город бонусных районов
+            from app.models.city import City
+            bonus_city_row = await session.execute(
+                select(City).where(City.phase == "business", City.owner_id == user.id)
+            )
+            bonus_city = bonus_city_row.scalar_one_or_none()
+            if bonus_city:
+                await session.execute(delete(District).where(District.city_id == bonus_city.id))
+                await session.delete(bonus_city)
 
         # ── Клановые бонусы от апгрейдов (не донат) ─────────────────────
         user.clan_income_bonus = 0
@@ -148,47 +156,48 @@ class PrestigeService:
             rs.reset_game_ui(user)
             user.ui_fragments = 0
 
-        from app.services.market_service import market_service
-        await market_service.cancel_all_user_listings(session, user.id)
+        if not bulk_precleaned:
+            from app.services.market_service import market_service
+            await market_service.cancel_all_user_listings(session, user.id)
 
-        await session.execute(
-            delete(SquadMember).where(SquadMember.user_id == user.id)
-        )
-        await session.execute(
-            delete(UserBuilding).where(UserBuilding.user_id == user.id)
-        )
-        await session.execute(
-            delete(UserCharacter).where(UserCharacter.user_id == user.id)
-        )
-        await session.execute(
-            delete(ActivePotion).where(ActivePotion.user_id == user.id)
-        )
-        await session.execute(
-            delete(District).where(District.owner_id == user.id)
-        )
-        await session.execute(
-            delete(UserPathSkills).where(UserPathSkills.user_id == user.id)
-        )
-        await session.execute(
-            delete(KingBot).where(KingBot.user_id == user.id)
-        )
-        await session.execute(
-            delete(FistBot).where(FistBot.challenger_id == user.id)
-        )
-        from app.models.emperor_gang import EmperorGangRecord
-        await session.execute(
-            delete(EmperorGangRecord).where(EmperorGangRecord.user_id == user.id)
-        )
-        from app.models.gapren import GaprenChallenge
-        await session.execute(
-            delete(GaprenChallenge).where(GaprenChallenge.user_id == user.id)
-        )
-        await session.execute(
-            delete(Campaign).where(Campaign.user_id == user.id)
-        )
+            await session.execute(
+                delete(SquadMember).where(SquadMember.user_id == user.id)
+            )
+            await session.execute(
+                delete(UserBuilding).where(UserBuilding.user_id == user.id)
+            )
+            await session.execute(
+                delete(UserCharacter).where(UserCharacter.user_id == user.id)
+            )
+            await session.execute(
+                delete(ActivePotion).where(ActivePotion.user_id == user.id)
+            )
+            await session.execute(
+                delete(District).where(District.owner_id == user.id)
+            )
+            await session.execute(
+                delete(UserPathSkills).where(UserPathSkills.user_id == user.id)
+            )
+            await session.execute(
+                delete(KingBot).where(KingBot.user_id == user.id)
+            )
+            await session.execute(
+                delete(FistBot).where(FistBot.challenger_id == user.id)
+            )
+            from app.models.emperor_gang import EmperorGangRecord
+            await session.execute(
+                delete(EmperorGangRecord).where(EmperorGangRecord.user_id == user.id)
+            )
+            from app.models.gapren import GaprenChallenge
+            await session.execute(
+                delete(GaprenChallenge).where(GaprenChallenge.user_id == user.id)
+            )
+            await session.execute(
+                delete(Campaign).where(Campaign.user_id == user.id)
+            )
 
         # ── Мастерство — только при полном сбросе ────────────────────────
-        if not keep_progress:
+        if not keep_progress and not bulk_precleaned:
             r = await session.execute(
                 select(UserMastery).where(UserMastery.user_id == user.id)
             )
@@ -228,16 +237,17 @@ class PrestigeService:
             user.ui_auto_potion  = False
             user.nh_coins = PATCH_STARTING_COINS
 
-        # Сбрасываем несекретные достижения — игроки могут выполнить их заново
-        from app.models.title import UserAchievement
-        from app.data.titles import ACHIEVEMENT_MAP
-        secret_ids = {a.achievement_id for a in ACHIEVEMENT_MAP.values() if a.secret}
-        await session.execute(
-            delete(UserAchievement).where(
-                UserAchievement.user_id == user.id,
-                UserAchievement.achievement_id.not_in(list(secret_ids)),
+        if not bulk_precleaned:
+            # Сбрасываем несекретные достижения — игроки могут выполнить их заново
+            from app.models.title import UserAchievement
+            from app.data.titles import ACHIEVEMENT_MAP
+            secret_ids = {a.achievement_id for a in ACHIEVEMENT_MAP.values() if a.secret}
+            await session.execute(
+                delete(UserAchievement).where(
+                    UserAchievement.user_id == user.id,
+                    UserAchievement.achievement_id.not_in(list(secret_ids)),
+                )
             )
-        )
 
         await session.flush()
 

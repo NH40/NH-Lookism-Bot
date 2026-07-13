@@ -191,13 +191,46 @@ class AdminBackupMixin:
         await session.execute(sa_update(User).values(fame_patch_points=0))
         await session.flush()
 
+        # ── Доп. bulk-очистка ДО цикла (patch_reset_progress сбрасывает ВСЕХ
+        # игроков разом, поэтому то, что _reset_progress иначе делал бы по
+        # одному пользователю за раз — гораздо быстрее одним запросом) ─────────
+        from app.models.gapren import GaprenChallenge
+        from app.models.campaign import Campaign
+        from app.models.skill import UserMastery
+        from app.models.title import UserAchievement
+        from app.data.titles import ACHIEVEMENT_MAP
+        from app.models.city import City
+
+        await session.execute(sa_delete(GaprenChallenge))
+        await session.execute(sa_delete(Campaign))
+        await session.execute(sa_update(UserMastery).values(
+            strength=0, speed=0, endurance=0, technique=0,
+        ))
+        secret_ids = {a.achievement_id for a in ACHIEVEMENT_MAP.values() if a.secret}
+        await session.execute(
+            sa_delete(UserAchievement).where(UserAchievement.achievement_id.not_in(list(secret_ids)))
+        )
+        # Личные business-города (бонусные районы) и их районы
+        business_city_ids_subq = select(City.id).where(
+            City.phase == "business", City.owner_id.isnot(None)
+        )
+        await session.execute(
+            sa_delete(District).where(District.city_id.in_(business_city_ids_subq))
+        )
+        await session.execute(
+            sa_delete(City).where(City.phase == "business", City.owner_id.isnot(None))
+        )
+        await session.flush()
+
         # ── Сброс прогресса ───────────────────────────────────────────────────────
         import logging as _logging
         _patch_log = _logging.getLogger(__name__)
         for user in users:
             try:
                 async with session.begin_nested():
-                    await prestige_service._reset_progress(session, user, keep_ui=False)
+                    await prestige_service._reset_progress(
+                        session, user, keep_ui=False, bulk_precleaned=True,
+                    )
             except Exception as _e:
                 _patch_log.error("patch_reset_progress: failed for user %s: %s", user.id, _e)
                 session.expunge(user)

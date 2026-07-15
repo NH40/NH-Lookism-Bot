@@ -4,6 +4,7 @@ from sqlalchemy import select, delete as sa_delete, update as sa_update
 from app.models.user import User
 from app.models.clan import ClanMember
 from app.services.clan.base import ClanBaseService
+from app.config.game_balance import SQUAD_BULK_CHUNK_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -150,14 +151,24 @@ class ClanExchangeService(ClanBaseService):
         if (available or 0) < amount:
             return {"ok": False, "reason": f"Недостаточно статистов (есть {available or 0}, часть могут быть в походе)"}
 
-        # Subquery вместо материализации ID в Python — нет огромного IN-списка
-        subq = select(SquadMember.id).where(cond).limit(amount)
-        await session.execute(
-            sa_update(SquadMember)
-            .where(SquadMember.id.in_(subq))
-            .values(user_id=to_user.id)
-            .execution_options(synchronize_session=False)
-        )
+        # Subquery вместо материализации ID в Python — нет огромного IN-списка.
+        # Режем на батчи с промежуточным commit — обмен в миллионы статистов
+        # одной транзакцией даёт WAL-всплеск и постоянные checkpoint'ы Postgres
+        # (см. SQUAD_BULK_CHUNK_SIZE). Каждый батч естественно исключает уже
+        # переданные строки — они больше не попадают под cond (user_id сменился).
+        remaining = amount
+        while remaining > 0:
+            chunk = min(SQUAD_BULK_CHUNK_SIZE, remaining)
+            subq = select(SquadMember.id).where(cond).limit(chunk)
+            await session.execute(
+                sa_update(SquadMember)
+                .where(SquadMember.id.in_(subq))
+                .values(user_id=to_user.id)
+                .execution_options(synchronize_session=False)
+            )
+            remaining -= chunk
+            await session.commit()
+
         await self._recalc_power(session, from_user, to_user)
         logger.info("exchange: from_user=%d to_user=%d resource=squad amount=%d", from_user.id, to_user.id, amount)
         return {"ok": True}
@@ -176,12 +187,21 @@ class ClanExchangeService(ClanBaseService):
         count = await session.scalar(select(func.count(SquadMember.id)).where(cond))
         if not count:
             return {"ok": False, "reason": f"Нет статистов ранга {rank} (часть могут быть в походе)"}
-        await session.execute(
-            sa_update(SquadMember)
-            .where(cond)
-            .values(user_id=to_user.id)
-            .execution_options(synchronize_session=False)
-        )
+
+        # Батчами, а не одним UPDATE по всему cond — см. _exchange_squad.
+        remaining = count
+        while remaining > 0:
+            chunk = min(SQUAD_BULK_CHUNK_SIZE, remaining)
+            subq = select(SquadMember.id).where(cond).limit(chunk)
+            await session.execute(
+                sa_update(SquadMember)
+                .where(SquadMember.id.in_(subq))
+                .values(user_id=to_user.id)
+                .execution_options(synchronize_session=False)
+            )
+            remaining -= chunk
+            await session.commit()
+
         await self._recalc_power(session, from_user, to_user)
         logger.info("exchange: from_user=%d to_user=%d resource=squad_all rank=%s count=%d", from_user.id, to_user.id, rank, count)
         return {"ok": True}

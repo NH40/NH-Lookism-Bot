@@ -10,7 +10,7 @@ from app.data.squad import RANKS_BY_ID, PHASE_RANKS, STAR_BONUS_PERCENT
 from app.constants.squad import PHASE_RANK_WEIGHTS
 from app.config.game_balance import (
     TRAIN_BASE_COVERAGE, TRAIN_BASE_SUCCESS_CHANCE, TRAIN_MAX_SUCCESS_CHANCE,
-    RECRUIT_INFLUENCE_TIERS,
+    RECRUIT_INFLUENCE_TIERS, SQUAD_BULK_CHUNK_SIZE,
 )
 
 
@@ -176,19 +176,24 @@ class SquadService:
 
         # Слава — Гапрена «Герой»: ×2 получение статистов из любых источников (в т.ч. магазин)
         granted = count * 2 if getattr(user, "fame_gaprena_hero", False) else count
-
-        # Один INSERT вместо N батч-запросов — PostgreSQL итерирует generate_series внутри
-        await session.execute(
-            text(
-                "INSERT INTO squad_members (user_id, rank, stars, base_power) "
-                "SELECT :uid, :rank, 0, :bp FROM generate_series(1, :cnt)"
-            ),
-            {"uid": user.id, "rank": rank, "bp": rank_cfg.base_power, "cnt": granted},
-        )
-
         user.total_statists_recruited = (user.total_statists_recruited or 0) + granted
 
-        await session.flush()
+        # INSERT ... generate_series вместо N отдельных запросов, но большими
+        # партиями с промежуточным commit — миллион+ строк одной транзакцией
+        # даёт WAL-всплеск и постоянные checkpoint'ы Postgres (см. SQUAD_BULK_CHUNK_SIZE).
+        remaining = granted
+        while remaining > 0:
+            chunk = min(SQUAD_BULK_CHUNK_SIZE, remaining)
+            await session.execute(
+                text(
+                    "INSERT INTO squad_members (user_id, rank, stars, base_power) "
+                    "SELECT :uid, :rank, 0, :bp FROM generate_series(1, :cnt)"
+                ),
+                {"uid": user.id, "rank": rank, "bp": rank_cfg.base_power, "cnt": chunk},
+            )
+            remaining -= chunk
+            await session.commit()
+
         from app.repositories.squad_repo import squad_repo
         await squad_repo.update_user_combat_power(session, user)
 

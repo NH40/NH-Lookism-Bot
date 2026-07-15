@@ -16,6 +16,24 @@ services:
       - 5433:5432
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    # Дефолты образа (max_wal_size=1GB, shared_buffers=128MB) не тянут
+    # bulk-операции на миллионы строк (покупка/обмен статистов) — WAL
+    # переполняется за секунды и Postgres уходит в checkpoint каждые
+    # 10-15 сек ("checkpoints are occurring too frequently"), подвешивая
+    # бота для всех. Подстрой shared_buffers/effective_cache_size под
+    # реальную память хоста, если она сильно отличается от ~2GB.
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c max_wal_size=4GB
+      -c min_wal_size=1GB
+      -c checkpoint_completion_target=0.9
+      -c checkpoint_timeout=15min
+      -c wal_buffers=16MB
+      -c work_mem=32MB
+      -c maintenance_work_mem=256MB
+      -c synchronous_commit=off
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U lookism -d lookism_db" ]
       interval: 5s

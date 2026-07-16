@@ -39,23 +39,13 @@ class AdminResourcesMixin:
 
     async def give_squad_member(self, session: AsyncSession, user: User, rank: str, count: int = 1) -> dict:
         from app.data.squad import RANKS_BY_ID
-        from app.models.squad_member import SquadMember
+        from app.repositories.squad_repo import squad_repo
 
         rank_cfg = RANKS_BY_ID.get(rank)
         if not rank_cfg:
             return {"ok": False, "reason": "Ранг не найден"}
 
-        for _ in range(count):
-            member = SquadMember(
-                user_id=user.id,
-                rank=rank,
-                stars=0,
-                base_power=rank_cfg.base_power,
-            )
-            session.add(member)
-        await session.flush()
-
-        from app.repositories.squad_repo import squad_repo
+        await squad_repo.add_count(session, user.id, rank, 0, count, base_power=rank_cfg.base_power)
         await squad_repo.update_user_combat_power(session, user)
 
         return {"ok": True, "rank": rank, "count": count}

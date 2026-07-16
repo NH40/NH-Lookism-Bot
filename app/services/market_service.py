@@ -273,25 +273,42 @@ class MarketService:
             user.card_dust = cur - amount
 
         elif item_type == "squad_member":
-            from app.models.squad_member import SquadMember
+            from app.repositories.squad_repo import squad_repo
             from app.services.campaign_service import campaign_service
             rank = meta.get("rank") if meta else None
-            busy_ids = await campaign_service.get_busy_squad_ids(session, user.id)
-            q = select(SquadMember).where(SquadMember.user_id == user.id)
-            if busy_ids:
-                q = q.where(SquadMember.id.notin_(busy_ids))
-            if rank:
-                q = q.where(SquadMember.rank == rank)
-            q = q.limit(amount)
-            result = await session.execute(q)
-            members = result.scalars().all()
-            if len(members) < amount:
-                return {"ok": False, "reason": f"Недостаточно статистов (есть {len(members)}, часть могут быть в походе)"}
-            avg_power = int(sum(m.base_power for m in members) / len(members)) if members else 1000
-            meta["power"] = avg_power
-            for m in members:
-                await session.delete(m)
-            from app.repositories.squad_repo import squad_repo
+            if not rank:
+                return {"ok": False, "reason": "Не указан ранг"}
+
+            groups = await squad_repo.get_groups(session, user.id, rank=rank)
+            busy = await campaign_service.get_busy_breakdown(session, user.id)
+
+            # Сначала планируем (какие группы, сколько), ничего не мутируя —
+            # чтобы при нехватке не списать часть и откатиться на середине.
+            remaining = amount
+            plan: list[tuple[int, int, int]] = []  # (stars, base_power, count)
+            total_power = 0
+            for g in groups:
+                if remaining <= 0:
+                    break
+                avail = g.count - busy.get((g.rank, g.stars, g.base_power), 0)
+                if avail <= 0:
+                    continue
+                take = min(avail, remaining)
+                plan.append((g.stars, g.base_power, take))
+                total_power += take * g.base_power
+                remaining -= take
+
+            taken = amount - remaining
+            if taken < amount:
+                return {"ok": False, "reason": f"Недостаточно статистов (есть {taken}, часть могут быть в походе)"}
+
+            for stars, bp, cnt in plan:
+                await squad_repo.add_count(session, user.id, rank, stars, -cnt, base_power=bp)
+
+            meta["power"] = int(total_power / taken) if taken else 1000
+            # Полная разбивка (не только stars) — чтобы при возврате/доставке
+            # лот точно восстановил ту же историческую мощь группы, а не текущую.
+            meta["stars_breakdown"] = [[stars, bp, cnt] for stars, bp, cnt in plan]
             await squad_repo.update_user_combat_power(session, user)
 
         elif item_type == "character":
@@ -358,16 +375,23 @@ class MarketService:
             user.card_dust = (user.card_dust or 0) + amount
 
         elif item_type == "squad_member":
-            from app.models.squad_member import SquadMember
+            from app.repositories.squad_repo import squad_repo
             rank = meta.get("rank", "C")
             power = meta.get("power", 1000)
-            for _ in range(amount):
-                session.add(SquadMember(
-                    user_id=user.id,
-                    rank=rank,
-                    base_power=power,
-                ))
-            from app.repositories.squad_repo import squad_repo
+            stars_breakdown = meta.get("stars_breakdown")
+            if stars_breakdown:
+                # Формат [[stars, base_power, count], ...] — точно та же разбивка,
+                # что была списана продавцом (см. _take_resource), звёзды и
+                # историческая мощь не теряются.
+                for entry in stars_breakdown:
+                    try:
+                        stars, bp, cnt = entry
+                    except (TypeError, ValueError):
+                        continue
+                    if cnt > 0:
+                        await squad_repo.add_count(session, user.id, rank, int(stars), int(cnt), base_power=int(bp))
+            else:
+                await squad_repo.add_count(session, user.id, rank, 0, amount, base_power=power)
             await squad_repo.update_user_combat_power(session, user)
 
         elif item_type == "character":

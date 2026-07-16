@@ -41,14 +41,12 @@ class ClanShopService(ClanBaseService):
 
         elif item.item_type == "squad":
             val = item.value
-            from app.models.squad_member import SquadMember
             from app.data.squad import RANKS_BY_ID
-            rank_cfg = RANKS_BY_ID.get(val["rank"])
-            for u in users:
-                for _ in range(val["amount"]):
-                    session.add(SquadMember(user_id=u.id, rank=val["rank"], base_power=rank_cfg.base_power if rank_cfg else 1000))
             from app.repositories.squad_repo import squad_repo
+            rank_cfg = RANKS_BY_ID.get(val["rank"])
+            base_power = rank_cfg.base_power if rank_cfg else 1000
             for u in users:
+                await squad_repo.add_count(session, u.id, val["rank"], 0, val["amount"], base_power=base_power)
                 await squad_repo.update_user_combat_power(session, u)
             await self.recalc_power(session, clan)
 

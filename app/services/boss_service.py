@@ -6,7 +6,6 @@ from __future__ import annotations
 import random
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select, delete as sa_delete, func as sa_func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants.bosses import (
@@ -328,18 +327,29 @@ class BossService:
                         special_effects.append(f"🧩 Марис украл {amt} фрагментов ({field})!")
 
                 if random.randint(1, 100) <= MARIS_STATIST_STEAL_CHANCE:
-                    from app.models.squad_member import SquadMember
+                    from app.repositories.squad_repo import squad_repo
+                    from app.services.campaign_service import campaign_service
+                    from app.utils.squad_math import largest_remainder_alloc
                     count = random.randint(MARIS_STATIST_STEAL_MIN, MARIS_STATIST_STEAL_MAX)
-                    ids_subq = (
-                        select(SquadMember.id)
-                        .where(SquadMember.user_id == user.id)
-                        .order_by(sa_func.random())
-                        .limit(count)
-                    )
-                    del_result = await session.execute(sa_delete(SquadMember).where(SquadMember.id.in_(ids_subq)))
-                    removed = del_result.rowcount or 0
+                    # Пропорционально по группам (rank,stars,base_power) — эквивалент
+                    # случайного выбора N бойцов по всему отряду без построчного перебора.
+                    # Зарезервированных под поход не трогаем.
+                    groups = await squad_repo.get_groups(session, user.id)
+                    busy = await campaign_service.get_busy_breakdown(session, user.id)
+                    weighted = [
+                        (
+                            (g.rank, g.stars, g.base_power),
+                            g.count - busy.get((g.rank, g.stars, g.base_power), 0),
+                        )
+                        for g in groups
+                    ]
+                    alloc = largest_remainder_alloc(weighted, count)
+                    removed = 0
+                    for (rank, stars, bp), cnt in alloc.items():
+                        if cnt > 0:
+                            await squad_repo.add_count(session, user.id, rank, stars, -cnt, base_power=bp)
+                            removed += cnt
                     if removed:
-                        from app.repositories.squad_repo import squad_repo
                         await squad_repo.update_user_combat_power(session, user)
                         special_effects.append(f"👥 Марис украл {removed} статистов!")
 

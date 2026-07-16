@@ -96,12 +96,10 @@ async def cb_clan_exch_target(cb: CallbackQuery, session: AsyncSession, user: Us
         await cb.answer("Игрок не найден", show_alert=True)
         return
 
-    from app.models.squad_member import SquadMember
+    from app.repositories.squad_repo import squad_repo
     from app.models.character import UserCharacter
 
-    squad_count = await session.scalar(
-        select(func.count(SquadMember.id)).where(SquadMember.user_id == user.id)
-    )
+    squad_count = await squad_repo.get_total_count(session, user.id)
     char_count = await session.scalar(
         select(func.count(UserCharacter.id)).where(UserCharacter.user_id == user.id)
     )
@@ -144,14 +142,9 @@ async def cb_clan_exch_res(cb: CallbackQuery, session: AsyncSession, user: User,
 
     if resource == "squad":
         from app.data.squad import RANKS_BY_ID
-        from app.models.squad_member import SquadMember
+        from app.repositories.squad_repo import squad_repo
 
-        result = await session.execute(
-            select(SquadMember.rank, func.count(SquadMember.id).label("cnt"))
-            .where(SquadMember.user_id == user.id)
-            .group_by(SquadMember.rank)
-        )
-        rank_counts = {row.rank: row.cnt for row in result.all()}
+        rank_counts = await squad_repo.get_rank_counts(session, user.id)
 
         builder = InlineKeyboardBuilder()
         for rank, count in rank_counts.items():
@@ -222,10 +215,8 @@ async def cb_clan_exch_squad_rank(cb: CallbackQuery, session: AsyncSession, user
     target_id = int(parts[1])
     rank = parts[2]
 
-    from app.models.squad_member import SquadMember
-    count = await session.scalar(
-        select(func.count(SquadMember.id)).where(SquadMember.user_id == user.id, SquadMember.rank == rank)
-    )
+    from app.repositories.squad_repo import squad_repo
+    count = await squad_repo.get_total_count(session, user.id, rank=rank)
 
     await state.set_state(ExchangeFSM.waiting_amount)
     await state.update_data(target_id=target_id, resource="squad", meta={"rank": rank})

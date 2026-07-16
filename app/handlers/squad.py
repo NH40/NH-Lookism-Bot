@@ -5,9 +5,7 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 from app.models.user import User
-from app.models.squad_member import SquadMember
 from app.services.squad_service import squad_service, PHASE_RANK_WEIGHTS, _calc_recruit_count
 from app.services.cooldown_service import cooldown_service
 from app.repositories.squad_repo import squad_repo
@@ -158,14 +156,11 @@ async def cb_squad_list(cb: CallbackQuery, session: AsyncSession, user: User):
     from aiogram.utils.keyboard import InlineKeyboardBuilder
     from aiogram.types import InlineKeyboardButton
 
-    # Агрегированный запрос вместо загрузки всех ORM-объектов
-    agg_rows = (await session.execute(
-        select(SquadMember.rank, SquadMember.stars, func.count().label("cnt"))
-        .where(SquadMember.user_id == user.id)
-        .group_by(SquadMember.rank, SquadMember.stars)
-    )).all()
+    # squad_members уже хранит по строке на (rank, stars, base_power) —
+    # никакой группировки в Python больше не нужно
+    groups = await squad_repo.get_groups(session, user.id)
 
-    if not agg_rows:
+    if not groups:
         await cb.message.edit_text(
             "🗒 <b>Состав армии</b>\n\nОтряд пуст",
             reply_markup=back_kb("squad"),
@@ -177,8 +172,9 @@ async def cb_squad_list(cb: CallbackQuery, session: AsyncSession, user: User):
     rank_data: dict[str, dict[int, int]] = {}
     total = 0
     five_star = 0
-    for rank, stars, cnt in agg_rows:
-        rank_data.setdefault(rank, {})[stars] = cnt
+    for g in groups:
+        star_counts = rank_data.setdefault(g.rank, {})
+        star_counts[g.stars] = star_counts.get(g.stars, 0) + g.count
         total += cnt
         if stars == 5:
             five_star += cnt

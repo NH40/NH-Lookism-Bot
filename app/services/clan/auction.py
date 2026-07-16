@@ -102,14 +102,12 @@ class ClanAuctionService(ClanBaseService):
             from app.services.potion_service import potion_service
             await potion_service.activate(session, winner, reward.get("potion_id"))
         elif rtype == "squad":
-            from app.models.squad_member import SquadMember
             from app.data.squad import RANKS_BY_ID
+            from app.repositories.squad_repo import squad_repo
             rank = reward.get("rank", "S")
             amount = reward.get("amount", 1)
             rank_cfg = RANKS_BY_ID.get(rank)
-            for _ in range(amount):
-                session.add(SquadMember(user_id=winner.id, rank=rank, base_power=rank_cfg.base_power if rank_cfg else 1000))
-            from app.repositories.squad_repo import squad_repo
+            await squad_repo.add_count(session, winner.id, rank, 0, amount, base_power=rank_cfg.base_power if rank_cfg else 1000)
             await squad_repo.update_user_combat_power(session, winner)
         elif rtype == "character":
             from app.data.characters import CHARACTERS

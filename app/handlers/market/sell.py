@@ -104,18 +104,20 @@ async def cb_market_create_type(
 
     # Статисты — выбор ранга
     if item_type == "squad_member":
-        from app.models.squad_member import SquadMember
         from app.data.squad import RANKS
+        from app.repositories.squad_repo import squad_repo
         from app.services.campaign_service import campaign_service
 
-        busy_ids = await campaign_service.get_busy_squad_ids(session, user.id)
+        rank_counts = await squad_repo.get_rank_counts(session, user.id)
+        busy = await campaign_service.get_busy_breakdown(session, user.id)
+        busy_by_rank: dict[str, int] = {}
+        for (r, _stars, _bp), cnt in busy.items():
+            busy_by_rank[r] = busy_by_rank.get(r, 0) + cnt
+
         builder = InlineKeyboardBuilder()
         has_any = False
         for rank_cfg in RANKS:
-            cond = (SquadMember.user_id == user.id) & (SquadMember.rank == rank_cfg.rank)
-            if busy_ids:
-                cond = cond & SquadMember.id.notin_(busy_ids)
-            cnt = await session.scalar(select(func.count(SquadMember.id)).where(cond)) or 0
+            cnt = max(0, rank_counts.get(rank_cfg.rank, 0) - busy_by_rank.get(rank_cfg.rank, 0))
             if cnt == 0:
                 continue
             has_any = True
@@ -225,13 +227,12 @@ async def cb_market_create_rank(
     cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext
 ):
     rank = cb.data.split(":")[1]
-    from app.models.squad_member import SquadMember
+    from app.repositories.squad_repo import squad_repo
     from app.services.campaign_service import campaign_service
-    busy_ids = await campaign_service.get_busy_squad_ids(session, user.id)
-    cond = (SquadMember.user_id == user.id) & (SquadMember.rank == rank)
-    if busy_ids:
-        cond = cond & SquadMember.id.notin_(busy_ids)
-    count = await session.scalar(select(func.count(SquadMember.id)).where(cond)) or 0
+    rank_total = await squad_repo.get_total_count(session, user.id, rank=rank)
+    busy = await campaign_service.get_busy_breakdown(session, user.id)
+    busy_total = sum(cnt for (r, _s, _bp), cnt in busy.items() if r == rank)
+    count = max(0, rank_total - busy_total)
 
     if count == 0:
         await cb.answer(f"У вас нет свободных статистов ранга {rank} (не в походе)", show_alert=True)

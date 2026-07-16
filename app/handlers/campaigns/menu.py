@@ -515,9 +515,8 @@ async def cb_campaigns_cnt(cb: CallbackQuery, session: AsyncSession, user: User)
         )
         return
 
-    # Средняя мощь слабейших из выбранного ранга — ORDER BY + LIMIT на стороне БД
-    chosen = await campaign_service.get_weakest_available(session, user.id, statist_rank, cnt)
-    avg_power = int(sum(m.base_power for m in chosen) / cnt) if cnt else 0
+    # Средняя мощь слабейших из выбранного ранга — только предпросмотр, без резерва
+    avg_power = await campaign_service.preview_avg_power(session, user.id, statist_rank, cnt)
 
     res_cfg = CAMPAIGN_RESOURCE_MAP[resource_id]
     rank_cfg = CAMPAIGN_RANK_MAP[task_rank]
@@ -699,8 +698,7 @@ async def msg_campaigns_custom_count(msg: Message, session: AsyncSession, user: 
         await msg.answer(f"❌ Недостаточно свободных статистов {statist_rank}: доступно {real_avail}")
         return
 
-    chosen = await campaign_service.get_weakest_available(session, user.id, statist_rank, cnt)
-    avg_power = int(sum(m.base_power for m in chosen) / cnt) if cnt else 0
+    avg_power = await campaign_service.preview_avg_power(session, user.id, statist_rank, cnt)
 
     res_cfg = CAMPAIGN_RESOURCE_MAP[resource_id]
     rank_cfg = CAMPAIGN_RANK_MAP[task_rank]

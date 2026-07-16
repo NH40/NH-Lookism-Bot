@@ -4,7 +4,6 @@ from sqlalchemy import select, delete as sa_delete, update as sa_update
 from app.models.user import User
 from app.models.clan import ClanMember
 from app.services.clan.base import ClanBaseService
-from app.config.game_balance import SQUAD_BULK_CHUNK_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -133,77 +132,66 @@ class ClanExchangeService(ClanBaseService):
         return {"ok": True, "amount": amount}
 
     # ── Статисты ────────────────────────────────────────────────────────────
+    # squad_members хранит агрегаты (rank, stars, base_power) -> count, а не
+    # строку на бойца — обмен миллионов статистов это O(групп) UPSERT'ов
+    # (обычно единицы-десятки), а не O(N) UPDATE по отдельным строкам.
 
     async def _exchange_squad(self, session, from_user, to_user, amount, meta):
-        from app.models.squad_member import SquadMember
-        from sqlalchemy import func as sqla_func
+        from app.repositories.squad_repo import squad_repo
         from app.services.campaign_service import campaign_service
         rank = meta.get("rank") if meta else None
+        if not rank:
+            return {"ok": False, "reason": "Не указан ранг"}
 
-        busy_ids = await campaign_service.get_busy_squad_ids(session, from_user.id)
-        cond = SquadMember.user_id == from_user.id
-        if busy_ids:
-            cond = cond & SquadMember.id.notin_(busy_ids)
-        if rank:
-            cond = cond & (SquadMember.rank == rank)
+        groups = await squad_repo.get_groups(session, from_user.id, rank=rank)
+        busy = await campaign_service.get_busy_breakdown(session, from_user.id)
 
-        available = await session.scalar(select(sqla_func.count(SquadMember.id)).where(cond))
-        if (available or 0) < amount:
-            return {"ok": False, "reason": f"Недостаточно статистов (есть {available or 0}, часть могут быть в походе)"}
+        available = sum(
+            max(0, g.count - busy.get((g.rank, g.stars, g.base_power), 0)) for g in groups
+        )
+        if available < amount:
+            return {"ok": False, "reason": f"Недостаточно статистов (есть {available}, часть могут быть в походе)"}
 
-        # Subquery вместо материализации ID в Python — нет огромного IN-списка.
-        # Режем на батчи с промежуточным commit — обмен в миллионы статистов
-        # одной транзакцией даёт WAL-всплеск и постоянные checkpoint'ы Postgres
-        # (см. SQUAD_BULK_CHUNK_SIZE). Каждый батч естественно исключает уже
-        # переданные строки — они больше не попадают под cond (user_id сменился).
         remaining = amount
-        while remaining > 0:
-            chunk = min(SQUAD_BULK_CHUNK_SIZE, remaining)
-            subq = select(SquadMember.id).where(cond).limit(chunk)
-            await session.execute(
-                sa_update(SquadMember)
-                .where(SquadMember.id.in_(subq))
-                .values(user_id=to_user.id)
-                .execution_options(synchronize_session=False)
-            )
-            remaining -= chunk
-            await session.commit()
+        for g in groups:
+            if remaining <= 0:
+                break
+            avail = g.count - busy.get((g.rank, g.stars, g.base_power), 0)
+            if avail <= 0:
+                continue
+            take = min(avail, remaining)
+            await squad_repo.add_count(session, from_user.id, g.rank, g.stars, -take, base_power=g.base_power)
+            await squad_repo.add_count(session, to_user.id, g.rank, g.stars, take, base_power=g.base_power)
+            remaining -= take
 
         await self._recalc_power(session, from_user, to_user)
         logger.info("exchange: from_user=%d to_user=%d resource=squad amount=%d", from_user.id, to_user.id, amount)
         return {"ok": True}
 
     async def _exchange_squad_all(self, session, from_user, to_user, meta):
-        from app.models.squad_member import SquadMember
+        from app.repositories.squad_repo import squad_repo
         from app.services.campaign_service import campaign_service
         rank = meta.get("rank") if meta else None
         if not rank:
             return {"ok": False, "reason": "Не указан ранг"}
-        from sqlalchemy import func
-        busy_ids = await campaign_service.get_busy_squad_ids(session, from_user.id)
-        cond = (SquadMember.user_id == from_user.id) & (SquadMember.rank == rank)
-        if busy_ids:
-            cond = cond & SquadMember.id.notin_(busy_ids)
-        count = await session.scalar(select(func.count(SquadMember.id)).where(cond))
-        if not count:
+
+        groups = await squad_repo.get_groups(session, from_user.id, rank=rank)
+        busy = await campaign_service.get_busy_breakdown(session, from_user.id)
+
+        total_moved = 0
+        for g in groups:
+            avail = g.count - busy.get((g.rank, g.stars, g.base_power), 0)
+            if avail <= 0:
+                continue
+            await squad_repo.add_count(session, from_user.id, g.rank, g.stars, -avail, base_power=g.base_power)
+            await squad_repo.add_count(session, to_user.id, g.rank, g.stars, avail, base_power=g.base_power)
+            total_moved += avail
+
+        if not total_moved:
             return {"ok": False, "reason": f"Нет статистов ранга {rank} (часть могут быть в походе)"}
 
-        # Батчами, а не одним UPDATE по всему cond — см. _exchange_squad.
-        remaining = count
-        while remaining > 0:
-            chunk = min(SQUAD_BULK_CHUNK_SIZE, remaining)
-            subq = select(SquadMember.id).where(cond).limit(chunk)
-            await session.execute(
-                sa_update(SquadMember)
-                .where(SquadMember.id.in_(subq))
-                .values(user_id=to_user.id)
-                .execution_options(synchronize_session=False)
-            )
-            remaining -= chunk
-            await session.commit()
-
         await self._recalc_power(session, from_user, to_user)
-        logger.info("exchange: from_user=%d to_user=%d resource=squad_all rank=%s count=%d", from_user.id, to_user.id, rank, count)
+        logger.info("exchange: from_user=%d to_user=%d resource=squad_all rank=%s count=%d", from_user.id, to_user.id, rank, total_moved)
         return {"ok": True}
 
     # ── Персонажи ───────────────────────────────────────────────────────────

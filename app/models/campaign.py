@@ -20,8 +20,11 @@ class Campaign(Base):
     duration_hours: Mapped[int] = mapped_column(Integer, nullable=False)     # 2 / 3 / 6 / 12
 
     # ── Статисты ──────────────────────────────────────────────────────────────
-    # JSON-список ID записей SquadMember, отправленных в поход
-    statist_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    # JSON-список [rank, stars, base_power, count] — сколько бойцов из какой
+    # группы squad_members зарезервировано под поход (squad_members хранит
+    # агрегаты, а не отдельные строки на бойца, поэтому вместо списка ID хранится
+    # разбивка по группам).
+    statist_breakdown: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     statist_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     avg_power: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)  # средняя мощь
     statist_rank: Mapped[str] = mapped_column(String(8), nullable=False, default="ERROR")  # ранг статистов

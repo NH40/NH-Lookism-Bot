@@ -106,7 +106,7 @@ class RaidService:
     ) -> int:
         if damage_source == "squad":
             result = await session.scalar(
-                select(func.sum(SquadMember.base_power)).where(
+                select(func.sum(SquadMember.base_power * SquadMember.count)).where(
                     SquadMember.user_id == user.id
                 )
             )

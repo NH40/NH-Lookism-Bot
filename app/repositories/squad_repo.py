@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, update as sa_update, case
+from sqlalchemy import select, func, update as sa_update, case, text
 from app.models.user import User
 from app.models.squad_member import SquadMember
 from app.models.character import UserCharacter
@@ -8,12 +8,69 @@ from app.data.squad import RANKS_BY_ID
 
 class SquadRepo:
 
+    # ════════════════════════════════════════════════════════════════════════
+    # Базовые операции над агрегированными группами
+    # ════════════════════════════════════════════════════════════════════════
+
+    async def add_count(
+        self, session: AsyncSession, user_id: int, rank: str, stars: int,
+        delta: int, base_power: int | None = None,
+    ) -> None:
+        """Атомарно прибавляет delta (может быть отрицательным) к count группы
+        (user_id, rank, stars, base_power). Создаёт строку при первом добавлении,
+        не даёт count уйти в минус (GREATEST 0) — один UPSERT вместо N insert/update/delete."""
+        if base_power is None:
+            rank_cfg = RANKS_BY_ID.get(rank)
+            base_power = rank_cfg.base_power if rank_cfg else 0
+        await session.execute(
+            text(
+                "INSERT INTO squad_members (user_id, rank, stars, base_power, count) "
+                "VALUES (:uid, :rank, :stars, :bp, GREATEST(0, :delta)) "
+                "ON CONFLICT (user_id, rank, stars, base_power) "
+                "DO UPDATE SET count = GREATEST(0, squad_members.count + :delta)"
+            ),
+            {"uid": user_id, "rank": rank, "stars": stars, "bp": base_power, "delta": delta},
+        )
+
+    async def get_groups(
+        self, session: AsyncSession, user_id: int, rank: str | None = None
+    ) -> list[SquadMember]:
+        """Все группы игрока (обычно десятки строк, не миллионы) — по строке на
+        (rank, stars, base_power). Отсортировано по мощи/звёздам — «слабейшие первыми»."""
+        q = select(SquadMember).where(SquadMember.user_id == user_id, SquadMember.count > 0)
+        if rank:
+            q = q.where(SquadMember.rank == rank)
+        q = q.order_by(SquadMember.base_power, SquadMember.stars)
+        return list((await session.execute(q)).scalars().all())
+
+    async def get_total_count(
+        self, session: AsyncSession, user_id: int, rank: str | None = None
+    ) -> int:
+        q = select(func.coalesce(func.sum(SquadMember.count), 0)).where(
+            SquadMember.user_id == user_id
+        )
+        if rank:
+            q = q.where(SquadMember.rank == rank)
+        return await session.scalar(q) or 0
+
+    async def get_rank_counts(self, session: AsyncSession, user_id: int) -> dict[str, int]:
+        """{ранг: суммарное количество} — для меню обмена/продажи."""
+        rows = (await session.execute(
+            select(SquadMember.rank, func.sum(SquadMember.count))
+            .where(SquadMember.user_id == user_id, SquadMember.count > 0)
+            .group_by(SquadMember.rank)
+        )).all()
+        return {rank: int(cnt) for rank, cnt in rows if cnt}
+
+    # ════════════════════════════════════════════════════════════════════════
+    # Боевая мощь
+    # ════════════════════════════════════════════════════════════════════════
+
     async def update_user_combat_power(
         self, session: AsyncSession, user: User
     ) -> int:
         """Единственное место расчёта боевой мощи."""
 
-        # 1. Мощь отряда — один агрегирующий запрос вместо загрузки всех строк
         star_mult = case(
             (SquadMember.stars == 1, 1.10),
             (SquadMember.stars == 2, 1.20),
@@ -23,7 +80,7 @@ class SquadRepo:
             else_=1.0,
         )
         squad_power_raw = await session.scalar(
-            select(func.sum(SquadMember.base_power * star_mult))
+            select(func.sum(SquadMember.base_power * star_mult * SquadMember.count))
             .where(SquadMember.user_id == user.id)
         )
         squad_power = int(squad_power_raw or 0)
@@ -128,26 +185,7 @@ class SquadRepo:
     async def get_squad_count(
         self, session: AsyncSession, user_id: int
     ) -> int:
-        result = await session.scalar(
-            select(func.count(SquadMember.id)).where(
-                SquadMember.user_id == user_id
-            )
-        )
-        return result or 0
-
-    async def get_members_by_rank(
-        self, session: AsyncSession, user_id: int
-    ) -> dict[str, list[SquadMember]]:
-        result = await session.execute(
-            select(SquadMember).where(
-                SquadMember.user_id == user_id
-            ).order_by(SquadMember.rank, SquadMember.stars.desc())
-        )
-        members = result.scalars().all()
-        grouped: dict[str, list] = {}
-        for m in members:
-            grouped.setdefault(m.rank, []).append(m)
-        return grouped
+        return await self.get_total_count(session, user_id)
 
 
 squad_repo = SquadRepo()

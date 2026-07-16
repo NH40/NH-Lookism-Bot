@@ -24,7 +24,7 @@ import random
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants.campaigns import (
@@ -45,12 +45,36 @@ from app.constants.campaigns import (
     SURVIVAL_FACTOR_FAIL,
 )
 from app.models.campaign import Campaign
-from app.models.squad_member import SquadMember
 from app.models.user import User
 from app.repositories.campaign_repo import campaign_repo
+from app.repositories.squad_repo import squad_repo
 
 if TYPE_CHECKING:
     pass
+
+
+# ── Сериализация резервирования (breakdown) ────────────────────────────────────
+# squad_members хранит агрегаты (rank, stars, base_power) -> count, поэтому поход
+# резервирует не список ID, а разбивку {(rank, stars, base_power): count}.
+
+def _breakdown_to_list(breakdown: dict[tuple[str, int, int], int]) -> list[list]:
+    return [[rank, stars, bp, cnt] for (rank, stars, bp), cnt in breakdown.items() if cnt > 0]
+
+
+def _breakdown_from_json(raw: str) -> dict[tuple[str, int, int], int]:
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return {}
+    result: dict[tuple[str, int, int], int] = {}
+    for entry in data:
+        try:
+            rank, stars, bp, cnt = entry
+            key = (rank, int(stars), int(bp))
+            result[key] = result.get(key, 0) + int(cnt)
+        except Exception:
+            continue
+    return result
 
 
 # ── Вспомогательные функции ───────────────────────────────────────────────────
@@ -122,22 +146,25 @@ class CampaignService:
             return False, f"Уже активно {count}/{MAX_ACTIVE_CAMPAIGNS} походов"
         return True, ""
 
-    async def _get_busy_ids(self, session: AsyncSession, user_id: int) -> set[int]:
-        """ID статистов, занятых в активных походах (максимум 3 похода × 200 = 600)."""
+    async def _get_busy_breakdown(
+        self, session: AsyncSession, user_id: int
+    ) -> dict[tuple[str, int, int], int]:
+        """{(rank, stars, base_power): зарезервировано} по активным походам
+        (максимум 3 похода × 200 = 600 — дёшево держать в памяти)."""
         active = await campaign_repo.get_active(session, user_id)
-        busy_ids: set[int] = set()
+        busy: dict[tuple[str, int, int], int] = {}
         for c in active:
-            try:
-                busy_ids.update(json.loads(c.statist_ids))
-            except Exception:
-                pass
-        return busy_ids
+            for key, cnt in _breakdown_from_json(c.statist_breakdown).items():
+                busy[key] = busy.get(key, 0) + cnt
+        return busy
 
-    async def get_busy_squad_ids(self, session: AsyncSession, user_id: int) -> set[int]:
-        """Публичная обёртка _get_busy_ids — для переиспользования вне похода
+    async def get_busy_breakdown(
+        self, session: AsyncSession, user_id: int
+    ) -> dict[tuple[str, int, int], int]:
+        """Публичная обёртка _get_busy_breakdown — для переиспользования вне похода
         (биржа, клановый обмен), чтобы нельзя было продать/передать статистов,
-        которые сейчас в активном походе."""
-        return await self._get_busy_ids(session, user_id)
+        которые сейчас зарезервированы активным походом."""
+        return await self._get_busy_breakdown(session, user_id)
 
     async def count_available_statists(
         self,
@@ -145,16 +172,16 @@ class CampaignService:
         user_id: int,
         statist_rank: str | None = None,
     ) -> int:
-        """Количество доступных статистов — COUNT на стороне БД, без загрузки строк
-        (игрок может держать сотни тысяч статистов — грузить их все в Python нельзя,
-        это блокирует event loop и вешает бота для всех остальных)."""
-        busy_ids = await self._get_busy_ids(session, user_id)
-        q = select(func.count(SquadMember.id)).where(SquadMember.user_id == user_id)
-        if statist_rank:
-            q = q.where(SquadMember.rank == statist_rank)
-        if busy_ids:
-            q = q.where(SquadMember.id.notin_(busy_ids))
-        return await session.scalar(q) or 0
+        """Количество доступных статистов — по группам (rank,stars,base_power),
+        которых обычно десятки, а не по отдельным бойцам."""
+        groups = await squad_repo.get_groups(session, user_id, rank=statist_rank)
+        busy = await self._get_busy_breakdown(session, user_id)
+        total = 0
+        for g in groups:
+            avail = g.count - busy.get((g.rank, g.stars, g.base_power), 0)
+            if avail > 0:
+                total += avail
+        return total
 
     async def get_available_stats(
         self,
@@ -162,56 +189,78 @@ class CampaignService:
         user_id: int,
         statist_rank: str | None = None,
     ) -> tuple[int, int]:
-        """(количество, средняя base_power) среди доступных — один агрегирующий запрос."""
-        busy_ids = await self._get_busy_ids(session, user_id)
-        q = select(
-            func.count(SquadMember.id), func.avg(SquadMember.base_power)
-        ).where(SquadMember.user_id == user_id)
-        if statist_rank:
-            q = q.where(SquadMember.rank == statist_rank)
-        if busy_ids:
-            q = q.where(SquadMember.id.notin_(busy_ids))
-        count, avg_power = (await session.execute(q)).one()
-        return count or 0, int(avg_power) if avg_power is not None else 0
+        """(количество, средняя base_power) среди доступных."""
+        groups = await squad_repo.get_groups(session, user_id, rank=statist_rank)
+        busy = await self._get_busy_breakdown(session, user_id)
+        total = 0
+        power_sum = 0
+        for g in groups:
+            avail = g.count - busy.get((g.rank, g.stars, g.base_power), 0)
+            if avail > 0:
+                total += avail
+                power_sum += avail * g.base_power
+        return total, int(power_sum / total) if total else 0
 
     async def get_available_stats_by_rank(
         self,
         session: AsyncSession,
         user_id: int,
     ) -> dict[str, tuple[int, int]]:
-        """{ранг: (количество, средняя base_power)} среди доступных — один GROUP BY."""
-        busy_ids = await self._get_busy_ids(session, user_id)
-        q = (
-            select(SquadMember.rank, func.count(SquadMember.id), func.avg(SquadMember.base_power))
-            .where(SquadMember.user_id == user_id)
-            .group_by(SquadMember.rank)
-        )
-        if busy_ids:
-            q = q.where(SquadMember.id.notin_(busy_ids))
-        rows = (await session.execute(q)).all()
+        """{ранг: (количество, средняя base_power)} среди доступных."""
+        groups = await squad_repo.get_groups(session, user_id)
+        busy = await self._get_busy_breakdown(session, user_id)
+        acc: dict[str, list[int]] = {}
+        for g in groups:
+            avail = g.count - busy.get((g.rank, g.stars, g.base_power), 0)
+            if avail > 0:
+                entry = acc.setdefault(g.rank, [0, 0])
+                entry[0] += avail
+                entry[1] += avail * g.base_power
         return {
-            rank: (cnt or 0, int(avg_p) if avg_p is not None else 0)
-            for rank, cnt, avg_p in rows
+            rank: (cnt, int(psum / cnt) if cnt else 0)
+            for rank, (cnt, psum) in acc.items()
         }
 
-    async def get_weakest_available(
+    async def _reserve_statists(
         self,
         session: AsyncSession,
         user_id: int,
         statist_rank: str | None,
-        limit: int,
-    ) -> list[SquadMember]:
-        """Слабейшие `limit` доступных статистов — ORDER BY + LIMIT на стороне БД.
-        Не грузит всю коллекцию игрока в Python (см. count_available_statists)."""
-        busy_ids = await self._get_busy_ids(session, user_id)
-        q = select(SquadMember).where(SquadMember.user_id == user_id)
-        if statist_rank:
-            q = q.where(SquadMember.rank == statist_rank)
-        if busy_ids:
-            q = q.where(SquadMember.id.notin_(busy_ids))
-        q = q.order_by(SquadMember.base_power.asc()).limit(limit)
-        result = await session.execute(q)
-        return list(result.scalars().all())
+        amount: int,
+    ) -> tuple[dict[tuple[str, int, int], int], int, int]:
+        """Резервирует `amount` статистов под поход, слабейших первыми (как раньше
+        ORDER BY base_power ASC). Ничего не списывает из squad_members — резерв
+        живёт как запись в самом походе (statist_breakdown), а "доступно" везде
+        считается как count минус то, что уже зарезервировано активными походами.
+        Возвращает (breakdown, реально зарезервировано, средняя мощь)."""
+        groups = await squad_repo.get_groups(session, user_id, rank=statist_rank)
+        busy = await self._get_busy_breakdown(session, user_id)
+        groups_sorted = sorted(groups, key=lambda g: (g.base_power, g.stars))
+        remaining = amount
+        breakdown: dict[tuple[str, int, int], int] = {}
+        total_power = 0
+        for g in groups_sorted:
+            if remaining <= 0:
+                break
+            avail = g.count - busy.get((g.rank, g.stars, g.base_power), 0)
+            if avail <= 0:
+                continue
+            take = min(avail, remaining)
+            breakdown[(g.rank, g.stars, g.base_power)] = take
+            total_power += take * g.base_power
+            remaining -= take
+        taken = amount - remaining
+        avg_power = int(total_power / taken) if taken else 0
+        return breakdown, taken, avg_power
+
+    async def preview_avg_power(
+        self, session: AsyncSession, user_id: int, statist_rank: str | None, amount: int
+    ) -> int:
+        """Средняя мощь `amount` слабейших доступных статистов — только для
+        предпросмотра похода в UI, ничего не резервирует (см. _reserve_statists —
+        сам по себе он тоже не мутирует БД, резерв фиксируется лишь при create())."""
+        _, _, avg_power = await self._reserve_statists(session, user_id, statist_rank, amount)
+        return avg_power
 
     async def start_campaign(
         self,
@@ -264,12 +313,19 @@ class CampaignService:
             }
         statist_count = min(statist_count, MAX_STATISTS_PER_CAMPAIGN)
 
-        # Берём самых слабых (по base_power) — чтобы сильных не трогать.
-        # ORDER BY + LIMIT на стороне БД — не грузим всю коллекцию игрока в Python.
-        chosen = await self.get_weakest_available(session, locked_user.id, statist_rank, statist_count)
-        chosen_ids = [m.id for m in chosen]
-
-        avg_power = int(sum(m.base_power for m in chosen) / len(chosen)) if chosen else 0
+        # Резервируем самых слабых (по base_power) — чтобы сильных не трогать.
+        # Резерв не трогает squad_members физически — только "бронирует" часть
+        # count в группах, записывая разбивку в сам поход.
+        breakdown, taken, avg_power = await self._reserve_statists(
+            session, locked_user.id, statist_rank, statist_count
+        )
+        if taken < statist_count:
+            rank_label = f" ранга {statist_rank}" if statist_rank else ""
+            return {
+                "ok": False,
+                "reason": f"Недостаточно свободных статистов{rank_label} (доступно {taken})",
+                "campaign": None,
+            }
 
         ends_at = datetime.now(timezone.utc) + timedelta(hours=duration_hours)
 
@@ -279,7 +335,8 @@ class CampaignService:
             resource_type=resource_type,
             rank=rank,
             duration_hours=duration_hours,
-            statist_ids=chosen_ids,
+            statist_breakdown=_breakdown_to_list(breakdown),
+            statist_count=taken,
             avg_power=avg_power,
             ends_at=ends_at,
             statist_rank=statist_rank or "ERROR",
@@ -316,24 +373,22 @@ class CampaignService:
             current = getattr(user, resource_type, 0)
             setattr(user, resource_type, current + gained)
 
-        # Возвращаем выживших статистов (они уже помечены в statist_ids, просто "разблокируются")
-        # Удаляем навсегда погибших из squad
+        # Выжившие статисты просто "разбронируются" — поход больше не активен,
+        # значит их группы больше не попадают в _get_busy_breakdown, ничего
+        # физически двигать не нужно. Погибших списываем с зарезервированных
+        # групп, пропорционально исходной разбивке похода (largest remainder —
+        # какая конкретно группа "потеряла" бойцов игроку никогда не показывалась,
+        # важна только суммарная цифра statists_lost).
         if camp.statists_lost > 0:
-            try:
-                all_ids = json.loads(camp.statist_ids)
-                returned_count = camp.statists_returned
-                # Убиваем тех, кто не вернулся (берём первых statists_lost по списку)
-                dead_ids = all_ids[returned_count:]
-                if dead_ids:
-                    from sqlalchemy import delete as sa_delete
-                    await session.execute(
-                        sa_delete(SquadMember).where(SquadMember.id.in_(dead_ids))
-                    )
-                    # Пересчитываем боевую мощь
-                    from app.repositories.squad_repo import squad_repo
+            breakdown = _breakdown_from_json(camp.statist_breakdown)
+            if breakdown:
+                from app.utils.squad_math import largest_remainder_alloc
+                alloc = largest_remainder_alloc(list(breakdown.items()), camp.statists_lost)
+                for (rank, stars, bp), cnt in alloc.items():
+                    if cnt > 0:
+                        await squad_repo.add_count(session, user.id, rank, stars, -cnt, base_power=bp)
+                if alloc:
                     await squad_repo.update_user_combat_power(session, user)
-            except Exception:
-                pass
 
         result = {
             "ok": True,

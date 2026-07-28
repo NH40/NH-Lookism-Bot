@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.data.titles import CIRCULAR_DONATS, CIRCULAR_DONAT_MAP, CLAN_DONAT_ITEMS, MANAGER_USERNAME
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -60,19 +61,16 @@ async def cb_black_market(cb: CallbackQuery, session: AsyncSession, user: User):
         else:
             passive_line = f"\n💸 Пассивный доход: +{_fn(eff_per_min)}/мин"
 
-    try:
-        await cb.message.edit_text(
-            f"🖤 <b>Чёрный рынок</b>\n"
-            f"<i>Эксклюзивный раздел для обладателей всех донатных сетов</i>"
-            f"{passive_line}\n\n"
-            f"🔄 <b>Круговые донаты</b> — покупай круги и получай перманентные баффы.\n"
-            f"Каждый новый круг суммируется с предыдущими.\n\n"
-            f"Выберите донат для просмотра:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"🖤 <b>Чёрный рынок</b>\n"
+        f"<i>Эксклюзивный раздел для обладателей всех донатных сетов</i>"
+        f"{passive_line}\n\n"
+        f"🔄 <b>Круговые донаты</b> — покупай круги и получай перманентные баффы.\n"
+        f"Каждый новый круг суммируется с предыдущими.\n\n"
+        f"Выберите донат для просмотра:",
+        builder.as_markup(),
+    )
     await cb.answer()
 
 
@@ -122,14 +120,7 @@ async def cb_bm_detail(cb: CallbackQuery, session: AsyncSession, user: User):
     ))
     builder.row(InlineKeyboardButton(text="◀️ К чёрному рынку", callback_data="black_market"))
 
-    try:
-        await cb.message.edit_text(
-            "\n".join(lines),
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
     await cb.answer()
 
 
@@ -211,12 +202,5 @@ async def cb_bm_clan_donats(cb: CallbackQuery, session: AsyncSession, user: User
     ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="black_market"))
 
-    try:
-        await cb.message.edit_text(
-            "\n".join(lines),
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
     await cb.answer()

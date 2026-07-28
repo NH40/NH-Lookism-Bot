@@ -10,6 +10,7 @@ from app.services.cooldown_service import cooldown_service
 from app.constants.quests import QUESTS_BY_ID
 from app.config.game_balance import QUEST_SWAP_COSTS, QUEST_SWAP_MAX_PER_DAY, QUEST_FULL_REROLL_COST
 from app.utils.formatters import fmt_num
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -147,10 +148,7 @@ async def _show_quests(cb: CallbackQuery, session: AsyncSession, user: User, pag
     reroll_used = await quest_service.is_reroll_used(user.id)
     h, m = _time_to_reset()
     text, markup = _build_quest_page(quests, page, h, m, swap_count, reroll_used)
-    try:
-        await cb.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
-    except Exception:
-        pass
+    await safe_edit(cb, text, markup)
 
 
 # ── Страница переролла ────────────────────────────────────────────────────────
@@ -202,10 +200,7 @@ async def _show_reroll_menu(cb: CallbackQuery, session: AsyncSession, user: User
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="daily_quests"))
 
-    try:
-        await cb.message.edit_text("\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
 
 
 # ── Выбор задания для замены ──────────────────────────────────────────────────
@@ -242,10 +237,7 @@ async def _show_swap_select(cb: CallbackQuery, session: AsyncSession, user: User
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="quest_reroll_menu"))
 
-    try:
-        await cb.message.edit_text("\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
 
 
 # ── Хендлеры ──────────────────────────────────────────────────────────────────

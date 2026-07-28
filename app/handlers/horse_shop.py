@@ -9,6 +9,7 @@ from app.services.horse_shop_service import horse_shop_service
 from app.repositories.horse_shop_repo import horse_shop_repo
 from app.config.game_balance import HORSE_SHOP_ITEMS, HORSE_SHOP_MAX_PER_ITEM
 from app.utils.formatters import fmt_num, fmt_ttl
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -41,7 +42,7 @@ async def _build_shop_screen(session: AsyncSession, user: User):
         ))
 
     lines.append("\n📌 Все цены фиксированы. Торг не предусмотрен.")
-    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="menu_economy"))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
 
     return "\n".join(lines), builder.as_markup()
 
@@ -53,10 +54,7 @@ async def cb_horse_shop(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer("Лавка коня сейчас закрыта", show_alert=True)
         return
     text, kb = screen
-    try:
-        await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-    except Exception:
-        pass
+    await safe_edit(cb, text, kb)
     await cb.answer()
 
 
@@ -97,10 +95,7 @@ async def cb_horse_item(cb: CallbackQuery, session: AsyncSession, user: User):
         f"📦 Куплено: <b>{bought}/{HORSE_SHOP_MAX_PER_ITEM}</b>\n"
         f"💳 Твой баланс: <b>{fmt_num(user.nh_coins)}</b> NHCoin"
     )
-    try:
-        await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        pass
+    await safe_edit(cb, text, builder.as_markup())
     await cb.answer()
 
 

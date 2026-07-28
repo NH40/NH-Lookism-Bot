@@ -4,11 +4,19 @@ from app.config.game_balance import DEFAULT_MAX_TICKETS
 
 
 def reset_donat_bonuses(user: User) -> None:
+    # Сбрасываем здесь (единственное безусловное место во всей цепочке
+    # reapply_all_titles) — дальше и rebuild_base_bonuses (скиллы Пути),
+    # и rebuild_circular_bonuses (донат-круги "Тень") могут независимо
+    # выставить True, не затирая друг друга (раньше circular_bonuses всегда
+    # сбрасывал их в False, стирая честно купленные скиллы — баг).
+    user.path_unique_1 = False
+    user.path_unique_2 = False
     user.ultra_instinct = False
     user.true_ultra_instinct = False
     user.double_recruit = False
     user.double_attack = False
     user.double_ticket = False
+    user.monster_card_luck = False
     user.extra_attack_count = 0
     user.ticket_cd_reduction = 0
     user.recruit_count_bonus = 0
@@ -22,6 +30,7 @@ def reset_donat_bonuses(user: User) -> None:
     user.extra_path_skill_slots = 1
     user.max_ticket_chance = 70
     user.squad_power_bonus = 0
+    user.influence_bonus_percent = 0
     user.ui_is_donat = False
     user.ui_level = 0
     user.ui_auto_recruit = False
@@ -136,6 +145,7 @@ def apply_set_bonus(user: User, set_id: str) -> None:
             user.skill_path_bonus_multiplier = round(user.skill_path_bonus_multiplier * 1.20, 4)
     elif set_id == "monster":
         user.double_attack = True
+        user.monster_card_luck = True
         if user.skill_path == "monster":
             user.extra_attack_count = 2
         else:
@@ -160,10 +170,11 @@ async def rebuild_base_bonuses(
     mastery = await session.scalar(
         sa_select(UserMastery).where(UserMastery.user_id == user.id)
     )
-    if mastery and mastery.technique > 0:
+    eff_technique = min(4, (mastery.technique if mastery else 0) + getattr(user, "clan_land_technique_mastery_bonus", 0))
+    if eff_technique > 0:
         tech_cfg = MASTERY_BY_ID.get("technique")
-        if tech_cfg and mastery.technique < len(tech_cfg.levels):
-            bonus = tech_cfg.levels[mastery.technique].bonus
+        if tech_cfg and eff_technique < len(tech_cfg.levels):
+            bonus = tech_cfg.levels[eff_technique].bonus
             user.income_bonus_percent += int(bonus * multiplier)
             user.train_bonus_percent += int(bonus * multiplier)
 

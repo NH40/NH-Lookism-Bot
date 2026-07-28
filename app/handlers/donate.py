@@ -22,6 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.config import settings
 from app.utils.formatters import fmt_num
+from app.utils.menu_media import safe_edit
+from app.utils.keyboards.common import back_kb
 
 router = Router()
 
@@ -61,10 +63,8 @@ async def _show_donate_menu(target: Message, user: User, edit: bool = False) -> 
     )
 
     if edit:
-        try:
-            await target.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-        except Exception:
-            pass
+        from app.utils.menu_media import safe_edit_message
+        await safe_edit_message(target, text, builder.as_markup())
     else:
         await target.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
@@ -92,16 +92,13 @@ async def cb_donate_topup(cb: CallbackQuery, state: FSMContext) -> None:
     builder.adjust(3)
     builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="donate_menu"))
 
-    try:
-        await cb.message.edit_text(
-            f"💳 <b>Пополнение NHDonate</b>\n\n"
-            f"Выберите сумму или введите своё число:\n"
-            f"<i>Мин. {MIN_DONATE} ₽ · Макс. {MAX_DONATE} ₽ · 1 ₽ = 1 NHDonate</i>",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"💳 <b>Пополнение NHDonate</b>\n\n"
+        f"Выберите сумму или введите своё число:\n"
+        f"<i>Мин. {MIN_DONATE} ₽ · Макс. {MAX_DONATE} ₽ · 1 ₽ = 1 NHDonate</i>",
+        builder.as_markup(),
+    )
     await cb.answer()
 
 
@@ -121,11 +118,9 @@ async def msg_donate_amount(message: Message, bot: Bot, user: User, state: FSMCo
         if not (MIN_DONATE <= amount <= MAX_DONATE):
             raise ValueError
     except (ValueError, AttributeError):
-        builder = InlineKeyboardBuilder()
-        builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="donate_topup"))
         await message.answer(
             f"❌ Введите целое число от <b>{MIN_DONATE}</b> до <b>{MAX_DONATE}</b> рублей.",
-            reply_markup=builder.as_markup(),
+            reply_markup=back_kb("donate_topup"),
             parse_mode="HTML",
         )
         return

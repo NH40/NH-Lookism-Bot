@@ -4,10 +4,8 @@ from aiogram import Router, F
 from aiogram.types import CallbackQuery, InlineKeyboardButton, FSInputFile, InputMediaPhoto
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
 from app.models.user import User
-from app.models.skill import UserMastery
 from app.services.training_service import training_service
 from app.services.cooldown_service import cooldown_service
 from app.utils.keyboards.common import back_kb
@@ -19,18 +17,10 @@ router = Router()
 
 # ── Меню тренировки (список тренеров) ────────────────────────────────────────
 
-@router.callback_query(F.data == "training_menu")
-async def cb_training_menu(cb: CallbackQuery, session: AsyncSession, user: User):
-    from app.services.bank.credits_service import credits_service
-    block_msg = await credits_service.block_message(session, user.id)
-    if block_msg:
-        try:
-            await cb.message.edit_text(block_msg, reply_markup=back_kb("bank_credits"), parse_mode="HTML")
-        except Exception:
-            pass
-        await cb.answer()
-        return
-
+async def build_training_menu_view(session: AsyncSession, user: User) -> tuple[str, "InlineKeyboardMarkup"]:
+    """Чистый билдер (текст, клавиатура) без CallbackQuery — переиспользуется
+    инлайн-хэндлером и быстрым меню (reply-клавиатура). Проверку кредитной
+    блокировки вызывающий код делает сам."""
     trainers_info = await training_service.get_trainers_info(user.id)
 
     builder = InlineKeyboardBuilder()
@@ -49,44 +39,40 @@ async def cb_training_menu(cb: CallbackQuery, session: AsyncSession, user: User)
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
 
-    r = await session.execute(select(UserMastery).where(UserMastery.user_id == user.id))
-    mastery = r.scalar_one_or_none()
-
-    from app.data.skills import MASTERY
-    bonus_map = {0: 0, 1: 5, 2: 10, 3: 20, 4: 30}
-    speed_map = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
-    mastery_lines = []
-    for m in MASTERY:
-        current = getattr(mastery, m.skill_id, 0) if mastery else 0
-        if m.skill_id in ("strength", "technique"):
-            bonus = bonus_map.get(current, 0)
-        else:
-            bonus = speed_map.get(current, 0)
-        mastery_lines.append(f"  {m.emoji} {m.name}: {current}/4 (+{bonus}%)")
-
     war_points = getattr(user, "war_points", 0)
-    war_genius = getattr(user, "war_genius_level", 0)
-    war_str = f"⚔️ Очки войны: <b>{war_points}</b> | Гений войны: <b>{war_genius}/5</b>"
 
     text = (
         f"🏋 <b>Тренировка</b>\n\n"
         f"⭐ Очки мастерства: <b>{user.mastery_points}</b>\n"
+        f"<i>Прокачка силы/скорости/выносливости/техники: Обучение → Навыки → Мастерство</i>\n\n"
         f"🔷 Очки пути: <b>{user.skill_path_points}</b>\n"
-        f"{war_str}\n\n"
-        f"<b>Текущее мастерство:</b>\n"
-        + "\n".join(mastery_lines)
-        + "\n\n"
+        f"<i>Прокачка навыков пути: Обучение → Навыки → Путь</i>\n\n"
+        f"⚔️ Очки войны: <b>{war_points}</b>\n"
+        f"<i>Прокачка Гения войны: тренер Менеджер Ким ниже</i>\n\n"
         f"Нажми на тренера, чтобы узнать подробности:"
     )
+    return text, builder.as_markup()
 
+
+@router.callback_query(F.data == "training_menu")
+async def cb_training_menu(cb: CallbackQuery, session: AsyncSession, user: User):
+    from app.services.bank.credits_service import credits_service
+    block_msg = await credits_service.block_message(session, user.id)
+    if block_msg:
+        from app.utils.menu_media import safe_edit
+        await safe_edit(cb, block_msg, back_kb("bank_credits"))
+        await cb.answer()
+        return
+
+    text, kb = await build_training_menu_view(session, user)
     try:
-        await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+        await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     except Exception:
         try:
             await cb.message.delete()
         except Exception:
             pass
-        await cb.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+        await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
 
 
 # ── Карточка тренера (с фото) ─────────────────────────────────────────────────

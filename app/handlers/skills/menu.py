@@ -6,14 +6,15 @@ from sqlalchemy import select
 
 from app.models.user import User
 from app.models.skill import UserMastery
-from app.utils.formatters import skill_path_label, progress_bar, pair_lines
+from app.utils.formatters import skill_path_label, progress_bar
 from app.constants.training import WAR_GENIUS_LEVEL_COSTS, WAR_GENIUS_BOSS_LABELS
 
 router = Router()
 
 
-@router.callback_query(F.data == "skills")
-async def cb_skills(cb: CallbackQuery, session: AsyncSession, user: User):
+async def build_skills_view(session: AsyncSession, user: User) -> tuple[str, "InlineKeyboardMarkup"]:
+    """Чистый билдер (текст, клавиатура) без CallbackQuery — переиспользуется
+    инлайн-хэндлером и быстрым меню (reply-клавиатура)."""
     await session.execute(
         select(UserMastery).where(UserMastery.user_id == user.id)
     )
@@ -49,7 +50,13 @@ async def cb_skills(cb: CallbackQuery, session: AsyncSession, user: User):
 
     text = (
         f"⚡ <b>Навыки</b>\n\n"
-        f"💎 Очков пути: <b>{user.skill_path_points}</b>   ⚔️ Очков войны: <b>{war_points}</b>\n\n"
+        f"⭐ Очков мастерства: <b>{user.mastery_points}</b>\n"
+        f"💎 Очков пути: <b>{user.skill_path_points}</b>\n"
+        f"⚔️ Очков войны: <b>{war_points}</b>\n\n"
+        f"🔷 Фрагменты Пути: <b>{getattr(user, 'path_fragments', 0)}</b>\n"
+        f"🧪 Фрагменты алхимии: <b>{getattr(user, 'alchemy_fragments', 0)}</b>\n"
+        f"🏢 Фрагменты бизнеса: <b>{getattr(user, 'business_fragments', 0)}</b>\n"
+        f"🔮 Фрагменты УИ: <b>{getattr(user, 'ui_fragments', 0)}</b>\n\n"
         f"━━━ 📊 Статус ━━━\n"
         f"🗺 Путь: {path_emoji} <b>{skill_path_label(user.skill_path)}</b>\n"
         f"👁 Ультра Инстинкт: {ui_status}\n"
@@ -58,6 +65,12 @@ async def cb_skills(cb: CallbackQuery, session: AsyncSession, user: User):
         f"🎖 Гений бизнеса {progress_bar(biz_genius, 5)} {biz_genius}/5\n\n"
         f"Выбери раздел:"
     )
+    return text, builder.as_markup()
+
+
+@router.callback_query(F.data == "skills")
+async def cb_skills(cb: CallbackQuery, session: AsyncSession, user: User):
+    text, kb = await build_skills_view(session, user)
     if cb.message.photo:
         # Раздел «Путь» отправляет фото (caption), а не текст — edit_text на таком
         # сообщении падает с "there is no text in the message to edit".
@@ -65,9 +78,9 @@ async def cb_skills(cb: CallbackQuery, session: AsyncSession, user: User):
             await cb.message.delete()
         except Exception:
             pass
-        await cb.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+        await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
     else:
-        await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+        await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
 
 @router.callback_query(F.data == "war_genius_menu")
@@ -115,7 +128,7 @@ async def cb_war_genius_menu(cb: CallbackQuery, session: AsyncSession, user: Use
             level_bits.append(f"🔓 Ур.{lvl}: {boss_lbl} — {cost}⚔️")
         else:
             level_bits.append(f"🔒 Ур.{lvl}: {boss_lbl} — {cost}⚔️")
-    lines.extend(pair_lines(level_bits))
+    lines.extend(level_bits)
 
     lines.append("")
     lines.append("<i>Очки войны — у тренера Менеджер Ким</i>")
@@ -140,7 +153,8 @@ async def cb_war_genius_buy(cb: CallbackQuery, session: AsyncSession, user: User
         await cb.answer("Максимальный уровень достигнут!", show_alert=True)
         return
 
-    cost = WAR_GENIUS_LEVEL_COSTS[war_genius]
+    from app.utils.formatters import apply_biz_discount
+    cost = apply_biz_discount(user, WAR_GENIUS_LEVEL_COSTS[war_genius])
     if war_points < cost:
         await cb.answer(f"Нужно {cost} ⚔️ очков войны", show_alert=True)
         return

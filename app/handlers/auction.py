@@ -10,6 +10,7 @@ from app.services.auction_service import auction_service
 from app.services.cooldown_service import cooldown_service
 from app.utils.keyboards.common import back_kb
 from app.utils.formatters import fmt_num
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -25,9 +26,9 @@ def _fmt_time(seconds: int) -> str:
     return f"{m}м {s}с" if m else f"{s}с"
 
 
-async def _render_auction(
-    cb: CallbackQuery, session: AsyncSession, user: User
-) -> None:
+async def _build_auction_view(session: AsyncSession, user: User) -> tuple[str, "InlineKeyboardMarkup"]:
+    """Чистый билдер (текст, клавиатура) без CallbackQuery — переиспользуется
+    инлайн-хэндлером и быстрым меню (reply-клавиатура)."""
     data = await auction_service.get_display_data(session, user)
 
     if not data["active"]:
@@ -46,15 +47,7 @@ async def _render_auction(
         builder.row(InlineKeyboardButton(
             text="◀️ Главное меню", callback_data="main_menu"
         ))
-        try:
-            await cb.message.edit_text(
-                msg,
-                reply_markup=builder.as_markup(),
-                parse_mode="HTML",
-            )
-        except Exception:
-            pass
-        return
+        return msg, builder.as_markup()
 
     leader_str = data["leader_name"]
     if data["is_leader"]:
@@ -97,12 +90,14 @@ async def _render_auction(
         text="◀️ Главное меню", callback_data="main_menu"
     ))
 
-    try:
-        await cb.message.edit_text(
-            text, reply_markup=builder.as_markup(), parse_mode="HTML"
-        )
-    except Exception:
-        pass
+    return text, builder.as_markup()
+
+
+async def _render_auction(
+    cb: CallbackQuery, session: AsyncSession, user: User
+) -> None:
+    text, kb = await _build_auction_view(session, user)
+    await safe_edit(cb, text, kb)
 
 
 @router.callback_query(F.data == "auction")
@@ -139,20 +134,13 @@ async def cb_auction_custom(
         return
 
     await state.set_state(AuctionFSM.waiting_bid)
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(
-        text="◀️ Назад", callback_data="auction"
-    ))
-    try:
-        await cb.message.edit_text(
-            f"✏️ <b>Введите сумму ставки</b>\n\n"
-            f"Мин. ставка: {fmt_num(data['min_next_bid'])} NHCoin\n"
-            f"Твой баланс: {fmt_num(user.nh_coins)} NHCoin",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"✏️ <b>Введите сумму ставки</b>\n\n"
+        f"Мин. ставка: {fmt_num(data['min_next_bid'])} NHCoin\n"
+        f"Твой баланс: {fmt_num(user.nh_coins)} NHCoin",
+        back_kb("auction"),
+    )
 
 
 @router.message(AuctionFSM.waiting_bid)

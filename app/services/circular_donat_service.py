@@ -66,6 +66,7 @@ _ADDITIVE_FIELDS = (
     "income_bonus_percent",
     "recruit_count_bonus",
     "all_cd_reduction",
+    "influence_bonus_percent",
 )
 
 
@@ -87,14 +88,16 @@ def _apply_one_donat(user: User, donat_id: str, circles: int) -> None:
             user.circ_daily_districts = max(user.circ_daily_districts, 64)
 
     elif donat_id == "clan_head":
+        # Личная часть (сверх клан-вайд трансляции — см. _broadcast_clan_head).
+        # Клан-вайд +5% сила/доход/вербовка/влияние всем членам клана — отдельно.
         user.squad_power_bonus += 10 * circles
-        user.income_bonus_percent += 5 * circles
-        user.recruit_count_bonus += 5 * circles
+        user.influence_bonus_percent += 5 * circles
         if circles >= 5:
             user.circ_clan_cashback = True
 
     elif donat_id == "korea_devil":
         user.squad_power_bonus += 10 * circles
+        user.influence_bonus_percent += 10 * circles
         user.circ_passive_income += 300 * circles
         if circles >= 3:
             user.circ_instant_raid_chance += 5
@@ -103,6 +106,7 @@ def _apply_one_donat(user: User, donat_id: str, circles: int) -> None:
 
     elif donat_id == "mountain_lord":
         user.squad_power_bonus += 20 * circles
+        user.influence_bonus_percent += 10 * circles
         if circles >= 2:
             user.circ_mountain_extra = True
         if circles >= 4:
@@ -132,10 +136,11 @@ def _apply_one_donat(user: User, donat_id: str, circles: int) -> None:
         user.train_bonus_percent += 5 * circles
 
     elif donat_id == "emperor_circle":
-        # Base per-circle bonuses
+        # Базовые бонусы за круг (income был задвоен двумя полями — правили
+        # по прямому запросу владельца проекта: должно быть ровно +5%/круг)
         base_power_per = 20
-        base_income_per = 10
-        base_building_income_per = 5
+        base_income_per = 5
+        base_influence_per = 10
         base_passive_per = 400
         base_recruit_per = 30
 
@@ -148,7 +153,7 @@ def _apply_one_donat(user: User, donat_id: str, circles: int) -> None:
 
         user.squad_power_bonus += int(base_power_per * circles * multiplier)
         user.income_bonus_percent += int(base_income_per * circles * multiplier)
-        user.income_bonus_percent += int(base_building_income_per * circles * multiplier)
+        user.influence_bonus_percent += int(base_influence_per * circles * multiplier)
         user.circ_passive_income += int(base_passive_per * circles * multiplier)
         user.recruit_count_bonus += int(base_recruit_per * circles * multiplier)
         user.circ_trainer_discount += int(2 * circles * multiplier)
@@ -179,9 +184,12 @@ async def rebuild_circular_bonuses(session: AsyncSession, user: User) -> None:
     user.circ_clan_cashback = False
     user.circ_mountain_extra = False
     user.circ_trainer_discount = 0
-    # path_unique_* сбрасываем — доустановим из кругов ниже
-    user.path_unique_1 = False
-    user.path_unique_2 = False
+    # path_unique_1/2 НЕ сбрасываем здесь: rebuild_base_bonuses (вызывается
+    # раньше, в reapply_all_titles) уже мог выставить их из купленных скиллов
+    # Пути (Тень: "первый удар"/"невидимость") — круги доната "Тень" ниже
+    # могут только ДОБАВИТЬ True поверх, а не затирать то, что дали скиллы.
+    # Раньше это был баг: игрок с прокачанным скиллом, но <3/<5 кругов "Тень",
+    # терял бонус при каждом reapply_all_titles (любая смена титулов).
 
     rows = await session.execute(
         select(UserCircularDonat).where(UserCircularDonat.user_id == user.id)
@@ -218,6 +226,8 @@ async def add_circle(session: AsyncSession, user: User, donat_id: str) -> dict:
 
     # Полный пересчёт бонусов (чтобы не было дублирования)
     await _full_rebuild(session, user)
+    if donat_id == "clan_head":
+        await _broadcast_clan_head(session, user)
     return {"ok": True, "circles": rec.circles}
 
 
@@ -236,6 +246,8 @@ async def remove_circle(session: AsyncSession, user: User, donat_id: str) -> dic
     await session.flush()
 
     await _full_rebuild(session, user)
+    if donat_id == "clan_head":
+        await _broadcast_clan_head(session, user)
     return {"ok": True, "circles": rec.circles}
 
 
@@ -248,6 +260,68 @@ async def get_user_circles(session: AsyncSession, user_id: int) -> dict[str, int
         )
     )
     return {r.donat_id: r.circles for r in rows.scalars().all()}
+
+
+async def _broadcast_clan_head(session: AsyncSession, user: User) -> None:
+    """Клан-вайд часть доната "Глава клана" — вызывается при add/remove_circle
+    покупателем, у которого точно есть клан на момент вызова."""
+    from app.services.clan import clan_service
+    clan = await clan_service.get_user_clan(session, user.id)
+    if not clan:
+        return
+    await recalc_clan_head_bonus(session, clan.id)
+
+
+async def recalc_clan_head_bonus(session: AsyncSession, clan_id: int) -> None:
+    """Клан-вайд часть доната "Глава клана": суммирует круги этого доната
+    у ВСЕХ ТЕКУЩИХ участников клана и транслирует +5%/круг силы/дохода/
+    вербовки/влияния каждому члену клана. Публичная — вызывается и отсюда
+    (после add/remove круга), и из clan/base.py (после ухода/исключения
+    участника — состав клана уже изменился к моменту вызова)."""
+    from app.models.clan import Clan, ClanMember
+    from app.services.business_service import business_service
+    from app.repositories.squad_repo import squad_repo
+
+    clan = await session.get(Clan, clan_id)
+    if not clan:
+        return
+
+    member_ids = (await session.execute(
+        select(ClanMember.user_id).where(ClanMember.clan_id == clan.id)
+    )).scalars().all()
+    if not member_ids:
+        clan.head_power_pct = 0
+        clan.head_income_pct = 0
+        clan.head_recruit_pct = 0
+        clan.head_influence_pct = 0
+        await session.flush()
+        return
+
+    rows = (await session.execute(
+        select(UserCircularDonat.circles).where(
+            UserCircularDonat.user_id.in_(member_ids),
+            UserCircularDonat.donat_id == "clan_head",
+        )
+    )).scalars().all()
+    total_circles = sum(rows)
+
+    clan.head_power_pct = 5 * total_circles
+    clan.head_income_pct = 5 * total_circles
+    clan.head_recruit_pct = 5 * total_circles
+    clan.head_influence_pct = 5 * total_circles
+    await session.flush()
+
+    members = (await session.execute(
+        select(User).where(User.id.in_(member_ids))
+    )).scalars().all()
+    for m in members:
+        m.clan_head_power_bonus = clan.head_power_pct
+        m.clan_head_income_bonus = clan.head_income_pct
+        m.clan_head_recruit_bonus = clan.head_recruit_pct
+        m.clan_head_influence_bonus = clan.head_influence_pct
+        await business_service._recalc_income(session, m)
+        await squad_repo.update_user_combat_power(session, m)
+    await session.flush()
 
 
 async def _full_rebuild(session: AsyncSession, user: User) -> None:

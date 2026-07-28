@@ -12,6 +12,8 @@ from app.models.user import User
 from app.models.clan import Clan, ClanMember, ClanInvite
 from app.services.clan import clan_service
 from app.utils.formatters import fmt_num
+from app.utils.menu_media import safe_edit
+from app.utils.keyboards.common import back_kb
 from datetime import datetime, timezone
 
 router = Router()
@@ -48,7 +50,9 @@ async def cb_clans_menu(cb: CallbackQuery, session: AsyncSession, user: User):
             await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
 
 
-async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, clan: Clan):
+async def _build_clan_main(session: AsyncSession, user: User, clan: Clan) -> tuple[str, "InlineKeyboardMarkup"]:
+    """Чистый билдер (текст, клавиатура) без CallbackQuery — переиспользуется
+    инлайн-хэндлером и быстрым меню (reply-клавиатура)."""
     members = await clan_service.get_clan_members(session, clan.id)
     is_owner = clan.owner_id == user.id
     now = datetime.now(timezone.utc)
@@ -167,7 +171,11 @@ async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, 
         f"{war_str}\n\n"
         f"Выбери действие:"
     )
-    kb = builder.as_markup()
+    return text, builder.as_markup()
+
+
+async def _show_clan_main(cb: CallbackQuery, session: AsyncSession, user: User, clan: Clan):
+    text, kb = await _build_clan_main(session, user, clan)
     if cb.message.photo:
         # Удаляем фото-сообщение и отправляем текстовое
         try:
@@ -204,17 +212,7 @@ async def cb_clan_members(cb: CallbackQuery, session: AsyncSession, user: User):
             f"  💪 {fmt_num(target.combat_power)}"
         )
 
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clans_menu"))
-
-    try:
-        await cb.message.edit_text(
-            "\n".join(lines),
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), back_kb("clans_menu"))
 
 # ── Создание ──────────────────────────────────────────────────────────────────
 
@@ -223,14 +221,11 @@ async def cb_clan_create(cb: CallbackQuery, state: FSMContext):
     await state.set_state(ClanCreateFSM.waiting_name)
     cancel_kb = InlineKeyboardBuilder()
     cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="clans_menu"))
-    try:
-        await cb.message.edit_text(
-            "🏯 <b>Создание клана</b>\n\nВведите название клана (2-32 символа):",
-            reply_markup=cancel_kb.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        "🏯 <b>Создание клана</b>\n\nВведите название клана (2-32 символа):",
+        cancel_kb.as_markup(),
+    )
 
 
 @router.message(ClanCreateFSM.waiting_name)
@@ -294,15 +289,12 @@ async def cb_clan_search(cb: CallbackQuery, session: AsyncSession, user: User, p
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clans_menu"))
 
-    try:
-        await cb.message.edit_text(
-            f"🔍 <b>Все кланы</b> (топ по силе)\n\n"
-            f"{'⏳ У вас есть активная заявка' if existing_request else 'Нажми на клан чтобы подать заявку:'}",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"🔍 <b>Все кланы</b> (топ по силе)\n\n"
+        f"{'⏳ У вас есть активная заявка' if existing_request else 'Нажми на клан чтобы подать заявку:'}",
+        builder.as_markup(),
+    )
 
 
 @router.callback_query(F.data.startswith("clan_view:"))
@@ -346,18 +338,15 @@ async def cb_clan_view(cb: CallbackQuery, session: AsyncSession, user: User):
     if clan.bonus_train_pct:  bonuses.append(f"🏋 +{clan.bonus_train_pct}% трен.")
     bonus_str = "\n" + " | ".join(bonuses) if bonuses else ""
 
-    try:
-        await cb.message.edit_text(
-            f"🏯 <b>{html.escape(clan.name)}</b>\n\n"
-            f"👥 Участников: {len(members)}/{clan.max_members}\n"
-            f"💪 Боевая мощь: {fmt_num(clan.combat_power)}\n"
-            f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin"
-            f"{bonus_str}",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"🏯 <b>{html.escape(clan.name)}</b>\n\n"
+        f"👥 Участников: {len(members)}/{clan.max_members}\n"
+        f"💪 Боевая мощь: {fmt_num(clan.combat_power)}\n"
+        f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin"
+        f"{bonus_str}",
+        builder.as_markup(),
+    )
 
 
 @router.callback_query(F.data.startswith("clan_request:"))

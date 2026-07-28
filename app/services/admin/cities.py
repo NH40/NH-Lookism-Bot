@@ -9,12 +9,13 @@ class AdminCitiesMixin:
     async def give_king_city(self, session: AsyncSession, user: User) -> dict:
         from app.models.city import City, District
         from app.repositories.city_repo import city_repo
+        from app.data.cities import DEFAULT_COUNTRY
 
-        sector = user.sector or "Н"
+        country = user.country or DEFAULT_COUNTRY
 
         result = await session.execute(
             select(City).where(
-                City.sector == sector,
+                City.country == country,
                 City.phase.in_(["gang", "king"]),
                 City.total_districts == 16,
             ).order_by(City.id)
@@ -35,13 +36,13 @@ class AdminCitiesMixin:
                 break
 
         if not target_city:
-            from app.data.cities import CITY_NAMES_BY_SECTOR
-            names = CITY_NAMES_BY_SECTOR.get(sector, [])
+            from app.data.cities import CITY_NAMES_BY_COUNTRY
+            names = CITY_NAMES_BY_COUNTRY.get(country, [])
             used_names = {c.name for c in all_cities}
             available = [n for n in names if n not in used_names]
-            name = random.choice(available) if available else f"Адм-{sector}-{len(all_cities)+1}"
+            name = random.choice(available) if available else f"Адм-{country}-{len(all_cities)+1}"
             target_city = City(
-                sector=sector, phase="king", type_id=3, name=name,
+                country=country, phase="king", type_id=3, name=name,
                 total_districts=16, captured_districts=0,
                 is_fully_captured=False, district_power_multiplier=1.0,
             )
@@ -92,6 +93,12 @@ class AdminCitiesMixin:
         )
         user.king_cities_count = 0
         user.fist_cities_count = 0
+
+        # Снимаем вассалитет — терять все города и оставаться сюзереном нелогично
+        await session.execute(
+            sa_update(User).where(User.suzerain_id == user.id).values(suzerain_id=None)
+        )
+        user.vassal_count = 0
         await session.flush()
 
         from app.services.business_service import business_service

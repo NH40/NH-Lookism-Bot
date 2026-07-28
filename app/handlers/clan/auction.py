@@ -12,6 +12,7 @@ from app.models.user import User
 from app.models.clan import ClanAuction
 from app.services.clan import clan_service
 from app.utils.formatters import fmt_num
+from app.utils.menu_media import safe_edit
 from datetime import datetime, timezone
 
 router = Router()
@@ -37,24 +38,21 @@ async def cb_clan_auction_info(cb: CallbackQuery, session: AsyncSession, user: U
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="🛒 Купить аукцион в магазине", callback_data="clan_shop_cat:auction"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clans_menu"))
-    try:
-        await cb.message.edit_text(
-            "🏛 <b>Клановый аукцион</b>\n\n"
-            "Сейчас активного аукциона нет.\n\n"
-            "Запустить аукцион можно через магазин клана:\n"
-            "• Обычный — 1.5M NHCoin\n"
-            "  └ Приз: до 7M монет, тикеты, статисты, фрагменты пути\n"
-            "• Редкий — 7.5M NHCoin\n"
-            "  └ Приз: до 35M монет, персонажи, мастерство\n"
-            "• Эпический — 20M NHCoin\n"
-            "  └ Приз: до 150M монет, LR/MP статисты, UI-фрагменты\n\n"
-            "Победитель получает приз, остальные возвращают ставки.\n"
-            "Только участники клана могут делать ставки.",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        "🏛 <b>Клановый аукцион</b>\n\n"
+        "Сейчас активного аукциона нет.\n\n"
+        "Запустить аукцион можно через магазин клана:\n"
+        "• Обычный — 1.5M NHCoin\n"
+        "  └ Приз: до 7M монет, тикеты, статисты, фрагменты пути\n"
+        "• Редкий — 7.5M NHCoin\n"
+        "  └ Приз: до 35M монет, персонажи, мастерство\n"
+        "• Эпический — 20M NHCoin\n"
+        "  └ Приз: до 150M монет, LR/MP статисты, UI-фрагменты\n\n"
+        "Победитель получает приз, остальные возвращают ставки.\n"
+        "Только участники клана могут делать ставки.",
+        builder.as_markup(),
+    )
 
 
 @router.callback_query(F.data.startswith("clan_auction:"))
@@ -125,14 +123,7 @@ async def cb_clan_auction(cb: CallbackQuery, session: AsyncSession, user: User, 
     lines.append(f"")
     lines.append(status)
 
-    try:
-        await cb.message.edit_text(
-            "\n".join(lines),
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
 
 
 @router.callback_query(F.data.startswith("clan_bid:"))
@@ -152,18 +143,15 @@ async def cb_clan_bid(cb: CallbackQuery, session: AsyncSession, user: User, stat
     cancel_kb.row(InlineKeyboardButton(
         text="❌ Отмена", callback_data=f"clan_auction:{auction_id}"
     ))
-    try:
-        await cb.message.edit_text(
-            f"💰 <b>Сделать ставку</b>\n\n"
-            f"Текущая ставка: {fmt_num(auction.current_bid)} NHCoin\n"
-            f"Минимальная ставка: {fmt_num(min_bid)} NHCoin\n"
-            f"У вас: {fmt_num(user.nh_coins)} NHCoin\n\n"
-            f"Введите сумму ставки:",
-            reply_markup=cancel_kb.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"💰 <b>Сделать ставку</b>\n\n"
+        f"Текущая ставка: {fmt_num(auction.current_bid)} NHCoin\n"
+        f"Минимальная ставка: {fmt_num(min_bid)} NHCoin\n"
+        f"У вас: {fmt_num(user.nh_coins)} NHCoin\n\n"
+        f"Введите сумму ставки:",
+        cancel_kb.as_markup(),
+    )
 
 
 @router.message(ClanAuctionFSM.waiting_bid)

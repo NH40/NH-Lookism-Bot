@@ -8,6 +8,7 @@ from app.services.cooldown_service import cooldown_service
 from app.repositories.city_repo import city_repo
 from app.repositories.user_repo import user_repo
 from app.data.squad import ATTACK_WIN_INFLUENCE_BONUS
+from app.services.business_service import business_service
 from app.services.game.base import GameBase, FIST_MIN_CITIES
 from app.services.game.utils import notify_pvp_attack
 from app.utils.truce import is_truce_active
@@ -21,12 +22,6 @@ class GameKingService(GameBase):
         if user.phase != "king":
             return {"ok": False, "reason": "Только для фазы Короля"}
 
-        # Принудительное повышение если уже >= 10 городов
-        real_count = await self._count_my_king_cities(session, user.id)
-        if real_count >= 10:
-            user.king_cities_count = real_count
-            return await self._promote_to_fist(session, user)
-
         if is_truce_active(user):
             return {"ok": False, "reason": "Во время перемирия нельзя атаковать"}
 
@@ -39,8 +34,9 @@ class GameKingService(GameBase):
         if not city:
             return {"ok": False, "reason": "Город не найден"}
 
-        if city.sector != (user.sector or "Н"):
-            return {"ok": False, "reason": "Этот город не в твоём секторе"}
+        from app.data.cities import DEFAULT_COUNTRY
+        if city.country != (user.country or DEFAULT_COUNTRY):
+            return {"ok": False, "reason": "Этот город не в твоей стране"}
 
         # ── Определяем доминирующего игрока ──────────────────────────────
         dominant_id = await self._get_city_dominant_player(session, city_id, user.id)
@@ -114,6 +110,8 @@ class GameKingService(GameBase):
                         break
                     d.owner_id = user.id
                     d.is_captured = True
+                    if d.income_owner_id is None:
+                        d.income_owner_id = user.id
                     city.captured_districts += 1
                     districts_gained += 1
             else:
@@ -138,15 +136,13 @@ class GameKingService(GameBase):
                     stolen = stolen_r.scalars().all()
                     for d in stolen:
                         d.owner_id = user.id
+                        if d.income_owner_id is None:
+                            d.income_owner_id = user.id
                         districts_gained += 1
                     if stolen:
-                        from app.repositories.building_repo import building_repo
-                        from app.services.business_service import business_service
-                        await building_repo.deactivate_buildings_on_district_loss(
-                            session, steal_from, len(stolen)
-                        )
                         steal_user = await user_repo.get_by_id(session, steal_from)
                         if steal_user:
+                            await business_service.apply_capture_influence(session, steal_user, -len(stolen))
                             await business_service._recalc_income(session, steal_user)
 
             # Синхронизируем captured_districts
@@ -158,19 +154,30 @@ class GameKingService(GameBase):
             ) or 0
             city.captured_districts = min(real_captured, city.total_districts)
 
-            if districts_gained > 0 and not city.owner_id:
-                city.owner_id = user.id
-
             user.total_wins += 1
             user.influence += ATTACK_WIN_INFLUENCE_BONUS["king"]
+            if districts_gained > 0:
+                await business_service.apply_capture_influence(session, user, districts_gained)
+                await business_service._recalc_income(session, user)
+
+            title_battle = None
+            if districts_gained > 0:
+                title_battle = await self._check_and_resolve_city_ownership(session, user, city)
+            if title_battle and title_battle["loser_id"] == user.id:
+                await session.flush()
+                return {
+                    "ok": True, "win": True, "title_battle": True, "destroyed": True,
+                    "message": "💀 Вы захватили город, но проиграли битву за трон и потеряли всё!",
+                }
 
             my_in_city = await self._get_my_districts_in_city(session, user.id, city_id)
             my_cities_count = await self._count_my_king_cities(session, user.id)
             user.king_cities_count = my_cities_count
             await session.flush()
 
-            if my_cities_count >= 10:
-                return await self._promote_to_fist(session, user)
+            emperor_result = await self._check_emperor_eligibility(session, user)
+            if emperor_result:
+                return emperor_result
 
             await self._handle_attack_cd(session, user, cd_key, "king")
             await session.flush()
@@ -225,31 +232,46 @@ class GameKingService(GameBase):
             taken = 0
             for d in defender_districts:
                 d.owner_id = attacker.id
+                if d.income_owner_id is None:
+                    d.income_owner_id = attacker.id
                 taken += 1
 
             if taken > 0:
-                from app.repositories.building_repo import building_repo
-                from app.services.business_service import business_service
-                await building_repo.deactivate_buildings_on_district_loss(
-                    session, defender.id, taken
-                )
+                await business_service.apply_capture_influence(session, defender, -taken)
                 await business_service._recalc_income(session, defender)
+                await business_service.apply_capture_influence(session, attacker, taken)
+                await business_service._recalc_income(session, attacker)
 
             attacker.total_wins += 1
             attacker.influence += ATTACK_WIN_INFLUENCE_BONUS["king"]
+
+            title_battle = None
+            if taken > 0:
+                title_battle = await self._check_and_resolve_city_ownership(session, attacker, city)
+            if title_battle and title_battle["loser_id"] == attacker.id:
+                await session.flush()
+                return {
+                    "ok": True, "win": True, "title_battle": True, "destroyed": True,
+                    "message": "💀 Вы забрали районы, но проиграли битву за трон и потеряли всё!",
+                }
+
             my_cities_count = await self._count_my_king_cities(session, attacker.id)
             attacker.king_cities_count = my_cities_count
 
-            def_cities = await self._count_my_king_cities(session, defender.id)
-            defender.king_cities_count = def_cities
-            if def_cities == 0:
-                await self._destroy_king(session, defender)
+            # defender мог быть уничтожен battle'ом выше (если он держал трон и проиграл) —
+            # тогда его прогресс уже сброшен _destroy_king внутри _resolve_city_title_battle
+            if not (title_battle and title_battle["loser_id"] == defender.id):
+                def_cities = await self._count_my_king_cities(session, defender.id)
+                defender.king_cities_count = def_cities
+                if def_cities == 0:
+                    await self._destroy_king(session, defender)
 
             await notify_pvp_attack(attacker, defender, True, "king")
             await session.flush()
 
-            if my_cities_count >= 10:
-                return await self._promote_to_fist(session, attacker)
+            emperor_result = await self._check_emperor_eligibility(session, attacker)
+            if emperor_result:
+                return emperor_result
 
             my_in_city = await self._get_my_districts_in_city(
                 session, attacker.id, city.id

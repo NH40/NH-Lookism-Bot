@@ -455,7 +455,10 @@ class RaidService:
             return {"ok": False, "reason": "Сначала выбери путь в Навыках!"}
 
         from app.services.fame_service import fame_service
-        cost = int(PATH_SPIN_CRAFT_COST * await fame_service.get_craft_cost_multiplier(user))
+        from app.utils.formatters import apply_biz_discount
+        cost = apply_biz_discount(
+            user, int(PATH_SPIN_CRAFT_COST * await fame_service.get_craft_cost_multiplier(user))
+        )
 
         if user.path_fragments < cost:
             return {
@@ -488,7 +491,10 @@ class RaidService:
             }
 
         from app.services.fame_service import fame_service
-        cost = int(UI_CRAFT_COST[target_level] * await fame_service.get_craft_cost_multiplier(user))
+        from app.utils.formatters import apply_biz_discount
+        cost = apply_biz_discount(
+            user, int(UI_CRAFT_COST[target_level] * await fame_service.get_craft_cost_multiplier(user))
+        )
 
         if user.ui_fragments < cost:
             return {
@@ -528,7 +534,10 @@ class RaidService:
             return {"ok": False, "reason": "Уровень 6 — только через донат"}
 
         from app.services.fame_service import fame_service
-        cost  = int(MG_LEVEL_COSTS[current] * await fame_service.get_craft_cost_multiplier(user))  # индекс = текущий уровень (0 = стоимость ур.1)
+        from app.utils.formatters import apply_biz_discount
+        cost = apply_biz_discount(
+            user, int(MG_LEVEL_COSTS[current] * await fame_service.get_craft_cost_multiplier(user))
+        )  # индекс = текущий уровень (0 = стоимость ур.1)
         frags = getattr(user, "alchemy_fragments", 0)
         if frags < cost:
             return {

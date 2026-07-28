@@ -9,6 +9,7 @@ from app.models.user import User
 from app.models.poker import PokerTable, PokerPlayer
 from app.services.bank.casino.poker_render import (
     render_table_header, render_seats, render_action_prompt, render_hole_cards, render_hand_result,
+    render_your_combo_line,
 )
 
 
@@ -16,6 +17,13 @@ def _display_name(u: User | None) -> str:
     if not u:
         return "Игрок"
     return u.username or u.full_name
+
+
+def _utility_row(builder: InlineKeyboardBuilder, table_id: int) -> None:
+    builder.row(
+        InlineKeyboardButton(text="❓ Комбинации", callback_data=f"poker_help:{table_id}"),
+        InlineKeyboardButton(text="🚪 Уйти со стола", callback_data=f"poker_leave:{table_id}"),
+    )
 
 
 def _action_kb(table_id: int, table: PokerTable, actor: PokerPlayer) -> InlineKeyboardMarkup:
@@ -32,6 +40,15 @@ def _action_kb(table_id: int, table: PokerTable, actor: PokerPlayer) -> InlineKe
             InlineKeyboardButton(text="✅ Чек", callback_data=f"poker_act:{table_id}:check"),
         )
     builder.row(InlineKeyboardButton(text="💰 Рейз / Ва-банк", callback_data=f"poker_bet_menu:{table_id}"))
+    _utility_row(builder, table_id)
+    return builder.as_markup()
+
+
+def _waiting_kb(table_id: int) -> InlineKeyboardMarkup:
+    """Клавиатура для игроков, чей ход сейчас не наступил — раньше у них не
+    было вообще никаких кнопок, только пришедший текст."""
+    builder = InlineKeyboardBuilder()
+    _utility_row(builder, table_id)
     return builder.as_markup()
 
 
@@ -41,6 +58,29 @@ async def users_by_id(session: AsyncSession, players: list[PokerPlayer]) -> dict
         return {}
     result = await session.execute(select(User).where(User.id.in_(ids)))
     return {u.id: u for u in result.scalars().all()}
+
+
+def build_player_view(
+    table: PokerTable, players: list[PokerPlayer], users: dict, viewer: PokerPlayer
+) -> tuple[str, InlineKeyboardMarkup]:
+    """Собирает текст+клавиатуру текущего состояния стола для конкретного
+    игрока — переиспользуется и рассылкой событий, и кнопкой "◀️ Назад к столу"
+    из экрана справки по комбинациям."""
+    header = render_table_header(table)
+    seats = render_seats(table, players, users, viewer_id=viewer.user_id)
+    hole = render_hole_cards(viewer)
+    text = f"{header}\n\n{seats}\n\nВаши карты: {hole}" + render_your_combo_line(viewer, table)
+
+    is_turn = table.status == "active" and viewer.seat_index == table.current_seat and viewer.status == "active"
+    if is_turn:
+        text += "\n\n" + render_action_prompt(table, viewer)
+        kb = _action_kb(table.id, table, viewer)
+    else:
+        current_actor = next((pp for pp in players if pp.seat_index == table.current_seat), None)
+        actor_name = _display_name(users.get(current_actor.user_id)) if current_actor else "?"
+        text += f"\n\n⏳ Ход: {actor_name}"
+        kb = _waiting_kb(table.id)
+    return text, kb
 
 
 async def notify_event(bot: Bot, session: AsyncSession, event: dict) -> None:
@@ -58,9 +98,9 @@ async def notify_event(bot: Bot, session: AsyncSession, event: dict) -> None:
             if not u or p.status == "folded":
                 continue
             header = render_table_header(table)
-            seats = render_seats(table, players, users)
+            seats = render_seats(table, players, users, viewer_id=p.user_id)
             hole = render_hole_cards(p)
-            text = f"{header}\n\n{seats}\n\nВаши карты: {hole}"
+            text = f"{header}\n\n{seats}\n\nВаши карты: {hole}" + render_your_combo_line(p, table)
 
             is_turn = table.status == "active" and p.seat_index == table.current_seat and p.status == "active"
             if is_turn:
@@ -68,7 +108,7 @@ async def notify_event(bot: Bot, session: AsyncSession, event: dict) -> None:
                 kb = _action_kb(table.id, table, p)
             else:
                 text += f"\n\n⏳ Ход: {actor_name}"
-                kb = None
+                kb = _waiting_kb(table.id)
             try:
                 await bot.send_message(u.tg_id, text, reply_markup=kb, parse_mode="HTML")
             except Exception:
@@ -80,9 +120,9 @@ async def notify_event(bot: Bot, session: AsyncSession, event: dict) -> None:
             u = users.get(p.user_id)
             if u:
                 header = render_table_header(table)
-                seats = render_seats(table, players, users)
+                seats = render_seats(table, players, users, viewer_id=p.user_id)
                 hole = render_hole_cards(p)
-                text = f"{header}\n\n{seats}\n\nВаши карты: {hole}\n\n" + render_action_prompt(table, p)
+                text = f"{header}\n\n{seats}\n\nВаши карты: {hole}" + render_your_combo_line(p, table) + "\n\n" + render_action_prompt(table, p)
                 kb = _action_kb(table.id, table, p)
                 try:
                     await bot.send_message(u.tg_id, text, reply_markup=kb, parse_mode="HTML")
@@ -100,14 +140,36 @@ async def notify_event(bot: Bot, session: AsyncSession, event: dict) -> None:
                     pass
 
     elif ev == "hand_finished":
-        text = render_hand_result(table, players, users, event.get("hands", {}), event.get("net_changes", {}))
-        for p in players:
-            u = users.get(p.user_id)
-            if u:
-                try:
-                    await bot.send_message(u.tg_id, text, parse_mode="HTML")
-                except Exception:
-                    pass
+        hands = event.get("hands", {})
+        net_changes = event.get("net_changes", {})
+        continuation = event.get("continuation") or {}
+        closing_note = ""
+        if continuation.get("event") == "table_closed":
+            closing_note = "\n\n🚪 <b>Стол закрыт — за ним осталось меньше 2 игроков со стеком. Все стеки выведены на баланс.</b>"
+
+        pot = event.get("pot", table.pot)
+        community_cards_json = event.get("community_cards", table.community_cards)
+        seat_order = event.get("seat_order") or [p.user_id for p in sorted(players, key=lambda x: x.seat_index)]
+        snapshot = event.get("snapshot") or {p.user_id: {"status": p.status, "hole_cards": p.hole_cards} for p in players}
+        for uid in seat_order:
+            u = users.get(uid)
+            if not u:
+                continue
+            text = render_hand_result(
+                table.id, seat_order, snapshot, users, hands, net_changes, pot, community_cards_json,
+                viewer_id=uid,
+            ) + closing_note
+            try:
+                await bot.send_message(u.tg_id, text, parse_mode="HTML")
+            except Exception:
+                pass
+
+        if continuation.get("event") == "next_hand":
+            await notify_event(bot, session, {
+                "event": "hand_started",
+                "table": continuation["table"],
+                "players": continuation["players"],
+            })
 
     elif ev == "table_cancelled":
         for p in players:

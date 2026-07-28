@@ -11,6 +11,7 @@ from app.models.user import User
 from app.models.clan import Clan, ClanInvite, ClanMember
 from app.services.clan import clan_service
 from app.utils.formatters import fmt_num
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -71,16 +72,13 @@ async def cb_clan_invite(cb: CallbackQuery, session: AsyncSession, user: User):
     members = await clan_service.get_clan_members(session, clan.id)
     requests_str = f"\n📋 Входящих заявок: <b>{len(requests)}</b>" if requests else ""
 
-    try:
-        await cb.message.edit_text(
-            f"📨 <b>Управление участниками</b>\n\n"
-            f"👥 В клане: {len(members)}/{clan.max_members}"
-            f"{requests_str}",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"📨 <b>Управление участниками</b>\n\n"
+        f"👥 В клане: {len(members)}/{clan.max_members}"
+        f"{requests_str}",
+        builder.as_markup(),
+    )
 
 
 @router.callback_query(F.data == "clan_invite_input")
@@ -88,13 +86,11 @@ async def cb_clan_invite_input(cb: CallbackQuery, state: FSMContext):
     await state.set_state(InviteFSM.waiting_username)
     cancel_kb = InlineKeyboardBuilder()
     cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="clan_invite"))
-    try:
-        await cb.message.edit_text(
-            "📨 Введите @username игрока которого хотите пригласить:",
-            reply_markup=cancel_kb.as_markup(),
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        "📨 Введите @username игрока которого хотите пригласить:",
+        cancel_kb.as_markup(),
+    )
 
 
 @router.message(InviteFSM.waiting_username)

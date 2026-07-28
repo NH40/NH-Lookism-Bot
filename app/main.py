@@ -25,6 +25,7 @@ from app.handlers import quests
 from app.handlers import horse_shop
 from app.handlers.clan import router as clan_router
 from app.handlers import fame as fame_handler
+from app.handlers import quick_menu
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,6 +34,26 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 bot: Bot = None
+
+HEARTBEAT_PATH = "/app/heartbeat"
+HEARTBEAT_INTERVAL_SECONDS = 15
+
+
+async def _heartbeat_loop():
+    """Пишет текущее время в файл каждые 15с, пока крутится event loop.
+    Если процесс зависнет (event loop заблокирован где-то синхронно или
+    в дедлоке), этот цикл тоже перестанет обновлять файл — именно на
+    "протух ли heartbeat" смотрит HEALTHCHECK в docker-compose, чтобы
+    отличить реально зависший процесс от просто тихого (нет сообщений)."""
+    import time
+    while True:
+        try:
+            with open(HEARTBEAT_PATH, "w") as f:
+                f.write(str(int(time.time())))
+        except Exception:
+            logger.warning("heartbeat write failed", exc_info=True)
+        await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
+
 
 async def main():
     global bot
@@ -67,6 +88,11 @@ async def main():
     # pre_checkout_query — нужен DbSession для записи (UserLoader не нужен, ответ быстрый)
     dp.pre_checkout_query.middleware(DbSessionMiddleware())
 
+    # quick_menu — ПЕРВЫЙ роутер: точный текст reply-кнопки быстрого меню
+    # должен перехватывать нажатие раньше любого активного FSM-хэндлера
+    # (например, ввода суммы) в остальных роутерах ниже.
+    dp.include_router(quick_menu.router)
+
     dp.include_router(common.router)
     dp.include_router(attack.router)
     
@@ -98,6 +124,8 @@ async def main():
     scheduler.start()
     logger.info("Scheduler started")
 
+    heartbeat_task = asyncio.create_task(_heartbeat_loop())
+
     logger.info("Starting bot polling...")
     try:
         await dp.start_polling(
@@ -107,6 +135,7 @@ async def main():
             retry_after=5,
         )
     finally:
+        heartbeat_task.cancel()
         scheduler.shutdown()
         await bot.session.close()
         logger.info("Bot stopped")
@@ -124,37 +153,40 @@ async def init_fame():
 async def init_cities():
     from app.database import AsyncSessionFactory
     from app.models.city import City
-    from app.data.cities import SECTORS, CITY_TYPES, CITY_NAMES_BY_SECTOR
+    from app.data.cities import COUNTRIES, GANG_CITY_TYPES, CITY_NAMES_BY_COUNTRY
     from sqlalchemy import select, func
 
     async with AsyncSessionFactory() as session:
         async with session.begin():
-            count = await session.scalar(select(func.count(City.id)))
+            count = await session.scalar(
+                select(func.count(City.id)).where(
+                    City.phase == "gang", City.country.isnot(None)
+                )
+            )
             if count and count > 0:
-                logger.info(f"Cities already initialized: {count}")
+                logger.info(f"Gang cities already initialized: {count}")
                 return
 
-            logger.info("Creating cities...")
+            logger.info("Creating gang cities...")
             total = 0
-            for sector in SECTORS:
-                names = CITY_NAMES_BY_SECTOR.get(sector, [])
+            for c in COUNTRIES:
+                names = CITY_NAMES_BY_COUNTRY.get(c.code, [])
                 name_idx = 0
-                for phase in ["gang", "king", "fist"]:
-                    for city_type in CITY_TYPES:
-                        for i in range(10):
-                            name = names[name_idx % len(names)] if names else f"Город {name_idx}"
-                            name_idx += 1
-                            city = City(
-                                sector=sector,
-                                phase=phase,
-                                type_id=city_type.type_id,
-                                name=f"{name} {city_type.type_id}-{i+1}",
-                                total_districts=city_type.total_districts,
-                            )
-                            session.add(city)
-                            total += 1
+                for city_type in GANG_CITY_TYPES:
+                    for i in range(10):
+                        name = names[name_idx % len(names)] if names else f"Город {name_idx}"
+                        name_idx += 1
+                        city = City(
+                            country=c.code,
+                            phase="gang",
+                            type_id=city_type.type_id,
+                            name=name,
+                            total_districts=city_type.total_districts,
+                        )
+                        session.add(city)
+                        total += 1
 
-            logger.info(f"Created {total} cities")
+            logger.info(f"Created {total} gang cities")
 
 
 if __name__ == "__main__":

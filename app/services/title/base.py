@@ -102,17 +102,21 @@ class TitleService:
         for title_id in title_ids:
             await apply_title_bonus(session, user, title_id)
 
-        owned = set(title_ids)
-        for s in DONAT_SETS:
-            titles_in_set = [t.title_id for t in DONAT_TITLES if t.set_id == s.set_id]
-            if all(tid in owned for tid in titles_in_set):
-                apply_set_bonus(user, s.set_id)
-
         await rebuild_base_bonuses(session, user)
 
         # Круговые донаты: пересчитываем поверх готовых титульных бонусов
         from app.services.circular_donat_service import rebuild_circular_bonuses
         await rebuild_circular_bonuses(session, user)
+
+        # Бонус сета применяется ПОСЛЕДНИМ — "genius_maker" (+20% ко всем баффам
+        # гениев) домножает income_bonus_percent/train_bonus_percent, которые
+        # должны уже включать вклад мастерства и круговых донатов, иначе эти
+        # добавки просто не попадают под множитель (баг, найденный аудитом).
+        owned = set(title_ids)
+        for s in DONAT_SETS:
+            titles_in_set = [t.title_id for t in DONAT_TITLES if t.set_id == s.set_id]
+            if all(tid in owned for tid in titles_in_set):
+                apply_set_bonus(user, s.set_id)
 
         from app.services.business_service import business_service
         await business_service._recalc_income(session, user)

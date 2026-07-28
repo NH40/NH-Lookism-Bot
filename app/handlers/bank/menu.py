@@ -8,6 +8,7 @@ from app.models.user import User
 from app.services.bank.credits_service import credits_service
 from app.services.bank.investments_service import investments_service, DURATION_OPTIONS
 from app.utils.formatters import fmt_num
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -49,8 +50,5 @@ def bank_menu_kb() -> "InlineKeyboardMarkup":
 @router.callback_query(F.data == "bank_menu")
 async def cb_bank_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     text = await _bank_menu_text(session, user)
-    try:
-        await cb.message.edit_text(text, reply_markup=bank_menu_kb(), parse_mode="HTML")
-    except Exception:
-        pass
+    await safe_edit(cb, text, bank_menu_kb())
     await cb.answer()

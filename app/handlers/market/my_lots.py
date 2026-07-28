@@ -10,6 +10,7 @@ from app.models.user import User
 from app.models.market import MarketListing
 from app.services.market_service import market_service
 from app.utils.formatters import fmt_num
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -31,15 +32,12 @@ async def cb_market_my_listings(cb: CallbackQuery, session: AsyncSession, user: 
                 callback_data=f"market_my_item:{listing.id}"
             ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_seller"))
-    try:
-        await cb.message.edit_text(
-            f"📦 <b>Мои товары</b>\n\n"
-            + (f"У вас нет активных товаров." if not listings else f"Активных: {len(listings)}/5"),
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"📦 <b>Мои товары</b>\n\n"
+        + (f"У вас нет активных товаров." if not listings else f"Активных: {len(listings)}/5"),
+        builder.as_markup(),
+    )
 
 
 @router.callback_query(F.data.startswith("market_my_item:"))
@@ -74,19 +72,16 @@ async def cb_market_my_item(cb: CallbackQuery, session: AsyncSession, user: User
     if meta.get("power"):
         meta_str += f"\nМощь: <b>{fmt_num(meta['power'])}</b>"
 
-    try:
-        await cb.message.edit_text(
-            f"📦 <b>Мой товар #{listing.id}</b>\n\n"
-            f"Тип: {label}\n"
-            f"Количество: <b>{listing.item_amount}</b>"
-            f"{meta_str}\n\n"
-            f"Цена: <b>{fmt_num(listing.price)} NHCoin</b>\n"
-            f"Статус: {'🟢 Активен' if not listing.is_sold else '✅ Продан'}",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"📦 <b>Мой товар #{listing.id}</b>\n\n"
+        f"Тип: {label}\n"
+        f"Количество: <b>{listing.item_amount}</b>"
+        f"{meta_str}\n\n"
+        f"Цена: <b>{fmt_num(listing.price)} NHCoin</b>\n"
+        f"Статус: {'🟢 Активен' if not listing.is_sold else '✅ Продан'}",
+        builder.as_markup(),
+    )
 
 
 @router.callback_query(F.data.startswith("market_cancel:"))

@@ -18,6 +18,7 @@ from app.services.bank.casino.common import CASINO_RESOURCES, get_balance
 from app.constants.market import ITEM_TYPES
 from app.utils.formatters import fmt_num, fmt_ttl
 from app.utils.keyboards.common import back_kb
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -47,16 +48,13 @@ async def cb_market_auction_menu(cb: CallbackQuery, session: AsyncSession, user:
     builder.row(InlineKeyboardButton(text="🔨 Создать аукцион", callback_data="market_create"))
     builder.row(InlineKeyboardButton(text="📦 Мои аукционы", callback_data="market_my_auctions"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_menu"))
-    try:
-        await cb.message.edit_text(
-            "🔨 <b>Аукционы</b>\n\n"
-            "Минимальная ставка + время — выигрывает тот, кто предложит больше.\n"
-            "Комиссия системы: 10% с выигрышной ставки.",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        "🔨 <b>Аукционы</b>\n\n"
+        "Минимальная ставка + время — выигрывает тот, кто предложит больше.\n"
+        "Комиссия системы: 10% с выигрышной ставки.",
+        builder.as_markup(),
+    )
     await cb.answer()
 
 
@@ -68,14 +66,7 @@ async def cb_market_auction_browse(cb: CallbackQuery, session: AsyncSession, use
     for item_type, label in ITEM_TYPES.items():
         builder.row(InlineKeyboardButton(text=label, callback_data=f"market_auction_cat:{item_type}:0"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_auction_menu"))
-    try:
-        await cb.message.edit_text(
-            "📋 <b>Активные аукционы</b>\n\nВыбери категорию:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, "📋 <b>Активные аукционы</b>\n\nВыбери категорию:", builder.as_markup())
     await cb.answer()
 
 
@@ -94,14 +85,7 @@ async def cb_market_auction_cat(cb: CallbackQuery, session: AsyncSession, user: 
 
     if not auctions:
         builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_auction_browse"))
-        try:
-            await cb.message.edit_text(
-                f"🔨 <b>{label}</b>\n\nАукционов нет.",
-                reply_markup=builder.as_markup(),
-                parse_mode="HTML",
-            )
-        except Exception:
-            pass
+        await safe_edit(cb, f"🔨 <b>{label}</b>\n\nАукционов нет.", builder.as_markup())
         return
 
     for auction in auctions:
@@ -121,14 +105,7 @@ async def cb_market_auction_cat(cb: CallbackQuery, session: AsyncSession, user: 
         builder.row(*nav)
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_auction_browse"))
 
-    try:
-        await cb.message.edit_text(
-            f"🔨 <b>{label}</b>\n\nСтр. {page+1}",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, f"🔨 <b>{label}</b>\n\nСтр. {page+1}", builder.as_markup())
 
 
 def _meta_str(item_type: str, meta: dict) -> str:
@@ -180,20 +157,17 @@ async def _render_auction_item(cb: CallbackQuery, session: AsyncSession, user: U
         if auction.current_bid else f"Ставок ещё нет (мин. {fmt_num(auction.min_bid)} {res_label})"
     )
 
-    try:
-        await cb.message.edit_text(
-            f"🔨 <b>Аукцион #{auction.id}</b>\n\n"
-            f"Тип: {label}\n"
-            f"Количество: <b>{auction.item_amount}</b>"
-            f"{_meta_str(auction.item_type, meta)}\n\n"
-            f"{bid_line}\n"
-            f"⏳ Осталось: {_ttl(auction)}\n"
-            f"👤 Продавец: {seller_name}",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"🔨 <b>Аукцион #{auction.id}</b>\n\n"
+        f"Тип: {label}\n"
+        f"Количество: <b>{auction.item_amount}</b>"
+        f"{_meta_str(auction.item_type, meta)}\n\n"
+        f"{bid_line}\n"
+        f"⏳ Осталось: {_ttl(auction)}\n"
+        f"👤 Продавец: {seller_name}",
+        builder.as_markup(),
+    )
     await cb.answer()
 
 
@@ -217,14 +191,7 @@ async def cb_market_auction_bid_menu(cb: CallbackQuery, session: AsyncSession, u
     ))
     builder.row(InlineKeyboardButton(text="✏️ Своя сумма", callback_data=f"market_auction_bid_custom:{auction_id}"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"market_auction_item:{auction_id}"))
-    try:
-        await cb.message.edit_text(
-            f"💰 Ставка в {res_label} (мин. {fmt_num(min_next)}):",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, f"💰 Ставка в {res_label} (мин. {fmt_num(min_next)}):", builder.as_markup())
     await cb.answer()
 
 
@@ -261,16 +228,7 @@ async def cb_market_auction_bid_custom(cb: CallbackQuery, state: FSMContext):
     auction_id = int(cb.data.split(":")[1])
     await state.set_state(AuctionBidFSM.waiting_amount)
     await state.update_data(auction_id=auction_id)
-    cancel_kb = InlineKeyboardBuilder()
-    cancel_kb.row(InlineKeyboardButton(text="◀️ Отмена", callback_data=f"market_auction_item:{auction_id}"))
-    try:
-        await cb.message.edit_text(
-            "✏️ Введи сумму ставки:",
-            reply_markup=cancel_kb.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, "✏️ Введи сумму ставки:", back_kb(f"market_auction_item:{auction_id}"))
     await cb.answer()
 
 
@@ -328,15 +286,12 @@ async def cb_market_my_auctions(cb: CallbackQuery, session: AsyncSession, user: 
                 callback_data=f"market_my_auction:{auction.id}",
             ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_auction_menu"))
-    try:
-        await cb.message.edit_text(
-            "📦 <b>Мои аукционы</b>\n\n"
-            + (f"Активных: {len(auctions)}" if auctions else "У вас нет активных аукционов."),
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        "📦 <b>Мои аукционы</b>\n\n"
+        + (f"Активных: {len(auctions)}" if auctions else "У вас нет активных аукционов."),
+        builder.as_markup(),
+    )
     await cb.answer()
 
 
@@ -362,19 +317,16 @@ async def cb_market_my_auction(cb: CallbackQuery, session: AsyncSession, user: U
         if auction.current_bid else f"Ставок ещё нет (мин. {fmt_num(auction.min_bid)} {res_label})"
     )
 
-    try:
-        await cb.message.edit_text(
-            f"📦 <b>Мой аукцион #{auction.id}</b>\n\n"
-            f"Тип: {label}\n"
-            f"Количество: <b>{auction.item_amount}</b>"
-            f"{_meta_str(auction.item_type, meta)}\n\n"
-            f"{bid_line}\n"
-            f"⏳ Осталось: {_ttl(auction)}",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"📦 <b>Мой аукцион #{auction.id}</b>\n\n"
+        f"Тип: {label}\n"
+        f"Количество: <b>{auction.item_amount}</b>"
+        f"{_meta_str(auction.item_type, meta)}\n\n"
+        f"{bid_line}\n"
+        f"⏳ Осталось: {_ttl(auction)}",
+        builder.as_markup(),
+    )
     await cb.answer()
 
 

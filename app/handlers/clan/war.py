@@ -11,6 +11,7 @@ from app.models.user import User
 from app.models.clan import Clan, ClanWar
 from app.services.clan import clan_service
 from app.utils.formatters import fmt_num
+from app.utils.menu_media import safe_edit
 from datetime import datetime, timezone
 
 router = Router()
@@ -50,20 +51,17 @@ async def cb_clan_war(cb: CallbackQuery, session: AsyncSession, user: User):
     ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clans_menu"))
 
-    try:
-        await cb.message.edit_text(
-            "⚔️ <b>Война кланов</b>\n\n"
-            "⚔️ <b>Война вооружения</b> — у кого больше вырастет боевая мощь за 6 часов\n"
-            "  Победитель получает 10% от своего прироста в казну\n\n"
-            "💰 <b>Война богатств</b> — у кого будет больше прироста казны за 4 часа\n"
-            "  Победитель получает 10% от своего прироста в казну\n\n"
-            "Проигравший тоже получает 5% от прироста.\n\n"
-            "Выбери тип войны:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        "⚔️ <b>Война кланов</b>\n\n"
+        "⚔️ <b>Война вооружения</b> — у кого больше вырастет боевая мощь за 6 часов\n"
+        "  Победитель получает 10% от своего прироста в казну\n\n"
+        "💰 <b>Война богатств</b> — у кого будет больше прироста казны за 4 часа\n"
+        "  Победитель получает 10% от своего прироста в казну\n\n"
+        "Проигравший тоже получает 5% от прироста.\n\n"
+        "Выбери тип войны:",
+        builder.as_markup(),
+    )
 
 
 @router.callback_query(F.data.startswith("clan_war_type:"))
@@ -101,14 +99,11 @@ async def cb_clan_war_type(cb: CallbackQuery, session: AsyncSession, user: User,
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clan_war"))
 
     type_name = "вооружения" if war_type == "power" else "богатств"
-    try:
-        await cb.message.edit_text(
-            f"⚔️ <b>Война {type_name}</b>\n\nВыбери противника:\n🔒 — уже в войне",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"⚔️ <b>Война {type_name}</b>\n\nВыбери противника:\n🔒 — уже в войне",
+        builder.as_markup(),
+    )
 
 
 @router.callback_query(F.data.startswith("clan_war_start:"))
@@ -212,13 +207,10 @@ async def cb_clan_war_status(cb: CallbackQuery, session: AsyncSession, user: Use
         winner = clan1 if war.winner_clan_id == war.clan1_id else clan2
         status += f"\n🏆 Победитель: {html.escape(winner.name) if winner else '?'}"
 
-    try:
-        await cb.message.edit_text(
-            f"⚔️ <b>Война {type_name}</b>\n\n"
-            f"{stat_str}\n\n"
-            f"{status}",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"⚔️ <b>Война {type_name}</b>\n\n"
+        f"{stat_str}\n\n"
+        f"{status}",
+        builder.as_markup(),
+    )

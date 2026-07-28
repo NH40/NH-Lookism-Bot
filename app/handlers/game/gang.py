@@ -9,9 +9,10 @@ from app.services.game_service import game_service
 from app.services.cooldown_service import cooldown_service
 from app.repositories.city_repo import city_repo
 from app.utils.keyboards.common import back_kb
-from app.utils.formatters import fmt_num, fmt_ttl
+from app.utils.formatters import fmt_num, fmt_ttl, clamp_enemy_power
 from app.services.quest_service import quest_service
 from app.utils.truce import truce_button_label
+from app.utils.menu_media import send_menu
 
 router = Router()
 
@@ -20,29 +21,32 @@ async def build_gang_menu(session, user, page: int = 0):
     cd_key = cooldown_service.attack_key(user.id)
     cd = await cooldown_service.get_ttl(cd_key)
 
-    if not user.sector:
+    if not user.country:
+        from app.data.cities import COUNTRIES
         builder = InlineKeyboardBuilder()
-        for s in ["Н", "Х", "Ч", "Б", "М", "Ж"]:
-            builder.button(text=f"🌐 Сектор {s}", callback_data=f"choose_sector:{s}")
-        builder.adjust(3)
+        for c in COUNTRIES:
+            builder.button(text=f"🌐 {c.label}", callback_data=f"choose_country:{c.code}")
+        builder.adjust(2)
         builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
         return (
-            "⚔️ <b>Атака — Выбор сектора</b>\n\n"
-            "Выбери сектор — это решение нельзя изменить!\n"
-            "В каждом секторе 50 городов (5 типов × 10 штук).",
-            builder.as_markup()
+            "⚔️ <b>Атака — Выбор страны</b>\n\n"
+            "Выбери страну — это решение нельзя изменить!\n"
+            "В каждой стране свои города (4 типа: 4/8/16/32 района).",
+            builder.as_markup(),
+            None,
         )
 
     if not user.gang_city_id:
+        from app.data.cities import COUNTRY_BY_CODE
         per_page = 10
-        cities = await city_repo.get_available_gang_cities(session, user.sector)
+        cities = await city_repo.get_available_gang_cities(session, user.country)
         total = len(cities)
         total_pages = max(1, (total + per_page - 1) // per_page)
         page = max(0, min(page, total_pages - 1))
         slice_ = cities[page * per_page:(page + 1) * per_page]
 
         builder = InlineKeyboardBuilder()
-        type_names = {1: "4р", 2: "8р", 3: "16р", 4: "32р", 5: "64р"}
+        type_names = {1: "4р", 2: "8р", 3: "16р", 4: "32р"}
         for city in slice_:
             builder.button(
                 text=f"🏙 {city.name} [{type_names.get(city.type_id, '?')}]",
@@ -62,24 +66,26 @@ async def build_gang_menu(session, user, page: int = 0):
             nav1.append(InlineKeyboardButton(text="+5 ⏭", callback_data=f"city_page:{page + 5}"))
         builder.row(*nav1)
         builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
+        country = COUNTRY_BY_CODE[user.country]
         return (
-            f"⚔️ <b>Выбор города — Сектор {user.sector}</b>\n\n"
+            f"⚔️ <b>Выбор города — {country.label}</b>\n\n"
             f"Выбери город. После выбора нельзя сменить\n"
             f"пока не завоюешь все районы!\n\n"
             f"🏙 Доступно городов: {total}",
-            builder.as_markup()
+            builder.as_markup(),
+            country.image,
         )
 
+    from app.data.cities import COUNTRY_BY_CODE
     situation = await game_service.gang_get_situation(session, user)
     if not situation["ok"]:
-        return situation["reason"], back_kb("main_menu")
+        return situation["reason"], back_kb("main_menu"), None
 
     city = situation["city"]
     my_d = situation["my_districts"]
     total_d = situation["total_districts"]
-    bot_power = situation["bot_district_power"]
     rivals = situation["rivals"]
-    next_bot = situation["next_bot_district"]
+    districts = situation["districts"]
 
     extra_str = f"\n⚡ Доп. атак: {user.extra_attack_count}" if user.extra_attack_count > 0 else ""
     cd_str = f"\n⏳ КД: {fmt_ttl(cd)}" if cd > 0 else ""
@@ -88,44 +94,36 @@ async def build_gang_menu(session, user, page: int = 0):
     if rivals:
         rival_str = "\n\n👥 <b>Соперники в городе:</b>"
         for r in rivals:
-            rival_str += f"\n  ⚔️ {r['name']} | 💪 {fmt_num(r['combat_power'])} | 🏘 {r['districts']}р."
-
-    next_district_str = ""
-    if bot_power and next_bot:
-        next_district_str = f"\n\n⚔️ Следующий район #{next_bot.number}: 🤖 {fmt_num(bot_power)} мощи"
-    elif not next_bot:
-        next_district_str = "\n\n✅ Все районы захвачены!"
+            rival_power = clamp_enemy_power(r['combat_power'], user.combat_power)
+            rival_str += f"\n  ⚔️ {r['name']} | 💪 {fmt_num(rival_power)} | 🏘 {r['districts']}р."
 
     text = (
         f"⚔️ <b>Атака — Фаза Банды</b>\n\n"
         f"🏙 Город: <b>{city.name}</b>\n"
-        f"📍 Сектор {user.sector} | {city.total_districts} районов\n\n"
         f"🏘 Твоих районов: {my_d}/{total_d}\n"
         f"💪 Твоя мощь: {fmt_num(user.combat_power)}\n"
         f"🎯 Влияние: {fmt_num(user.influence)}"
-        + extra_str + cd_str + next_district_str + rival_str
+        + extra_str + cd_str + rival_str +
+        "\n\n⭐ твой | 🔴 соперник | ⚔️ свободен/бот"
     )
 
     builder = InlineKeyboardBuilder()
-    if cd > 0:
-        builder.row(
-            InlineKeyboardButton(text=f"⏳ КД: {fmt_ttl(cd)}", callback_data="attack_cd"),
-            InlineKeyboardButton(text="🔄 Обновить", callback_data="attack"),
-        )
-    else:
-        atk_label = (
-            f"⚡ Атаковать (ещё {user.extra_attack_count + 1} атаки)"
-            if user.extra_attack_count > 0 else "⚔️ Атаковать район"
-        )
-        builder.row(InlineKeyboardButton(text=atk_label, callback_data="do_attack"))
+    for d in districts:
+        if d["is_mine"]:
+            builder.button(text=f"⭐#{d['number']}", callback_data="noop")
+        elif cd > 0:
+            builder.button(text=f"⏳#{d['number']}", callback_data="attack_cd")
+        elif d["owner_id"]:
+            builder.button(text=f"🔴#{d['number']} 💪{fmt_num(d['power'])}", callback_data=f"gang_pvp:{d['owner_id']}")
+        else:
+            builder.button(text=f"⚔️#{d['number']} 💪{fmt_num(d['power'])}", callback_data=f"gang_district:{d['id']}")
+    builder.adjust(4)
 
-    if rivals:
-        builder.row(InlineKeyboardButton(
-            text=f"🥊 PvP ({len(rivals)} соперника)", callback_data="pvp_attack"
-        ))
+    if cd > 0:
+        builder.row(InlineKeyboardButton(text=f"⏳ КД: {fmt_ttl(cd)}", callback_data="attack_cd"))
     builder.row(InlineKeyboardButton(text=truce_button_label(user), callback_data="truce_menu"))
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
-    return text, builder.as_markup()
+    return text, builder.as_markup(), COUNTRY_BY_CODE[user.country].image
 
 
 @router.callback_query(F.data == "noop")
@@ -136,28 +134,23 @@ async def cb_noop(cb: CallbackQuery):
 @router.callback_query(F.data.startswith("city_page:"))
 async def cb_city_page(cb: CallbackQuery, session: AsyncSession, user: User):
     page = int(cb.data.split(":")[1])
-    text, kb = await build_gang_menu(session, user, page=page)
-    try:
-        await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-    except Exception:
-        pass
+    text, kb, photo = await build_gang_menu(session, user, page=page)
+    await send_menu(cb, text, kb, photo)
     await cb.answer()
 
 
-@router.callback_query(F.data.startswith("choose_sector:"))
-async def cb_choose_sector(cb: CallbackQuery, session: AsyncSession, user: User):
-    sector = cb.data.split(":")[1]
-    result = await game_service.choose_sector(session, user, sector)
+@router.callback_query(F.data.startswith("choose_country:"))
+async def cb_choose_country(cb: CallbackQuery, session: AsyncSession, user: User):
+    from app.data.cities import COUNTRY_BY_CODE
+    country = cb.data.split(":")[1]
+    result = await game_service.choose_country(session, user, country)
     if result["ok"]:
-        await cb.answer(f"✅ Сектор {sector} выбран!")
-        # Обновляем объект user из БД чтобы sector был актуален
+        await cb.answer(f"✅ {COUNTRY_BY_CODE[country].label} выбрана!")
+        # Обновляем объект user из БД чтобы country был актуален
         await session.refresh(user)
         from app.handlers.attack import build_attack_menu
-        text, kb = await build_attack_menu(session, user)
-        try:
-            await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-        except Exception:
-            pass
+        text, kb, photo = await build_attack_menu(session, user)
+        await send_menu(cb, text, kb, photo)
     else:
         await cb.answer(result["reason"], show_alert=True)
 
@@ -170,40 +163,32 @@ async def cb_choose_city(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer(f"✅ {result['city']} выбран!")
         await session.refresh(user)
         from app.handlers.attack import build_attack_menu
-        text, kb = await build_attack_menu(session, user)
-        try:
-            await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-        except Exception:
-            pass
+        text, kb, photo = await build_attack_menu(session, user)
+        await send_menu(cb, text, kb, photo)
     else:
         await cb.answer(result["reason"], show_alert=True)
 
 
-@router.callback_query(F.data == "do_attack")
-async def cb_do_attack(cb: CallbackQuery, session: AsyncSession, user: User):
+@router.callback_query(F.data.startswith("gang_district:"))
+async def cb_gang_attack_district(cb: CallbackQuery, session: AsyncSession, user: User):
+    district_id = int(cb.data.split(":")[1])
     lock_key = cooldown_service.attack_lock_key(user.id)
     if not await cooldown_service.acquire_lock(lock_key, ttl=10):
         await cb.answer("⏳ Атака уже обрабатывается", show_alert=True)
         return
 
     try:
-        result = await game_service.gang_attack_bot(session, user)
+        result = await game_service.gang_attack_district(session, user, district_id)
         await session.commit()
     finally:
         await cooldown_service.release_lock(lock_key)
 
     if result.get("promoted"):
-        await cb.message.edit_text(
-            f"🎉 {result['message']}",
-            reply_markup=back_kb("main_menu"), parse_mode="HTML"
-        )
+        await send_menu(cb, f"🎉 {result['message']}", back_kb("main_menu"))
         return
 
     if result.get("destroyed"):
-        await cb.message.edit_text(
-            f"💀 <b>{result['message']}</b>",
-            reply_markup=back_kb("main_menu"), parse_mode="HTML"
-        )
+        await send_menu(cb, f"💀 <b>{result['message']}</b>", back_kb("main_menu"))
         return
 
     if not result["ok"]:
@@ -245,34 +230,7 @@ async def cb_do_attack(cb: CallbackQuery, session: AsyncSession, user: User):
             f"🏴 Мощь района #{result.get('district_num', '?')}: {fmt_num(result['district_power'])}"
             + extra_str
         )
-    await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-
-
-@router.callback_query(F.data == "pvp_attack")
-async def cb_pvp_attack(cb: CallbackQuery, session: AsyncSession, user: User):
-    if not user.gang_city_id:
-        await cb.answer("Выберите город", show_alert=True)
-        return
-    situation = await game_service.gang_get_situation(session, user)
-    rivals = situation.get("rivals", [])
-    if not rivals:
-        await cb.answer("Нет соперников в городе", show_alert=True)
-        return
-
-    builder = InlineKeyboardBuilder()
-    for r in rivals[:5]:
-        builder.button(
-            text=f"⚔️ {r['name']} | 💪 {fmt_num(r['combat_power'])} | 🏘 {r['districts']}р.",
-            callback_data=f"gang_pvp:{r['id']}"
-        )
-    builder.adjust(1)
-    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="attack"))
-    await cb.message.edit_text(
-        f"🥊 <b>PvP — Выбери соперника</b>\n\n"
-        f"💪 Твоя мощь: {fmt_num(user.combat_power)}\n\n"
-        f"Победишь — заберёшь его район!",
-        reply_markup=builder.as_markup(), parse_mode="HTML",
-    )
+    await send_menu(cb, text, builder.as_markup())
 
 
 @router.callback_query(F.data.startswith("gang_pvp:"))
@@ -282,14 +240,17 @@ async def cb_gang_pvp(cb: CallbackQuery, session: AsyncSession, user: User):
     result = await game_service.gang_attack_pvp(session, user, defender_id)
 
     if result.get("promoted"):
-        await cb.message.edit_text(
-            f"🎉 {result['message']}",
-            reply_markup=back_kb("main_menu"), parse_mode="HTML"
-        )
+        await send_menu(cb, f"🎉 {result['message']}", back_kb("main_menu"))
         return
 
     if not result["ok"]:
         await cb.answer(result.get("reason", "Ошибка"), show_alert=True)
+        if result.get("healed"):
+            # Район(ы) освобождены самолечением — старая доска с этой кнопкой
+            # уже не отражает реальность (соперник исчез), перерисовываем
+            # меню атаки, иначе игрок просто тыкает в ту же мёртвую кнопку.
+            text, kb, photo = await build_gang_menu(session, user)
+            await send_menu(cb, text, kb, photo)
         return
 
     if getattr(user, "fame_set_gaprena", False):
@@ -312,4 +273,4 @@ async def cb_gang_pvp(cb: CallbackQuery, session: AsyncSession, user: User):
             f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
             f"⚔️ Его мощь: {fmt_num(result['defender_power'])}"
         )
-    await cb.message.edit_text(text, reply_markup=back_kb("attack"), parse_mode="HTML")
+    await send_menu(cb, text, back_kb("attack"))

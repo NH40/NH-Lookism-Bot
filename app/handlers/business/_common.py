@@ -4,7 +4,8 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.services.business_service import business_service
-from app.utils.formatters import fmt_num, progress_bar, pair_lines
+from app.utils.formatters import fmt_num, progress_bar
+from app.utils.menu_media import safe_edit
 
 PATH_INFO = {
     "legal": {
@@ -16,70 +17,92 @@ PATH_INFO = {
     "illegal": {
         "name": "Нелегальный",
         "emoji": "🕶",
-        "desc": "−Влияние при постройке, +влияние при сносе. Лучший доход",
+        "desc": "Доход выше, но волатильный. −Влияние с каждым захваченным районом",
         "color": "🔴",
     },
     "political": {
         "name": "Политика",
         "emoji": "🏛",
-        "desc": "+Влияние при постройке, −влияние при сносе",
+        "desc": "Доход ниже, но +влияние с каждым захваченным районом",
         "color": "🔵",
     },
     "digital": {
         "name": "Цифровой",
         "emoji": "💻",
-        "desc": "Дешёвые районы + Сетевой эффект: +10% доход за каждые 10 зданий (макс +50%)",
+        "desc": "Соло слабее, но сеть своих районов поднимает доход выше легального",
         "color": "🟣",
     },
 }
 
 
-async def _show_business_main(
-    cb: CallbackQuery, session: AsyncSession, user: User
-) -> None:
+async def _build_business_main(
+    session: AsyncSession, user: User
+) -> tuple[str, "InlineKeyboardMarkup"]:
+    """Чистый билдер (текст, клавиатура) без зависимости от CallbackQuery —
+    переиспользуется и инлайн-хэндлером, и быстрым меню (reply-клавиатура)."""
     info = await business_service.get_income_breakdown(session, user)
-    path_info = PATH_INFO.get(user.business_path, {})
+    path_info = PATH_INFO.get(info["building_path"], {})
 
-    biz_genius = getattr(user, "business_genius_level", 0)
-    biz_frags = getattr(user, "business_fragments", 0)
-    bonus_districts = getattr(user, "bonus_business_districts", 0)
-
-    # Бонусы к доходу (гений бизнеса уже показан отдельной строкой выше — не дублируем)
     bonuses = []
     if info.get('network_bonus'):
-        bonuses.append(f"🌐 Сеть +{info['network_bonus']}%")
+        sign = "+" if info['network_bonus'] >= 0 else ""
+        bonuses.append(f"🌐 Сеть {sign}{info['network_bonus']}%")
     if info.get('skills_bonus'):
-        bonuses.append(f"📊 Титул +{info['skills_bonus']}%")
+        bonuses.append(f"📊 Донаты/титулы/мастерство +{info['skills_bonus']}%")
     if info['prestige_bonus']:
         bonuses.append(f"🌟 Пробуждение +{info['prestige_bonus']}%")
     if info['potion_bonus']:
         bonuses.append(f"🧪 Зелье +{info['potion_bonus']}%")
     if info.get('clan_income_bonus'):
-        bonuses.append(f"🏯 Клан +{info['clan_income_bonus']}%")
+        bonuses.append(f"🏯 Клан (улучшения) +{info['clan_income_bonus']}%")
+    if info.get('clan_land_income_bonus'):
+        bonuses.append(f"🏰 Клан-земли (здания) +{info['clan_land_income_bonus']}%")
     if info.get('clan_donat_income_bonus'):
         bonuses.append(f"💎 Клан-донат +{info['clan_donat_income_bonus']}%")
+    if info.get('clan_head_income_bonus'):
+        bonuses.append(f"👑 Глава клана +{info['clan_head_income_bonus']}%")
+    if info.get('suzerain_bonus'):
+        bonuses.append(f"🫡 Вассалы +{info['suzerain_bonus']}%")
     if info['district_multiplier'] != 1.0:
         bonuses.append(f"✖️ Районы x{info['district_multiplier']:.1f}")
 
     bonus_section = ""
     if bonuses:
-        bonus_section = "\n\n━━━ 📊 Бонусы к доходу ━━━\n" + "\n".join(pair_lines(bonuses))
+        bonus_section = "\n\n━━━ 📊 Прочие бонусы ━━━\n" + "\n".join(bonuses)
 
-    # Влияние пути
+    # Сет Славы «Чарльз Чой» — не в общей сумме %, а последним множителем
+    # поверх уже готового итога (см. business_service._charles_bonus_percent).
+    charles_lines = []
+    if info.get('nhn_bonus'):
+        charles_lines.append(f"  🏢 Слава NHN +{info['nhn_bonus']}%")
+    if info.get('geniuses_bonus'):
+        charles_lines.append(f"  🎓 Слава «10 гениев» +{info['geniuses_bonus']}%")
+    charles_section = ""
+    if charles_lines:
+        charles_section = (
+            "\n\n━━━ 👑 Сет Славы «Чарльз Чой» ━━━\n"
+            "<i>Применяется последним, поверх итога сверху</i>\n"
+            + "\n".join(charles_lines)
+            + f"\n  ✖️ Итоговый множитель: +{info.get('charles_bonus_pct', 0)}%"
+        )
+
     influence_note = ""
-    if user.business_path == "illegal":
-        influence_note = "  <i>⚠️ −влияние за постройку</i>\n"
-    elif user.business_path == "political":
-        influence_note = "  <i>✅ +влияние за постройку</i>\n"
+    if info["building_path"] == "illegal":
+        influence_note = "  <i>⚠️ −влияние за каждый захваченный район</i>\n"
+    elif info["building_path"] == "political":
+        influence_note = "  <i>✅ +влияние за каждый захваченный район</i>\n"
 
-    # Пассивный доход от циркуляции
     circ_line = ""
     circ_passive = info.get("circ_passive_income", 0)
     if circ_passive:
         circ_per_min = info.get("circ_passive_per_min", 0) or circ_passive
         circ_line = f"\n💸 Пассивный: +{fmt_num(circ_per_min)}/мин"
 
-    # Таймер ежедневного города Архангела (круг 10)
+    vassal_line = ""
+    vassal_income = info.get("vassal_tribute_income", 0)
+    if vassal_income:
+        vassal_line = f"\n🫡 От вассалов: +{fmt_num(vassal_income)}/мин"
+
     archangel_timer_line = ""
     if getattr(user, "circ_daily_districts", 0) > 0:
         last_at = getattr(user, "circ_daily_districts_at", None)
@@ -102,63 +125,51 @@ async def _show_business_main(
                 m, s = divmod(rem, 60)
                 archangel_timer_line = f"\n👼 Город Архангела (64р.): через <b>{h}ч {m}м {s}с</b>"
 
-    from app.constants.raid import BIZ_GENIUS_LEVEL_LABELS, BIZ_GENIUS_DISCOUNT, BIZ_GENIUS_INCOME_BONUS
-    genius_label = BIZ_GENIUS_LEVEL_LABELS.get(biz_genius, "") if biz_genius > 0 else "не открыт"
-    genius_discount = BIZ_GENIUS_DISCOUNT[biz_genius - 1] if biz_genius > 0 else 0
-    genius_income_b = BIZ_GENIUS_INCOME_BONUS[biz_genius - 1] if biz_genius > 0 else 0
-    genius_perks = []
-    if genius_income_b:
-        genius_perks.append(f"+{genius_income_b}% доход")
-    if genius_discount:
-        genius_perks.append(f"-{genius_discount}% стройка")
-    genius_perks_str = f"\n   {', '.join(genius_perks)}" if genius_perks else ""
-    genius_label_str = f" — {genius_label}" if genius_label else ""
-
-    # Дополнительная информация (районы/фрагменты)
-    extra_bits = []
-    if bonus_districts:
-        extra_bits.append(f"🏘 Районов: {bonus_districts}/50")
-    if biz_frags:
-        extra_bits.append(f"🧩 Фрагментов: {biz_frags}")
-    extra_line = f"\n{' | '.join(extra_bits)}" if extra_bits else ""
-
-    # Дополнительный доход (пассивный/архангел) — отдельным блоком
-    extra_income_lines = [l for l in (circ_line, archangel_timer_line) if l]
+    extra_income_lines = [l for l in (circ_line, vassal_line, archangel_timer_line) if l]
     extra_income_section = ""
     if extra_income_lines:
         extra_income_section = "\n\n━━━ 🌐 Доп. доход ━━━" + "".join(extra_income_lines)
 
+    genius_lines = [
+        f"🎖 Уровень {progress_bar(info['genius_level'], 10)} {info['genius_level']}/10 (+{info['genius_level_bonus']}%)",
+        f"📦 Вместимость {progress_bar(info['genius_capacity_level'], 5)} {info['genius_capacity_level']}/5 (+{info['genius_capacity_bonus']}%)",
+        f"💹 Бонус к доходу {progress_bar(info['genius_income_level'], 5)} {info['genius_income_level']}/5 (+{info['genius_income_bonus']}%)",
+    ]
+
     overall_pct = ""
     if info["base_income"] > 0:
         pct = round((info["final_income"] / info["base_income"] - 1) * 100)
-        overall_pct = f" (+{pct}%)"
+        sign = "+" if pct >= 0 else ""
+        overall_pct = f" ({sign}{pct}%)"
 
     text = (
         f"🏢 <b>Бизнес</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📍 {path_info.get('color','')} {path_info.get('emoji','')} <b>{path_info.get('name','')}</b>\n"
+        f"📍 {path_info.get('color', '')} {info.get('building_emoji', '')} <b>{info.get('building_name', '')}</b>"
+        f" ({path_info.get('name', '')})\n"
         f"{influence_note}"
-        f"🎖 Гений бизнеса {progress_bar(biz_genius, 5)} {biz_genius}/5{genius_label_str}"
-        f"{genius_perks_str}"
-        f"{extra_line}\n\n"
-        f"━━━ 💰 Доход ━━━\n"
+        f"🏘 Районов: <b>{info['district_count']}</b> × {fmt_num(info['per_district_rate'])}/район\n\n"
+        f"━━━ 🎖 Гений бизнеса ━━━\n"
+        + "\n".join(genius_lines) +
+        f"\n\n━━━ 💰 Доход ━━━\n"
         f"Базовый:  <b>{fmt_num(info['base_income'])}</b>/мин\n"
         f"Итоговый: <b>{fmt_num(info['final_income'])}</b>/мин{overall_pct}"
         f"{bonus_section}"
+        f"{charles_section}"
         f"{extra_income_section}"
     )
 
     builder = InlineKeyboardBuilder()
-    builder.row(
-        InlineKeyboardButton(text="🏗 Построить",    callback_data="biz_build"),
-        InlineKeyboardButton(text="🏢 Мои здания",   callback_data="biz_my_buildings"),
-    )
     builder.row(InlineKeyboardButton(
-        text=f"🎖 Гений бизнеса  [Ур.{biz_genius}/5]", callback_data="biz_genius_menu"
+        text=f"🎖 Гений бизнеса", callback_data="biz_genius_menu"
     ))
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
 
-    try:
-        await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        pass
+    return text, builder.as_markup()
+
+
+async def _show_business_main(
+    cb: CallbackQuery, session: AsyncSession, user: User
+) -> None:
+    text, kb = await _build_business_main(session, user)
+    await safe_edit(cb, text, kb)

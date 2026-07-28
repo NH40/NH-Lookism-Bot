@@ -16,15 +16,23 @@ class User(Base):
 
     # ── Фаза и прогресс ────────────────────────────────────────────────────
     phase: Mapped[str] = mapped_column(String(16), nullable=False, default="gang")
-    sector: Mapped[str | None] = mapped_column(String(4))
+    sector: Mapped[str | None] = mapped_column(String(4))  # DEPRECATED — заменено на country (патч 1.3.1)
+    country: Mapped[str | None] = mapped_column(String(32))
     gang_city_id: Mapped[int | None] = mapped_column(Integer)
     king_cities_count: Mapped[int] = mapped_column(Integer, default=0)
-    fist_wins: Mapped[int] = mapped_column(Integer, default=0)
-    fist_cities_count: Mapped[int] = mapped_column(Integer, default=0)
+    fist_wins: Mapped[int] = mapped_column(Integer, default=0)  # DEPRECATED — фаза Кулака убрана из прогрессии (патч 1.3.1)
+    fist_cities_count: Mapped[int] = mapped_column(Integer, default=0)  # DEPRECATED
+
+    # ── Король/Вассал (патч 1.3.1) ───────────────────────────────────────────
+    suzerain_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    vassal_count: Mapped[int] = mapped_column(Integer, default=0)
+    city_tax_percent: Mapped[int] = mapped_column(Integer, default=0)
+    city_tax_recipient_id: Mapped[int | None] = mapped_column(Integer, index=True)
 
     # ── Ресурсы ────────────────────────────────────────────────────────────
     nh_coins: Mapped[int] = mapped_column(BigInteger, default=0)
     influence: Mapped[int] = mapped_column(BigInteger, default=100)
+    influence_bonus_percent: Mapped[int] = mapped_column(Integer, default=0)
     combat_power: Mapped[int] = mapped_column(BigInteger, default=0, index=True)
 
     # ── Бизнес ────────────────────────────────────────────────────────────
@@ -66,6 +74,8 @@ class User(Base):
     double_attack_used: Mapped[bool] = mapped_column(Boolean, default=False)
     extra_attack_count: Mapped[int] = mapped_column(Integer, default=0)
     emperor_gang_multi_attack: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Донат-сет "Монстр" — ×5 шанс ранга "Совершенство" при выковке карт
+    monster_card_luck: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # ── Перемирие ─────────────────────────────────────────────────────────
     truce_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -145,6 +155,12 @@ class User(Base):
     clan_donat_income_bonus: Mapped[int] = mapped_column(Integer, default=0)
     clan_donat_ticket_bonus: Mapped[int] = mapped_column(Integer, default=0)
     clan_donat_train_bonus: Mapped[int] = mapped_column(Integer, default=0)
+    # Круговой донат "Глава клана" — трансляция клан-вайд части бонуса всем
+    # участникам клана (сумма кругов "Глава клана" у всех членов клана)
+    clan_head_power_bonus: Mapped[int] = mapped_column(Integer, default=0)
+    clan_head_income_bonus: Mapped[int] = mapped_column(Integer, default=0)
+    clan_head_recruit_bonus: Mapped[int] = mapped_column(Integer, default=0)
+    clan_head_influence_bonus: Mapped[int] = mapped_column(Integer, default=0)
 
     # ── VVIP (клановый, денормализовано) ─────────────────────────────────────
     clan_vvip_level: Mapped[int] = mapped_column(Integer, default=0)
@@ -203,6 +219,8 @@ class User(Base):
     clan_land_mastery_pct: Mapped[int] = mapped_column(Integer, default=0)         # +% очков мастерства/пути с тренировок
     clan_land_power_mastery_bonus: Mapped[int] = mapped_column(Integer, default=0) # +уровней к мастерству силы (макс 4)
     clan_land_speed_mastery_bonus: Mapped[int] = mapped_column(Integer, default=0) # +уровней к мастерству скорости (макс 4)
+    clan_land_technique_mastery_bonus: Mapped[int] = mapped_column(Integer, default=0)  # +уровней к мастерству техники (макс 4)
+    clan_land_endurance_mastery_bonus: Mapped[int] = mapped_column(Integer, default=0)  # +уровней к мастерству выносливости (макс 4)
     clan_land_cd_reduction_pct: Mapped[int] = mapped_column(Integer, default=0)    # +% сокращение КД (рейд-боссы, дуэли)
 
     # ── Игровые титулы (за топ рейтинга казино, еженедельно) ─────────────────
@@ -239,7 +257,13 @@ class User(Base):
     # ── Бизнес-рейды ──────────────────────────────────────────────────────
     business_fragments: Mapped[int] = mapped_column(Integer, default=0)
     bonus_business_districts: Mapped[int] = mapped_column(Integer, default=0)
-    business_genius_level: Mapped[int] = mapped_column(Integer, default=0)
+    business_genius_level: Mapped[int] = mapped_column(Integer, default=0)  # трек "Уровень", 0-10 (патч 1.3.1, было 0-5)
+
+    # ── Бизнес (патч 1.3.1): здание выбирается один раз, доход = ставка × районы ──
+    business_building_id: Mapped[str | None] = mapped_column(String(32))
+    business_genius_capacity_level: Mapped[int] = mapped_column(Integer, default=0)  # 0-5
+    business_genius_discount_level: Mapped[int] = mapped_column(Integer, default=0)  # 0-5
+    business_genius_income_level: Mapped[int] = mapped_column(Integer, default=0)    # 0-5
 
     # ── Гений войны (Менеджер Ким) ────────────────────────────────────────
     war_points: Mapped[int] = mapped_column(Integer, default=0)

@@ -83,7 +83,7 @@ def _render_finished(hand: dict, outcome: str) -> str:
 def _finish_kb(resource: str) -> "InlineKeyboardMarkup":
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="🃏 Сыграть снова", callback_data=f"bj_pick:{resource}"))
-    builder.row(InlineKeyboardButton(text="◀️ В казино", callback_data="bank_casino"))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="bank_casino"))
     return builder.as_markup()
 
 

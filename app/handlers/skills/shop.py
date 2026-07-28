@@ -5,7 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.utils.keyboards.common import back_kb
-from app.utils.formatters import progress_bar, pair_lines
+from app.utils.formatters import progress_bar
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -90,22 +91,14 @@ async def cb_ui_settings(cb: CallbackQuery, session: AsyncSession, user: User):
         _perk_line(has_3, "Авто-тикеты", user.ui_auto_ticket, "УИ III"),
         _perk_line(has_4, "Авто-прокрутка", user.ui_auto_pull, "УИ IV"),
     ]
-    perk_rows = pair_lines(perks)
 
     text = (
         f"👁 <b>Ультра Инстинкт</b> — {ui_level_str}{tui_str}\n\n"
         f"━━━ ⚙️ Автоматизация ━━━\n"
-        + "\n".join(perk_rows)
+        + "\n".join(perks)
     )
 
-    try:
-        await cb.message.edit_text(
-            text,
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, text, builder.as_markup())
 
 
 @router.callback_query(F.data == "toggle_ui_recruit")

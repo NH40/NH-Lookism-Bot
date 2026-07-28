@@ -1,74 +1,147 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 from app.models.user import User
-from app.models.building import UserBuilding
 from app.services.potion_service import potion_service
 
 
 class BusinessService:
 
-    @staticmethod
-    def _biz_genius_bonus(user: User) -> int:
-        from app.constants.raid import BIZ_GENIUS_INCOME_BONUS
-        lvl = getattr(user, "business_genius_level", 0)
-        if lvl <= 0:
-            return 0
-        return BIZ_GENIUS_INCOME_BONUS[min(lvl, len(BIZ_GENIUS_INCOME_BONUS)) - 1]
+    async def choose_business(
+        self, session: AsyncSession, user: User, building_id: str
+    ) -> dict:
+        """Разовый выбор здания — навсегда. Доход дальше растёт от количества
+        захваченных районов, новых зданий строить нельзя (патч 1.3.1)."""
+        if user.business_building_id:
+            return {"ok": False, "reason": "Бизнес уже выбран"}
+
+        from app.data.buildings import BUILDINGS_BY_ID, CANONICAL_BUILDING_IDS
+        cfg = BUILDINGS_BY_ID.get(building_id)
+        if not cfg or building_id not in CANONICAL_BUILDING_IDS:
+            return {"ok": False, "reason": "Здание не найдено"}
+
+        from app.repositories.city_repo import city_repo
+        district_count = await city_repo.get_user_district_count(session, user.id)
+        if district_count < 1:
+            return {"ok": False, "reason": "Нужен хотя бы 1 захваченный район"}
+
+        required_level = cfg.min_biz_genius * 2
+        if user.business_genius_level < required_level:
+            return {"ok": False, "reason": f"Требуется Гений бизнеса (Уровень) {required_level}+"}
+
+        user.business_path = cfg.path
+        user.business_building_id = building_id
+        await session.flush()
+        await self._recalc_income(session, user)
+        return {"ok": True, "building": cfg.name, "path": cfg.path}
 
     @staticmethod
-    async def _digital_network_bonus(session: AsyncSession, user: User) -> int:
-        """Сетевой эффект: +10% за каждые 10 цифровых зданий, макс +50%."""
-        if getattr(user, "business_path", None) != "digital":
-            return 0
-        count = await session.scalar(
-            select(func.sum(UserBuilding.count)).where(
-                UserBuilding.user_id == user.id,
-                UserBuilding.is_active == True,
-                UserBuilding.path == "digital",
-            )
-        ) or 0
-        return min(50, (count // 10) * 10)
-
-    @staticmethod
-    async def _nhn_group_bonus(session: AsyncSession, user: User) -> int:
-        """Слава — Чарльз Чоя «NHN Групп»: +10% за каждые 10 построенных зданий
-        (любого типа), макс +80% на 80 зданиях."""
-        if not getattr(user, "fame_charles_nhn_group", False):
-            return 0
-        count = await session.scalar(
-            select(func.sum(UserBuilding.count)).where(
-                UserBuilding.user_id == user.id,
-                UserBuilding.is_active == True,
-            )
-        ) or 0
-        return min(80, (count // 10) * 10)
+    async def apply_capture_influence(
+        session: AsyncSession, user: User, districts_delta: int
+    ) -> None:
+        """Влияние за захват/потерю районов: illegal теряет, political получает."""
+        if districts_delta == 0 or not user.business_building_id:
+            return
+        from app.config.game_balance import (
+            ILLEGAL_INFLUENCE_PER_DISTRICT, POLITICAL_INFLUENCE_PER_DISTRICT,
+        )
+        if user.business_path == "illegal":
+            from app.repositories.title_repo import title_repo
+            has_great = await title_repo.has_title(session, user.id, "great_influence")
+            floor = 3000 if has_great else 10
+            user.influence = max(floor, user.influence + ILLEGAL_INFLUENCE_PER_DISTRICT * districts_delta)
+        elif user.business_path == "political":
+            delta = POLITICAL_INFLUENCE_PER_DISTRICT * districts_delta
+            if delta > 0:
+                # Круговые донаты дают +% к ПРИРОСТУ влияния — не усиливаем
+                # потери при потере районов.
+                bonus_pct = (
+                    getattr(user, "influence_bonus_percent", 0)
+                    + getattr(user, "clan_head_influence_bonus", 0)
+                )
+                delta = int(delta * (1 + bonus_pct / 100))
+            user.influence = max(0, user.influence + delta)
 
     async def _recalc_income(self, session: AsyncSession, user: User) -> None:
-        result = await session.execute(
-            select(
-                func.sum(UserBuilding.base_income * UserBuilding.count)
-            ).where(
-                UserBuilding.user_id == user.id,
-                UserBuilding.is_active == True,
-                UserBuilding.count > 0,
-            )
-        )
-        base_income = result.scalar() or 0
-        clan_bonus = getattr(user, 'clan_income_bonus', 0) + getattr(user, 'clan_donat_income_bonus', 0)
-        biz_genius_bonus = self._biz_genius_bonus(user)
-        network_bonus = await self._digital_network_bonus(session, user)
-        nhn_bonus = await self._nhn_group_bonus(session, user)
-        # Слава — Чарльз Чоя «Десять гениев»: +30% дохода с каждого здания
-        geniuses_bonus = 30 if getattr(user, "fame_charles_geniuses", False) else 0
-        total_bonus = (
-            user.income_bonus_percent + user.prestige_income_bonus + clan_bonus
-            + biz_genius_bonus + network_bonus + nhn_bonus + geniuses_bonus
-        )
-        effective_income = int(
-            base_income * (1 + total_bonus / 100) * user.district_multiplier
-        )
-        user.income_per_minute = effective_income
+        if not user.business_building_id:
+            user.income_per_minute = 0
+            await session.flush()
+            return
+
+        from app.data.buildings import BUILDINGS_BY_ID
+        cfg = BUILDINGS_BY_ID.get(user.business_building_id)
+        if not cfg:
+            user.income_per_minute = 0
+            await session.flush()
+            return
+
+        from app.repositories.city_repo import city_repo
+        district_count = await city_repo.get_user_district_count(session, user.id)
+
+        from app.config.game_balance import BIZ_GENIUS_CAPACITY_PCT_PER_LEVEL
+        capacity_pct = user.business_genius_capacity_level * BIZ_GENIUS_CAPACITY_PCT_PER_LEVEL
+        effective_districts = district_count * (1 + capacity_pct / 100)
+        base_income = cfg.base_income * effective_districts
+
+        total_bonus = self._total_bonus_percent(user, district_count)
+        interim_income = int(base_income * (1 + total_bonus / 100) * user.district_multiplier)
+
+        charles_bonus = self._charles_bonus_percent(user, district_count)
+        user.income_per_minute = int(interim_income * (1 + charles_bonus / 100))
+
+        from app.services.game_service import game_service
+        await game_service._recalc_city_tax(session, user)
+
         await session.flush()
+
+    @staticmethod
+    def _total_bonus_percent(user: User, district_count: int) -> int:
+        from app.config.game_balance import (
+            BIZ_GENIUS_LEVEL_PCT_PER_LEVEL,
+            BIZ_GENIUS_INCOME_PCT_PER_LEVEL,
+            DIGITAL_NETWORK_BASE_PENALTY, DIGITAL_NETWORK_BONUS_PER_TIER,
+            DIGITAL_NETWORK_DISTRICTS_PER_TIER, DIGITAL_NETWORK_BONUS_CAP,
+            SUZERAIN_INCOME_BONUS_PCT_PER_VASSAL, SUZERAIN_INCOME_BONUS_CAP_PCT,
+        )
+        genius_level_bonus = user.business_genius_level * BIZ_GENIUS_LEVEL_PCT_PER_LEVEL
+        genius_income_bonus = user.business_genius_income_level * BIZ_GENIUS_INCOME_PCT_PER_LEVEL
+        suzerain_bonus = min(
+            SUZERAIN_INCOME_BONUS_CAP_PCT,
+            getattr(user, "vassal_count", 0) * SUZERAIN_INCOME_BONUS_PCT_PER_VASSAL,
+        )
+
+        network_bonus = 0
+        if user.business_path == "digital":
+            network_bonus = max(
+                DIGITAL_NETWORK_BASE_PENALTY,
+                min(
+                    DIGITAL_NETWORK_BONUS_CAP,
+                    DIGITAL_NETWORK_BASE_PENALTY
+                    + (district_count // DIGITAL_NETWORK_DISTRICTS_PER_TIER) * DIGITAL_NETWORK_BONUS_PER_TIER,
+                ),
+            )
+
+        clan_bonus = (
+            getattr(user, 'clan_income_bonus', 0) + getattr(user, 'clan_donat_income_bonus', 0)
+            + getattr(user, 'clan_head_income_bonus', 0) + getattr(user, 'clan_land_income_pct', 0)
+        )
+
+        # nhn_bonus/geniuses_bonus (сет Славы «Чарльз Чой») сюда НЕ входят —
+        # см. _charles_bonus_percent: этот сет применяется отдельным
+        # мультипликативным слоем поверх уже готового итога, а не в общую
+        # сумму процентов (иначе он терял ценность, складываясь с остальным
+        # вместо того чтобы усиливать финальный результат).
+        return (
+            user.income_bonus_percent + user.prestige_income_bonus + clan_bonus
+            + genius_level_bonus + genius_income_bonus
+            + network_bonus + suzerain_bonus
+        )
+
+    @staticmethod
+    def _charles_bonus_percent(user: User, district_count: int) -> int:
+        """Сет Славы «Чарльз Чой» — применяется ПОСЛЕДНИМ, мультипликативно
+        поверх уже посчитанного итогового дохода (не в общую сумму %)."""
+        nhn_bonus = min(80, (district_count // 15) * 10) if getattr(user, "fame_charles_nhn_group", False) else 0
+        geniuses_bonus = 30 if getattr(user, "fame_charles_geniuses", False) else 0
+        return nhn_bonus + geniuses_bonus
 
     async def tick_income(self, session: AsyncSession, user: User) -> int:
         if user.income_per_minute <= 0:
@@ -110,270 +183,8 @@ class BusinessService:
             .values(total_earned=Referral.total_earned + amount)
         )
 
-    @staticmethod
-    def _apply_demolish_influence(user: User, districts: int) -> None:
-        """Корректирует влияние при сносе зданий.
-        Политика: теряет влияние обратно (cost * 5).
-        Нелегальный: возвращает влияние (cost * 5).
-        """
-        if districts <= 0:
-            return
-        delta = districts * 5
-        if user.business_path == "political":
-            user.influence = max(0, user.influence - delta)
-        elif user.business_path == "illegal":
-            user.influence += delta
-
-    @staticmethod
-    def _genius_discount(user: User) -> int:
-        from app.constants.raid import BIZ_GENIUS_DISCOUNT
-        lvl = getattr(user, "business_genius_level", 0)
-        if lvl <= 0:
-            return 0
-        return BIZ_GENIUS_DISCOUNT[min(lvl, len(BIZ_GENIUS_DISCOUNT)) - 1]
-
-    async def buy_building(
-        self, session: AsyncSession, user: User,
-        building_id: str, city_id: int | None = None
-    ) -> dict:
-        from app.data.buildings import BUILDINGS_BY_ID
-        cfg = BUILDINGS_BY_ID.get(building_id)
-        if not cfg:
-            return {"ok": False, "reason": "Здание не найдено"}
-
-        if user.business_path and user.business_path != cfg.path:
-            return {"ok": False, "reason": "Это здание для другого пути бизнеса"}
-
-        if not user.business_path:
-            user.business_path = cfg.path
-
-        discount = user.building_discount_percent + self._genius_discount(user)
-        cost = max(2, int(cfg.district_cost * (1 - discount / 100)))
-        if cost % 2 != 0:
-            cost += 1
-
-        # Считаем районы в городе
-        if city_id:
-            from app.models.city import District
-            district_count = await session.scalar(
-                select(func.count(District.id)).where(
-                    District.owner_id == user.id,
-                    District.city_id == city_id,
-                    District.is_captured == True,
-                )
-            ) or 0
-        else:
-            from app.repositories.city_repo import city_repo
-            district_count = await city_repo.get_total_districts(session, user.id)
-
-        # Занятые районы — только активные здания с count > 0
-        used_in_city = await session.scalar(
-            select(func.sum(UserBuilding.district_cost)).where(
-                UserBuilding.user_id == user.id,
-                UserBuilding.city_id == city_id,
-                UserBuilding.is_active == True,
-                UserBuilding.count > 0,
-            )
-        ) or 0
-
-        free = district_count - used_in_city
-        if free < cost:
-            return {
-                "ok": False,
-                "reason": f"Недостаточно районов (нужно {cost}, свободно {free})"
-            }
-
-        # Для fist-городов: лимит бизнесов по размеру города
-        if city_id:
-            from app.models.city import City as CityModel
-            from app.data.cities import FIST_CITY_MAX_BUSINESSES
-            city_obj = await session.get(CityModel, city_id)
-            if city_obj and city_obj.phase == "fist":
-                max_biz = FIST_CITY_MAX_BUSINESSES.get(city_obj.total_districts, 1)
-                existing_biz = await session.scalar(
-                    select(func.count(UserBuilding.id)).where(
-                        UserBuilding.user_id == user.id,
-                        UserBuilding.city_id == city_id,
-                        UserBuilding.is_active == True,
-                    )
-                ) or 0
-                if existing_biz >= max_biz:
-                    sfx = "бизнес" if max_biz == 1 else "бизнеса"
-                    return {"ok": False, "reason": f"В этом городе максимум {max_biz} {sfx}"}
-
-        if user.business_path == "illegal":
-            loss = cost * 5
-            from app.repositories.title_repo import title_repo
-            has_great = await title_repo.has_title(session, user.id, "great_influence")
-            min_influence = 3000 if has_great else 10
-            user.influence = max(min_influence, user.influence - loss)
-        elif user.business_path == "political":
-            user.influence += cost * 5
-        result = await session.execute(
-            select(UserBuilding).where(
-                UserBuilding.user_id == user.id,
-                UserBuilding.building_type == building_id,
-                UserBuilding.city_id == city_id,
-                UserBuilding.is_active == True,
-            )
-        )
-        existing = result.scalar_one_or_none()
-        if existing:
-            existing.count += 1
-            existing.district_cost += cost
-        else:
-            building = UserBuilding(
-                user_id=user.id,
-                building_type=building_id,
-                path=cfg.path,
-                city_id=city_id,
-                count=1,
-                base_income=cfg.base_income,
-                district_cost=cost,
-            )
-            session.add(building)
-
-        await session.flush()
-        await self._recalc_income(session, user)
-        return {"ok": True, "cost": cost}
-
-    async def buy_building_max(
-        self, session: AsyncSession, user: User, building_id: str
-    ) -> dict:
-        from app.data.buildings import BUILDINGS_BY_ID
-        from app.models.city import District, City as CityModel
-
-        cfg = BUILDINGS_BY_ID.get(building_id)
-        if not cfg:
-            return {"ok": False, "reason": "Здание не найдено", "count": 0}
-
-        discount = user.building_discount_percent + self._genius_discount(user)
-        cost = max(2, int(cfg.district_cost * (1 - discount / 100)))
-        if cost % 2 != 0:
-            cost += 1
-
-        has_great = False
-        if user.business_path == "illegal":
-            from app.repositories.title_repo import title_repo
-            has_great = await title_repo.has_title(session, user.id, "great_influence")
-        min_influence = 3000 if has_great else 10
-
-        result = await session.execute(
-            select(District.city_id, func.count(District.id).label("cnt"))
-            .where(
-                District.owner_id == user.id,
-                District.is_captured == True,
-                District.city_id.isnot(None),
-            )
-            .group_by(District.city_id)
-        )
-        city_rows = result.all()
-
-        total_built = 0
-        for city_id, district_count in city_rows:
-            city_obj = await session.get(CityModel, city_id)
-            if city_obj and city_obj.phase == "fist":
-                from app.data.cities import FIST_CITY_MAX_BUSINESSES
-                max_biz = FIST_CITY_MAX_BUSINESSES.get(city_obj.total_districts, 1)
-                existing_biz = await session.scalar(
-                    select(func.count(UserBuilding.id)).where(
-                        UserBuilding.user_id == user.id,
-                        UserBuilding.city_id == city_id,
-                        UserBuilding.is_active == True,
-                    )
-                ) or 0
-                if existing_biz >= max_biz:
-                    continue
-
-            used_in_city = await session.scalar(
-                select(func.sum(UserBuilding.district_cost)).where(
-                    UserBuilding.user_id == user.id,
-                    UserBuilding.city_id == city_id,
-                    UserBuilding.is_active == True,
-                    UserBuilding.count > 0,
-                )
-            ) or 0
-            free = district_count - used_in_city
-            n = free // cost
-            if n <= 0:
-                continue
-
-            if user.business_path == "illegal":
-                user.influence = max(min_influence, user.influence - cost * n * 5)
-            elif user.business_path == "political":
-                user.influence += cost * n * 5
-
-            res2 = await session.execute(
-                select(UserBuilding).where(
-                    UserBuilding.user_id == user.id,
-                    UserBuilding.building_type == building_id,
-                    UserBuilding.city_id == city_id,
-                    UserBuilding.is_active == True,
-                )
-            )
-            existing = res2.scalar_one_or_none()
-            if existing:
-                existing.count += n
-                existing.district_cost += cost * n
-            else:
-                session.add(UserBuilding(
-                    user_id=user.id,
-                    building_type=building_id,
-                    path=cfg.path,
-                    city_id=city_id,
-                    count=n,
-                    base_income=cfg.base_income,
-                    district_cost=cost * n,
-                ))
-            total_built += n
-
-        if total_built > 0:
-            await session.flush()
-            await self._recalc_income(session, user)
-        return {"ok": True, "count": total_built, "cost_each": cost}
-
-    async def demolish_all_city(
-        self, session: AsyncSession, user: User, city_id: int
-    ) -> dict:
-        result = await session.execute(
-            select(UserBuilding).where(
-                UserBuilding.user_id == user.id,
-                UserBuilding.city_id == city_id,
-                UserBuilding.is_active == True,
-            )
-        )
-        buildings = result.scalars().all()
-        total_count = sum(b.count for b in buildings)
-        total_districts = sum(b.district_cost for b in buildings)
-        for b in buildings:
-            await session.delete(b)
-        await session.flush()
-        if buildings:
-            self._apply_demolish_influence(user, total_districts)
-            await self._recalc_income(session, user)
-        return {"ok": True, "count": total_count}
-
-    async def demolish_all(
-        self, session: AsyncSession, user: User
-    ) -> dict:
-        result = await session.execute(
-            select(UserBuilding).where(
-                UserBuilding.user_id == user.id,
-                UserBuilding.is_active == True,
-            )
-        )
-        buildings = result.scalars().all()
-        total_count = sum(b.count for b in buildings)
-        total_districts = sum(b.district_cost for b in buildings)
-        for b in buildings:
-            await session.delete(b)
-        await session.flush()
-        if buildings:
-            self._apply_demolish_influence(user, total_districts)
-            await self._recalc_income(session, user)
-        return {"ok": True, "count": total_count}
-
     async def get_or_create_bonus_city(self, session: AsyncSession, user: User):
+        from sqlalchemy import select
         from app.models.city import City
         result = await session.execute(
             select(City).where(City.phase == "business", City.owner_id == user.id)
@@ -409,52 +220,108 @@ class BusinessService:
         city.total_districts += count
         city.captured_districts += count
         await session.flush()
+        await self._recalc_income(session, user)
 
     async def get_income_breakdown(
         self, session: AsyncSession, user: User
     ) -> dict:
-        result = await session.execute(
-            select(
-                func.sum(UserBuilding.base_income * UserBuilding.count)
-            ).where(
-                UserBuilding.user_id == user.id,
-                UserBuilding.is_active == True,
-                UserBuilding.count > 0,
-            )
+        from app.config.game_balance import (
+            BIZ_GENIUS_LEVEL_PCT_PER_LEVEL, BIZ_GENIUS_CAPACITY_PCT_PER_LEVEL,
+            BIZ_GENIUS_INCOME_PCT_PER_LEVEL,
         )
-        base = result.scalar() or 0
+        from app.data.buildings import BUILDINGS_BY_ID
+        from app.repositories.city_repo import city_repo
+
+        district_count = await city_repo.get_user_district_count(session, user.id)
+
+        has_business = bool(user.business_building_id)
+        cfg = BUILDINGS_BY_ID.get(user.business_building_id) if has_business else None
+
+        per_district_rate = cfg.base_income if cfg else 0
+        base_income = per_district_rate * district_count
+
+        total_bonus = self._total_bonus_percent(user, district_count) if has_business else 0
         potion_bonus = await potion_service.get_income_bonus(session, user.id)
-        clan_upgrade_bonus = getattr(user, 'clan_income_bonus', 0)
-        clan_donat_bonus = getattr(user, 'clan_donat_income_bonus', 0)
-        clan_bonus = clan_upgrade_bonus + clan_donat_bonus
-        biz_genius_bonus = self._biz_genius_bonus(user)
-        network_bonus = await self._digital_network_bonus(session, user)
-        other_bonus = user.income_bonus_percent + user.prestige_income_bonus
-        total_bonus = other_bonus + clan_bonus + biz_genius_bonus + network_bonus
+        effective_income = int(base_income * (1 + total_bonus / 100) * user.district_multiplier)
+        effective_final_before_charles = int(effective_income * (1 + potion_bonus / 100))
 
-        effective_income = int(base * (1 + total_bonus / 100) * user.district_multiplier)
-        effective_final = int(effective_income * (1 + potion_bonus / 100))
+        # Сет Славы «Чарльз Чой» — последний множитель, поверх уже готового
+        # итога (не в общую сумму %, см. _charles_bonus_percent).
+        charles_bonus = self._charles_bonus_percent(user, district_count) if has_business else 0
+        effective_final = int(effective_final_before_charles * (1 + charles_bonus / 100))
 
-        # Пассивный доход от круговых донатов: NHCoin/мин (уже за минуту)
-        # Применяем те же % баффы что и в income_tick: навыки + пробуждение + клан + зелье
+        network_bonus = 0
+        if has_business and user.business_path == "digital":
+            from app.config.game_balance import (
+                DIGITAL_NETWORK_BASE_PENALTY, DIGITAL_NETWORK_BONUS_PER_TIER,
+                DIGITAL_NETWORK_DISTRICTS_PER_TIER, DIGITAL_NETWORK_BONUS_CAP,
+            )
+            network_bonus = max(
+                DIGITAL_NETWORK_BASE_PENALTY,
+                min(
+                    DIGITAL_NETWORK_BONUS_CAP,
+                    DIGITAL_NETWORK_BASE_PENALTY
+                    + (district_count // DIGITAL_NETWORK_DISTRICTS_PER_TIER) * DIGITAL_NETWORK_BONUS_PER_TIER,
+                ),
+            )
+
+        nhn_bonus = min(80, (district_count // 15) * 10) if getattr(user, "fame_charles_nhn_group", False) else 0
+        geniuses_bonus = 30 if getattr(user, "fame_charles_geniuses", False) else 0
+        charles_bonus_for_circ = nhn_bonus + geniuses_bonus
+
         circ_passive = getattr(user, "circ_passive_income", 0) or 0
         circ_total_bonus = total_bonus + potion_bonus
-        circ_per_min = max(0, int(circ_passive * (1 + circ_total_bonus / 100)))
+        circ_per_min = max(0, int(circ_passive * (1 + circ_total_bonus / 100) * (1 + charles_bonus_for_circ / 100)))
+
+        from app.config.game_balance import (
+            SUZERAIN_INCOME_BONUS_PCT_PER_VASSAL, SUZERAIN_INCOME_BONUS_CAP_PCT,
+        )
+        suzerain_bonus = min(
+            SUZERAIN_INCOME_BONUS_CAP_PCT,
+            getattr(user, "vassal_count", 0) * SUZERAIN_INCOME_BONUS_PCT_PER_VASSAL,
+        )
+
+        from app.config.game_balance import VASSAL_TRIBUTE_PERCENT
+        from sqlalchemy import select, func
+        from app.models.user import User as _User
+        vassal_income_sum = await session.scalar(
+            select(func.coalesce(func.sum(_User.income_per_minute), 0)).where(_User.suzerain_id == user.id)
+        ) or 0
+        vassal_tribute_income = int(vassal_income_sum * VASSAL_TRIBUTE_PERCENT / 100)
 
         return {
-            "base_income": base,
+            "has_business": has_business,
+            "building_name": cfg.name if cfg else None,
+            "building_emoji": cfg.emoji if cfg else None,
+            "building_path": cfg.path if cfg else None,
+            "district_count": district_count,
+            "per_district_rate": per_district_rate,
+            "base_income": base_income,
             "final_income": effective_final,
             "total_bonus_percent": total_bonus,
+            "genius_level": user.business_genius_level,
+            "genius_capacity_level": user.business_genius_capacity_level,
+            "genius_discount_level": user.business_genius_discount_level,
+            "genius_income_level": user.business_genius_income_level,
+            "genius_level_bonus": user.business_genius_level * BIZ_GENIUS_LEVEL_PCT_PER_LEVEL,
+            "genius_capacity_bonus": user.business_genius_capacity_level * BIZ_GENIUS_CAPACITY_PCT_PER_LEVEL,
+            "genius_income_bonus": user.business_genius_income_level * BIZ_GENIUS_INCOME_PCT_PER_LEVEL,
+            "network_bonus": network_bonus,
             "prestige_bonus": user.prestige_income_bonus,
             "potion_bonus": potion_bonus,
-            "clan_income_bonus": clan_upgrade_bonus,
-            "clan_donat_income_bonus": clan_donat_bonus,
+            "clan_income_bonus": getattr(user, 'clan_income_bonus', 0),
+            "clan_donat_income_bonus": getattr(user, 'clan_donat_income_bonus', 0),
+            "clan_head_income_bonus": getattr(user, 'clan_head_income_bonus', 0),
+            "clan_land_income_bonus": getattr(user, 'clan_land_income_pct', 0),
+            "suzerain_bonus": suzerain_bonus,
+            "nhn_bonus": nhn_bonus,
+            "geniuses_bonus": geniuses_bonus,
+            "charles_bonus_pct": charles_bonus,
             "district_multiplier": user.district_multiplier,
             "skills_bonus": user.income_bonus_percent,
-            "biz_genius_bonus": biz_genius_bonus,
-            "network_bonus": network_bonus,
             "circ_passive_income": circ_passive,
             "circ_passive_per_min": circ_per_min,
+            "vassal_tribute_income": vassal_tribute_income,
         }
 
 

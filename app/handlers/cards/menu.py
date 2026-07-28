@@ -25,8 +25,9 @@ RANK_ORDER = [
 ]
 
 
-@router.callback_query(F.data == "deck")
-async def cb_deck(cb: CallbackQuery, session: AsyncSession, user: User):
+async def build_deck_view(session: AsyncSession, user: User) -> tuple[str, "InlineKeyboardMarkup"]:
+    """Чистый билдер (текст, клавиатура) без CallbackQuery — переиспользуется
+    инлайн-хэндлером и быстрым меню (reply-клавиатура)."""
     cd = await cooldown_service.get_ttl(cooldown_service.ticket_key(user.id))
     total_char_power = await character_repo.get_total_power(session, user.id)
     cd_str = f"⏳ {fmt_ttl(cd)}" if cd > 0 else "✅ Готов"
@@ -76,7 +77,12 @@ async def cb_deck(cb: CallbackQuery, session: AsyncSession, user: User):
         f"💎 Пыль: {fmt_num(dust)}\n"
         f"💪 Мощь персонажей: {fmt_num(total_char_power)}"
     )
-    markup = builder.as_markup()
+    return text, builder.as_markup()
+
+
+@router.callback_query(F.data == "deck")
+async def cb_deck(cb: CallbackQuery, session: AsyncSession, user: User):
+    text, markup = await build_deck_view(session, user)
     try:
         await cb.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
     except Exception:

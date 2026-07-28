@@ -13,6 +13,7 @@ from app.constants.clan import (
     CLAN_DONAT_PACKAGES,
 )
 from app.utils.formatters import fmt_num
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -44,16 +45,13 @@ async def cb_clan_shop(cb: CallbackQuery, session: AsyncSession, user: User):
         builder.row(InlineKeyboardButton(text=cat_name, callback_data=f"clan_shop_cat:{cat_id}"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clans_menu"))
 
-    try:
-        await cb.message.edit_text(
-            f"🛒 <b>Магазин клана {html.escape(clan.name)}</b>\n\n"
-            f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin\n\n"
-            f"Выбери категорию:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"🛒 <b>Магазин клана {html.escape(clan.name)}</b>\n\n"
+        f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin\n\n"
+        f"Выбери категорию:",
+        builder.as_markup(),
+    )
 
 
 async def _show_upgrades(cb: CallbackQuery, clan: Clan, can_buy: bool = False):
@@ -91,19 +89,16 @@ async def _show_upgrades(cb: CallbackQuery, clan: Clan, can_buy: bool = False):
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clan_shop"))
 
-    try:
-        await cb.message.edit_text(
-            f"⚙️ <b>Улучшения клана</b>\n\n"
-            f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin\n"
-            f"👥 Слоты: {clan.max_members} (доп: {slots_str}, макс +25)\n\n"
-            f"Активные бонусы (улучшения):\n{bonuses_str}\n\n"
-            f"💎 Донат-бонусы:\n{donat_str}\n\n"
-            f"Улучшения применяются ко всем участникам:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"⚙️ <b>Улучшения клана</b>\n\n"
+        f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin\n"
+        f"👥 Слоты: {clan.max_members} (доп: {slots_str}, макс +25)\n\n"
+        f"Активные бонусы (улучшения):\n{bonuses_str}\n\n"
+        f"💎 Донат-бонусы:\n{donat_str}\n\n"
+        f"Улучшения применяются ко всем участникам:",
+        builder.as_markup(),
+    )
 
 
 async def _show_donate(cb: CallbackQuery, clan: Clan):
@@ -133,14 +128,7 @@ async def _show_donate(cb: CallbackQuery, clan: Clan):
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clan_shop"))
-    try:
-        await cb.message.edit_text(
-            "\n".join(lines),
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
 
 
 _POTION_TYPE_GROUPS = [
@@ -176,16 +164,13 @@ async def _show_category(cb: CallbackQuery, clan: Clan, cat_id: str, can_buy_upg
         ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clan_shop"))
 
-    try:
-        await cb.message.edit_text(
-            f"🛒 <b>{cat_name}</b>\n\n"
-            f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin\n\n"
-            f"Покупки применяются ко всем участникам клана:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"🛒 <b>{cat_name}</b>\n\n"
+        f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin\n\n"
+        f"Покупки применяются ко всем участникам клана:",
+        builder.as_markup(),
+    )
 
 
 async def _show_potion_types(cb: CallbackQuery, clan: Clan):
@@ -197,17 +182,14 @@ async def _show_potion_types(cb: CallbackQuery, clan: Clan):
             callback_data=f"clan_potion_type:{type_key}",
         ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clan_shop"))
-    try:
-        await cb.message.edit_text(
-            f"🧪 <b>Зелья клана</b>\n\n"
-            f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin\n\n"
-            f"Выбери тип зелья (6 уровней):\n"
-            f"<i>Применяются ко всем участникам клана</i>",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"🧪 <b>Зелья клана</b>\n\n"
+        f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin\n\n"
+        f"Выбери тип зелья (6 уровней):\n"
+        f"<i>Применяются ко всем участникам клана</i>",
+        builder.as_markup(),
+    )
 
 
 @router.callback_query(F.data.startswith("clan_shop_cat:"))
@@ -243,18 +225,15 @@ async def cb_clan_potion_type(cb: CallbackQuery, session: AsyncSession, user: Us
             text=f"{can} {item.name} — {fmt_num(item.price)}",
             callback_data=f"clan_buy:{item.item_id}",
         ))
-    builder.row(InlineKeyboardButton(text="◀️ К типам зелий", callback_data="clan_shop_cat:potions"))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clan_shop_cat:potions"))
 
-    try:
-        await cb.message.edit_text(
-            f"🧪 <b>{type_label}</b>\n\n"
-            f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin\n\n"
-            f"Выбери уровень:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"🧪 <b>{type_label}</b>\n\n"
+        f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin\n\n"
+        f"Выбери уровень:",
+        builder.as_markup(),
+    )
 
 
 @router.callback_query(F.data.startswith("clan_buy:"))

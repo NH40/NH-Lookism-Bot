@@ -160,8 +160,12 @@ async def _main_menu_text(session: AsyncSession, user: User) -> str:
 
     land_power_bonus = getattr(user, "clan_land_power_mastery_bonus", 0)
     land_speed_bonus = getattr(user, "clan_land_speed_mastery_bonus", 0)
+    land_endurance_bonus = getattr(user, "clan_land_endurance_mastery_bonus", 0)
+    land_technique_bonus = getattr(user, "clan_land_technique_mastery_bonus", 0)
     eff_strength = min(4, (mastery.strength if mastery else 0) + land_power_bonus)
     eff_speed = min(4, (mastery.speed if mastery else 0) + land_speed_bonus)
+    eff_endurance = min(4, (mastery.endurance if mastery else 0) + land_endurance_bonus)
+    eff_technique = min(4, (mastery.technique if mastery else 0) + land_technique_bonus)
 
     mastery_lines = []
     if eff_strength > 0:
@@ -170,10 +174,12 @@ async def _main_menu_text(session: AsyncSession, user: User) -> str:
     if eff_speed > 0:
         land_str = f" 🏰+{land_speed_bonus}" if land_speed_bonus else ""
         mastery_lines.append(f"  ⚡ Скорость {_pbar(eff_speed, 4)} {eff_speed}/4{land_str} (-{speed_map[eff_speed]}% КД)")
-    if mastery and mastery.endurance > 0:
-        mastery_lines.append(f"  🛡 Выносливость {_pbar(mastery.endurance, 4)} {mastery.endurance}/4 (+{speed_map[mastery.endurance]}% порог)")
-    if mastery and mastery.technique > 0:
-        mastery_lines.append(f"  🏋 Техника {_pbar(mastery.technique, 4)} {mastery.technique}/4 (+{bonus_map[mastery.technique]}% трен./доход)")
+    if eff_endurance > 0:
+        land_str = f" 🏰+{land_endurance_bonus}" if land_endurance_bonus else ""
+        mastery_lines.append(f"  🛡 Выносливость {_pbar(eff_endurance, 4)} {eff_endurance}/4{land_str} (+{speed_map[eff_endurance]}% порог)")
+    if eff_technique > 0:
+        land_str = f" 🏰+{land_technique_bonus}" if land_technique_bonus else ""
+        mastery_lines.append(f"  🏋 Техника {_pbar(eff_technique, 4)} {eff_technique}/4{land_str} (+{bonus_map[eff_technique]}% трен./доход)")
 
     path_emoji = {"businessman": "💼", "romantic": "💝", "monster": "👹", "shadow": "🌑"}
     path_name  = {"businessman": "Бизнесмен", "romantic": "Романтик", "monster": "Монстр", "shadow": "Тень"}
@@ -205,22 +211,40 @@ async def _main_menu_text(session: AsyncSession, user: User) -> str:
         tui = " TUI" if user.true_ultra_instinct else ""
         ui_line = f"  🤖 УИ{tui} активен"
 
-    war_points = getattr(user, "war_points", 0)
     war_genius = getattr(user, "war_genius_level", 0)
-    war_line = f"  ⚔️ Очки войны: {war_points} | Гений войны: {war_genius}/5" if (war_points or war_genius) else ""
+    biz_genius = getattr(user, "business_genius_level", 0)
+    path_level = getattr(user, "skill_path_level", 0)
+    from app.constants.raid import PATH_LEVEL_MAX
+
+    genius_lines = []
+    if war_genius:
+        genius_lines.append(f"  ⚔️ Гений войны {_pbar(war_genius, 5)} {war_genius}/5")
+    if biz_genius:
+        genius_lines.append(f"  🎖 Гений бизнеса {_pbar(biz_genius, 5)} {biz_genius}/5")
+    from app.handlers.skills.med_genius import any_unlocked, _unlocked_count, MG_POTIONS, is_donat as _mg_is_donat
+    if _mg_is_donat(user):
+        genius_lines.append("  🩺 Гений медицины: Донат (все Ур.6)")
+    elif any_unlocked(user):
+        genius_lines.append(f"  🩺 Гений медицины: {_unlocked_count(user)}/{len(MG_POTIONS)} зелий")
+    if path_level:
+        genius_lines.append(f"  🔷 Путь {_pbar(path_level, PATH_LEVEL_MAX)} {path_level}/{PATH_LEVEL_MAX}")
+
+    alchemy_frags = getattr(user, "alchemy_fragments", 0)
+    alchemy_line = f"  🧪 Фрагменты алхимии: {alchemy_frags}" if alchemy_frags else ""
 
     buff_lines = []
-    if mastery_lines or war_line:
+    if mastery_lines:
         buff_lines.append("━━━ ⚔️ Мастерство ━━━")
         buff_lines.extend(mastery_lines)
-        if war_line:
-            buff_lines.append(war_line)
-    if path_line or ui_line:
+    if path_line or ui_line or alchemy_line or genius_lines:
         buff_lines.append("━━━ 🛤 Развитие ━━━")
         if path_line:
             buff_lines.append(path_line)
         if ui_line:
             buff_lines.append(ui_line)
+        if alchemy_line:
+            buff_lines.append(alchemy_line)
+        buff_lines.extend(genius_lines)
     if potion_lines:
         buff_lines.append("━━━ 🧪 Активные зелья ━━━")
         buff_lines.extend(potion_lines)
@@ -230,10 +254,22 @@ async def _main_menu_text(session: AsyncSession, user: User) -> str:
     full_name = html.escape(user.full_name)
     gang_name = html.escape(user.gang_name) if user.gang_name else None
 
+    from app.services.clan import clan_service
+    clan = await clan_service.get_user_clan(session, user.id)
+    clan_line = f"🏯 Клан: {html.escape(clan.name)}\n" if clan else ""
+
+    from app.services.quest_service import quest_service
+    from app.constants.quests import DAILY_QUESTS_COUNT
+    quests = await quest_service.get_or_create_quests(session, user)
+    completed = sum(1 for q in quests if q.is_completed and q.quest_id != "all_done")
+    quest_line = f"📋 Задания: {completed}/{DAILY_QUESTS_COUNT} выполнено\n"
+
     from app.utils.formatters import fmt_num, phase_label
     return (
         f"👤 {full_name}\n"
         + (f"🏴 Банда: {gang_name}\n" if gang_name else "")
+        + clan_line
+        + quest_line
         + f"{'─' * 20}\n"
         f"{_phase_emoji(user.phase)} Фаза: {phase_label(user.phase)}\n"
         f"💰 NHCoin: {fmt_num(user.nh_coins)}\n"

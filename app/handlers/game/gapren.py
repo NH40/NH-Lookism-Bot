@@ -8,6 +8,7 @@ from app.models.user import User
 from app.services.game.gapren import get_or_create_challenge, gapren_power, attack_gapren
 from app.config.game_balance import GAPREN_WINS_NEEDED
 from app.utils.formatters import fmt_num, fmt_ttl
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -55,10 +56,7 @@ async def cb_emperor_awakening(cb: CallbackQuery, session: AsyncSession, user: U
         await cb.answer("Только для Императора!", show_alert=True)
         return
     text, kb = await _build_awakening_screen(session, user)
-    try:
-        await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-    except Exception:
-        pass
+    await safe_edit(cb, text, kb)
     await cb.answer()
 
 
@@ -111,10 +109,7 @@ async def cb_gapren_attack(cb: CallbackQuery, session: AsyncSession, user: User)
         builder.row(InlineKeyboardButton(text="◀️ К пробуждению", callback_data="emperor_awakening"))
 
         text = "\n".join(lines)
-        try:
-            await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-        except Exception:
-            pass
+        await safe_edit(cb, text, builder.as_markup())
         await cb.answer()
     finally:
         await cooldown_service.release_lock(lock_key)

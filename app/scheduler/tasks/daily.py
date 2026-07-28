@@ -2,8 +2,10 @@
 Ежедневные бонусы от круговых донатов.
 
 circ_daily_districts (Архангел круг 10):
-  Для игроков в фазе Кулак — выдаётся реальный fist-город с N районами.
-  Для остальных фаз — начисляется NHCoin-эквивалент (N × DISTRICT_DAILY_COIN_RATE).
+  Начисляет N бонусных районов (через business_service.add_bonus_districts —
+  личный "business"-квартал вне карты, засчитывается в доход как обычные
+  захваченные районы). До патча 1.3.1 (Кулак ещё был в прогрессии) выдавался
+  настоящий fist-город; фаза Кулака убрана из прогрессии — теперь всем одинаково.
 """
 import logging
 from datetime import datetime, timezone
@@ -38,31 +40,17 @@ async def daily_tick():
                     if districts <= 0:
                         continue
 
-                    from app.services.game_service import game_service
                     from app.services.business_service import business_service
-                    from app.models.city import City, District
-                    from sqlalchemy import func
 
-                    await game_service._give_fist_city_one(session, user, districts)
-
-                    fist_cnt = await session.scalar(
-                        select(func.count(func.distinct(District.city_id)))
-                        .join(City, City.id == District.city_id)
-                        .where(
-                            District.owner_id == user.id,
-                            District.is_captured == True,
-                            City.phase == "fist",
-                        )
-                    ) or 0
-                    user.fist_cities_count = fist_cnt
-                    await business_service._recalc_income(session, user)
+                    user.bonus_business_districts = getattr(user, "bonus_business_districts", 0) + districts
+                    await business_service.add_bonus_districts(session, user, districts)
 
                     user.circ_daily_districts_at = datetime.now(timezone.utc)
                     notifications.append((
                         user.tg_id,
-                        f"🏙 <b>Архангел подарил вам город!</b>\n\n"
+                        f"🏙 <b>Архангел подарил вам районы!</b>\n\n"
                         f"Ежедневный бонус: +<b>{districts}</b> районов.\n"
-                        f"Городов Кулака: <b>{fist_cnt}</b>",
+                        f"Всего бонусных районов: <b>{user.bonus_business_districts}</b>",
                     ))
                     count += 1
 

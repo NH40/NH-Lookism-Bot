@@ -11,8 +11,9 @@ from app.services.cooldown_service import cooldown_service
 from app.repositories.city_repo import city_repo
 from app.repositories.user_repo import user_repo
 from app.utils.keyboards.common import back_kb
-from app.utils.formatters import fmt_num, fmt_ttl
+from app.utils.formatters import fmt_num, fmt_ttl, clamp_enemy_power
 from app.utils.truce import truce_button_label
+from app.utils.menu_media import send_menu
 import html
 
 router = Router()
@@ -22,7 +23,8 @@ async def build_king_menu(session, user, page: int = 0):
     cd_key = cooldown_service.attack_key(user.id)
     cd = await cooldown_service.get_ttl(cd_key)
 
-    cities = await city_repo.get_available_king_cities(session, user.sector or "Н")
+    from app.data.cities import DEFAULT_COUNTRY
+    cities = await city_repo.get_available_king_cities(session, user.country or DEFAULT_COUNTRY)
 
     from app.models.city import City
     from app.data.cities import KING_DISTRICT_BASE_POWER
@@ -193,41 +195,37 @@ async def build_king_menu(session, user, page: int = 0):
         builder.row(*nav)
 
     cities_count = my_cities_count
-    if cities_count >= 9:
-        builder.row(InlineKeyboardButton(
-            text=f"⚠️ {cities_count}/10 — последний город не через ботов!",
-            callback_data="king_bots_menu"
-        ))
-    else:
-        builder.row(InlineKeyboardButton(text="🤖 Боты-короли", callback_data="king_bots_menu"))
+    ruled_count = await game_service._count_ruled_cities(session, user.id)
+    builder.row(InlineKeyboardButton(text="👑 Борьба за трон", callback_data="king_challenge_list"))
     builder.row(InlineKeyboardButton(text=truce_button_label(user), callback_data="truce_menu"))
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
 
     extra_str = f"\n⚡ Доп. атак: {user.extra_attack_count}" if user.extra_attack_count > 0 else ""
     cd_str = f"\n⏳ КД: {fmt_ttl(cd)}" if cd > 0 else ""
-    nine_hint = "\n\n⚠️ <b>Последний город захвати через список городов выше — не через ботов!</b>" if cities_count >= 9 else ""
 
     text = (
         f"⚔️ <b>Атака — Фаза Короля</b>\n\n"
         f"{'─' * 20}\n"
-        f"🏙 Городов с районами: <b>{cities_count}/10</b>\n"
-        f"💪 Твоя мощь: <b>{fmt_num(user.combat_power)}</b>"
+        f"🏙 Городов с районами: <b>{cities_count}</b>\n"
+        f"👑 Городов на троне: <b>{ruled_count}</b>\n"
+        f"🤝 Вассалов: <b>{user.vassal_count}</b>"
+        + (f" | 🫡 Плачу дань королю" if user.suzerain_id else "") +
+        f"\n💪 Твоя мощь: <b>{fmt_num(user.combat_power)}</b>"
         + extra_str + cd_str +
         f"\n{'─' * 20}\n\n"
         f"Выбери город для атаки:"
-        + nine_hint
     )
-    return text, builder.as_markup()
+    from app.data.cities import COUNTRY_BY_CODE, DEFAULT_COUNTRY
+    photo = COUNTRY_BY_CODE[user.country or DEFAULT_COUNTRY].image
+    return text, builder.as_markup(), photo
 
 
 @router.callback_query(F.data.startswith("king_page:"))
 async def cb_king_page(cb: CallbackQuery, session: AsyncSession, user: User):
     page = int(cb.data.split(":")[1])
-    text, kb = await build_king_menu(session, user, page=page)
-    try:
-        await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-    except Exception:
-        pass
+    text, kb, photo = await build_king_menu(session, user, page=page)
+    from app.utils.menu_media import send_menu
+    await send_menu(cb, text, kb, photo)
     await cb.answer()
 
 
@@ -297,13 +295,13 @@ async def cb_king_city_info(cb: CallbackQuery, session: AsyncSession, user: User
         if defender and defender.phase == "king":
             is_pvp = True
             defender_name = defender.full_name
-            enemy_power = int(defender.combat_power)
+            enemy_power = clamp_enemy_power(int(defender.combat_power), user.combat_power)
         elif defender and defender.phase == "fist":
             is_fist_locked = free_count == 0
             enemy_power = int(KING_DISTRICT_BASE_POWER * city.total_districts * city.district_power_multiplier)
-            enemy_power = max(100, enemy_power)
+            enemy_power = clamp_enemy_power(max(100, enemy_power), user.combat_power)
         else:
-            enemy_power = int(defender.combat_power * 0.7) if defender else 0
+            enemy_power = clamp_enemy_power(int(defender.combat_power * 0.7), user.combat_power) if defender else 0
     else:
         from app.models.building import UserBuilding
         buildings_count = await session.scalar(
@@ -316,7 +314,7 @@ async def cb_king_city_info(cb: CallbackQuery, session: AsyncSession, user: User
             enemy_power = int(buildings_count * 50 * city.district_power_multiplier * 0.7)
         else:
             enemy_power = int(KING_DISTRICT_BASE_POWER * city.total_districts * city.district_power_multiplier)
-        enemy_power = max(100, enemy_power)
+        enemy_power = clamp_enemy_power(max(100, enemy_power), user.combat_power)
 
     can_win = user.combat_power >= enemy_power
     power_diff = user.combat_power - enemy_power
@@ -364,26 +362,23 @@ async def cb_king_city_info(cb: CallbackQuery, session: AsyncSession, user: User
     enemy_str = f"👤 PvP: {html.escape(defender_name)}" if is_pvp else "🤖 Бот"
     status_str = f"{'✅ Можешь победить' if can_win else '❌ Слишком слабый'} ({power_str})"
 
-    try:
-        await cb.message.edit_text(
-            f"{size_emoji} <b>{html.escape(city.name)}</b>\n\n"
-            f"{'─' * 20}\n"
-            f"💪 Мощь противника: <b>{fmt_num(enemy_power)}</b> {enemy_str}\n"
-            f"💪 Твоя мощь: <b>{fmt_num(user.combat_power)}</b>\n"
-            f"📈 Разница: {power_str}\n\n"
-            f"{'─' * 20}\n"
-            f"🏘 Прогресс города:\n"
-            f"{progress_bar} {pct}%\n"
-            f"Всего районов: {captured}/{total}\n"
-            f"Моих районов: <b>{my_in_city}</b>\n"
-            f"Свободных: {free_count} | Чужих: {not_mine}\n\n"
-            f"{'─' * 20}\n"
-            f"{status_str}",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await send_menu(
+        cb,
+        f"{size_emoji} <b>{html.escape(city.name)}</b>\n\n"
+        f"{'─' * 20}\n"
+        f"💪 Мощь противника: <b>{fmt_num(enemy_power)}</b> {enemy_str}\n"
+        f"💪 Твоя мощь: <b>{fmt_num(user.combat_power)}</b>\n"
+        f"📈 Разница: {power_str}\n\n"
+        f"{'─' * 20}\n"
+        f"🏘 Прогресс города:\n"
+        f"{progress_bar} {pct}%\n"
+        f"Всего районов: {captured}/{total}\n"
+        f"Моих районов: <b>{my_in_city}</b>\n"
+        f"Свободных: {free_count} | Чужих: {not_mine}\n\n"
+        f"{'─' * 20}\n"
+        f"{status_str}",
+        builder.as_markup(),
+    )
 
 
 @router.callback_query(F.data.startswith("king_attack:"))
@@ -424,10 +419,11 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         await cooldown_service.release_lock(lock_key)
 
     if result.get("promoted"):
-        await cb.message.edit_text(
-            f"🎉 {html.escape(result['message'])}",
-            reply_markup=back_kb("main_menu"), parse_mode="HTML"
-        )
+        await send_menu(cb, f"🎉 {html.escape(result['message'])}", back_kb("main_menu"))
+        return
+
+    if result.get("destroyed"):
+        await send_menu(cb, f"💀 <b>{html.escape(result['message'])}</b>", back_kb("main_menu"))
         return
 
     if not result["ok"]:
@@ -506,14 +502,94 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
             f"🤖 Мощь противника: {fmt_num(result['bot_power'])}"
         )
 
-    try:
-        await cb.message.edit_text(
-            text, reply_markup=builder.as_markup(), parse_mode="HTML"
-        )
-    except Exception:
-        pass
+    await send_menu(cb, text, builder.as_markup())
 
 
 @router.callback_query(F.data == "noop_king")
 async def cb_noop_king(cb: CallbackQuery):
     await cb.answer()
+
+
+@router.callback_query(F.data == "king_challenge_list")
+async def cb_king_challenge_list(cb: CallbackQuery, session: AsyncSession, user: User):
+    from app.data.cities import DEFAULT_COUNTRY
+    from app.utils.truce import is_truce_active
+
+    country = user.country or DEFAULT_COUNTRY
+    rivals_r = await session.execute(
+        select(User).where(
+            User.phase == "king",
+            User.country == country,
+            User.id != user.id,
+        ).order_by(User.combat_power.desc()).limit(10)
+    )
+    rivals = rivals_r.scalars().all()
+
+    if not rivals:
+        await cb.answer("В твоей стране больше нет других королей", show_alert=True)
+        return
+
+    builder = InlineKeyboardBuilder()
+    for r in rivals:
+        power = clamp_enemy_power(int(r.combat_power), user.combat_power)
+        if is_truce_active(r):
+            builder.row(InlineKeyboardButton(
+                text=f"🕊 {r.full_name} | 💪 {fmt_num(power)} (перемирие)",
+                callback_data="noop_king"
+            ))
+        else:
+            builder.row(InlineKeyboardButton(
+                text=f"⚔️ {r.full_name} | 💪 {fmt_num(power)}",
+                callback_data=f"king_challenge_attack:{r.id}"
+            ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="attack"))
+
+    await send_menu(
+        cb,
+        "👑 <b>Борьба за трон</b>\n\n"
+        "Победишь — соперник станет твоим вассалом (платит 20% дохода).\n"
+        "Проиграешь — станешь вассалом сам.\n"
+        "Вызов раз в час, только внутри своей страны.\n\n"
+        f"💪 Твоя мощь: {fmt_num(user.combat_power)}",
+        builder.as_markup(),
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("king_challenge_attack:"))
+async def cb_king_challenge_attack(cb: CallbackQuery, session: AsyncSession, user: User):
+    defender_id = int(cb.data.split(":")[1])
+
+    lock_key = cooldown_service.king_challenge_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
+        await cb.answer("⏳ Вызов уже обрабатывается", show_alert=True)
+        return
+
+    try:
+        result = await game_service.king_challenge_throne(session, user, defender_id)
+        await session.commit()
+    finally:
+        await cooldown_service.release_lock(lock_key)
+
+    if not result["ok"]:
+        await cb.answer(result.get("reason", "Ошибка"), show_alert=True)
+        return
+
+    crit_str = " ⚡КРИТ!" if result.get("is_crit") else ""
+    if result["win"]:
+        text = (
+            f"✅ <b>Победа!{crit_str}</b>\n\n"
+            f"Противник: {html.escape(result['defender_name'])}\n"
+            f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
+            f"⚔️ Его мощь: {fmt_num(result['defender_power'])}\n\n"
+            f"👑 {html.escape(result['defender_name'])} стал твоим вассалом! +20% от его дохода."
+        )
+    else:
+        text = (
+            f"❌ <b>Поражение!</b>\n\n"
+            f"Противник: {html.escape(result['defender_name'])}\n"
+            f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
+            f"⚔️ Его мощь: {fmt_num(result['defender_power'])}\n\n"
+            f"🫡 Ты стал вассалом {html.escape(result['defender_name'])} — платишь ему 20% дохода."
+        )
+    await send_menu(cb, text, back_kb("attack"))

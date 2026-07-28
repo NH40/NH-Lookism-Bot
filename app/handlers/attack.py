@@ -28,13 +28,11 @@ async def build_attack_menu(session, user):
     elif user.phase == "king":
         from app.handlers.game.king import build_king_menu
         return await build_king_menu(session, user)
-    elif user.phase == "fist":
-        from app.handlers.game.fist import build_fist_menu
-        return await build_fist_menu(session, user)
     elif user.phase == "emperor":
         from app.handlers.game.emperor import _build_gang_list
-        return await _build_gang_list(session, user)
-    return "⚔️ Атака недоступна", back_kb("main_menu")
+        text, kb = await _build_gang_list(session, user)
+        return text, kb, None
+    return "⚔️ Атака недоступна", back_kb("main_menu"), None
 
 
 @router.callback_query(F.data == "attack")
@@ -44,18 +42,14 @@ async def cb_attack(cb: CallbackQuery, session: AsyncSession, user: User):
     block_msg = await credits_service.block_message(session, user.id)
     if block_msg:
         from app.utils.keyboards.common import back_kb
-        try:
-            await cb.message.edit_text(block_msg, reply_markup=back_kb("bank_credits"), parse_mode="HTML")
-        except Exception:
-            pass
+        from app.utils.menu_media import safe_edit
+        await safe_edit(cb, block_msg, back_kb("bank_credits"))
         await cb.answer()
         return
 
-    text, kb = await build_attack_menu(session, user)
-    try:
-        await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-    except Exception:
-        pass
+    text, kb, photo = await build_attack_menu(session, user)
+    from app.utils.menu_media import send_menu
+    await send_menu(cb, text, kb, photo)
     await cb.answer()
 
 
@@ -86,7 +80,9 @@ async def cb_do_prestige(cb: CallbackQuery, session: AsyncSession, user: User):
             show_alert=True,
         )
         return
-    await cb.message.edit_text(
+    from app.utils.menu_media import send_menu
+    await send_menu(
+        cb,
         f"🌟 <b>Пробуждение</b>\n\n"
         f"Уровень: {user.prestige_level}/10\n\n"
         f"После пробуждения:\n"
@@ -96,8 +92,7 @@ async def cb_do_prestige(cb: CallbackQuery, session: AsyncSession, user: User):
         f"❌ Весь прогресс будет сброшен!\n"
         f"(донаты и пробуждения сохраняются)\n\n"
         f"Подтвердить?",
-        reply_markup=confirm_kb("prestige_confirm", "attack"),
-        parse_mode="HTML",
+        confirm_kb("prestige_confirm", "attack"),
     )
 
 
@@ -106,11 +101,12 @@ async def cb_prestige_confirm(cb: CallbackQuery, session: AsyncSession, user: Us
     from app.services.prestige_service import prestige_service
     result = await prestige_service.do_prestige(session, user)
     if result["ok"]:
-        await cb.message.edit_text(
+        from app.utils.menu_media import send_menu
+        await send_menu(
+            cb,
             f"🌟 <b>Пробуждение {result['level']}/10!</b>\n\n"
             f"Прогресс сброшен. Начинай снова!",
-            reply_markup=back_kb("main_menu"),
-            parse_mode="HTML",
+            back_kb("main_menu"),
         )
     else:
         await cb.answer(result["reason"], show_alert=True)
@@ -144,10 +140,8 @@ async def cb_truce_menu(cb: CallbackQuery, session: AsyncSession, user: User):
         )
         builder.row(InlineKeyboardButton(text="✅ Активировать", callback_data="truce_confirm"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="attack"))
-    try:
-        await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        pass
+    from app.utils.menu_media import send_menu
+    await send_menu(cb, text, builder.as_markup())
     await cb.answer()
 
 
@@ -156,21 +150,17 @@ async def cb_truce_confirm(cb: CallbackQuery, session: AsyncSession, user: User)
     if is_truce_active(user) or is_truce_on_cooldown(user):
         await cb.answer("Перемирие недоступно", show_alert=True)
         return
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="✅ Да, активировать", callback_data="truce_activate"))
-    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="truce_menu"))
-    try:
-        await cb.message.edit_text(
-            f"🕊 <b>Подтверждение перемирия</b>\n\n"
-            f"⏱ Перемирие будет активно <b>{TRUCE_DURATION_HOURS} часов</b>\n"
-            f"🔄 После — перезарядка <b>{TRUCE_COOLDOWN_HOURS} часов</b>\n\n"
-            f"❗ Во время перемирия ты <b>не сможешь атаковать</b>\n\n"
-            f"Активировать перемирие?",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    from app.utils.keyboards.common import confirm_kb
+    from app.utils.menu_media import send_menu
+    await send_menu(
+        cb,
+        f"🕊 <b>Подтверждение перемирия</b>\n\n"
+        f"⏱ Перемирие будет активно <b>{TRUCE_DURATION_HOURS} часов</b>\n"
+        f"🔄 После — перезарядка <b>{TRUCE_COOLDOWN_HOURS} часов</b>\n\n"
+        f"❗ Во время перемирия ты <b>не сможешь атаковать</b>\n\n"
+        f"Активировать перемирие?",
+        confirm_kb("truce_activate", "truce_menu"),
+    )
     await cb.answer()
 
 
@@ -183,17 +173,15 @@ async def cb_truce_activate(cb: CallbackQuery, session: AsyncSession, user: User
     user.truce_until = now + timedelta(hours=TRUCE_DURATION_HOURS)
     user.truce_cd_until = now + timedelta(hours=TRUCE_DURATION_HOURS + TRUCE_COOLDOWN_HOURS)
     await session.flush()
-    try:
-        await cb.message.edit_text(
-            f"✅ <b>Перемирие активировано!</b>\n\n"
-            f"🕊 Ты под защитой на {TRUCE_DURATION_HOURS} часов.\n"
-            f"Никто не сможет атаковать тебя,\n"
-            f"но и ты не можешь атаковать других.",
-            reply_markup=back_kb("attack"),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    from app.utils.menu_media import send_menu
+    await send_menu(
+        cb,
+        f"✅ <b>Перемирие активировано!</b>\n\n"
+        f"🕊 Ты под защитой на {TRUCE_DURATION_HOURS} часов.\n"
+        f"Никто не сможет атаковать тебя,\n"
+        f"но и ты не можешь атаковать других.",
+        back_kb("attack"),
+    )
     await cb.answer()
 
 
@@ -206,29 +194,23 @@ async def cb_truce_deactivate(cb: CallbackQuery, session: AsyncSession, user: Us
     user.truce_until = now - timedelta(seconds=1)
     user.truce_cd_until = now + timedelta(hours=TRUCE_COOLDOWN_HOURS)
     await session.flush()
-    try:
-        await cb.message.edit_text(
-            f"❌ <b>Перемирие деактивировано</b>\n\n"
-            f"🔄 Следующее перемирие через {TRUCE_COOLDOWN_HOURS} часов.",
-            reply_markup=back_kb("attack"),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    from app.utils.menu_media import send_menu
+    await send_menu(
+        cb,
+        f"❌ <b>Перемирие деактивировано</b>\n\n"
+        f"🔄 Следующее перемирие через {TRUCE_COOLDOWN_HOURS} часов.",
+        back_kb("attack"),
+    )
     await cb.answer()
 
 
 # Подключаем дочерние роутеры
 from app.handlers.game.gang import router as gang_router
 from app.handlers.game.king import router as king_router
-from app.handlers.game.fist import router as fist_router
-from app.handlers.game.king_bots import router as king_bots_router
 from app.handlers.game.emperor import router as emperor_router
 from app.handlers.game.gapren import router as gapren_router
 
 router.include_router(gang_router)
 router.include_router(king_router)
-router.include_router(fist_router)
-router.include_router(king_bots_router)
 router.include_router(emperor_router)
 router.include_router(gapren_router)

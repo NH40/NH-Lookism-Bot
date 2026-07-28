@@ -13,6 +13,7 @@ from app.services.bank.casino.common import CASINO_RESOURCES
 from app.constants.market import ITEM_TYPES
 from app.utils.keyboards.common import back_kb
 from app.utils.formatters import fmt_num
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -33,16 +34,13 @@ async def cb_market_seller(cb: CallbackQuery, session: AsyncSession, user: User)
     builder.row(InlineKeyboardButton(text="➕ Создать товар", callback_data="market_create"))
     builder.row(InlineKeyboardButton(text="📦 Мои товары", callback_data="market_my_listings"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_menu"))
-    try:
-        await cb.message.edit_text(
-            f"💰 <b>Продавец</b>\n\n"
-            f"Активных товаров: <b>{len(listings)}/5</b>\n\n"
-            f"Выбери действие:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"💰 <b>Продавец</b>\n\n"
+        f"Активных товаров: <b>{len(listings)}/5</b>\n\n"
+        f"Выбери действие:",
+        builder.as_markup(),
+    )
 
 
 # ── Отмена создания товара ────────────────────────────────────────────────────
@@ -62,14 +60,7 @@ async def cb_market_create(cb: CallbackQuery, session: AsyncSession, user: User,
     builder.row(InlineKeyboardButton(text="📦 Обычная продажа", callback_data="market_create_mode:listing"))
     builder.row(InlineKeyboardButton(text="🔨 Аукцион", callback_data="market_create_mode:auction"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_seller"))
-    try:
-        await cb.message.edit_text(
-            f"➕ <b>Создать товар</b>\n\nКак хотите продать?",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, f"➕ <b>Создать товар</b>\n\nКак хотите продать?", builder.as_markup())
 
 
 @router.callback_query(F.data.startswith("market_create_mode:"))
@@ -85,14 +76,7 @@ async def cb_market_create_mode(cb: CallbackQuery, state: FSMContext):
         ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_create"))
     title = "🔨 Создать аукцион" if mode == "auction" else "➕ Создать товар"
-    try:
-        await cb.message.edit_text(
-            f"{title}\n\nВыбери тип товара:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, f"{title}\n\nВыбери тип товара:", builder.as_markup())
     await cb.answer()
 
 
@@ -132,14 +116,7 @@ async def cb_market_create_type(
 
         builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_create"))
         await state.update_data(item_type=item_type)
-        try:
-            await cb.message.edit_text(
-                "👥 Выбери ранг статистов:",
-                reply_markup=builder.as_markup(),
-                parse_mode="HTML",
-            )
-        except Exception:
-            pass
+        await safe_edit(cb, "👥 Выбери ранг статистов:", builder.as_markup())
         return
 
     # Персонажи — выбор ранга
@@ -174,14 +151,7 @@ async def cb_market_create_type(
 
         builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_create"))
         await state.update_data(item_type=item_type)
-        try:
-            await cb.message.edit_text(
-                "⭐ Выбери ранг персонажа:",
-                reply_markup=builder.as_markup(),
-                parse_mode="HTML",
-            )
-        except Exception:
-            pass
+        await safe_edit(cb, "⭐ Выбери ранг персонажа:", builder.as_markup())
         return
 
     # Остальные типы — показываем баланс
@@ -208,18 +178,13 @@ async def cb_market_create_type(
     await state.update_data(item_type=item_type, meta={})
     await state.set_state(MarketFSM.waiting_amount)
 
-    cancel_kb = InlineKeyboardBuilder()
-    cancel_kb.row(InlineKeyboardButton(text="◀️ Отмена", callback_data="market_create_cancel"))
-    try:
-        await cb.message.edit_text(
-            f"➕ <b>{ITEM_TYPES[item_type]}</b>\n\n"
-            f"{balance_str}\n\n"
-            f"Введи количество:",
-            reply_markup=cancel_kb.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"➕ <b>{ITEM_TYPES[item_type]}</b>\n\n"
+        f"{balance_str}\n\n"
+        f"Введи количество:",
+        back_kb("market_create_cancel"),
+    )
 
 
 @router.callback_query(F.data.startswith("market_create_rank:"))
@@ -241,18 +206,13 @@ async def cb_market_create_rank(
     await state.update_data(item_type="squad_member", meta={"rank": rank}, max_amount=count)
     await state.set_state(MarketFSM.waiting_amount)
 
-    cancel_kb = InlineKeyboardBuilder()
-    cancel_kb.row(InlineKeyboardButton(text="◀️ Отмена", callback_data="market_create_cancel"))
-    try:
-        await cb.message.edit_text(
-            f"👥 <b>Статисты ранга {rank}</b>\n\n"
-            f"У вас: <b>{count}</b> штук\n\n"
-            f"Введи количество для продажи (макс {count}):",
-            reply_markup=cancel_kb.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"👥 <b>Статисты ранга {rank}</b>\n\n"
+        f"У вас: <b>{count}</b> штук\n\n"
+        f"Введи количество для продажи (макс {count}):",
+        back_kb("market_create_cancel"),
+    )
 
 
 @router.callback_query(F.data.startswith("market_char_rank:"))
@@ -298,14 +258,7 @@ async def cb_market_char_rank(
         text="◀️ Назад", callback_data="market_create_type:character"
     ))
     await state.update_data(item_type="character")
-    try:
-        await cb.message.edit_text(
-            f"{emoji} <b>Персонажи ранга {rank}</b>\n\nВыбери персонажа:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, f"{emoji} <b>Персонажи ранга {rank}</b>\n\nВыбери персонажа:", builder.as_markup())
 
 
 @router.callback_query(F.data.startswith("market_char_select:"))
@@ -351,20 +304,15 @@ async def cb_market_char_select(
     )
     await state.set_state(MarketFSM.waiting_amount)
 
-    cancel_kb = InlineKeyboardBuilder()
-    cancel_kb.row(InlineKeyboardButton(text="◀️ Отмена", callback_data="market_create_cancel"))
-    try:
-        await cb.message.edit_text(
-            f"⭐ <b>{html.escape(char_id)}</b> [{rank}]\n"
-            f"📊 Средний уровень: {lvl_lbl}\n"
-            f"💪 Средняя мощь: {fmt_num(avg_power)}\n"
-            f"У вас: <b>{count}</b> шт.\n\n"
-            f"Введи количество для продажи (макс {count}):",
-            reply_markup=cancel_kb.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"⭐ <b>{html.escape(char_id)}</b> [{rank}]\n"
+        f"📊 Средний уровень: {lvl_lbl}\n"
+        f"💪 Средняя мощь: {fmt_num(avg_power)}\n"
+        f"У вас: <b>{count}</b> шт.\n\n"
+        f"Введи количество для продажи (макс {count}):",
+        back_kb("market_create_cancel"),
+    )
 
 
 @router.message(MarketFSM.waiting_amount)
@@ -391,7 +339,7 @@ async def msg_market_amount(
     builder = InlineKeyboardBuilder()
     for res, label in CASINO_RESOURCES.items():
         builder.row(InlineKeyboardButton(text=label, callback_data=f"market_resource:{res}"))
-    builder.row(InlineKeyboardButton(text="◀️ Отмена", callback_data="market_create_cancel"))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_create_cancel"))
     await message.answer(
         "💱 В каком ресурсе хотите получить оплату?",
         reply_markup=builder.as_markup(),
@@ -410,9 +358,6 @@ async def cb_market_resource(cb: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     mode = data.get("mode", "listing")
 
-    cancel_kb = InlineKeyboardBuilder()
-    cancel_kb.row(InlineKeyboardButton(text="◀️ Отмена", callback_data="market_create_cancel"))
-
     if mode == "auction":
         await state.set_state(MarketFSM.waiting_min_bid)
         prompt = f"🔨 Введи минимальную ставку в {CASINO_RESOURCES[resource]}:"
@@ -420,10 +365,7 @@ async def cb_market_resource(cb: CallbackQuery, state: FSMContext):
         await state.set_state(MarketFSM.waiting_price)
         prompt = f"💰 Введи цену в {CASINO_RESOURCES[resource]}:"
 
-    try:
-        await cb.message.edit_text(prompt, reply_markup=cancel_kb.as_markup(), parse_mode="HTML")
-    except Exception:
-        pass
+    await safe_edit(cb, prompt, back_kb("market_create_cancel"))
     await cb.answer()
 
 
@@ -442,7 +384,7 @@ async def msg_market_min_bid(message: Message, state: FSMContext):
     for sec in MARKET_AUCTION_DURATION_OPTIONS:
         builder.button(text=f"{sec // 3600} ч", callback_data=f"market_auction_duration:{sec}")
     builder.adjust(len(MARKET_AUCTION_DURATION_OPTIONS))
-    builder.row(InlineKeyboardButton(text="◀️ Отмена", callback_data="market_create_cancel"))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_create_cancel"))
     await message.answer(
         "⏳ На сколько выставить аукцион?",
         reply_markup=builder.as_markup(),
@@ -477,26 +419,16 @@ async def cb_market_auction_duration(cb: CallbackQuery, session: AsyncSession, u
         await record(session, user.id, "market")
         label = market_service.get_item_label(item_type)
         hours = duration // 3600
-        try:
-            await cb.message.edit_text(
-                f"✅ <b>Аукцион создан!</b>\n\n"
-                f"{label} x{amount}\n"
-                f"Мин. ставка: {fmt_num(min_bid)} {CASINO_RESOURCES[resource]}\n"
-                f"Длительность: {hours} ч",
-                reply_markup=back_kb("market_seller"),
-                parse_mode="HTML",
-            )
-        except Exception:
-            pass
+        await safe_edit(
+            cb,
+            f"✅ <b>Аукцион создан!</b>\n\n"
+            f"{label} x{amount}\n"
+            f"Мин. ставка: {fmt_num(min_bid)} {CASINO_RESOURCES[resource]}\n"
+            f"Длительность: {hours} ч",
+            back_kb("market_seller"),
+        )
     else:
-        try:
-            await cb.message.edit_text(
-                f"❌ {result['reason']}",
-                reply_markup=back_kb("market_seller"),
-                parse_mode="HTML",
-            )
-        except Exception:
-            pass
+        await safe_edit(cb, f"❌ {result['reason']}", back_kb("market_seller"))
     await cb.answer()
 
 

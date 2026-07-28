@@ -15,6 +15,7 @@ from app.services.bank.investments_service import (
 )
 from app.utils.formatters import fmt_num, fmt_ttl
 from app.utils.keyboards.common import back_kb
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -84,14 +85,7 @@ def _investments_kb(active: list[Investment], can_create: bool) -> "InlineKeyboa
 async def cb_bank_investments(cb: CallbackQuery, session: AsyncSession, user: User):
     active = await investments_service.get_active(session, user.id)
     can_create = len(active) < MAX_INVESTMENTS
-    try:
-        await cb.message.edit_text(
-            _investments_text(active, user.nh_coins),
-            reply_markup=_investments_kb(active, can_create),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, _investments_text(active, user.nh_coins), _investments_kb(active, can_create))
     await cb.answer()
 
 
@@ -111,15 +105,12 @@ async def cb_invest_choose_duration(cb: CallbackQuery, session: AsyncSession, us
             callback_data=f"invest_pick_dur:{hours}"
         ))
     builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="bank_investments"))
-    try:
-        await cb.message.edit_text(
-            "📈 <b>Выберите срок вклада</b>\n\n"
-            "Чем дольше срок — тем выше процент!",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        "📈 <b>Выберите срок вклада</b>\n\n"
+        "Чем дольше срок — тем выше процент!",
+        builder.as_markup(),
+    )
     await cb.answer()
 
 
@@ -136,17 +127,14 @@ async def cb_invest_pick_dur(cb: CallbackQuery, session: AsyncSession, user: Use
 
     cancel_kb = InlineKeyboardBuilder()
     cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="bank_investments"))
-    try:
-        await cb.message.edit_text(
-            f"📈 <b>Вклад на {hours}ч (+{pct}%)</b>\n\n"
-            f"Максимум: {fmt_num(MAX_DEPOSIT)} NHCoin\n"
-            f"Ваш баланс: {fmt_num(user.nh_coins)} NHCoin\n\n"
-            f"Введите сумму вклада:",
-            reply_markup=cancel_kb.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"📈 <b>Вклад на {hours}ч (+{pct}%)</b>\n\n"
+        f"Максимум: {fmt_num(MAX_DEPOSIT)} NHCoin\n"
+        f"Ваш баланс: {fmt_num(user.nh_coins)} NHCoin\n\n"
+        f"Введите сумму вклада:",
+        cancel_kb.as_markup(),
+    )
     await cb.answer()
 
 
@@ -211,14 +199,11 @@ async def cb_invest_withdraw(cb: CallbackQuery, session: AsyncSession, user: Use
         except Exception:
             await cb.answer(err, show_alert=True)
         return
-    try:
-        await cb.message.edit_text(
-            f"✅ <b>Вклад получен!</b>\n\n"
-            f"Зачислено: <b>{fmt_num(payout)} NHCoin</b>\n"
-            f"Баланс: {fmt_num(user.nh_coins)} NHCoin",
-            reply_markup=back_kb("bank_investments"),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"✅ <b>Вклад получен!</b>\n\n"
+        f"Зачислено: <b>{fmt_num(payout)} NHCoin</b>\n"
+        f"Баланс: {fmt_num(user.nh_coins)} NHCoin",
+        back_kb("bank_investments"),
+    )
     await cb.answer()

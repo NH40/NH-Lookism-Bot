@@ -223,10 +223,22 @@ class UserRepo:
     async def get_fist_players(
         self, session: AsyncSession, exclude_user_id: int
     ) -> list[User]:
-        """Все кулаки для PvP."""
+        """DEPRECATED — фаза Кулака убрана из прогрессии (патч 1.3.1)."""
         result = await session.execute(
             select(User).where(
                 User.phase == "fist",
+                User.id != exclude_user_id,
+            )
+        )
+        return result.scalars().all()
+
+    async def get_emperor_players(
+        self, session: AsyncSession, exclude_user_id: int
+    ) -> list[User]:
+        """Все Императоры для PvP (патч 1.3.1)."""
+        result = await session.execute(
+            select(User).where(
+                User.phase == "emperor",
                 User.id != exclude_user_id,
             )
         )

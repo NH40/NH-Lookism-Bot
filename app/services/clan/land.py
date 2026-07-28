@@ -70,6 +70,8 @@ class ClanLandService(ClanBaseService):
             "clan_land_mastery_pct": bonuses.get("mastery_gain", 0),
             "clan_land_power_mastery_bonus": bonuses.get("power_mastery", 0),
             "clan_land_speed_mastery_bonus": bonuses.get("speed_mastery", 0),
+            "clan_land_technique_mastery_bonus": bonuses.get("technique_mastery", 0),
+            "clan_land_endurance_mastery_bonus": bonuses.get("endurance_mastery", 0),
             "clan_land_cd_reduction_pct": bonuses.get("cd_reduction", 0),
         }
 

@@ -618,12 +618,14 @@ def _fmt_coins(v: int) -> str:
     return str(v)
 
 
-def hp_bar(current: int, maximum: int, length: int = 16) -> str:
+def hp_bar(current: int, maximum: int, length: int = 10) -> str:
+    """Эмодзи вместо Unicode block elements (█░) — те не везде рендерятся
+    клиентским шрифтом, эмодзи поддерживаются везде."""
     if maximum <= 0:
-        return "░" * length
+        return "⬛" * length
     pct = max(0.0, min(1.0, current / maximum))
     filled = round(pct * length)
-    return "█" * filled + "░" * (length - filled)
+    return "🟥" * filled + "⬛" * (length - filled)
 
 
 boss_service = BossService()

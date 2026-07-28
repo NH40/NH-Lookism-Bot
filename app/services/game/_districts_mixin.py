@@ -14,13 +14,14 @@ class DistrictsMixin:
         """Выдаёт игроку один fist-город с total_districts районами (все районы его)."""
         from app.models.city import City, District
         from app.repositories.city_repo import city_repo
+        from app.data.cities import DEFAULT_COUNTRY
 
-        sector = user.sector or "Н"
+        country = user.country or DEFAULT_COUNTRY
         type_id = {8: 2, 16: 3, 32: 4, 64: 5}.get(total_districts, 2)
 
         result = await session.execute(
             select(City).where(
-                City.sector == sector,
+                City.country == country,
                 City.phase == "fist",
                 City.total_districts == total_districts,
             ).order_by(City.id)
@@ -42,7 +43,7 @@ class DistrictsMixin:
 
         if not target_city:
             target_city = await self._create_fist_city(
-                session, sector, type_id, total_districts, all_cities
+                session, country, type_id, total_districts, all_cities
             )
 
         await city_repo.init_city_districts(session, target_city)
@@ -59,7 +60,7 @@ class DistrictsMixin:
 
         if not districts:
             target_city = await self._create_fist_city(
-                session, sector, type_id, total_districts, all_cities, extra=True
+                session, country, type_id, total_districts, all_cities, extra=True
             )
             await city_repo.init_city_districts(session, target_city)
             await session.flush()
@@ -78,19 +79,19 @@ class DistrictsMixin:
         await session.flush()
 
     async def _create_fist_city(
-        self, session: AsyncSession, sector: str, type_id: int,
+        self, session: AsyncSession, country: str, type_id: int,
         total_districts: int, existing_cities: list, extra: bool = False
     ):
-        """Создаёт новый fist-город в секторе."""
+        """Создаёт новый fist-город в стране."""
         from app.models.city import City
-        from app.data.cities import CITY_NAMES_BY_SECTOR
-        names = CITY_NAMES_BY_SECTOR.get(sector, [])
+        from app.data.cities import CITY_NAMES_BY_COUNTRY
+        names = CITY_NAMES_BY_COUNTRY.get(country, [])
         used_names = {c.name for c in existing_cities}
         available = [n for n in names if n not in used_names]
         suffix = "-new" if extra else f"-{len(existing_cities)+1}"
-        name = random.choice(available) if available else f"Кулак-{sector}-{total_districts}{suffix}"
+        name = random.choice(available) if available else f"Кулак-{country}-{total_districts}{suffix}"
         city = City(
-            sector=sector, phase="fist", type_id=type_id, name=name,
+            country=country, phase="fist", type_id=type_id, name=name,
             total_districts=total_districts, captured_districts=0,
             is_fully_captured=False, district_power_multiplier=1.0,
         )
@@ -104,10 +105,11 @@ class DistrictsMixin:
         """Выдаёт реальные районы в fist городах при победе кулака."""
         from app.models.city import City, District
         from app.repositories.city_repo import city_repo
+        from app.data.cities import DEFAULT_COUNTRY
 
-        sector = user.sector or "Н"
+        country = user.country or DEFAULT_COUNTRY
         result = await session.execute(
-            select(City).where(City.sector == sector, City.phase == "fist").order_by(City.id)
+            select(City).where(City.country == country, City.phase == "fist").order_by(City.id)
         )
         all_cities = result.scalars().all()
 
@@ -152,7 +154,6 @@ class DistrictsMixin:
     ) -> int:
         """Забирает king-районы у игрока при падении с фазы Кулака."""
         from app.models.city import City, District
-        from app.repositories.building_repo import building_repo
         from app.services.business_service import business_service
 
         cities_r = await session.execute(
@@ -200,9 +201,7 @@ class DistrictsMixin:
             taken_cities += 1
 
         if total_districts_lost > 0:
-            await building_repo.deactivate_buildings_on_district_loss(
-                session, user.id, total_districts_lost
-            )
+            await business_service.apply_capture_influence(session, user, -total_districts_lost)
             await business_service._recalc_income(session, user)
 
         await session.flush()
@@ -213,7 +212,6 @@ class DistrictsMixin:
     ) -> int:
         """Забирает fist-районы у игрока (при проигрыше или потере в PvP)."""
         from app.models.city import City, District
-        from app.repositories.building_repo import building_repo
         from app.services.business_service import business_service
 
         cities_r = await session.execute(
@@ -261,9 +259,7 @@ class DistrictsMixin:
             taken_cities += 1
 
         if total_districts_lost > 0:
-            await building_repo.deactivate_buildings_on_district_loss(
-                session, user.id, total_districts_lost
-            )
+            await business_service.apply_capture_influence(session, user, -total_districts_lost)
             await business_service._recalc_income(session, user)
 
         await session.flush()

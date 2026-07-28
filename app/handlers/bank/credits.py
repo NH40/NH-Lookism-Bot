@@ -15,6 +15,7 @@ from app.services.bank.credits_service import (
 )
 from app.utils.formatters import fmt_num, fmt_ttl
 from app.utils.keyboards.common import back_kb
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -87,14 +88,7 @@ async def cb_bank_credits(cb: CallbackQuery, session: AsyncSession, user: User):
     credits = await credits_service.get_active_credits(session, user.id)
     max_amount = user.income_per_minute * 60
     can_take = len(credits) < MAX_CREDITS
-    try:
-        await cb.message.edit_text(
-            _credits_text(credits, max_amount),
-            reply_markup=_credits_kb(credits, can_take),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, _credits_text(credits, max_amount), _credits_kb(credits, can_take))
     await cb.answer()
 
 
@@ -117,17 +111,14 @@ async def cb_credit_take(cb: CallbackQuery, session: AsyncSession, user: User, s
 
     cancel_kb = InlineKeyboardBuilder()
     cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="bank_credits"))
-    try:
-        await cb.message.edit_text(
-            f"💳 <b>Взять кредит</b>\n\n"
-            f"Максимум: <b>{fmt_num(max_amount)} NHCoin</b>\n"
-            f"К выплате: <b>{int(REPAY_FACTOR*100)}%</b> от суммы\n\n"
-            f"Введите сумму кредита:",
-            reply_markup=cancel_kb.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"💳 <b>Взять кредит</b>\n\n"
+        f"Максимум: <b>{fmt_num(max_amount)} NHCoin</b>\n"
+        f"К выплате: <b>{int(REPAY_FACTOR*100)}%</b> от суммы\n\n"
+        f"Введите сумму кредита:",
+        cancel_kb.as_markup(),
+    )
     await cb.answer()
 
 
@@ -197,17 +188,14 @@ async def cb_credit_repay(cb: CallbackQuery, session: AsyncSession, user: User, 
     ))
     cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="bank_credits"))
 
-    try:
-        await cb.message.edit_text(
-            f"💸 <b>Погашение кредита #{credit_id}</b>\n\n"
-            f"Осталось выплатить: <b>{fmt_num(remaining)} NHCoin</b>\n"
-            f"Ваш баланс: {fmt_num(user.nh_coins)} NHCoin\n\n"
-            f"Введите сумму для частичной выплаты\nили нажмите кнопку ниже:",
-            reply_markup=cancel_kb.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"💸 <b>Погашение кредита #{credit_id}</b>\n\n"
+        f"Осталось выплатить: <b>{fmt_num(remaining)} NHCoin</b>\n"
+        f"Ваш баланс: {fmt_num(user.nh_coins)} NHCoin\n\n"
+        f"Введите сумму для частичной выплаты\nили нажмите кнопку ниже:",
+        cancel_kb.as_markup(),
+    )
     await cb.answer()
 
 
@@ -234,20 +222,14 @@ async def cb_credit_repay_full(cb: CallbackQuery, session: AsyncSession, user: U
     remaining = credit.due_amount - credit.paid_amount
     ok, err = await credits_service.repay_credit(session, user, credit_id, remaining)
     if not ok:
-        try:
-            await cb.message.edit_text(err, reply_markup=back_kb("bank_credits"), parse_mode="HTML")
-        except Exception:
-            pass
+        await safe_edit(cb, err, back_kb("bank_credits"))
         return
-    try:
-        await cb.message.edit_text(
-            f"✅ <b>Кредит #{credit_id} полностью погашен!</b>\n\n"
-            f"Выплачено: {fmt_num(remaining)} NHCoin",
-            reply_markup=back_kb("bank_credits"),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"✅ <b>Кредит #{credit_id} полностью погашен!</b>\n\n"
+        f"Выплачено: {fmt_num(remaining)} NHCoin",
+        back_kb("bank_credits"),
+    )
     await cb.answer()
 
 

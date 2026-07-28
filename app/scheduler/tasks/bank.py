@@ -115,6 +115,7 @@ async def bank_credit_tick():
                         u.gang_name = None
                         u.gang_city_id = None
                         u.sector = None
+                        u.country = None
                         remaining = credit.due_amount - credit.paid_amount
                         delete_notifications.append((
                             u.tg_id,

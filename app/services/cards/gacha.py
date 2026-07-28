@@ -28,6 +28,11 @@ class GachaService:
     def __init__(self) -> None:
         # Pre-compute weights once — reused across all pull calls (avoid per-pull recalculation)
         self._weights: list[float] = [RANK_CONFIG_MAP[c["rank"]].weight for c in CHARACTERS]
+        # Донат-сет "Монстр": ×5 вес ранга "perfection" (самый редкий/сильный)
+        self._monster_weights: list[float] = [
+            w * 5 if c["rank"] == "perfection" else w
+            for c, w in zip(CHARACTERS, self._weights)
+        ]
 
     async def try_get_ticket(self, session: AsyncSession, user: User) -> dict:
         """Попытка получить тикет раз в 5 минут."""
@@ -76,7 +81,8 @@ class GachaService:
 
     def _pick_char(self, user: User) -> dict:
         user.tickets -= 1
-        return random.choices(CHARACTERS, weights=self._weights, k=1)[0]
+        weights = self._monster_weights if getattr(user, "monster_card_luck", False) else self._weights
+        return random.choices(CHARACTERS, weights=weights, k=1)[0]
 
     def _make_uc(self, user_id: int, char_data: dict) -> UserCharacter:
         bp = char_data["power"]

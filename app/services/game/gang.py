@@ -9,6 +9,7 @@ from app.services.cooldown_service import cooldown_service
 from app.repositories.city_repo import city_repo
 from app.repositories.user_repo import user_repo
 from app.data.squad import ATTACK_WIN_INFLUENCE_BONUS
+from app.services.business_service import business_service
 from app.services.game.base import GameBase
 from app.services.game.utils import notify_pvp_attack
 from app.utils.truce import is_truce_active
@@ -16,17 +17,17 @@ from app.utils.truce import is_truce_active
 
 class GameGangService(GameBase):
 
-    async def choose_sector(
-        self, session: AsyncSession, user: User, sector: str
+    async def choose_country(
+        self, session: AsyncSession, user: User, country: str
     ) -> dict:
-        if user.sector:
-            return {"ok": False, "reason": "Сектор уже выбран"}
-        from app.data.cities import SECTORS
-        if sector not in SECTORS:
-            return {"ok": False, "reason": "Неверный сектор"}
-        user.sector = sector
+        if user.country:
+            return {"ok": False, "reason": "Страна уже выбрана"}
+        from app.data.cities import COUNTRY_BY_CODE
+        if country not in COUNTRY_BY_CODE:
+            return {"ok": False, "reason": "Неверная страна"}
+        user.country = country
         await session.flush()
-        return {"ok": True, "sector": sector}
+        return {"ok": True, "country": country}
 
     async def choose_gang_city(self, session, user, city_id):
         if user.gang_city_id:
@@ -49,17 +50,8 @@ class GameGangService(GameBase):
             return {"ok": False, "reason": "Город не найден"}
         await city_repo.init_city_districts(session, city)
         my_districts = await self._get_my_districts_in_city(session, user.id, user.gang_city_id)
-        next_bot_r = await session.execute(
-            select(District).where(
-                District.city_id == user.gang_city_id,
-                District.is_captured == False,
-            ).order_by(District.number).limit(1)
-        )
-        next_bot = next_bot_r.scalar_one_or_none()
-        bot_district_power = None
-        if next_bot:
-            bot_district_power = self._get_district_power(next_bot.number, city.district_power_multiplier)
         rivals = await user_repo.get_players_in_city(session, user.gang_city_id, user.id)
+        owner_name_map = {r.id: r.full_name for r in rivals}
         rival_info = []
         for rival in rivals:
             rival_districts = await self._get_my_districts_in_city(session, rival.id, user.gang_city_id)
@@ -68,17 +60,28 @@ class GameGangService(GameBase):
                     "id": rival.id, "name": rival.full_name,
                     "combat_power": rival.combat_power, "districts": rival_districts,
                 })
+        raw_districts = await city_repo.get_city_districts(session, user.gang_city_id)
+        district_info = []
+        for d in raw_districts:
+            district_info.append({
+                "id": d.id,
+                "number": d.number,
+                "is_captured": d.is_captured,
+                "owner_id": d.owner_id,
+                "is_mine": d.owner_id == user.id,
+                "owner_name": owner_name_map.get(d.owner_id) if d.owner_id else None,
+                "power": self._get_district_power(d.number, city.district_power_multiplier),
+            })
         return {
             "ok": True, "city": city,
             "my_districts": my_districts,
             "total_districts": city.total_districts,
-            "next_bot_district": next_bot,
-            "bot_district_power": bot_district_power,
+            "districts": district_info,
             "rivals": rival_info,
             "city_fully_captured": city.is_fully_captured,
         }
 
-    async def gang_attack_bot(self, session: AsyncSession, user: User) -> dict:
+    async def gang_attack_district(self, session: AsyncSession, user: User, district_id: int) -> dict:
         if user.phase != "gang":
             return {"ok": False, "reason": "Только для фазы Банды"}
         if not user.gang_city_id:
@@ -93,24 +96,33 @@ class GameGangService(GameBase):
         if not city:
             return {"ok": False, "reason": "Город не найден"}
         await city_repo.init_city_districts(session, city)
-        next_r = await session.execute(
+        district_r = await session.execute(
             select(District).where(
+                District.id == district_id,
                 District.city_id == user.gang_city_id,
                 District.is_captured == False,
-            ).order_by(District.number).limit(1)
+            )
         )
-        district = next_r.scalar_one_or_none()
+        district = district_r.scalar_one_or_none()
         if not district:
-            return await self._promote_to_king(session, user, city)
+            return {"ok": False, "reason": "Район уже занят или недоступен"}
         district_power = self._get_district_power(district.number, city.district_power_multiplier)
         result = await fight_district(session, user, district_power)
         if result["win"]:
             district.owner_id = user.id
             district.is_captured = True
+            # Постоянная привязка дохода — только если район "виргинский"
+            # (никогда не был чей-то) или его исторический владелец давно
+            # прошёл фазу Банды не сохранив претензию; не перезаписываем
+            # чужую действующую историческую привязку.
+            if district.income_owner_id is None:
+                district.income_owner_id = user.id
             city.captured_districts = min(city.captured_districts + 1, city.total_districts)
             city.district_power_multiplier += random.uniform(0.02, 0.05)
             user.total_wins += 1
             user.influence += ATTACK_WIN_INFLUENCE_BONUS["gang"]
+            await business_service.apply_capture_influence(session, user, 1)
+            await business_service._recalc_income(session, user)
             await session.flush()
             await session.refresh(city)
             if city.captured_districts >= city.total_districts:
@@ -143,9 +155,7 @@ class GameGangService(GameBase):
                 lost.is_captured = False
                 city.captured_districts = max(0, city.captured_districts - 1)
                 await session.flush()
-                from app.repositories.building_repo import building_repo
-                from app.services.business_service import business_service
-                await building_repo.deactivate_buildings_on_district_loss(session, user.id, 1)
+                await business_service.apply_capture_influence(session, user, -1)
                 await business_service._recalc_income(session, user)
             my_districts = await self._get_my_districts_in_city(session, user.id, user.gang_city_id)
             if my_districts == 0:
@@ -174,7 +184,36 @@ class GameGangService(GameBase):
         if is_truce_active(defender):
             return {"ok": False, "reason": f"{defender.full_name} находится под перемирием"}
         if defender.gang_city_id != attacker.gang_city_id:
-            return {"ok": False, "reason": "Противник в другом городе"}
+            # Владелец района сменил город/фазу (престиж, повышение до Короля,
+            # сброс банды и т.п.) — District.owner_id остался "осиротевшим",
+            # т.к. ничто не освобождает чужие захваченные районы при смене
+            # gang_city_id. Без этой самопочинки район навсегда виснет как
+            # 🔴 "соперник", хотя атаковать его уже некого — самовосстанавливаемся:
+            # освобождаем все такие районы соперника в этом городе.
+            from sqlalchemy import update as sql_update, func as sql_func
+            freed = await session.execute(
+                sql_update(District)
+                .where(
+                    District.owner_id == defender.id,
+                    District.city_id == attacker.gang_city_id,
+                    District.is_captured == True,
+                )
+                # Подстраховка: если у района ещё не было исторической
+                # привязки дохода (income_owner_id) — фиксируем её за
+                # соперником сейчас, до освобождения владения боем.
+                .values(
+                    owner_id=None, is_captured=False,
+                    income_owner_id=sql_func.coalesce(District.income_owner_id, defender.id),
+                )
+            )
+            if freed.rowcount:
+                await city_repo.sync_captured_districts(session, attacker.gang_city_id)
+                await session.flush()
+                return {"ok": False, "healed": True, "reason": "🔓 Соперник покинул город — районы освобождены, доска обновлена, атакуй снова!"}
+            # rowcount==0 — уже освобождено более ранним кликом (своим или
+            # чужим): экран у игрока просто ещё не обновлён (кнопка старая).
+            # Тоже просим обновить меню, а не показываем тупиковую ошибку.
+            return {"ok": False, "healed": True, "reason": "🔓 Этот район уже свободен — доска обновлена, атакуй снова!"}
         cd_key = cooldown_service.attack_key(attacker.id)
         if await cooldown_service.is_on_cooldown(cd_key):
             ttl = await cooldown_service.get_ttl(cd_key)
@@ -193,10 +232,12 @@ class GameGangService(GameBase):
             def_last = def_last_r.scalar_one_or_none()
             if def_last:
                 def_last.owner_id = attacker.id
-                from app.repositories.building_repo import building_repo
-                from app.services.business_service import business_service
-                await building_repo.deactivate_buildings_on_district_loss(session, defender.id, 1)
+                if def_last.income_owner_id is None:
+                    def_last.income_owner_id = attacker.id
+                await business_service.apply_capture_influence(session, defender, -1)
                 await business_service._recalc_income(session, defender)
+                await business_service.apply_capture_influence(session, attacker, 1)
+                await business_service._recalc_income(session, attacker)
             def_owned = await self._get_my_districts_in_city(session, defender.id, defender.gang_city_id or 0)
             if def_owned == 0:
                 await self._destroy_gang(session, defender)

@@ -14,6 +14,7 @@ from app.services.quest_service import quest_service
 from app.services.bank.casino.common import CASINO_RESOURCES, get_balance
 from app.constants.market import ITEM_TYPES
 from app.utils.formatters import fmt_num
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -31,16 +32,13 @@ async def cb_market_buyer(cb: CallbackQuery, session: AsyncSession, user: User):
             callback_data=f"market_browse:{item_type}:0"
         ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_menu"))
-    try:
-        await cb.message.edit_text(
-            f"🛒 <b>Покупатель</b>\n\n"
-            f"💰 Ваши NHCoin: <b>{fmt_num(user.nh_coins)}</b>\n\n"
-            f"Выбери категорию:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"🛒 <b>Покупатель</b>\n\n"
+        f"💰 Ваши NHCoin: <b>{fmt_num(user.nh_coins)}</b>\n\n"
+        f"Выбери категорию:",
+        builder.as_markup(),
+    )
 
 
 @router.callback_query(F.data.startswith("market_browse:"))
@@ -68,14 +66,7 @@ async def cb_market_browse(cb: CallbackQuery, session: AsyncSession, user: User)
 
     if not listings:
         builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_buyer"))
-        try:
-            await cb.message.edit_text(
-                f"🛒 <b>{label}</b>\n\nТоваров нет.",
-                reply_markup=builder.as_markup(),
-                parse_mode="HTML",
-            )
-        except Exception:
-            pass
+        await safe_edit(cb, f"🛒 <b>{label}</b>\n\nТоваров нет.", builder.as_markup())
         return
 
     for listing in listings:
@@ -109,15 +100,7 @@ async def cb_market_browse(cb: CallbackQuery, session: AsyncSession, user: User)
         builder.row(*nav)
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="market_buyer"))
 
-    try:
-        await cb.message.edit_text(
-            f"🛒 <b>{label}</b>\n\n"
-            f"Найдено: {total} товаров | Стр. {page+1}",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, f"🛒 <b>{label}</b>\n\nНайдено: {total} товаров | Стр. {page+1}", builder.as_markup())
 
 
 @router.callback_query(F.data.startswith("market_item:"))
@@ -170,20 +153,17 @@ async def cb_market_item(cb: CallbackQuery, session: AsyncSession, user: User):
         callback_data=f"market_browse:{listing.item_type}:0"
     ))
 
-    try:
-        await cb.message.edit_text(
-            f"📦 <b>Товар #{listing.id}</b>\n\n"
-            f"Тип: {label}\n"
-            f"Количество: <b>{listing.item_amount}</b>"
-            f"{meta_str}\n\n"
-            f"💰 Цена: <b>{fmt_num(listing.price)} {res_label}</b>\n"
-            f"👤 Продавец: {seller_name} ({seller_username})\n\n"
-            f"{can_afford} У вас: {fmt_num(user_balance)} {res_label}",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"📦 <b>Товар #{listing.id}</b>\n\n"
+        f"Тип: {label}\n"
+        f"Количество: <b>{listing.item_amount}</b>"
+        f"{meta_str}\n\n"
+        f"💰 Цена: <b>{fmt_num(listing.price)} {res_label}</b>\n"
+        f"👤 Продавец: {seller_name} ({seller_username})\n\n"
+        f"{can_afford} У вас: {fmt_num(user_balance)} {res_label}",
+        builder.as_markup(),
+    )
 
 
 @router.callback_query(F.data.startswith("market_buy:"))

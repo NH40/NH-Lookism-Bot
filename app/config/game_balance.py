@@ -152,6 +152,8 @@ CLAN_LAND_BUILDINGS: dict = {
     "cd_reduction":  {"name": "⏱ Скорость восстановления КД", "cost": 6_000_000, "bonus_per_unit": 2, "unit": "%",   "max_count": 10},
     "power_mastery": {"name": "🥋 Мастерство силы",          "cost": 8_000_000, "bonus_per_unit": 1, "unit": "lvl", "max_count": 4},
     "speed_mastery": {"name": "⚡ Мастерство скорости",       "cost": 8_000_000, "bonus_per_unit": 1, "unit": "lvl", "max_count": 4},
+    "technique_mastery": {"name": "🏋 Мастерство техники",    "cost": 8_000_000, "bonus_per_unit": 1, "unit": "lvl", "max_count": 4},
+    "endurance_mastery": {"name": "🛡 Мастерство выносливости","cost": 8_000_000, "bonus_per_unit": 1, "unit": "lvl", "max_count": 4},
 }
 
 # ── Патч-ревард (топ игроки/кланы при сбросе) ────────────────────────────────
@@ -169,3 +171,42 @@ PATCH_TOP_PLAYERS_COUNT: int = 10
 PATCH_TOP_CLANS_COUNT: int = 5
 # NHCoin на старте после патч-сброса
 PATCH_STARTING_COINS: int = 1_000
+
+# ── Бизнес (патч 1.3.1): влияние за захват/потерю района ──────────────────────
+ILLEGAL_INFLUENCE_PER_DISTRICT: int = -3
+POLITICAL_INFLUENCE_PER_DISTRICT: int = 3
+
+# ── Бизнес: волатильность нелегального дохода (income_tick, каждую минуту) ────
+ILLEGAL_INCOME_VOLATILITY_MIN: float = 0.6
+ILLEGAL_INCOME_VOLATILITY_MAX: float = 1.5
+
+# ── Бизнес: сетевой бонус цифрового пути (от своих цифровых районов) ──────────
+# Диапазон -30%..+50%: соло цифровой бизнес слабее легального, но с ростом сети
+# (больше своих районов) может его превзойти.
+DIGITAL_NETWORK_BASE_PENALTY: int = -30
+DIGITAL_NETWORK_BONUS_PER_TIER: int = 10
+DIGITAL_NETWORK_DISTRICTS_PER_TIER: int = 15
+DIGITAL_NETWORK_BONUS_CAP: int = 50
+
+# ── Гений бизнеса: 4 независимых трека (патч 1.3.1) ────────────────────────────
+# Уровень 0-10: +5%/уровень (макс +50%), также гейтит выбор здания (min_biz_genius*2)
+# Вместимость 0-5: +20%/уровень (макс +100%)
+# Скидка 0-5: +5%/уровень (макс 25%) — на фрагмент-магазин и апгрейды Гения
+# Бонус к доходу 0-5: +20%/уровень (макс +100%), как обычный % к доходу
+BIZ_GENIUS_LEVEL_COSTS: list[int] = [50, 150, 350, 750, 1500, 2800, 5000, 9000, 16000, 28000]
+BIZ_GENIUS_CAPACITY_COSTS: list[int] = [300, 800, 2000, 4500, 9000]
+BIZ_GENIUS_DISCOUNT_COSTS: list[int] = [100, 250, 600, 1200, 2500]
+BIZ_GENIUS_INCOME_COSTS: list[int] = [300, 800, 2000, 4500, 9000]
+BIZ_GENIUS_LEVEL_PCT_PER_LEVEL: int = 5
+BIZ_GENIUS_CAPACITY_PCT_PER_LEVEL: int = 4
+BIZ_GENIUS_DISCOUNT_PCT_PER_LEVEL: int = 5
+BIZ_GENIUS_INCOME_PCT_PER_LEVEL: int = 20
+
+# ── Король/Вассал/Император (патч 1.3.1) ──────────────────────────────────────
+VASSAL_TRIBUTE_PERCENT: int = 20              # вассал отдаёт сюзерену
+SUZERAIN_INCOME_BONUS_PCT_PER_VASSAL: int = 10
+SUZERAIN_INCOME_BONUS_CAP_PCT: int = 100
+KING_CHALLENGE_CD_SECONDS: int = 3600         # вызов трона — раз в час
+EMPEROR_PVP_CD_SECONDS: int = 3600
+EMPEROR_PVP_STEAL_PERCENT: int = 30           # % статистов/карточек/денег победителю (не всё)
+CITY_TAX_PERCENT: int = 20                    # налог городу с чужим королём

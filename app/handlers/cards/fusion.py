@@ -13,8 +13,10 @@ from app.models.card_deck import UserDeck
 from app.services.cards.fusion import fusion_service
 from app.services.quest_service import quest_service
 from app.utils.formatters import fmt_power
+from app.utils.menu_media import safe_edit
 from app.data.characters import RANK_EMOJI
 from app.constants.cards import LEVEL_LABELS, LEVEL_EMOJIS, FUSION_COST
+from app.utils.keyboards.common import confirm_kb
 
 router = Router()
 
@@ -119,12 +121,6 @@ async def cb_card_fuse_confirm(cb: CallbackQuery, session: AsyncSession, user: U
     next_lbl = LEVEL_LABELS.get(uc.level + 1, "MAX")
     lvl_lbl = LEVEL_LABELS.get(uc.level, f"Ур.{uc.level}")
 
-    builder = InlineKeyboardBuilder()
-    builder.row(
-        InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"card_fuse_do:{uc_id}"),
-        InlineKeyboardButton(text="❌ Отмена", callback_data="fusion_menu"),
-    )
-
     await _safe_edit(
         cb,
         f"🔗 <b>Слияние</b>\n\n"
@@ -133,7 +129,7 @@ async def cb_card_fuse_confirm(cb: CallbackQuery, session: AsyncSession, user: U
         f"Нужно карточек: {cost}×\n"
         f"Результат: <b>{next_lbl}</b>\n\n"
         f"⚠️ <b>{cost} карточек вне колоды будут уничтожены.</b>",
-        reply_markup=builder.as_markup(),
+        reply_markup=confirm_kb(f"card_fuse_do:{uc_id}", "fusion_menu"),
     )
     await cb.answer()
 
@@ -171,15 +167,8 @@ async def cb_fuse_all(cb: CallbackQuery, session: AsyncSession, user: User):
         lines.append(f"… и ещё {total_fused - 15}")
 
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="🔗 К слиянию", callback_data="fusion_menu"))
-    try:
-        await cb.message.edit_text(
-            "\n".join(lines),
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    builder.row(InlineKeyboardButton(text="◀️ К слиянию", callback_data="fusion_menu"))
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
 
 
 @router.callback_query(F.data.startswith("card_fuse_do:"))

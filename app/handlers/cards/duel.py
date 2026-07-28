@@ -13,6 +13,7 @@ from app.services.cards.duel import duel_service
 from app.services.cooldown_service import cooldown_service
 from app.services.quest_service import quest_service
 from app.utils.formatters import fmt_power, fmt_ttl
+from app.utils.menu_media import safe_edit
 from app.data.characters import RANK_EMOJI
 from app.constants.cards import BOT_TIERS, LEVEL_LABELS
 
@@ -147,10 +148,7 @@ async def cb_duel_bot(cb: CallbackQuery, session: AsyncSession, user: User):
         return
 
     await cb.answer()
-    try:
-        await cb.message.edit_text("⚔️ Дуэль начинается...")
-    except Exception:
-        pass
+    await safe_edit(cb, "⚔️ Дуэль начинается...", None)
 
     result = await duel_service.duel_vs_bot(session, user, tier)
     if result["ok"]:
@@ -162,12 +160,7 @@ async def cb_duel_bot(cb: CallbackQuery, session: AsyncSession, user: User):
     if not result["ok"]:
         builder = InlineKeyboardBuilder()
         builder.row(InlineKeyboardButton(text="◀️ К дуэлям", callback_data="duel_menu"))
-        try:
-            await cb.message.edit_text(
-                f"❌ {result['reason']}", reply_markup=builder.as_markup(), parse_mode="HTML"
-            )
-        except Exception:
-            pass
+        await safe_edit(cb, f"❌ {result['reason']}", builder.as_markup())
         return
 
     won = result["won"]
@@ -218,12 +211,7 @@ async def cb_duel_bot(cb: CallbackQuery, session: AsyncSession, user: User):
         ))
     builder.row(InlineKeyboardButton(text="◀️ К дуэлям", callback_data="duel_menu"))
 
-    try:
-        await cb.message.edit_text(
-            "\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML"
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
 
 
 # ── PvP ──────────────────────────────────────────────────────────────────────
@@ -237,13 +225,11 @@ async def cb_duel_pvp(cb: CallbackQuery, user: User, state: FSMContext):
     await state.set_state(DuelFSM.waiting_opponent)
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="duel_menu"))
-    try:
-        await cb.message.edit_text(
-            "⚔️ <b>Дуэль с игроком</b>\n\nВведи <b>@username</b> или <b>tg_id</b>:",
-            reply_markup=builder.as_markup(), parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        "⚔️ <b>Дуэль с игроком</b>\n\nВведи <b>@username</b> или <b>tg_id</b>:",
+        builder.as_markup(),
+    )
     await cb.answer()
 
 
@@ -304,10 +290,7 @@ async def cb_duel_accept(cb: CallbackQuery, session: AsyncSession, user: User):
     await session.commit()
 
     if not result["ok"]:
-        try:
-            await cb.message.edit_text(f"❌ {result['reason']}", parse_mode="HTML")
-        except Exception:
-            pass
+        await safe_edit(cb, f"❌ {result['reason']}", None)
         return
 
     from_user = result["from_user"]
@@ -325,12 +308,9 @@ async def cb_duel_accept(cb: CallbackQuery, session: AsyncSession, user: User):
     )
 
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="⚔️ К дуэлям", callback_data="duel_menu"))
+    builder.row(InlineKeyboardButton(text="◀️ К дуэлям", callback_data="duel_menu"))
 
-    try:
-        await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        pass
+    await safe_edit(cb, text, builder.as_markup())
 
     # Уведомляем инициатора
     from app.bot_instance import get_bot
@@ -346,7 +326,4 @@ async def cb_duel_accept(cb: CallbackQuery, session: AsyncSession, user: User):
 async def cb_duel_decline(cb: CallbackQuery, user: User):
     declined = await duel_service.decline_challenge(user)
     await cb.answer("Вызов отклонён" if declined else "Вызов уже истёк")
-    try:
-        await cb.message.edit_text("❌ Вызов отклонён.")
-    except Exception:
-        pass
+    await safe_edit(cb, "❌ Вызов отклонён.", None)

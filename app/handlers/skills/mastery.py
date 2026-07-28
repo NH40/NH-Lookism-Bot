@@ -33,6 +33,8 @@ async def cb_mastery_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     land_bonus_map = {
         "strength": getattr(user, "clan_land_power_mastery_bonus", 0),
         "speed": getattr(user, "clan_land_speed_mastery_bonus", 0),
+        "endurance": getattr(user, "clan_land_endurance_mastery_bonus", 0),
+        "technique": getattr(user, "clan_land_technique_mastery_bonus", 0),
     }
 
     def lvl(attr): return getattr(mastery, attr, 0) if mastery else 0
@@ -49,13 +51,10 @@ async def cb_mastery_menu(cb: CallbackQuery, session: AsyncSession, user: User):
         ("technique", "🏋 Техника",      "Улучшает эффективность тренировок"),
     ]
 
-    war_points = getattr(user, "war_points", 0)
-    war_genius = getattr(user, "war_genius_level", 0)
     lines = [
         f"⚔️ <b>Мастерство</b>\n",
         f"⭐ Очков мастерства: <b>{user.mastery_points}</b>",
-        f"⚔️ Очков войны: <b>{war_points}</b>   🎖 Гений войны {progress_bar(war_genius, 5)} {war_genius}/5",
-        f"<i>Мастерство — у Тома Ли | Очки войны — у Менеджера Кима</i>",
+        f"<i>Мастерство — у Тома Ли</i>",
         f"",
         f"━━━ 📊 Ветки ━━━",
     ]
@@ -77,14 +76,17 @@ async def cb_mastery_menu(cb: CallbackQuery, session: AsyncSession, user: User):
             can_buy = user.mastery_points >= cost
             afford = "✅" if can_buy else "❌"
             lines.append(f"{afford} {label} {bar} {level_name}{land_str} (+{bonus}%)")
-            lines.append(f"   {desc} · след: {cost}⭐")
+            lines.append(f"{desc}")
+            lines.append(f"След: {cost}⭐")
+            lines.append("")
             builder.button(
                 text=f"{label} [{level_name}→{next_level}] | ⭐ {cost}",
                 callback_data=f"mastery_upgrade:{skill_id}"
             )
         else:
             lines.append(f"✅ {label} {bar} MAX{land_str} (+{bonus}%)")
-            lines.append(f"   {desc}")
+            lines.append(f"{desc}")
+            lines.append("")
 
     builder.adjust(1)
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="skills"))

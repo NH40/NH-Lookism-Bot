@@ -15,6 +15,7 @@ from app.services.bank.storage_service import (
 )
 from app.utils.formatters import fmt_num
 from app.utils.keyboards.common import back_kb
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -79,14 +80,7 @@ async def cb_bank_storage(cb: CallbackQuery, session: AsyncSession, user: User):
     for cell in cells:
         lines.append(_cell_display(cell))
 
-    try:
-        await cb.message.edit_text(
-            "\n".join(lines),
-            reply_markup=_storage_kb(cells, user),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), _storage_kb(cells, user))
     await cb.answer()
 
 
@@ -113,14 +107,7 @@ async def cb_storage_open(cb: CallbackQuery, session: AsyncSession, user: User):
     ]
     for cell in cells:
         lines.append(_cell_display(cell))
-    try:
-        await cb.message.edit_text(
-            "\n".join(lines),
-            reply_markup=_storage_kb(cells, user),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), _storage_kb(cells, user))
 
 
 # ── Выбрать ресурс → ввести сумму ────────────────────────────────────────────
@@ -139,14 +126,7 @@ async def cb_storage_store(cb: CallbackQuery, user: User, state: FSMContext):
             callback_data=f"storage_pick_res:{slot}:{res}"
         ))
     builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="bank_storage"))
-    try:
-        await cb.message.edit_text(
-            f"📥 <b>Слот {slot} — выберите ресурс</b>\n\nЧто положить?",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, f"📥 <b>Слот {slot} — выберите ресурс</b>\n\nЧто положить?", builder.as_markup())
     await cb.answer()
 
 
@@ -167,16 +147,13 @@ async def cb_storage_pick_res(cb: CallbackQuery, session: AsyncSession, user: Us
 
     cancel_kb = InlineKeyboardBuilder()
     cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="bank_storage"))
-    try:
-        await cb.message.edit_text(
-            f"📥 <b>Слот {slot} — {label}</b>\n\n"
-            f"Баланс: {fmt_num(balance)}\n\n"
-            f"Введите количество для хранения:",
-            reply_markup=cancel_kb.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"📥 <b>Слот {slot} — {label}</b>\n\n"
+        f"Баланс: {fmt_num(balance)}\n\n"
+        f"Введите количество для хранения:",
+        cancel_kb.as_markup(),
+    )
     await cb.answer()
 
 
@@ -244,11 +221,4 @@ async def cb_storage_retrieve(cb: CallbackQuery, session: AsyncSession, user: Us
     ]
     for c in cells:
         lines.append(_cell_display(c))
-    try:
-        await cb.message.edit_text(
-            "\n".join(lines),
-            reply_markup=_storage_kb(cells, user),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), _storage_kb(cells, user))

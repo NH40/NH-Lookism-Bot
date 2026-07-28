@@ -197,12 +197,10 @@ async def cb_pull_one(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer("Подожди...", show_alert=False)
         return
     await cb.answer()
-    try:
-        await cb.message.edit_text("🎰 Прокручиваем...")
-    except Exception:
-        pass
+    from app.utils.menu_media import safe_edit_get_message
+    msg = await safe_edit_get_message(cb, "🎰 Прокручиваем...")
     asyncio.create_task(
-        _pull_one_bg(cb.message.chat.id, cb.message.message_id, user.id, lock_key)
+        _pull_one_bg(msg.chat.id, msg.message_id, user.id, lock_key)
     )
 
 
@@ -216,10 +214,8 @@ async def cb_pull_10(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer("Подожди...", show_alert=False)
         return
     await cb.answer()
-    try:
-        await cb.message.edit_text("🎰 Прокручиваем тикеты...")
-    except Exception:
-        pass
+    from app.utils.menu_media import safe_edit_get_message
+    msg = await safe_edit_get_message(cb, "🎰 Прокручиваем тикеты...")
     asyncio.create_task(
-        _pull_10_bg(cb.message.chat.id, cb.message.message_id, user.id, lock_key)
+        _pull_10_bg(msg.chat.id, msg.message_id, user.id, lock_key)
     )

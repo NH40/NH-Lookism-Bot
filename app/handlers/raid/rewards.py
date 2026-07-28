@@ -18,15 +18,19 @@ from app.constants.raid import (
     PATH_BONUS_LABELS,
     UI_CRAFT_COST,
     UI_LEVEL_PERKS,
-    BIZ_GENIUS_COSTS,
-    BIZ_GENIUS_INCOME_BONUS,
-    BIZ_GENIUS_LEVEL_LABELS,
     BUSINESS_DISTRICT_COST,
     BUSINESS_DISTRICTS_MAX,
 )
+from app.config.game_balance import (
+    BIZ_GENIUS_LEVEL_COSTS, BIZ_GENIUS_CAPACITY_COSTS,
+    BIZ_GENIUS_DISCOUNT_COSTS, BIZ_GENIUS_INCOME_COSTS,
+    BIZ_GENIUS_LEVEL_PCT_PER_LEVEL, BIZ_GENIUS_CAPACITY_PCT_PER_LEVEL,
+    BIZ_GENIUS_DISCOUNT_PCT_PER_LEVEL, BIZ_GENIUS_INCOME_PCT_PER_LEVEL,
+)
 from app.utils.keyboards.common import back_kb
-from app.utils.formatters import fmt_num, progress_bar, pair_lines
+from app.utils.formatters import fmt_num, progress_bar
 from app.handlers.raid.boss import _raid_boss_photo, _send_or_edit_raid_photo
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -109,7 +113,7 @@ async def cb_craft_ui_menu(cb: CallbackQuery, session: AsyncSession, user: User)
         cost = UI_CRAFT_COST[lvl]
         st = "✅" if user.ui_level >= lvl else f"{cost}фр."
         perk_bits.append(f"{perk['name']}: {perk['perk']} [{st}]")
-    lines.extend(pair_lines(perk_bits))
+    lines.extend(perk_bits)
 
     await cb.message.edit_text(
         "\n".join(lines),
@@ -196,14 +200,7 @@ async def cb_craft_mg_menu(cb: CallbackQuery, session: AsyncSession, user: User)
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="raid_craft"))
 
-    try:
-        await cb.message.edit_text(
-            "\n".join(lines),
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
     await cb.answer()
 
 
@@ -335,36 +332,77 @@ async def cb_craft_path_spin(cb: CallbackQuery, session: AsyncSession, user: Use
     await cb_craft_path_menu(cb, session, user)
 
 
-# ── Гений бизнеса (Бизнес-крафт) ────────────────────────────────────────────
+# ── Гений бизнеса (Бизнес-крафт) — 4 независимых трека (патч 1.3.1) ─────────
+
+GENIUS_TRACKS: dict[str, dict] = {
+    "level": {
+        "field": "business_genius_level", "max": 10,
+        "costs": BIZ_GENIUS_LEVEL_COSTS, "pct": BIZ_GENIUS_LEVEL_PCT_PER_LEVEL,
+        "label": "Уровень", "emoji": "📈",
+        "effect": lambda pct: f"+{pct}% дохода/ур.",
+    },
+    "capacity": {
+        "field": "business_genius_capacity_level", "max": 5,
+        "costs": BIZ_GENIUS_CAPACITY_COSTS, "pct": BIZ_GENIUS_CAPACITY_PCT_PER_LEVEL,
+        "label": "Вместимость", "emoji": "📦",
+        "effect": lambda pct: f"+{pct}% к количеству районов/ур.",
+    },
+    "discount": {
+        "field": "business_genius_discount_level", "max": 5,
+        "costs": BIZ_GENIUS_DISCOUNT_COSTS, "pct": BIZ_GENIUS_DISCOUNT_PCT_PER_LEVEL,
+        "label": "Скидка", "emoji": "🏷",
+        "effect": lambda pct: f"-{pct}% на траты во всех крафтах, магазине и Гениях/ур.",
+    },
+    "income": {
+        "field": "business_genius_income_level", "max": 5,
+        "costs": BIZ_GENIUS_INCOME_COSTS, "pct": BIZ_GENIUS_INCOME_PCT_PER_LEVEL,
+        "label": "Бонус к доходу", "emoji": "💹",
+        "effect": lambda pct: f"+{pct}% дохода/ур.",
+    },
+}
+
+
+from app.utils.formatters import biz_discount_pct as _genius_discount_pct
+from app.utils.formatters import apply_biz_discount as _apply_biz_discount
+
+
+def _genius_track_cost(user: User, track: str) -> int | None:
+    cfg = GENIUS_TRACKS[track]
+    level = getattr(user, cfg["field"], 0)
+    if level >= cfg["max"]:
+        return None
+    base_cost = cfg["costs"][level]
+    return _apply_biz_discount(user, base_cost)
+
 
 async def _biz_genius_page(cb: CallbackQuery, session: AsyncSession, user: User, back: str = "raid_craft"):
     """Общая функция отображения страницы Гения бизнеса."""
-    from app.constants.raid import BUSINESS_DISTRICT_COST_TIER2, BUSINESS_DISTRICTS_TIER1_MAX, BIZ_GENIUS_DISCOUNT
+    from app.constants.raid import BUSINESS_DISTRICT_COST_TIER2, BUSINESS_DISTRICTS_TIER1_MAX
     biz_frags = getattr(user, "business_fragments", 0)
-    biz_genius = getattr(user, "business_genius_level", 0)
     bonus_districts = getattr(user, "bonus_business_districts", 0)
 
-    # Текущая цена района (зависит от тира)
-    current_dist_cost = BUSINESS_DISTRICT_COST if bonus_districts < BUSINESS_DISTRICTS_TIER1_MAX else BUSINESS_DISTRICT_COST_TIER2
+    current_dist_cost = _apply_biz_discount(
+        user,
+        BUSINESS_DISTRICT_COST if bonus_districts < BUSINESS_DISTRICTS_TIER1_MAX else BUSINESS_DISTRICT_COST_TIER2
+    )
 
     builder = InlineKeyboardBuilder()
 
-    # ── Прокачка уровня Гения бизнеса ────────────────────────────────────────
-    if biz_genius < 5:
-        cost = BIZ_GENIUS_COSTS[biz_genius]
-        can = "✅" if biz_frags >= cost else "❌"
-        lbl = BIZ_GENIUS_LEVEL_LABELS.get(biz_genius + 1, "")
-        builder.row(InlineKeyboardButton(
-            text=f"{can} Ур.{biz_genius + 1}: {lbl} — {cost} 🏢",
-            callback_data="biz_genius_upgrade"
-        ))
-    else:
-        builder.row(InlineKeyboardButton(
-            text="👑 Гений бизнеса — МАКСИМУМ (Ур.5)",
-            callback_data="noop_raid"
-        ))
+    for track, cfg in GENIUS_TRACKS.items():
+        level = getattr(user, cfg["field"], 0)
+        cost = _genius_track_cost(user, track)
+        if cost is None:
+            builder.row(InlineKeyboardButton(
+                text=f"👑 {cfg['emoji']} {cfg['label']} — МАКСИМУМ (Ур.{cfg['max']})",
+                callback_data="noop_raid"
+            ))
+        else:
+            can = "✅" if biz_frags >= cost else "❌"
+            builder.row(InlineKeyboardButton(
+                text=f"{can} {cfg['emoji']} {cfg['label']} Ур.{level + 1} — {cost} 🏢",
+                callback_data=f"biz_genius_upgrade:{track}:{back}"
+            ))
 
-    # ── Бизнес-экспансия: бонусные районы ────────────────────────────────────
     if bonus_districts < BUSINESS_DISTRICTS_MAX:
         can_d = "✅" if biz_frags >= current_dist_cost else "❌"
         tier_label = " 🥈Тир 2" if bonus_districts >= BUSINESS_DISTRICTS_TIER1_MAX else ""
@@ -385,6 +423,7 @@ async def _biz_genius_page(cb: CallbackQuery, session: AsyncSession, user: User,
         ))
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=back))
+    builder.row(InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu"))
 
     # ── Текст ─────────────────────────────────────────────────────────────────
     lines = [
@@ -392,42 +431,25 @@ async def _biz_genius_page(cb: CallbackQuery, session: AsyncSession, user: User,
         "<i>Фрагменты — у Элиты (Нулевое поколение)</i>",
         "",
         f"🏢 Бизнес-фрагменты: <b>{biz_frags}</b>",
-        f"🎖 Уровень {progress_bar(biz_genius, 5)} {biz_genius}/5",
         "",
-        "━━━ 📈 Уровни Гения бизнеса ━━━",
-        "<i>Каждый уровень: новые здания + бонус к доходу + скидка на строительство</i>",
-        "",
+        "━━━ 🎖 Треки Гения ━━━",
     ]
-    for lvl in range(1, 6):
-        cost = BIZ_GENIUS_COSTS[lvl - 1]
-        bonus = BIZ_GENIUS_INCOME_BONUS[lvl - 1]
-        discount = BIZ_GENIUS_DISCOUNT[lvl - 1]
-        lbl = BIZ_GENIUS_LEVEL_LABELS.get(lvl, "")
-        perks = f"+{bonus}% доход, -{discount}% стройка"
-        if biz_genius >= lvl:
-            lines.append(f"✅ Ур.{lvl}: {lbl} — {perks}")
-        elif biz_genius + 1 == lvl:
-            lines.append(f"🔓 Ур.{lvl}: {lbl} — {cost} 🏢 | {perks}")
-        else:
-            lines.append(f"🔒 Ур.{lvl}: {lbl} — {cost} 🏢 | {perks}")
+    for track, cfg in GENIUS_TRACKS.items():
+        level = getattr(user, cfg["field"], 0)
+        lines.append(f"{cfg['emoji']} {cfg['label']} {progress_bar(level, cfg['max'])} {level}/{cfg['max']}")
+        lines.append(cfg['effect'](cfg['pct']))
+        lines.append("")
 
     lines += [
-        "",
         "━━━ 🏘 Бизнес-экспансия ━━━",
-        "<i>Бонусные районы для строительства без захвата городов</i>",
+        "Бонусные районы для строительства без захвата городов",
         f"Куплено {progress_bar(bonus_districts, BUSINESS_DISTRICTS_MAX)} {bonus_districts}/{BUSINESS_DISTRICTS_MAX}",
-        f"Тир 1 (1–{BUSINESS_DISTRICTS_TIER1_MAX}): {BUSINESS_DISTRICT_COST} 🏢/р.   "
+        "",
+        f"Тир 1 (1–{BUSINESS_DISTRICTS_TIER1_MAX}): {BUSINESS_DISTRICT_COST} 🏢/р.",
         f"Тир 2 ({BUSINESS_DISTRICTS_TIER1_MAX + 1}–{BUSINESS_DISTRICTS_MAX}): {BUSINESS_DISTRICT_COST_TIER2} 🏢/р.",
     ]
 
-    try:
-        await cb.message.edit_text(
-            "\n".join(lines),
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
     await cb.answer()
 
 
@@ -441,44 +463,40 @@ async def cb_biz_genius_menu(cb: CallbackQuery, session: AsyncSession, user: Use
     await _biz_genius_page(cb, session, user, back="business")
 
 
-@router.callback_query(F.data == "biz_genius_upgrade")
+@router.callback_query(F.data.startswith("biz_genius_upgrade:"))
 async def cb_biz_genius_upgrade(cb: CallbackQuery, session: AsyncSession, user: User):
-    biz_genius = getattr(user, "business_genius_level", 0)
-    biz_frags = getattr(user, "business_fragments", 0)
+    parts = cb.data.split(":", 2)
+    track = parts[1]
+    back = parts[2] if len(parts) > 2 else "raid_craft"
+    cfg = GENIUS_TRACKS.get(track)
+    if not cfg:
+        await cb.answer("Неизвестный трек", show_alert=True)
+        return
 
-    if biz_genius >= 5:
+    level = getattr(user, cfg["field"], 0)
+    if level >= cfg["max"]:
         await cb.answer("Максимальный уровень достигнут!", show_alert=True)
         return
 
-    # Слава — Чарльз Чоя «Десять гениев»: -50% стоимость фрагментов бизнеса
-    cost = BIZ_GENIUS_COSTS[biz_genius]
-    if getattr(user, "fame_charles_geniuses", False):
-        cost = cost // 2
+    cost = _genius_track_cost(user, track)
+    biz_frags = getattr(user, "business_fragments", 0)
     if biz_frags < cost:
         await cb.answer(f"Нужно {cost} 🏢 фрагментов", show_alert=True)
         return
 
     user.business_fragments = biz_frags - cost
-    user.business_genius_level = biz_genius + 1
-    new_lvl = user.business_genius_level
-    lbl = BIZ_GENIUS_LEVEL_LABELS.get(new_lvl, "")
-    bonus = BIZ_GENIUS_INCOME_BONUS[new_lvl - 1]
+    setattr(user, cfg["field"], level + 1)
 
-    # Пересчитываем доход (добавился genius bonus)
     from app.services.business_service import business_service
     await business_service._recalc_income(session, user)
     await session.flush()
 
     await cb.answer(
-        f"🎖 Гений бизнеса Ур.{new_lvl} открыт!\n"
-        f"{lbl}\n"
-        f"+{bonus}% ко всему доходу!\n"
-        f"Новые здания доступны в Бизнесе!",
+        f"🎖 {cfg['label']} Ур.{level + 1} открыт!\n"
+        f"{cfg['effect'](cfg['pct'])}",
         show_alert=True
     )
-    # Определяем куда вернуться (по тексту кнопки «Назад» в message нет надёжного способа,
-    # поэтому всегда возвращаем в raid_craft; из бизнеса вызывается отдельный callback)
-    await _biz_genius_page(cb, session, user, back="raid_craft")
+    await _biz_genius_page(cb, session, user, back=back)
 
 
 @router.callback_query(F.data == "craft_biz_district")
@@ -489,9 +507,10 @@ async def cb_craft_biz_district(cb: CallbackQuery, session: AsyncSession, user: 
     if bonus_districts >= BUSINESS_DISTRICTS_MAX:
         await cb.answer("Достигнут максимум бонусных районов!", show_alert=True)
         return
-    cost = BUSINESS_DISTRICT_COST if bonus_districts < BUSINESS_DISTRICTS_TIER1_MAX else BUSINESS_DISTRICT_COST_TIER2
-    if getattr(user, "fame_charles_geniuses", False):
-        cost = cost // 2
+    cost = _apply_biz_discount(
+        user,
+        BUSINESS_DISTRICT_COST if bonus_districts < BUSINESS_DISTRICTS_TIER1_MAX else BUSINESS_DISTRICT_COST_TIER2
+    )
     if biz_frags < cost:
         await cb.answer(f"Нужно {cost} 🏢 фрагментов", show_alert=True)
         return
@@ -513,17 +532,16 @@ async def cb_craft_biz_district_5(cb: CallbackQuery, session: AsyncSession, user
         await cb.answer("Достигнут максимум!", show_alert=True)
         return
     # Считаем реальную стоимость с учётом тира (районы могут пересекать границу)
-    # Слава — Чарльз Чоя «Десять гениев»: -50% стоимость фрагментов бизнеса
-    geniuses = getattr(user, "fame_charles_geniuses", False)
     total_cost = 0
     add = 0
     cur = bonus_districts
     for _ in range(5):
         if cur >= BUSINESS_DISTRICTS_MAX:
             break
-        c = BUSINESS_DISTRICT_COST if cur < BUSINESS_DISTRICTS_TIER1_MAX else BUSINESS_DISTRICT_COST_TIER2
-        if geniuses:
-            c = c // 2
+        c = _apply_biz_discount(
+            user,
+            BUSINESS_DISTRICT_COST if cur < BUSINESS_DISTRICTS_TIER1_MAX else BUSINESS_DISTRICT_COST_TIER2
+        )
         if biz_frags < total_cost + c:
             break
         total_cost += c
@@ -613,14 +631,7 @@ async def cb_craft_exchange_menu(cb: CallbackQuery, session: AsyncSession, user:
             callback_data=f"exch_from:{key}",
         ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="raid_craft"))
-    try:
-        await cb.message.edit_text(
-            _exch_menu_text(user),
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, _exch_menu_text(user), builder.as_markup())
     await cb.answer()
 
 
@@ -644,16 +655,13 @@ async def cb_exch_from(cb: CallbackQuery, session: AsyncSession, user: User):
             callback_data=f"exch_to:{from_key}:{key}",
         ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="craft_exchange_menu"))
-    try:
-        await cb.message.edit_text(
-            f"💱 <b>Обмен</b> {from_emoji} {from_label}\n"
-            f"Ваш баланс: <b>{balance}</b>\n\n"
-            f"Выберите тип фрагментов <b>получить</b>:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"💱 <b>Обмен</b> {from_emoji} {from_label}\n"
+        f"Ваш баланс: <b>{balance}</b>\n\n"
+        f"Выберите тип фрагментов <b>получить</b>:",
+        builder.as_markup(),
+    )
     await cb.answer()
 
 
@@ -678,18 +686,15 @@ async def cb_exch_to(cb: CallbackQuery, session: AsyncSession, user: User, state
     rate_str = _exch_rate_str(from_key, to_key)
     cancel_kb = InlineKeyboardBuilder()
     cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="craft_exchange_menu"))
-    try:
-        await cb.message.edit_text(
-            f"💱 <b>Обмен</b>\n"
-            f"{from_emoji} {from_label} → {to_emoji} {to_label}\n\n"
-            f"Баланс: <b>{balance}</b> {from_emoji}\n"
-            f"Курс: {rate_str} | Цена: {fmt_num(EXCHANGE_COST_PER_FRAG)} NHCoin за отданный фрагмент\n\n"
-            f"Введите количество фрагментов <b>отдать</b>:",
-            reply_markup=cancel_kb.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"💱 <b>Обмен</b>\n"
+        f"{from_emoji} {from_label} → {to_emoji} {to_label}\n\n"
+        f"Баланс: <b>{balance}</b> {from_emoji}\n"
+        f"Курс: {rate_str} | Цена: {fmt_num(EXCHANGE_COST_PER_FRAG)} NHCoin за отданный фрагмент\n\n"
+        f"Введите количество фрагментов <b>отдать</b>:",
+        cancel_kb.as_markup(),
+    )
     await cb.answer()
 
 

@@ -72,6 +72,32 @@ services:
     restart: unless-stopped
     command: python -m app.main
     logging: *default-logging
+    # app/main.py пишет текущее unix-время в /app/heartbeat каждые 15с из
+    # своего event loop — если процесс зависнет (не крашнется, а именно
+    # подвиснет, событийный цикл перестанет тикать), файл перестаёт
+    # обновляться и HEALTHCHECK это ловит. restart:unless-stopped сам по себе
+    # НЕ помогает в этом случае (процесс формально жив, просто не отвечает) —
+    # нужен autoheal-сайдкар ниже, который перезапускает контейнер по
+    # статусу unhealthy.
+    healthcheck:
+      test: ["CMD-SHELL", "test $(( $(date +%s) - $(cat /app/heartbeat 2>/dev/null || echo 0) )) -lt 60"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    labels:
+      - autoheal=true
+
+  autoheal:
+    image: willfarrell/autoheal
+    container_name: lookism_autoheal
+    restart: unless-stopped
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=10
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    logging: *default-logging
 
   manager:
     build: .

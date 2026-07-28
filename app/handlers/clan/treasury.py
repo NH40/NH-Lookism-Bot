@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.services.clan import clan_service
 from app.utils.formatters import fmt_num
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -50,17 +51,14 @@ async def cb_clan_treasury_deposit_coin(cb: CallbackQuery, session: AsyncSession
     cancel_kb = InlineKeyboardBuilder()
     cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="clan_treasury"))
 
-    try:
-        await cb.message.edit_text(
-            f"🏦 <b>Казна клана {html.escape(clan.name)}</b>\n\n"
-            f"В казне: {fmt_num(clan.treasury)} NHCoin\n"
-            f"У вас: {fmt_num(user.nh_coins)} NHCoin\n\n"
-            f"Введите сумму для пополнения:",
-            reply_markup=cancel_kb.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"🏦 <b>Казна клана {html.escape(clan.name)}</b>\n\n"
+        f"В казне: {fmt_num(clan.treasury)} NHCoin\n"
+        f"У вас: {fmt_num(user.nh_coins)} NHCoin\n\n"
+        f"Введите сумму для пополнения:",
+        cancel_kb.as_markup(),
+    )
 
 
 @router.message(TreasuryFSM.waiting_amount)

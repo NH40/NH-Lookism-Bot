@@ -93,7 +93,7 @@ async def _boss_main_screen(
         heal_count = state.get("heal_count", 0)
         extra_lines.append(
             f"🔴 Шкала отчаяния: <b>{despair:.1f}%</b> "
-            f"{'█' * int(despair / 10)}{'░' * (10 - int(despair / 10))}\n"
+            f"{'🟥' * int(despair / 10)}{'⬛' * (10 - int(despair / 10))}\n"
             f"   Исцелений: {heal_count}"
         )
     elif boss.boss_id == "archangel":
@@ -133,7 +133,7 @@ async def _boss_main_screen(
     if boss.boss_id == "brothers" and boss.hp < 0:
         hp_line = (
             f"❤️ HP: <b>{fmt_hp(boss.hp)}</b> ← в минусе!\n"
-            f"{'░' * 16} 0%"
+            f"{'⬛' * 10} 0%"
         )
 
     extra_str = "\n".join(extra_lines)
@@ -147,6 +147,7 @@ async def _boss_main_screen(
         f"{hp_line}"
         f"{extra_str}\n"
         f"⏳ До конца: <b>{fmt_ttl(time_left)}</b>\n\n"
+        f"━━━ ⚡ Способности ━━━\n"
         f"{cfg.special_desc}\n"
     )
 

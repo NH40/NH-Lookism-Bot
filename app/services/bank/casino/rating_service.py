@@ -16,6 +16,18 @@ class CasinoRatingService:
         )
         return list(result.scalars().all())
 
+    async def get_user_rank(self, session: AsyncSession, user_id: int) -> tuple[int, int]:
+        """Место пользователя в общем недельном рейтинге (независимо от знака
+        результата) и сам результат."""
+        from sqlalchemy import func
+        user_value = await session.scalar(
+            select(User.casino_weekly_coins_won).where(User.id == user_id)
+        ) or 0
+        ahead = await session.scalar(
+            select(func.count()).select_from(User).where(User.casino_weekly_coins_won > user_value)
+        ) or 0
+        return ahead + 1, user_value
+
     async def reset_and_reward(self, session: AsyncSession) -> list[dict]:
         """Награждает топ-3, обнуляет счётчик у всех. Возвращает данные для уведомлений.
 

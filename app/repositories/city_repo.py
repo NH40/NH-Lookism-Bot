@@ -84,10 +84,18 @@ class CityRepo:
     async def get_user_district_count(
         self, session: AsyncSession, user_id: int
     ) -> int:
+        """Считает районы игрока: те, что он держит СЕЙЧАС (owner_id, боевая
+        фаза Банды) + те, что исторически его (income_owner_id, бизнес-доход
+        Короля/Императора после повышения). Один и тот же район может
+        засчитаться сразу и текущему держателю, и историческому владельцу —
+        так и задумано (см. комментарий у District.income_owner_id)."""
+        from sqlalchemy import or_
         result = await session.scalar(
             select(func.count(District.id)).where(
-                District.owner_id == user_id,
-                District.is_captured == True,
+                or_(
+                    (District.owner_id == user_id) & (District.is_captured == True),
+                    District.income_owner_id == user_id,
+                )
             )
         )
         return result or 0
@@ -160,11 +168,11 @@ class CityRepo:
         return result or 0
 
     async def get_available_gang_cities(
-        self, session: AsyncSession, sector: str
+        self, session: AsyncSession, country: str
     ) -> list[City]:
         result = await session.execute(
             select(City).where(
-                City.sector == sector,
+                City.country == country,
                 City.phase == "gang",
                 City.is_fully_captured == False,
             ).order_by(City.type_id)
@@ -172,13 +180,23 @@ class CityRepo:
         return result.scalars().all()
 
     async def get_available_king_cities(
-        self, session: AsyncSession, sector: str
+        self, session: AsyncSession, country: str
     ) -> list[City]:
         result = await session.execute(
             select(City).where(
-                City.sector == sector,
+                City.country == country,
                 City.phase != "fist",
             ).order_by(City.type_id.desc(), City.id)
+        )
+        return result.scalars().all()
+
+    async def get_city_districts(
+        self, session: AsyncSession, city_id: int
+    ) -> list[District]:
+        result = await session.execute(
+            select(District).where(
+                District.city_id == city_id,
+            ).order_by(District.number)
         )
         return result.scalars().all()
 

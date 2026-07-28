@@ -7,9 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.utils.keyboards.common import (
     main_menu_kb, back_kb,
-    menu_combat_kb, menu_economy_kb, menu_progress_kb, menu_social_kb, menu_other_kb,
+    menu_other_kb,
 )
+from app.utils.keyboards.reply_menu import quick_menu_kb
 from app.utils.formatters import fmt_num, phase_label, progress_bar
+from app.data.cities import COUNTRY_BY_CODE
 from ._common import _main_menu_text, _phase_emoji
 
 router = Router()
@@ -40,16 +42,25 @@ async def cmd_start(message: Message, session: AsyncSession, user: User, is_new_
             parse_mode="HTML",
         )
     else:
+        from app.services.horse_shop_service import horse_shop_service
+        event = await horse_shop_service.get_current_event(session)
         text = await _main_menu_text(session, user)
-        await message.answer(text, reply_markup=main_menu_kb(), parse_mode="HTML")
+        await message.answer(text, reply_markup=main_menu_kb(horse_shop_active=bool(event)), parse_mode="HTML")
+
+    # Reply-клавиатура — постоянное быстрое меню внизу экрана (отдельным
+    # сообщением: Telegram не позволяет одновременно inline- и reply-разметку
+    # на одном сообщении).
+    await message.answer("⌨️ Быстрое меню снизу экрана — открывает разделы в один тап.", reply_markup=quick_menu_kb())
 
 
 # ── Главное меню ────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "main_menu")
 async def cb_main_menu(cb: CallbackQuery, session: AsyncSession, user: User):
+    from app.services.horse_shop_service import horse_shop_service
+    event = await horse_shop_service.get_current_event(session)
     text = await _main_menu_text(session, user)
-    kb = main_menu_kb()
+    kb = main_menu_kb(horse_shop_active=bool(event))
     try:
         await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     except Exception:
@@ -73,32 +84,6 @@ async def _edit_or_resend(cb: CallbackQuery, text: str, kb) -> None:
         except Exception:
             pass
         await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
-
-
-@router.callback_query(F.data == "menu_combat")
-async def cb_menu_combat(cb: CallbackQuery):
-    await _edit_or_resend(cb, "⚔️ <b>Бой</b>\n\nВыбери действие:", menu_combat_kb())
-    await cb.answer()
-
-
-@router.callback_query(F.data == "menu_economy")
-async def cb_menu_economy(cb: CallbackQuery, session: AsyncSession):
-    from app.services.horse_shop_service import horse_shop_service
-    event = await horse_shop_service.get_current_event(session)
-    await _edit_or_resend(cb, "💰 <b>Экономика</b>\n\nВыбери раздел:", menu_economy_kb(horse_shop_active=bool(event)))
-    await cb.answer()
-
-
-@router.callback_query(F.data == "menu_progress")
-async def cb_menu_progress(cb: CallbackQuery):
-    await _edit_or_resend(cb, "📈 <b>Прогресс</b>\n\nВыбери раздел:", menu_progress_kb())
-    await cb.answer()
-
-
-@router.callback_query(F.data == "menu_social")
-async def cb_menu_social(cb: CallbackQuery):
-    await _edit_or_resend(cb, "🏯 <b>Социальное</b>\n\nВыбери раздел:", menu_social_kb())
-    await cb.answer()
 
 
 @router.callback_query(F.data == "menu_other")
@@ -172,7 +157,7 @@ async def cb_profile(cb: CallbackQuery, session: AsyncSession, user: User):
         f"👤 {html.escape(user.full_name)}"
         + (f"\n🏴 Банда: {html.escape(user.gang_name)}" if user.gang_name else "")
         + f"\n{_phase_emoji(user.phase)} {phase_label(user.phase)}"
-        + (f" | 🌐 Сектор {user.sector}" if user.sector else "")
+        + (f" | 🌐 {COUNTRY_BY_CODE[user.country].label}" if user.country and user.country in COUNTRY_BY_CODE else "")
         + f"\n\n━━━ 💰 Финансы ━━━\n"
         f"NHCoin: {fmt_num(user.nh_coins)}\n"
         f"Доход: {fmt_num(info['base_income'])}/мин"

@@ -31,6 +31,12 @@ class Clan(Base):
     donat_school_circles: Mapped[int] = mapped_column(Integer, default=0)
     donat_war_circles: Mapped[int] = mapped_column(Integer, default=0)
     donat_premium_circles: Mapped[int] = mapped_column(Integer, default=0)
+    # Круговой донат "Глава клана" — сумма кругов у всех членов клана,
+    # транслируется всем участникам как %-бонус (см. circular_donat_service.py)
+    head_power_pct: Mapped[int] = mapped_column(Integer, default=0)
+    head_income_pct: Mapped[int] = mapped_column(Integer, default=0)
+    head_recruit_pct: Mapped[int] = mapped_column(Integer, default=0)
+    head_influence_pct: Mapped[int] = mapped_column(Integer, default=0)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

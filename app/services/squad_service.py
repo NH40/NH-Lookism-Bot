@@ -76,7 +76,8 @@ class SquadService:
             return {"ok": False, "reason": "Недостаточно влияния (минимум 10)"}
 
         # Количество завербованных
-        count = _calc_recruit_count(effective_influence, user.recruit_count_bonus)
+        recruit_bonus = user.recruit_count_bonus + getattr(user, "clan_head_recruit_bonus", 0)
+        count = _calc_recruit_count(effective_influence, recruit_bonus)
 
         # double_recruit — удваивает
         if user.double_recruit:

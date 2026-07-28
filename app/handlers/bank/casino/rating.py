@@ -17,7 +17,8 @@ _MEDALS = {1: "🥇", 2: "🥈", 3: "🥉"}
 
 @router.callback_query(F.data == "bank_casino_rating")
 async def cb_casino_rating(cb: CallbackQuery, session: AsyncSession, user: User):
-    top = await casino_rating_service.get_top(session, limit=10)
+    top = await casino_rating_service.get_top(session, limit=3)
+    user_rank, user_value = await casino_rating_service.get_user_rank(session, user.id)
 
     lines = ["🏆 <b>Рейтинг казино за неделю</b>\n", "<i>Считается только прибыль в NHCoin (слоты, блэкджек, покер)</i>\n"]
 
@@ -28,6 +29,9 @@ async def cb_casino_rating(cb: CallbackQuery, session: AsyncSession, user: User)
             medal = _MEDALS.get(i, f"{i}.")
             name = u.username or u.full_name
             lines.append(f"{medal} {name} — +{fmt_num(u.casino_weekly_coins_won)} NHCoin")
+
+    sign = "+" if user_value >= 0 else ""
+    lines.append(f"\n📍 Твой результат: {sign}{fmt_num(user_value)} NHCoin (место {user_rank})")
 
     lines.append("\n<b>Награды топ-3:</b>")
     for rank, reward in CASINO_RATING_REWARDS.items():

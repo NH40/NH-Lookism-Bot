@@ -143,5 +143,5 @@ async def msg_slots_bet(message: Message, session: AsyncSession, user: User, sta
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="🎰 Крутить снова", callback_data=f"slots_pick:{resource}"))
-    builder.row(InlineKeyboardButton(text="◀️ В казино", callback_data="bank_casino_slots"))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="bank_casino_slots"))
     await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")

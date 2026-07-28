@@ -25,6 +25,7 @@ income_tick — оптимизированная версия для 5000+ иг�
 """
 import asyncio
 import logging
+import random
 from datetime import datetime, timezone
 
 from sqlalchemy import select, text, func, or_
@@ -32,6 +33,10 @@ from app.database import AsyncSessionFactory
 from app.models.user import User
 from app.models.potion import ActivePotion
 from app.services.fame_service import fame_service
+from app.config.game_balance import (
+    ILLEGAL_INCOME_VOLATILITY_MIN, ILLEGAL_INCOME_VOLATILITY_MAX,
+    VASSAL_TRIBUTE_PERCENT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +77,7 @@ async def income_tick():
                 select(
                     User.id,
                     User.income_per_minute,
+                    User.business_path,
                     User.circ_passive_income,
                     User.referred_by,
                     User.teacher_income_share,
@@ -83,6 +89,9 @@ async def income_tick():
                     User.title_casino_jackpot,
                     User.title_casino_blackjack,
                     User.fame_set_gaprena,
+                    User.suzerain_id,
+                    User.city_tax_percent,
+                    User.city_tax_recipient_id,
                 ).where(
                     or_(User.income_per_minute > 0, User.circ_passive_income > 0)
                 )
@@ -110,11 +119,14 @@ async def income_tick():
             }
 
             # ── 3. Считаем дельты в Python ──────────────────────────────────
-            user_deltas: dict[int, int] = {}    # user_id -> монеты к зачислению
-            teacher_deltas: dict[int, int] = {} # teacher_id -> монеты к зачислению
+            # Один общий net_deltas на ВСЕХ получателей (сам игрок + учитель +
+            # городской налог + вассальная дань) — единый bulk UPDATE вместо
+            # нескольких, чтобы не плодить разнопорядковые блокировки одних и
+            # тех же строк users в рамках одной транзакции (см. _bulk_update_sql).
+            net_deltas: dict[int, int] = {}
+            quest_deltas: dict[int, int] = {}  # трекинг квестов — ДО вычета налога/дани (эффорт, не чистый доход)
 
             for u in users:
-                earned = 0
                 potion_bonus = income_bonuses.get(u.id, 0)
 
                 # Игровые титулы за рейтинг казино + бафф сета «Преодоление» (Слава — Гапрена)
@@ -129,20 +141,43 @@ async def income_tick():
                         title_mult *= 1 + overcome_pct / 100
 
                 if u.income_per_minute > 0:
-                    total = int(u.income_per_minute * (1 + potion_bonus / 100) * title_mult)
+                    volatility_mult = 1.0
+                    if u.business_path == "illegal":
+                        volatility_mult = random.uniform(ILLEGAL_INCOME_VOLATILITY_MIN, ILLEGAL_INCOME_VOLATILITY_MAX)
+                    total = int(u.income_per_minute * (1 + potion_bonus / 100) * title_mult * volatility_mult)
 
                     if total > 0:
+                        quest_deltas[u.id] = quest_deltas.get(u.id, 0) + total
+                        remaining = total
+
+                        # Городской налог — королю города, если чужой
+                        if u.city_tax_percent and u.city_tax_recipient_id:
+                            tax_amt = int(remaining * u.city_tax_percent / 100)
+                            if tax_amt > 0:
+                                remaining -= tax_amt
+                                net_deltas[u.city_tax_recipient_id] = (
+                                    net_deltas.get(u.city_tax_recipient_id, 0) + tax_amt
+                                )
+
+                        # Вассальная дань — сюзерену
+                        if u.suzerain_id:
+                            tribute_amt = int(remaining * VASSAL_TRIBUTE_PERCENT / 100)
+                            if tribute_amt > 0:
+                                remaining -= tribute_amt
+                                net_deltas[u.suzerain_id] = (
+                                    net_deltas.get(u.suzerain_id, 0) + tribute_amt
+                                )
+
+                        # Учительская доля (реферальная система)
                         if u.referred_by:
                             share_pct = u.teacher_income_share or 3
-                            teacher_share = max(1, int(total * share_pct / 100))
-                            earned += total - teacher_share
-                            teacher_deltas[u.referred_by] = (
-                                teacher_deltas.get(u.referred_by, 0) + teacher_share
-                            )
-                        else:
-                            earned += total
+                            teacher_share = max(1, int(remaining * share_pct / 100))
+                            remaining -= teacher_share
+                            net_deltas[u.referred_by] = net_deltas.get(u.referred_by, 0) + teacher_share
 
-                # Пассивный доход: circ-донаты
+                        net_deltas[u.id] = net_deltas.get(u.id, 0) + remaining
+
+                # Пассивный доход: circ-донаты (налог/дань не затрагивают — отдельный источник)
                 circ = u.circ_passive_income or 0
                 if circ > 0:
                     skills_bonus = (u.income_bonus_percent or 0) + (u.prestige_income_bonus or 0)
@@ -150,37 +185,24 @@ async def income_tick():
                     circ_total_bonus = skills_bonus + clan_bonus + potion_bonus
                     per_tick = max(0, int(circ * (1 + circ_total_bonus / 100) * title_mult))
                     if per_tick > 0:
-                        earned += per_tick
+                        net_deltas[u.id] = net_deltas.get(u.id, 0) + per_tick
 
-                if earned > 0:
-                    user_deltas[u.id] = earned
-
-            # ── 4. Bulk UPDATE игроков — один SQL через VALUES ───────────────
+            # ── 4. Bulk UPDATE — один SQL через VALUES ────────────────────────
             # VALUES безопасен: все значения явно приводятся к int выше
-            if user_deltas:
+            if net_deltas:
                 try:
-                    await session.execute(text(_bulk_update_sql(user_deltas)))
+                    await session.execute(text(_bulk_update_sql(net_deltas)))
                 except Exception as e:
                     logger.error(f"income_tick bulk update error: {e}")
                     raise
 
-            # ── 5. Bulk UPDATE учителей (реферальная система) ────────────────
-            if teacher_deltas:
-                try:
-                    await session.execute(text(_bulk_update_sql(teacher_deltas)))
-                except Exception as e:
-                    logger.error(f"income_tick teacher update error: {e}")
-                    raise
-
             logger.debug(
-                "income_tick: %d players updated, %d teachers credited",
-                len(user_deltas),
-                len(teacher_deltas),
+                "income_tick: %d получателей обновлено", len(net_deltas),
             )
 
-    # ── 6. Трекинг квестов «доход» — fire-and-forget, не блокирует тик ──
-    if user_deltas:
-        asyncio.create_task(_track_income_quests(user_deltas))
+    # ── 5. Трекинг квестов «доход» — fire-and-forget, не блокирует тик ──
+    if quest_deltas:
+        asyncio.create_task(_track_income_quests(quest_deltas))
 
 
 async def _track_income_quests(user_deltas: dict[int, int]) -> None:

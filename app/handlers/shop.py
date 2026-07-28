@@ -8,7 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.utils.keyboards.shop import shop_kb
 from app.utils.keyboards.common import back_kb
-from app.utils.formatters import fmt_num
+from app.utils.formatters import fmt_num, biz_discount_pct, influence_discount_pct
+from app.utils.menu_media import safe_edit
 from app.data.shop import SHOP_ITEMS, SHOP_MAP, MG_TIERS, MG_TIER_MAP
 from app.services.cards.craft import craft_service
 from app.constants.cards import TICKET_CRAFT_COST
@@ -23,16 +24,13 @@ class ShopFSM(StatesGroup):
 
 @router.callback_query(F.data == "shop")
 async def cb_shop(cb: CallbackQuery, session: AsyncSession, user: User):
-    try:
-        await cb.message.edit_text(
-            f"🛒 <b>Магазин</b>\n\n"
-            f"💰 Баланс: {fmt_num(user.nh_coins)} NHCoin\n\n"
-            f"Выберите раздел:",
-            reply_markup=shop_kb(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"🛒 <b>Магазин</b>\n\n"
+        f"💰 Баланс: {fmt_num(user.nh_coins)} NHCoin\n\n"
+        f"Выберите раздел:",
+        shop_kb(),
+    )
 
 
 # ── Крафт пыли → тикеты ───────────────────────────────────────────────────────
@@ -59,21 +57,18 @@ async def cb_shop_craft(cb: CallbackQuery, session: AsyncSession, user: User):
             ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="shop"))
 
-    try:
-        await cb.message.edit_text(
-            f"⚗️ <b>Крафт тикетов</b>\n\n"
-            f"💎 Пыль: {fmt_num(dust)}\n"
-            f"🎟 Тикеты: {user.tickets}/{ticket_cap}" + (f" (лимит ×2 🌟)" if overflow else "") + "\n\n"
-            f"1 тикет = {TICKET_CRAFT_COST} 💎 пыли\n"
-            f"Можно скрафтить: {min(can_craft, ticket_space)} тик.\n\n"
-            f"<i>Пыль получается:\n"
-            f"• Распыление карточек из коллекции\n"
-            f"• Победа в дуэлях</i>",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"⚗️ <b>Крафт тикетов</b>\n\n"
+        f"💎 Пыль: {fmt_num(dust)}\n"
+        f"🎟 Тикеты: {user.tickets}/{ticket_cap}" + (f" (лимит ×2 🌟)" if overflow else "") + "\n\n"
+        f"1 тикет = {TICKET_CRAFT_COST} 💎 пыли\n"
+        f"Можно скрафтить: {min(can_craft, ticket_space)} тик.\n\n"
+        f"<i>Пыль получается:\n"
+        f"• Распыление карточек из коллекции\n"
+        f"• Победа в дуэлях</i>",
+        builder.as_markup(),
+    )
     await cb.answer()
 
 
@@ -168,16 +163,13 @@ async def cb_shop_potions(cb: CallbackQuery, session: AsyncSession, user: User):
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="shop"))
 
-    try:
-        await cb.message.edit_text(
-            f"🧪 <b>Зелья</b>\n\n"
-            f"💰 Баланс: {fmt_num(user.nh_coins)}\n\n"
-            f"Выберите тип зелья:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"🧪 <b>Зелья</b>\n\n"
+        f"💰 Баланс: {fmt_num(user.nh_coins)}\n\n"
+        f"Выберите тип зелья:",
+        builder.as_markup(),
+    )
     await cb.answer()
 
 
@@ -217,14 +209,7 @@ async def _render_pot_type(
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="shop_potions"))
 
-    try:
-        await cb.message.edit_text(
-            "\n".join(lines),
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
 
 
 @router.callback_query(F.data.startswith("shop_pot_type:"))
@@ -290,7 +275,7 @@ async def cb_shop_recruits(cb: CallbackQuery, session: AsyncSession, user: User)
     lines = [
         f"👥 <b>Покупка статистов</b>\n\n"
         f"💰 Баланс: {fmt_num(user.nh_coins)}\n"
-        f"Скидка: {user.recruit_discount_percent}%\n\n"
+        f"Скидка: {user.recruit_discount_percent + biz_discount_pct(user) + influence_discount_pct(user)}%\n\n"
         f"Выберите ранг:"
     ]
 
@@ -299,7 +284,7 @@ async def cb_shop_recruits(cb: CallbackQuery, session: AsyncSession, user: User)
         item = SHOP_MAP.get(item_id)
         if not item:
             continue
-        discount = user.recruit_discount_percent
+        discount = user.recruit_discount_percent + biz_discount_pct(user) + influence_discount_pct(user)
         price = max(1, int(item.price * (1 - discount / 100)))
         rank_cfg = RANKS_BY_ID.get(rank)
         power = rank_cfg.base_power if rank_cfg else 0
@@ -333,7 +318,7 @@ async def cb_shop_buy_rank(
         await cb.answer("Товар не найден", show_alert=True)
         return
 
-    discount = user.recruit_discount_percent
+    discount = user.recruit_discount_percent + biz_discount_pct(user) + influence_discount_pct(user)
     price = max(1, int(item.price * (1 - discount / 100)))
     rank_cfg = RANKS_BY_ID.get(rank)
     power = rank_cfg.base_power if rank_cfg else 0
@@ -380,7 +365,7 @@ async def cb_shop_input_qty(
         await cb.answer("Товар не найден", show_alert=True)
         return
 
-    discount = user.recruit_discount_percent
+    discount = user.recruit_discount_percent + biz_discount_pct(user) + influence_discount_pct(user)
     price = max(1, int(item.price * (1 - discount / 100)))
 
     await state.set_state(ShopFSM.waiting_recruit_count)
@@ -391,17 +376,14 @@ async def cb_shop_input_qty(
         text="❌ Отмена", callback_data=f"shop_buy_rank:{rank}"
     ))
 
-    try:
-        await cb.message.edit_text(
-            f"✏️ <b>Введите количество статистов [{rank}]</b>\n\n"
-            f"Цена: {fmt_num(price)}/шт\n"
-            f"Баланс: {fmt_num(user.nh_coins)}\n\n"
-            f"Введите число от 1 до 1 000 000:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"✏️ <b>Введите количество статистов [{rank}]</b>\n\n"
+        f"Цена: {fmt_num(price)}/шт\n"
+        f"Баланс: {fmt_num(user.nh_coins)}\n\n"
+        f"Введите число от 1 до 1 000 000:",
+        builder.as_markup(),
+    )
 
 @router.callback_query(F.data.startswith("shop_buy_qty:"))
 async def cb_shop_buy_qty(

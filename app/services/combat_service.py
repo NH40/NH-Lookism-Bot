@@ -73,7 +73,8 @@ async def fight_district(
     endurance_bonus = 0
     if mastery:
         endurance_levels = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}
-        raw = endurance_levels.get(mastery.endurance, 0)
+        eff_endurance = min(4, mastery.endurance + getattr(user, "clan_land_endurance_mastery_bonus", 0))
+        raw = endurance_levels.get(eff_endurance, 0)
         endurance_bonus = int(raw * user.skill_path_bonus_multiplier)
 
     # Круговой донат «Дракон» круг 3: снижение входящего урона (защита атакующего)

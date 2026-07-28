@@ -58,17 +58,33 @@ class PromotionsMixin:
         user.phase = "king"
         user.king_cities_count = 1
         city.owner_id = user.id
-        city.is_fully_captured = True
         user.extra_attack_count = await self._get_max_extra_attacks_async(session, user)
-        from sqlalchemy import delete as sql_delete
+        from sqlalchemy import delete as sql_delete, update as sql_update
         from app.models.king_bot import KingBot
+        from app.models.city import District
         await session.execute(sql_delete(KingBot).where(KingBot.user_id == user.id))
+
+        # Трон города переходит новому Королю (city.owner_id — считается для
+        # налога/вассалитета/права на Императора), но сами районы освобождаются
+        # обратно под простых ботов: банды продолжают соревноваться за этот
+        # город, как за любой другой ещё не захваченный (см. gang_attack_pvp —
+        # без этого освобождения районы навсегда "зависают" ничейными
+        # соперниками, которых нельзя атаковать, т.к. их владелец — Король —
+        # больше не участвует в фазе Банды).
+        await session.execute(
+            sql_update(District)
+            .where(District.city_id == city.id, District.is_captured == True)
+            .values(owner_id=None, is_captured=False)
+        )
+        city.captured_districts = 0
+        city.is_fully_captured = False
+
         await session.flush()
         return {
             "ok": True, "promoted": True, "new_phase": "king",
             "message": (
                 f"🎉 Вы захватили <b>{city.name}</b> и стали Королём!\n\n"
-                f"Захватите районы в 10 городах чтобы стать Кулаком."
+                f"Захватите все города своей страны, чтобы стать Императором."
             )
         }
 
@@ -114,11 +130,8 @@ class PromotionsMixin:
                     city.owner_id = None
                     city.is_fully_captured = False
 
-        from app.repositories.building_repo import building_repo
         from app.services.business_service import business_service
-        await building_repo.deactivate_buildings_on_district_loss(
-            session, user.id, len(district_ids)
-        )
+        await business_service.apply_capture_influence(session, user, -len(district_ids))
         await business_service._recalc_income(session, user)
         await session.flush()
 
@@ -126,13 +139,17 @@ class PromotionsMixin:
         user.phase = "fist"
         user.fist_cities_count = 0
         user.extra_attack_count = await self._get_max_extra_attacks_async(session, user)
+        total_granted = 0
         for _ in range(FIST_MIN_CITIES):
-            await self._give_fist_city_one(session, user, random.choice(FIST_CITY_SIZES))
+            city_size = random.choice(FIST_CITY_SIZES)
+            total_granted += city_size
+            await self._give_fist_city_one(session, user, city_size)
         user.fist_cities_count = FIST_MIN_CITIES
         from sqlalchemy import delete as sql_delete
         from app.models.city import FistBot
         await session.execute(sql_delete(FistBot).where(FistBot.challenger_id == user.id))
         from app.services.business_service import business_service
+        await business_service.apply_capture_influence(session, user, total_granted)
         await business_service._recalc_income(session, user)
         await session.flush()
         return {
@@ -156,10 +173,57 @@ class PromotionsMixin:
         user.phase = "emperor"
         user.extra_attack_count = 0
         user.emperor_entry_power = user.combat_power
+
+        # Как и при повышении банда→король (см. _promote_to_king): районы,
+        # которые Император держал как Король, освобождаются под ботов, чтобы
+        # другие банды/короли снова могли за них соревноваться — но, В ОТЛИЧИЕ
+        # от _release_king_districts (который чистит City.owner_id — так было
+        # нужно для убранного из игры этапа Кулака), трон города (City.owner_id)
+        # у Императора НЕ отбирается: город навсегда остаётся его, и он
+        # продолжает получать долю чужого дохода с этих районов через
+        # существующий налог города (city_tax_percent/city_tax_recipient_id,
+        # см. _recalc_city_tax) — Император не теряет город, просто перестаёт
+        # держать в нём районы лично.
+        from sqlalchemy import update as sql_update, select as sql_select, func as sql_func
+        from app.models.city import City, District
+
+        districts_r = await session.execute(
+            sql_select(District.id, District.city_id)
+            .join(City, City.id == District.city_id)
+            .where(
+                District.owner_id == user.id,
+                District.is_captured == True,
+                City.phase != "fist",
+            )
+        )
+        rows = districts_r.all()
+        if rows:
+            district_ids = [r[0] for r in rows]
+            city_ids = set(r[1] for r in rows)
+
+            await session.execute(
+                sql_update(District)
+                .where(District.id.in_(district_ids))
+                .values(owner_id=None, is_captured=False)
+            )
+            await session.flush()
+
+            for city_id in city_ids:
+                real_captured = await session.scalar(
+                    sql_select(sql_func.count(District.id)).where(
+                        District.city_id == city_id,
+                        District.is_captured == True,
+                    )
+                ) or 0
+                city = await session.get(City, city_id)
+                if city:
+                    city.captured_districts = real_captured
+                    # city.owner_id намеренно НЕ трогаем — трон остаётся у Императора.
+
         await session.flush()
         return {
             "ok": True, "promoted": True, "new_phase": "emperor",
-            "message": "👑 Вы победили 10 кулаков и стали Императором!"
+            "message": "👑 Вы захватили все земли своей страны и стали Императором!"
         }
 
     async def _destroy_gang(self, session: AsyncSession, user: User) -> dict:
@@ -168,6 +232,17 @@ class PromotionsMixin:
         return {"ok": True, "destroyed": True, "message": "💀 Ваша банда уничтожена! Начинайте сначала."}
 
     async def _destroy_king(self, session: AsyncSession, user: User) -> dict:
+        from sqlalchemy import update as sql_update
+        from app.models.city import City
+        # Фикс "фантомного короля" — сброс прогресса раньше не чистил City.owner_id,
+        # погибший король оставался вечным получателем городского налога.
+        await session.execute(
+            sql_update(City).where(City.owner_id == user.id).values(owner_id=None)
+        )
+        await session.execute(
+            sql_update(User).where(User.suzerain_id == user.id).values(suzerain_id=None)
+        )
+        user.vassal_count = 0
         from app.services.prestige_service import prestige_service
         await prestige_service._reset_progress(session, user, keep_ui=True, keep_progress=True)
         return {"ok": True, "destroyed": True, "message": "💀 Вы потеряли все города!"}

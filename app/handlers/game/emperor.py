@@ -14,6 +14,8 @@ from app.constants.emperor import (
     GANG_COOLDOWN_HOURS, GANG_STRENGTH_GROWTH,
 )
 from app.utils.formatters import fmt_num, fmt_ttl
+from app.utils.menu_media import safe_edit
+from app.utils.truce import truce_button_label
 
 router = Router()
 
@@ -71,48 +73,22 @@ async def _compute_speed_pct(session: AsyncSession, user: User) -> int:
 
 
 async def _build_gang_list(session: AsyncSession, user: User) -> tuple[str, any]:
-    now = datetime.now(timezone.utc)
     builder = InlineKeyboardBuilder()
-
-    # Один запрос вместо N (по одному на каждую группировку)
-    records = await _batch_get_records(session, user.id)
-
-    lines = [f"⚔️ <b>Группировки Императора</b>\n"]
-
-    for cfg in EMPEROR_GANGS:
-        rec = records.get(cfg.gang_id)
-        defeat_count = rec.defeat_count if rec else 0
-        cooldown_until = rec.cooldown_until if rec else None
-
-        power = _gang_power(cfg, defeat_count)
-        on_cd = cooldown_until and cooldown_until > now
-
-        if on_cd:
-            secs = int((cooldown_until - now).total_seconds())
-            status_icon = "🔒"
-            btn_text = f"{cfg.emoji} {cfg.name} | ⏳ {fmt_ttl(secs)}"
-            cd_data = f"emperor_gang_cd:{cfg.gang_id}"
-            builder.row(InlineKeyboardButton(text=btn_text, callback_data=cd_data))
-        else:
-            can_win = user.combat_power >= power
-            can_icon = "✅" if can_win else "❌"
-            streak = f" [+{defeat_count * 20}%]" if defeat_count > 0 else ""
-            btn_text = f"{cfg.emoji} {cfg.name}{streak} | {fmt_num(power)} | {can_icon}"
-            builder.row(InlineKeyboardButton(
-                text=btn_text,
-                callback_data=f"emperor_gang_info:{cfg.gang_id}"
-            ))
-
-    builder.row(InlineKeyboardButton(text="🌟 Пробуждения", callback_data="emperor_awakening"))
+    builder.row(InlineKeyboardButton(text="⚔️ PvP Императоров", callback_data="emperor_pvp_list"))
+    builder.row(InlineKeyboardButton(text="🌟 Пробуждение", callback_data="emperor_awakening_wip"))
+    builder.row(InlineKeyboardButton(text=truce_button_label(user), callback_data="truce_menu"))
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
 
     text = (
-        f"⚔️ <b>Группировки Императора</b>\n\n"
-        f"💪 Ваша мощь: <b>{fmt_num(user.combat_power)}</b>\n\n"
-        f"Побеждайте группировки — они усиливаются на <b>20%</b> после каждого поражения.\n"
-        f"Перезарядка: <b>{GANG_COOLDOWN_HOURS} час</b>"
+        f"🏛 <b>Император</b>\n\n"
+        f"💪 Ваша мощь: <b>{fmt_num(user.combat_power)}</b>"
     )
     return text, builder.as_markup()
+
+
+@router.callback_query(F.data == "emperor_awakening_wip")
+async def cb_emperor_awakening_wip(cb: CallbackQuery):
+    await cb.answer("🚧 Пробуждение временно недоступно — функция в разработке", show_alert=True)
 
 
 # ── Главное меню Emperor ──────────────────────────────────────────────────────
@@ -175,22 +151,19 @@ async def cb_emperor_gang_info(cb: CallbackQuery, session: AsyncSession, user: U
         text="◀️ Назад", callback_data="emperor_gangs"
     ))
 
-    try:
-        await cb.message.edit_text(
-            f"{cfg.emoji} <b>{cfg.name}</b>\n\n"
-            f"{cfg.desc}\n\n"
-            f"👥 Состав:\n{members_str}\n\n"
-            f"💪 Мощь: <b>{fmt_num(power)}</b>{growth_str}\n"
-            f"🏆 Побед: <b>{defeat_count}</b>\n\n"
-            f"🎁 Награда:\n"
-            f"  💎 50–150 пыли (5–15 при поражении)\n"
-            f"  🃏 Шанс карточки: {cfg.drop_chance}%\n\n"
-            f"{can_icon} Ваша мощь: {fmt_num(user.combat_power)} / {fmt_num(power)}",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"{cfg.emoji} <b>{cfg.name}</b>\n\n"
+        f"{cfg.desc}\n\n"
+        f"👥 Состав:\n{members_str}\n\n"
+        f"💪 Мощь: <b>{fmt_num(power)}</b>{growth_str}\n"
+        f"🏆 Побед: <b>{defeat_count}</b>\n\n"
+        f"🎁 Награда:\n"
+        f"  💎 50–150 пыли (5–15 при поражении)\n"
+        f"  🃏 Шанс карточки: {cfg.drop_chance}%\n\n"
+        f"{can_icon} Ваша мощь: {fmt_num(user.combat_power)} / {fmt_num(power)}",
+        builder.as_markup(),
+    )
     await cb.answer()
 
 
@@ -369,11 +342,97 @@ async def cb_emperor_gang_attack(cb: CallbackQuery, session: AsyncSession, user:
                 await cb.answer()
                 return
 
-        try:
-            await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-        except Exception:
-            pass
+        await safe_edit(cb, text, kb)
         await cb.answer()
 
     finally:
         await cooldown_service.release_lock(lock_key)
+
+
+# ── PvP между Императорами (патч 1.3.1, заменяет убранную фазу Кулака) ────────
+
+@router.callback_query(F.data == "emperor_pvp_list")
+async def cb_emperor_pvp_list(cb: CallbackQuery, session: AsyncSession, user: User):
+    if user.phase != "emperor":
+        await cb.answer("Только для Императора!", show_alert=True)
+        return
+
+    from app.repositories.user_repo import user_repo
+    rivals = await user_repo.get_emperor_players(session, user.id)
+    if not rivals:
+        await cb.answer("Нет других Императоров для PvP", show_alert=True)
+        return
+
+    from app.utils.formatters import clamp_enemy_power
+    builder = InlineKeyboardBuilder()
+    for rival in rivals[:8]:
+        power = clamp_enemy_power(rival.combat_power, user.combat_power)
+        builder.button(
+            text=f"⚔️ {rival.full_name} | 💪 {fmt_num(power)}",
+            callback_data=f"emperor_pvp_attack:{rival.id}"
+        )
+    builder.adjust(1)
+    builder.row(InlineKeyboardButton(text=truce_button_label(user), callback_data="truce_menu"))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="emperor_gangs"))
+    from app.config.game_balance import EMPEROR_PVP_STEAL_PERCENT
+    await safe_edit(
+        cb,
+        "⚔️ <b>PvP Императоров</b>\n\n"
+        f"Победа — забираешь {EMPEROR_PVP_STEAL_PERCENT}% статистов, карточек и монет "
+        f"противника, плюс 1-3 случайных города его страны!\n\n"
+        f"💪 Твоя мощь: {fmt_num(user.combat_power)}\n\n"
+        "Выбери соперника:",
+        builder.as_markup(),
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("emperor_pvp_attack:"))
+async def cb_emperor_pvp_attack(cb: CallbackQuery, session: AsyncSession, user: User):
+    defender_id = int(cb.data.split(":")[1])
+    from app.services.cooldown_service import cooldown_service
+    from app.services.game_service import game_service
+
+    lock_key = cooldown_service.attack_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
+        await cb.answer("⏳ Атака уже обрабатывается", show_alert=True)
+        return
+
+    try:
+        result = await game_service.emperor_pvp_attack(session, user, defender_id)
+        await session.commit()
+    finally:
+        await cooldown_service.release_lock(lock_key)
+
+    if not result["ok"]:
+        await cb.answer(result.get("reason", "Ошибка"), show_alert=True)
+        return
+
+    crit_str = " ⚡КРИТ!" if result.get("is_crit") else ""
+    if result["win"]:
+        cities = result.get("captured_cities") or []
+        cities_str = (
+            f"\n🏙 Захвачено городов: {len(cities)} ({', '.join(cities)})"
+            if cities else ""
+        )
+        text = (
+            f"✅ <b>Победа!{crit_str}</b>\n\n"
+            f"Противник: {result['defender_name']}\n"
+            f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
+            f"⚔️ Его мощь: {fmt_num(result['defender_power'])}\n\n"
+            f"💰 Забрано монет: {fmt_num(result['stolen_coins'])}\n"
+            f"👥 Забрано статистов: {fmt_num(result.get('stolen_squad', 0))}\n"
+            f"🃏 Забрано карточек: {result.get('stolen_cards', 0)}"
+            + cities_str
+        )
+    else:
+        text = (
+            f"❌ <b>Поражение!</b>\n\n"
+            f"Противник: {result['defender_name']}\n"
+            f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
+            f"⚔️ Его мощь: {fmt_num(result['defender_power'])}"
+        )
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="◀️ К группировкам", callback_data="emperor_gangs"))
+    await safe_edit(cb, text, builder.as_markup())

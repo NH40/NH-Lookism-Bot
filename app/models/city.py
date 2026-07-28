@@ -8,7 +8,8 @@ class City(Base):
     __tablename__ = "cities"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    sector: Mapped[str] = mapped_column(String(4), nullable=False, index=True)
+    sector: Mapped[str | None] = mapped_column(String(4), index=True)  # DEPRECATED — заменено на country (патч 1.3.1)
+    country: Mapped[str | None] = mapped_column(String(32), index=True)
     phase: Mapped[str] = mapped_column(String(16), nullable=False)
     type_id: Mapped[int] = mapped_column(Integer, nullable=False)  # 1=4р, 2=8р, 3=16р, 4=32р, 5=64р
     name: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -27,6 +28,16 @@ class District(Base):
     number: Mapped[int] = mapped_column(Integer, nullable=False)
     owner_id: Mapped[int | None] = mapped_column(Integer, index=True)
     is_captured: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Постоянная привязка дохода — кто "исторически" заработал этот район.
+    # НЕ сбрасывается при повышении фазы (банда→король→император): владелец
+    # продолжает получать с него бизнес-доход навсегда. owner_id/is_captured —
+    # ЭТО ОТДЕЛЬНО: текущий держатель района для боевой фазы Банды, который
+    # свободно переходит другим игрокам в бою, не трогая income_owner_id.
+    # Одна и та же победа над районом засчитывается ОБОИМ: и текущему
+    # захватчику (owner_id, для его прогресса Банды), и историческому
+    # владельцу (income_owner_id, для его бизнес-дохода) — см.
+    # city_repo.get_user_district_count.
+    income_owner_id: Mapped[int | None] = mapped_column(Integer, index=True)
 
 
 class FistBot(Base):

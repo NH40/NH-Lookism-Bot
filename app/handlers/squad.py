@@ -13,6 +13,7 @@ from app.utils.keyboards.squad import squad_kb
 from app.utils.keyboards.common import back_kb
 from app.utils.formatters import fmt_num, fmt_power
 from app.data.squad import RANKS_BY_ID
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -36,8 +37,9 @@ def _phase_ranks_str(phase: str) -> str:
     return " ".join(parts)
 
 
-@router.callback_query(F.data == "squad")
-async def cb_squad(cb: CallbackQuery, session: AsyncSession, user: User):
+async def build_squad_view(session: AsyncSession, user: User) -> tuple[str, "InlineKeyboardMarkup"]:
+    """Чистый билдер (текст, клавиатура) без CallbackQuery — переиспользуется
+    инлайн-хэндлером и быстрым меню (reply-клавиатура)."""
     recruit_cd, train_cd, squad_count = await asyncio.gather(
         cooldown_service.get_ttl(cooldown_service.recruit_key(user.id)),
         cooldown_service.get_ttl(cooldown_service.train_key(user.id)),
@@ -74,10 +76,13 @@ async def cb_squad(cb: CallbackQuery, session: AsyncSession, user: User):
         f"<i>Больше влияния → больше статистов за вербовку</i>\n\n"
         f"Выбери действие:"
     )
-    try:
-        await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        pass
+    return text, builder.as_markup()
+
+
+@router.callback_query(F.data == "squad")
+async def cb_squad(cb: CallbackQuery, session: AsyncSession, user: User):
+    text, kb = await build_squad_view(session, user)
+    await safe_edit(cb, text, kb)
 
 
 @router.callback_query(F.data == "do_recruit")
@@ -101,9 +106,10 @@ async def cb_do_recruit(cb: CallbackQuery, session: AsyncSession, user: User):
         cnt = result["rank_counts"].get(rank, 0)
         if cnt:
             rank_cfg = RANKS_BY_ID.get(rank)
+            emoji = RANK_EMOJI.get(rank, "")
             rank_lines.append(
-                f"  Ранг {rank} — {cnt} бойцов "
-                f"({rank_cfg.base_power:,} силы каждый)"
+                f"{emoji} <b>{rank}</b> — {cnt} бойцов"
+                f" ({rank_cfg.base_power:,} силы каждый)"
             )
 
     from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -113,8 +119,8 @@ async def cb_do_recruit(cb: CallbackQuery, session: AsyncSession, user: User):
 
     await cb.message.edit_text(
         f"📢 <b>Вербовка завершена!</b>\n\n"
-        f"Завербовано: {result['count']} бойцов\n\n"
-        + "\n".join(rank_lines) +
+        f"Завербовано: <b>{result['count']}</b> бойцов\n\n"
+        + "\n\n".join(rank_lines) +
         f"\n\n💪 Боевая мощь: {fmt_num(user.combat_power)}",
         reply_markup=builder.as_markup(),
         parse_mode="HTML",
@@ -161,10 +167,11 @@ async def cb_squad_list(cb: CallbackQuery, session: AsyncSession, user: User):
     groups = await squad_repo.get_groups(session, user.id)
 
     if not groups:
-        await cb.message.edit_text(
+        from app.utils.menu_media import safe_edit
+        await safe_edit(
+            cb,
             "🗒 <b>Состав армии</b>\n\nОтряд пуст",
-            reply_markup=back_kb("squad"),
-            parse_mode="HTML",
+            back_kb("squad"),
         )
         return
 
@@ -175,9 +182,9 @@ async def cb_squad_list(cb: CallbackQuery, session: AsyncSession, user: User):
     for g in groups:
         star_counts = rank_data.setdefault(g.rank, {})
         star_counts[g.stars] = star_counts.get(g.stars, 0) + g.count
-        total += cnt
-        if stars == 5:
-            five_star += cnt
+        total += g.count
+        if g.stars == 5:
+            five_star += g.count
 
     lines = ["🗒 <b>Состав армии</b>\n"]
     for rank in RANK_ORDER:
@@ -203,8 +210,5 @@ async def cb_squad_list(cb: CallbackQuery, session: AsyncSession, user: User):
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="◀️ К группировке", callback_data="squad"))
 
-    await cb.message.edit_text(
-        "\n".join(lines),
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
+    from app.utils.menu_media import safe_edit
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())

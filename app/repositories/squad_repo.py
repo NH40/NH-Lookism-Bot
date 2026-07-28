@@ -122,8 +122,10 @@ class SquadRepo:
             total = int(total * (1 + land_power_pct / 100))
 
         # Бонус навыков пути (squad_power_bonus): mon_power_1 / mon_power_2
-        if user.squad_power_bonus > 0:
-            total = int(total * (1 + user.squad_power_bonus / 100))
+        # + клан-вайд трансляция доната "Глава клана"
+        power_bonus = user.squad_power_bonus + getattr(user, "clan_head_power_bonus", 0)
+        if power_bonus > 0:
+            total = int(total * (1 + power_bonus / 100))
 
         # Слава — Гана «Монстр»: +60% боевая мощь
         if getattr(user, "fame_gana_monster", False):

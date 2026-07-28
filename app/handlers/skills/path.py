@@ -48,15 +48,16 @@ async def cb_path_choose(cb: CallbackQuery, session: AsyncSession, user: User):
     ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="skills"))
 
-    await cb.message.edit_text(
+    from app.utils.menu_media import safe_edit
+    await safe_edit(
+        cb,
         "🗺 <b>Выбор пути</b>\n\n"
         "💼 <b>Бизнесмен</b>\n+% доход, скидки на здания, множитель районов, рэкет\n\n"
         "💝 <b>Романтик</b>\n+слоты тикетов, +% шанс, двойная вербовка, народная любовь\n\n"
         "👹 <b>Монстр</b>\n+% тренировка, двойная тренировка, двойная атака, ярость\n\n"
         "🌑 <b>Тень</b>\n-% КД всего, скрытность, удар из засады, серия убийств\n\n"
         "<i>⚠️ Выбор нельзя изменить!</i>",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
+        builder.as_markup(),
     )
 
 

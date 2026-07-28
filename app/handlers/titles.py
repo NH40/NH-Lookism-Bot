@@ -7,6 +7,7 @@ from app.models.user import User
 from app.models.title import UserDonatTitle, UserAchievement
 from app.utils.keyboards import back_kb
 from app.utils.formatters import fmt_num
+from app.utils.menu_media import safe_edit
 from app.data.titles import (
     ACHIEVEMENTS, ACHIEVEMENT_MAP,
     DONAT_SETS, DONAT_SET_MAP, DONAT_TITLES, DONAT_TITLE_MAP,
@@ -26,16 +27,16 @@ async def cb_titles(cb: CallbackQuery, session: AsyncSession, user: User):
     builder.row(InlineKeyboardButton(text="💎 Донатные сеты", callback_data="donat_sets_menu"))
     builder.row(InlineKeyboardButton(text="🎮 Игровые титулы", callback_data="game_titles_menu"))
     builder.row(InlineKeyboardButton(text="🌟 Слава",         callback_data="fame_titles_menu"))
-    builder.row(InlineKeyboardButton(text="🔙 Назад",         callback_data="main_menu"))
+    builder.row(InlineKeyboardButton(text="◀️ Назад",         callback_data="main_menu"))
 
-    await cb.message.edit_text(
+    await safe_edit(
+        cb,
         "🏆 <b>Титулы</b>\n\n"
-        "🥇 Достижения — выполняй задачи и получай бонусы\n"
-        "💎 Донатные сеты — особые привилегии за поддержку проекта\n"
-        "🎮 Игровые титулы — за топ рейтинга казино\n"
+        "🥇 Достижения — выполняй задачи и получай бонусы\n\n"
+        "💎 Донатные сеты — особые привилегии за поддержку проекта\n\n"
+        "🎮 Игровые титулы — за топ рейтинга казино\n\n"
         "🌟 Слава — уникальные сеты Кузницы славы",
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
+        builder.as_markup(),
     )
 
 
@@ -43,26 +44,18 @@ async def cb_titles(cb: CallbackQuery, session: AsyncSession, user: User):
 
 @router.callback_query(F.data == "game_titles_menu")
 async def cb_game_titles_menu(cb: CallbackQuery, session: AsyncSession, user: User):
-    from aiogram.utils.keyboard import InlineKeyboardBuilder
-    from aiogram.types import InlineKeyboardButton
-
     def _status(has: bool) -> str:
         return "✅ У тебя" if has else "❌"
 
     lines = [
         "🎮 <b>Игровые титулы</b>\n",
         "<i>Выдаются автоматически топ-3 еженедельного рейтинга казино и меняются каждую неделю</i>\n",
-        f"🎰 <b>Джекпот</b> (1 место) — доход ×2\n   {_status(user.title_casino_jackpot)}\n",
-        f"🃏 <b>Блэкджек</b> (2 место) — доход +33% (тик каждые 45с вместо 60с)\n   {_status(user.title_casino_blackjack)}\n",
-        f"🎲 <b>Игрок</b> (3 место) — крафты в рейдах -15%\n   {_status(user.title_casino_player)}\n",
+        f"🎰 <b>Джекпот</b> (1 место) — доход ×2\n{_status(user.title_casino_jackpot)}\n",
+        f"🃏 <b>Блэкджек</b> (2 место) — доход +33% (тик каждые 45с вместо 60с)\n{_status(user.title_casino_blackjack)}\n",
+        f"🎲 <b>Игрок</b> (3 место) — крафты в рейдах -15%\n{_status(user.title_casino_player)}\n",
     ]
 
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="🔙 Назад", callback_data="titles"))
-
-    await cb.message.edit_text(
-        "\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML",
-    )
+    await safe_edit(cb, "\n".join(lines), back_kb("titles"))
 
 
 # ── СЛАВА (Кузница славы — уникальные сеты) ─────────────────────────────────
@@ -87,11 +80,9 @@ async def cb_fame_titles_menu(cb: CallbackQuery, session: AsyncSession, user: Us
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="🔨 Кузница славы", callback_data="fame_forge"))
-    builder.row(InlineKeyboardButton(text="🔙 Назад", callback_data="titles"))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="titles"))
 
-    await cb.message.edit_text(
-        "\n\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML",
-    )
+    await safe_edit(cb, "\n\n".join(lines), builder.as_markup())
 
 
 # ── ДОСТИЖЕНИЯ ──────────────────────────────────────────────────────────────
@@ -162,16 +153,13 @@ async def _show_achievements(cb: CallbackQuery, session, user: User, page: int =
     if page + 1 < total_pages:
         nav.append(InlineKeyboardButton(text="▶️", callback_data=f"ach_page:{page + 1}"))
     builder.row(*nav)
-    builder.row(InlineKeyboardButton(text="🔙 Назад", callback_data="titles"))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="titles"))
 
-    try:
-        await cb.message.edit_text(
-            f"🥇 <b>Достижения</b> (стр. {page + 1}/{total_pages})\n{''.join(lines)}",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"🥇 <b>Достижения</b> (стр. {page + 1}/{total_pages})\n{''.join(lines)}",
+        builder.as_markup(),
+    )
 
 
 @router.callback_query(F.data == "achievements_menu")
@@ -248,7 +236,7 @@ async def cb_donat_sets_menu(cb: CallbackQuery, session: AsyncSession, user: Use
     builder.row(InlineKeyboardButton(
         text="💳 Пополнить NHDonate", callback_data="donate_topup"
     ))
-    builder.row(InlineKeyboardButton(text="🔙 Назад", callback_data="titles"))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="titles"))
 
     await cb.message.edit_text(
         "💎 <b>Донатные сеты</b>\n\n" + "\n\n".join(lines),
@@ -308,16 +296,9 @@ async def cb_donat_set_detail(cb: CallbackQuery, session: AsyncSession, user: Us
     builder.row(InlineKeyboardButton(
         text="💳 Пополнить NHDonate", callback_data="donate_topup"
     ))
-    builder.row(InlineKeyboardButton(text="🔙 К сетам", callback_data="donat_sets_menu"))
+    builder.row(InlineKeyboardButton(text="◀️ К сетам", callback_data="donat_sets_menu"))
 
-    try:
-        await cb.message.edit_text(
-            "\n".join(lines),
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
     await cb.answer()
 
 

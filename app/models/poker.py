@@ -60,4 +60,8 @@ class PokerPlayer(Base):
     total_bet: Mapped[int] = mapped_column(BigInteger, default=0)
     has_acted: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # Игрок нажал "Уйти со стола" — стек выводится и место освобождается
+    # после текущей раздачи (не прерывает её самому игроку и остальным).
+    leaving: Mapped[bool] = mapped_column(Boolean, default=False)
+
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -222,9 +222,12 @@ class ClanBaseService:
         if not member:
             return {"ok": False, "reason": "Игрок не в клане"}
         await session.delete(member)
+        await session.flush()
         kicked_user = await session.scalar(select(User).where(User.id == target_user_id))
         if kicked_user:
             await self._remove_clan_bonuses_from_user(session, kicked_user)
+        from app.services.circular_donat_service import recalc_clan_head_bonus
+        await recalc_clan_head_bonus(session, clan.id)
         await self.recalc_power(session, clan)
         await session.flush()
         return {"ok": True}
@@ -247,7 +250,10 @@ class ClanBaseService:
                 await session.flush()
                 return {"ok": True, "clan_deleted": True}
         await session.delete(member)
+        await session.flush()
         await self._remove_clan_bonuses_from_user(session, user)
+        from app.services.circular_donat_service import recalc_clan_head_bonus
+        await recalc_clan_head_bonus(session, clan.id)
         await self.recalc_power(session, clan)
         await session.flush()
         return {"ok": True, "clan_deleted": False}
@@ -305,7 +311,13 @@ class ClanBaseService:
         user.clan_land_mastery_pct = 0
         user.clan_land_power_mastery_bonus = 0
         user.clan_land_speed_mastery_bonus = 0
+        user.clan_land_technique_mastery_bonus = 0
+        user.clan_land_endurance_mastery_bonus = 0
         user.clan_land_cd_reduction_pct = 0
+        user.clan_head_power_bonus = 0
+        user.clan_head_income_bonus = 0
+        user.clan_head_recruit_bonus = 0
+        user.clan_head_influence_bonus = 0
         await business_service._recalc_income(session, user)
 
     async def _add_clan_bonuses_to_user(self, session: AsyncSession, clan: Clan, user: User) -> None:
@@ -318,5 +330,13 @@ class ClanBaseService:
         user.clan_donat_ticket_bonus = clan.donat_ticket_pct
         user.clan_donat_train_bonus = clan.donat_train_pct
         user.clan_vvip_level = getattr(clan, "vvip_level", 0)
+        user.clan_head_power_bonus = clan.head_power_pct
+        user.clan_head_income_bonus = clan.head_income_pct
+        user.clan_head_recruit_bonus = clan.head_recruit_pct
+        user.clan_head_influence_bonus = clan.head_influence_pct
         await ClanLandService().apply_land_bonuses_to_user(session, user, clan)
         await business_service._recalc_income(session, user)
+        # Если у нового участника уже есть личные круги "Глава клана" (из
+        # прошлого клана) — они должны влиться в клан-вайд сумму нового клана.
+        from app.services.circular_donat_service import recalc_clan_head_bonus
+        await recalc_clan_head_bonus(session, clan.id)

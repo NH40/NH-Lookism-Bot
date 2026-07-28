@@ -10,6 +10,7 @@ from app.models.user import User
 from app.models.clan import ClanMember
 from app.services.clan import clan_service
 from app.utils.formatters import fmt_num
+from app.utils.menu_media import safe_edit
 import html
 
 router = Router()
@@ -77,13 +78,7 @@ async def cb_clan_exchange(cb: CallbackQuery, session: AsyncSession, user: User)
             callback_data=f"clan_exch_target:{target.id}",
         ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clans_menu"))
-    try:
-        await cb.message.edit_text(
-            "🔄 <b>Обмен ресурсами</b>\n\nВыбери участника:",
-            reply_markup=builder.as_markup(), parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, "🔄 <b>Обмен ресурсами</b>\n\nВыбери участника:", builder.as_markup())
 
 
 # ── Выбор ресурса с фильтрацией (пустые ресурсы скрываются) ─────────────────
@@ -123,13 +118,7 @@ async def cb_clan_exch_target(cb: CallbackQuery, session: AsyncSession, user: Us
         builder.row(InlineKeyboardButton(text=text, callback_data=f"clan_exch_res:{target_id}:{res_id}"))
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clan_exchange"))
-    try:
-        await cb.message.edit_text(
-            f"🔄 Обмен с <b>{html.escape(target.full_name)}</b>\n\nВыбери ресурс:",
-            reply_markup=builder.as_markup(), parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, f"🔄 Обмен с <b>{html.escape(target.full_name)}</b>\n\nВыбери ресурс:", builder.as_markup())
 
 
 # ── Маршрутизация по типу ресурса ────────────────────────────────────────────
@@ -155,13 +144,7 @@ async def cb_clan_exch_res(cb: CallbackQuery, session: AsyncSession, user: User,
                 callback_data=f"clan_exch_squad_rank:{target_id}:{rank}",
             ))
         builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"clan_exch_target:{target_id}"))
-        try:
-            await cb.message.edit_text(
-                "👥 <b>Выбери ранг статистов для передачи:</b>",
-                reply_markup=builder.as_markup(), parse_mode="HTML",
-            )
-        except Exception:
-            pass
+        await safe_edit(cb, "👥 <b>Выбери ранг статистов для передачи:</b>", builder.as_markup())
         return
 
     if resource == "character":
@@ -187,13 +170,7 @@ async def cb_clan_exch_res(cb: CallbackQuery, session: AsyncSession, user: User,
                 callback_data=f"clan_exch_char_rank:{target_id}:{rank}",
             ))
         builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"clan_exch_target:{target_id}"))
-        try:
-            await cb.message.edit_text(
-                "🎴 <b>Выбери ранг персонажа для передачи:</b>",
-                reply_markup=builder.as_markup(), parse_mode="HTML",
-            )
-        except Exception:
-            pass
+        await safe_edit(cb, "🎴 <b>Выбери ранг персонажа для передачи:</b>", builder.as_markup())
         return
 
     # Обычные ресурсы — запрос количества
@@ -201,10 +178,7 @@ async def cb_clan_exch_res(cb: CallbackQuery, session: AsyncSession, user: User,
     await state.update_data(target_id=target_id, resource=resource)
     cancel_kb = InlineKeyboardBuilder()
     cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data=f"clan_exch_target:{target_id}"))
-    try:
-        await cb.message.edit_text("🔄 Введите количество для передачи:", reply_markup=cancel_kb.as_markup())
-    except Exception:
-        pass
+    await safe_edit(cb, "🔄 Введите количество для передачи:", cancel_kb.as_markup())
 
 
 # ── Статисты: выбор ранга → количество или всё сразу ─────────────────────────
@@ -227,13 +201,11 @@ async def cb_clan_exch_squad_rank(cb: CallbackQuery, session: AsyncSession, user
         callback_data=f"clan_exch_squad_all:{target_id}:{rank}",
     ))
     builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data=f"clan_exch_res:{target_id}:squad"))
-    try:
-        await cb.message.edit_text(
-            f"👥 Передача статистов ранга <b>{rank}</b>\nДоступно: <b>{count}</b>\n\nВведите количество или передайте всех:",
-            reply_markup=builder.as_markup(), parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"👥 Передача статистов ранга <b>{rank}</b>\nДоступно: <b>{count}</b>\n\nВведите количество или передайте всех:",
+        builder.as_markup(),
+    )
 
 
 @router.callback_query(F.data.startswith("clan_exch_squad_all:"))
@@ -308,13 +280,11 @@ async def cb_clan_exch_char_rank(cb: CallbackQuery, session: AsyncSession, user:
             callback_data=f"clan_exch_char_name:{target_id}:{idx}",
         ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"clan_exch_res:{target_id}:character"))
-    try:
-        await cb.message.edit_text(
-            f"🎴 <b>{rank_label}</b> — {total_count} шт.\n\nВыбери персонажа или передай всю категорию:",
-            reply_markup=builder.as_markup(), parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"🎴 <b>{rank_label}</b> — {total_count} шт.\n\nВыбери персонажа или передай всю категорию:",
+        builder.as_markup(),
+    )
 
 
 # ── Персонажи: передать всю категорию (ранг) сразу ──────────────────────────
@@ -374,13 +344,11 @@ async def cb_clan_exch_char_name(cb: CallbackQuery, session: AsyncSession, user:
         callback_data=f"clan_exch_char_nameall:{target_id}",
     ))
     builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data=f"clan_exch_char_rank:{target_id}:{rank}"))
-    try:
-        await cb.message.edit_text(
-            f"🎴 <b>{html.escape(char_name)}</b>\nДоступно: <b>{count}</b>\n\nВведите количество для передачи:",
-            reply_markup=builder.as_markup(), parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"🎴 <b>{html.escape(char_name)}</b>\nДоступно: <b>{count}</b>\n\nВведите количество для передачи:",
+        builder.as_markup(),
+    )
 
 
 # ── Персонажи: передать всех конкретного персонажа ──────────────────────────

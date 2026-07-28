@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.models.poker import PokerTable
 from app.services.bank.casino.poker_service import poker_service
-from app.services.bank.casino.poker_notify import notify_event
+from app.services.bank.casino.poker_notify import notify_event, build_player_view, users_by_id
+from app.services.bank.casino.poker_render import HAND_RANKING_GUIDE
 from app.services.cooldown_service import cooldown_service
 from app.constants.poker import (
     POKER_MIN_PLAYERS, POKER_MAX_PLAYERS, POKER_BUY_IN_MIN, POKER_BUY_IN_MAX, POKER_WAIT_OPTIONS_SECONDS,
@@ -47,6 +48,11 @@ async def cb_poker_menu(cb: CallbackQuery, session: AsyncSession, user: User, st
         "Полноценный Texas Hold'em против других игроков — с торгами на префлопе, флопе, тёрне и ривере.\n\n"
         f"Игроков за столом: {POKER_MIN_PLAYERS}–{POKER_MAX_PLAYERS}\n"
         f"Вход: {fmt_num(POKER_BUY_IN_MIN)}–{fmt_num(POKER_BUY_IN_MAX)} NHCoin\n\n"
+        "🔁 Стол играет раздачу за раздачей без остановки. Сброс карт (фолд) "
+        "пропускает только текущую раздачу — вы остаётесь за столом со своим "
+        "стеком и участвуете в следующей. Уйти можно в любой момент кнопкой "
+        "«🚪 Уйти со стола» (стек выводится на баланс) — либо играть, пока он "
+        "не закончится.\n\n"
         "Создайте стол или присоединитесь к открытому."
     )
     await safe_edit(cb.message, text, reply_markup=_poker_menu_kb())
@@ -67,7 +73,7 @@ def _lobby_card_kb(table: PokerTable) -> "InlineKeyboardMarkup":
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="🔗 Присоединиться", callback_data=f"poker_join:{table.id}"))
     builder.row(InlineKeyboardButton(text="❌ Отменить стол", callback_data=f"poker_cancel:{table.id}"))
-    builder.row(InlineKeyboardButton(text="◀️ Покер", callback_data="poker_menu"))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="poker_menu"))
     return builder.as_markup()
 
 
@@ -363,3 +369,55 @@ async def msg_poker_raise_amount(message: Message, session: AsyncSession, user: 
 
     await message.answer("✅ Рейз принят.")
     await notify_event(message.bot, session, result)
+
+
+# ── Уйти со стола / справка по комбинациям ────────────────────────────────────
+
+@router.callback_query(F.data.startswith("poker_leave:"))
+async def cb_poker_leave(cb: CallbackQuery, session: AsyncSession, user: User):
+    table_id = int(cb.data.split(":")[1])
+
+    lock_key = cooldown_service.poker_action_lock_key(table_id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("⏳ Подождите...", show_alert=True)
+        return
+
+    result = await poker_service.request_leave(session, table_id, user.id)
+    if not result.get("ok"):
+        await cb.answer(result["msg"], show_alert=True)
+        return
+
+    await cb.answer(result["msg"], show_alert=True)
+    try:
+        await cb.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("poker_help:"))
+async def cb_poker_help(cb: CallbackQuery, session: AsyncSession, user: User):
+    table_id = int(cb.data.split(":")[1])
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="◀️ Назад к столу", callback_data=f"poker_back_to_table:{table_id}"))
+    await safe_edit(cb.message, HAND_RANKING_GUIDE, reply_markup=builder.as_markup())
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("poker_back_to_table:"))
+async def cb_poker_back_to_table(cb: CallbackQuery, session: AsyncSession, user: User):
+    table_id = int(cb.data.split(":")[1])
+    table = await poker_service.get_table(session, table_id)
+    if not table or table.status != "active":
+        await cb.answer("❌ Раздача уже завершена.", show_alert=True)
+        return
+
+    players = await poker_service.get_players(session, table_id)
+    viewer = next((p for p in players if p.user_id == user.id), None)
+    if not viewer or viewer.status == "folded":
+        await cb.answer("❌ Вы не участвуете в текущей раздаче.", show_alert=True)
+        return
+
+    users = await users_by_id(session, players)
+    text, kb = build_player_view(table, players, users, viewer)
+    await safe_edit(cb.message, text, reply_markup=kb)
+    await cb.answer()

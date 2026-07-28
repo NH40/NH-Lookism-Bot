@@ -99,3 +99,18 @@ BUILDINGS_BY_ID: dict[str, BuildingConfig] = {b.id: b for b in BUILDINGS}
 BUILDINGS_BY_PATH: dict[str, list[BuildingConfig]] = {}
 for b in BUILDINGS:
     BUILDINGS_BY_PATH.setdefault(b.path, []).append(b)
+
+# ── Канонические здания (патч 1.3.1) ──────────────────────────────────────────
+# Здание в новой механике выбирается один раз навсегда — district_cost больше
+# ничего не стоит, поэтому из нескольких зданий одного тира (одинаковый
+# min_biz_genius) игрок всегда выбрал бы самое доходное. Чтобы не оставлять
+# заведомо мёртвые варианты в UI, для каждой пары (путь, тир) оставляем только
+# одно — с максимальным base_income. Остальные записи в BUILDINGS не удаляются
+# (задел на будущее — например, если тиры получат разную механику), но
+# choose_business() и меню выбора здания видят только канонические id.
+_best_per_tier: dict[tuple[str, int], BuildingConfig] = {}
+for _b in BUILDINGS:
+    _key = (_b.path, _b.min_biz_genius)
+    if _key not in _best_per_tier or _b.base_income > _best_per_tier[_key].base_income:
+        _best_per_tier[_key] = _b
+CANONICAL_BUILDING_IDS: set[str] = {b.id for b in _best_per_tier.values()}

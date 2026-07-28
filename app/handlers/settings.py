@@ -8,8 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.user import User
 from app.models.game_version import GameVersion
-from app.utils.keyboards.common import back_kb
+from app.utils.keyboards.common import back_kb, confirm_kb
 from app.utils.formatters import fmt_num, fmt_power
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -264,24 +265,14 @@ async def cb_toggle_notif(cb: CallbackQuery, session: AsyncSession, user: User):
 
 @router.callback_query(F.data == "delete_gang_confirm")
 async def cb_delete_gang_confirm(cb: CallbackQuery, session: AsyncSession, user: User):
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(
-        text="✅ Да, удалить", callback_data="delete_gang_do"
-    ))
-    builder.row(InlineKeyboardButton(
-        text="❌ Отмена", callback_data="settings"
-    ))
-    try:
-        await cb.message.edit_text(
-            "💀 <b>Удаление банды</b>\n\n"
-            "Весь прогресс будет сброшен!\n"
-            "Донаты и пробуждения сохранятся.\n\n"
-            "Подтвердить?",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        "💀 <b>Удаление банды</b>\n\n"
+        "Весь прогресс будет сброшен!\n"
+        "Донаты и пробуждения сохранятся.\n\n"
+        "Подтвердить?",
+        confirm_kb("delete_gang_do", "settings"),
+    )
 
 
 @router.callback_query(F.data == "delete_gang_do")

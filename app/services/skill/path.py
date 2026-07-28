@@ -38,7 +38,8 @@ async def upgrade_path_level(session: AsyncSession, user: User) -> dict:
         return {"ok": False, "reason": "Максимальный уровень пути достигнут"}
 
     # Слава — Гана «Построение пути»: -50% стоимость крафтов уровня пути
-    cost = PATH_LEVEL_COSTS[current]
+    from app.utils.formatters import apply_biz_discount
+    cost = apply_biz_discount(user, PATH_LEVEL_COSTS[current])
     if getattr(user, "fame_gana_path", False):
         cost = cost // 2
     path_frags = getattr(user, "path_fragments", 0)

@@ -57,6 +57,7 @@ class PrestigeService:
         """
         user.phase = "gang"
         user.sector = None
+        user.country = None
         user.gang_city_id = None
         user.king_cities_count = 0
         user.fist_wins = 0
@@ -104,6 +105,7 @@ class PrestigeService:
         user.double_ticket = False
         user.path_awakened = False
         user.squad_power_bonus = 0
+        user.influence_bonus_percent = 0
         user.statist_power_bonus = 0
         user.trainer_cd_reduction = 0
         user.all_cd_reduction = 0
@@ -118,6 +120,10 @@ class PrestigeService:
         user.business_fragments = 0
         user.bonus_business_districts = 0
         user.business_genius_level = 0
+        user.business_building_id = None
+        user.business_genius_capacity_level = 0
+        user.business_genius_discount_level = 0
+        user.business_genius_income_level = 0
 
         if not bulk_precleaned:
             # Удаляем личный город бонусных районов
@@ -172,9 +178,23 @@ class PrestigeService:
             await session.execute(
                 delete(ActivePotion).where(ActivePotion.user_id == user.id)
             )
+            # Запоминаем города, где у юзера были захваченные районы, чтобы
+            # пересинхронизировать City.captured_districts после удаления —
+            # иначе счётчик города остаётся завышенным навсегда (район удалён,
+            # а счётчик думает, что он всё ещё захвачен), и другие районы того
+            # же города, брошенные другими игроками, зависают "ничейными"
+            # 🔴-соперниками, которых нельзя атаковать (см. gang_attack_pvp).
+            from sqlalchemy import distinct
+            affected_city_ids = (await session.execute(
+                select(distinct(District.city_id)).where(District.owner_id == user.id)
+            )).scalars().all()
             await session.execute(
                 delete(District).where(District.owner_id == user.id)
             )
+            if affected_city_ids:
+                from app.repositories.city_repo import city_repo
+                for city_id in affected_city_ids:
+                    await city_repo.sync_captured_districts(session, city_id)
             await session.execute(
                 delete(UserPathSkills).where(UserPathSkills.user_id == user.id)
             )

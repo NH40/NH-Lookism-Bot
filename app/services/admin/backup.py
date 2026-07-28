@@ -257,6 +257,8 @@ class AdminBackupMixin:
             clan_land_mastery_pct=0,
             clan_land_power_mastery_bonus=0,
             clan_land_speed_mastery_bonus=0,
+            clan_land_technique_mastery_bonus=0,
+            clan_land_endurance_mastery_bonus=0,
             clan_land_cd_reduction_pct=0,
         ))
 

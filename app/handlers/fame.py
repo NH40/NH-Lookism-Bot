@@ -11,6 +11,7 @@ from app.models.user import User
 from app.data.fame import FAME_SETS, FAME_SET_MAP, FAME_FORGE_COST, fame_fragment_key
 from app.services.fame_service import fame_service
 from app.utils.formatters import fmt_num
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -158,11 +159,7 @@ async def cb_fame_forge(cb: CallbackQuery, session: AsyncSession, user: User):
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="titles"))
 
-    text = "\n".join(lines)
-    try:
-        await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        await cb.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
 
 
 @router.callback_query(F.data.startswith("fame_set:"))
@@ -202,16 +199,15 @@ async def cb_fame_set_detail(cb: CallbackQuery, session: AsyncSession, user: Use
                 callback_data=f"fame_forge_do:{set_key}:{fdef.key}",
             ))
 
+    if owned_count == len(s.fragments):
+        lines.append(f"\n✅ <b>Сет активен! Бонус «{s.bonus_name}» применяется.</b>")
+
     if owned_count > 0:
         builder.row(InlineKeyboardButton(text="🎁 Передать", callback_data=f"fame_transfer_menu:{set_key}"))
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="fame_forge"))
 
-    text = "\n".join(lines)
-    try:
-        await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        await cb.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
 
 
 @router.callback_query(F.data.startswith("fame_forge_do:"))
@@ -255,10 +251,7 @@ async def cb_fame_transfer_menu(cb: CallbackQuery, session: AsyncSession, user: 
         builder.row(InlineKeyboardButton(text="📦 Передать весь сет", callback_data=f"fame_transfer_full:{set_key}"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"fame_set:{set_key}"))
 
-    await cb.message.edit_text(
-        f"🎁 <b>Передача — {s.name}</b>\n\nВыбери, что передать:",
-        reply_markup=builder.as_markup(), parse_mode="HTML",
-    )
+    await safe_edit(cb, f"🎁 <b>Передача — {s.name}</b>\n\nВыбери, что передать:", builder.as_markup())
 
 
 @router.callback_query(F.data.startswith("fame_transfer_frag:"))
@@ -268,10 +261,7 @@ async def cb_fame_transfer_frag(cb: CallbackQuery, state: FSMContext):
     await state.update_data(mode="fragment", set_key=set_key, frag_key=frag_key)
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data=f"fame_set:{set_key}"))
-    await cb.message.edit_text(
-        "🎁 <b>Передача фрагмента</b>\n\nВведи <b>@username</b> или <b>tg_id</b> получателя:",
-        reply_markup=builder.as_markup(), parse_mode="HTML",
-    )
+    await safe_edit(cb, "🎁 <b>Передача фрагмента</b>\n\nВведи <b>@username</b> или <b>tg_id</b> получателя:", builder.as_markup())
 
 
 @router.callback_query(F.data.startswith("fame_transfer_full:"))
@@ -281,10 +271,7 @@ async def cb_fame_transfer_full(cb: CallbackQuery, state: FSMContext):
     await state.update_data(mode="full_set", set_key=set_key)
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data=f"fame_set:{set_key}"))
-    await cb.message.edit_text(
-        "📦 <b>Передача всего сета</b>\n\nВведи <b>@username</b> или <b>tg_id</b> получателя:",
-        reply_markup=builder.as_markup(), parse_mode="HTML",
-    )
+    await safe_edit(cb, "📦 <b>Передача всего сета</b>\n\nВведи <b>@username</b> или <b>tg_id</b> получателя:", builder.as_markup())
 
 
 @router.message(FameTransferFSM.waiting_target)

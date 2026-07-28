@@ -1,4 +1,5 @@
-"""PvP-покер: жизненный цикл стола и одной раздачи Texas Hold'em (БД-логика)."""
+"""PvP-покер: жизненный цикл стола Texas Hold'em — много раздач подряд, пока
+за столом остаётся ≥2 игроков со стеком (БД-логика)."""
 import json
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
@@ -129,21 +130,33 @@ class PokerService:
         n = len(players)
         seats = {p.seat_index: p for p in players}
 
+        for p in players:
+            p.status = "active"
+            p.current_round_bet = 0
+            p.total_bet = 0
+            p.has_acted = False
+            p.leaving = False
+
         deck = new_shuffled_deck()
         for i, p in enumerate(players):
             p.hole_cards = json.dumps(deck[2 * i: 2 * i + 2])
         community = deck[2 * n: 2 * n + 5]
 
         table.community_cards = json.dumps(community)
-        table.dealer_seat = 0
         table.status = "active"
         table.current_round = "preflop"
         table.pot = 0
 
+        # Блайнды и первый ход считаются от кнопки дилера (вращается каждую
+        # раздачу в _start_new_hand_or_finish), а не от фиксированных мест —
+        # иначе за многораздачным столом одни и те же места всегда были бы
+        # слепыми, независимо от того, сколько раздач уже сыграно.
+        dealer_seat = table.dealer_seat % n
         if n == 2:
-            sb_seat, bb_seat, first_to_act = 0, 1, 0
+            sb_seat, bb_seat, first_to_act = dealer_seat, (dealer_seat + 1) % n, dealer_seat
         else:
-            sb_seat, bb_seat = 1 % n, 2 % n
+            sb_seat = (dealer_seat + 1) % n
+            bb_seat = (dealer_seat + 2) % n
             first_to_act = (bb_seat + 1) % n
 
         sb_player, bb_player = seats[sb_seat], seats[bb_seat]
@@ -326,31 +339,121 @@ class PokerService:
             rake = showdown_result["rake_taken"]
 
         table.rake_taken = rake
-        table.status = "finished"
-        table.finished_at = _now()
         table.current_seat = -1
         table.action_deadline = None
 
-        user_ids = [p.user_id for p in players]
-        users_result = await session.execute(select(User).where(User.id.in_(user_ids)))
-        users_by_id = {u.id: u for u in users_result.scalars().all()}
-
+        # Выигрыш остаётся фишками на столе (в стеке) — не выводится на баланс
+        # сразу. Игрок продолжает играть следующие раздачи тем же стеком, пока
+        # не проиграется в ноль или сам не встанет из-за стола (see
+        # _start_new_hand_or_finish). net_change — результат ИМЕННО этой
+        # раздачи (выигрыш минус то, что поставил в этом кругу), не всей сессии
+        # за столом — иначе цифра вводила бы в заблуждение на 2+ раздаче.
         net_changes: dict[int, int] = {}
         for p in players:
-            u = users_by_id[p.user_id]
             payout = payouts.get(p.user_id, 0)
-            refund = p.stack
-            u.nh_coins = (u.nh_coins or 0) + refund + payout
-            net_change = refund + payout - table.buy_in
-            add_weekly_casino_profit(u, "nh_coins", net_change)
-            net_changes[p.user_id] = net_change
+            p.stack += payout
+            net_changes[p.user_id] = payout - p.total_bet
+
+        # Снимок этой раздачи ДО continuation: если стол продолжает играть,
+        # _start_new_hand_or_finish() тут же вызовет start_hand() на ТЕХ ЖЕ
+        # ORM-объектах (identity map — свежий select их не пересоздаст) и
+        # перезапишет table.pot/community_cards и p.status/p.hole_cards под
+        # новую раздачу. Без снимка экран результата показал бы уже новые,
+        # ещё не сыгранные карты вместо только что закончившейся раздачи.
+        finished_pot = table.pot
+        finished_community = table.community_cards
+        finished_seat_order = [p.user_id for p in sorted(players, key=lambda x: x.seat_index)]
+        finished_snapshot = {p.user_id: {"status": p.status, "hole_cards": p.hole_cards} for p in players}
 
         await session.flush()
+
+        continuation = await self._start_new_hand_or_finish(session, table, players)
+
         return {
             "event": "hand_finished", "reason": reason,
             "table": table, "players": players,
             "hands": hands, "net_changes": net_changes,
+            "pot": finished_pot,
+            "community_cards": finished_community,
+            "seat_order": finished_seat_order,
+            "snapshot": finished_snapshot,
+            "continuation": continuation,
         }
+
+    async def _start_new_hand_or_finish(
+        self, session: AsyncSession, table: PokerTable, players: list[PokerPlayer]
+    ) -> dict:
+        """После раздачи: выводит проигравшихся в ноль и тех, кто нажал "уйти",
+        затем либо раздаёт следующую раздачу оставшимся, либо закрывает стол,
+        если играть больше не с кем."""
+        stay = [p for p in players if p.stack > 0 and not p.leaving]
+        leave = [p for p in players if p not in stay]
+
+        if leave:
+            await self._cash_out(session, leave, table.buy_in)
+
+        if len(stay) < POKER_MIN_PLAYERS:
+            await self._cash_out(session, stay, table.buy_in)
+            table.status = "finished"
+            table.finished_at = _now()
+            await session.flush()
+            return {"event": "table_closed", "table": table, "players": []}
+
+        stay_sorted = sorted(stay, key=lambda p: p.seat_index)
+        for i, p in enumerate(stay_sorted):
+            p.seat_index = i
+        await session.flush()
+
+        table.dealer_seat = (table.dealer_seat + 1) % len(stay_sorted)
+        start_result = await self.start_hand(session, table, stay_sorted)
+        return {"event": "next_hand", "table": table, "players": stay_sorted, **start_result}
+
+    async def _cash_out(self, session: AsyncSession, players: list[PokerPlayer], buy_in: int) -> None:
+        """Выводит стек игроков на баланс и убирает их со стола.
+        buy_in — сколько игрок изначально заплатил за место (рёбаев нет),
+        используется только для еженедельной статистики прибыли казино."""
+        if not players:
+            return
+        user_ids = [p.user_id for p in players]
+        users_result = await session.execute(select(User).where(User.id.in_(user_ids)))
+        users_by_id = {u.id: u for u in users_result.scalars().all()}
+        for p in players:
+            u = users_by_id.get(p.user_id)
+            if u:
+                if p.stack > 0:
+                    u.nh_coins = (u.nh_coins or 0) + p.stack
+                add_weekly_casino_profit(u, "nh_coins", p.stack - buy_in)
+            await session.delete(p)
+        await session.flush()
+
+    async def request_leave(self, session: AsyncSession, table_id: int, user_id: int) -> dict:
+        """Игрок нажал "Уйти со стола". Если раздача ещё не идёт (стол
+        активен, но между раздачами быть не может — стол либо waiting, либо
+        active с раздачей в процессе) — помечаем на выход после текущей
+        раздачи; сама раздача (и остальные игроки) продолжается как обычно."""
+        table = await session.get(PokerTable, table_id)
+        if not table:
+            return {"ok": False, "msg": "❌ Стол не найден."}
+        players = await self._get_players(session, table_id)
+        actor = next((p for p in players if p.user_id == user_id), None)
+        if not actor:
+            return {"ok": False, "msg": "❌ Вы не за этим столом."}
+
+        if table.status == "waiting":
+            await self._cash_out(session, [actor], table.buy_in)
+            remaining = [p for p in players if p.id != actor.id]
+            if not remaining:
+                table.status = "cancelled"
+                table.finished_at = _now()
+                await session.flush()
+            return {"ok": True, "msg": "🚪 Вы вышли из-за стола, вход возвращён.", "left_now": True}
+
+        if table.status != "active":
+            return {"ok": False, "msg": "❌ Раздача уже завершена."}
+
+        actor.leaving = True
+        await session.flush()
+        return {"ok": True, "msg": "🚪 Вы встанете из-за стола после текущей раздачи.", "left_now": False}
 
     async def _cancel_table(self, session: AsyncSession, table: PokerTable, players: list[PokerPlayer]) -> dict:
         user_ids = [p.user_id for p in players]

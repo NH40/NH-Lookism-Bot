@@ -8,6 +8,7 @@ from app.models.user import User
 from app.services.market_service import market_service
 from app.constants.market import ITEM_TYPES
 from app.utils.formatters import fmt_num
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -23,13 +24,10 @@ async def cb_market_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     builder.row(InlineKeyboardButton(text="💰 Продавец", callback_data="market_seller"))
     builder.row(InlineKeyboardButton(text="🔨 Аукционы", callback_data="market_auction_menu"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
-    try:
-        await cb.message.edit_text(
-            f"🏪 <b>Биржа</b>\n\n"
-            f"💰 NHCoin: <b>{fmt_num(user.nh_coins)}</b>\n"
-            f"Выбери роль:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"🏪 <b>Биржа</b>\n\n"
+        f"💰 NHCoin: <b>{fmt_num(user.nh_coins)}</b>\n"
+        f"Выбери роль:",
+        builder.as_markup(),
+    )

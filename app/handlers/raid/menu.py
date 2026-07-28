@@ -26,17 +26,10 @@ router = Router()
 
 # ── Главное меню рейдов ─────────────────────────────────────────────────────
 
-@router.callback_query(F.data == "raid_menu")
-async def cb_raid_menu(cb: CallbackQuery, session: AsyncSession, user: User):
-    # Проверка кредитной блокировки
-    from app.services.bank.credits_service import credits_service
-    block_msg = await credits_service.block_message(session, user.id)
-    if block_msg:
-        from app.utils.keyboards.common import back_kb
-        await _send_or_edit_raid_photo(cb, None, block_msg, back_kb("bank_credits"))
-        await cb.answer()
-        return
-
+async def build_raid_menu_view(session: AsyncSession, user: User) -> tuple[str, "InlineKeyboardMarkup"]:
+    """Чистый билдер (текст, клавиатура) без CallbackQuery — переиспользуется
+    инлайн-хэндлером и быстрым меню (reply-клавиатура). Проверку кредитной
+    блокировки вызывающий код делает сам (нужен доступ к cb для её экрана)."""
     active = await raid_service.get_active_raid(session, user.id)
 
     builder = InlineKeyboardBuilder()
@@ -70,30 +63,38 @@ async def cb_raid_menu(cb: CallbackQuery, session: AsyncSession, user: User):
         text="◀️ Назад", callback_data="main_menu"
     ))
 
-    ui_str = f"Ур.{user.ui_level}" if user.ui_level > 0 else ("Донат 🔱" if user.ui_is_donat else "нет")
     path_frags = getattr(user, "path_fragments", 0)
     biz_frags = getattr(user, "business_fragments", 0)
-    from app.handlers.skills.med_genius import any_unlocked, _unlocked_count, MG_POTIONS, is_donat as _mg_is_donat
-    if _mg_is_donat(user):
-        mg_str = "Донат (все Ур.6)"
-    elif any_unlocked(user):
-        mg_str = f"{_unlocked_count(user)}/{len(MG_POTIONS)} зелий"
-    else:
-        mg_str = f"🔒 ({user.alchemy_fragments}/30 🧪)"
 
     menu_text = (
         f"⚔️ <b>Рейды</b>\n\n"
-        f"<b>Фрагменты:</b>\n"
-        f"🔮 УИ: <b>{user.ui_fragments}</b>   "
+        f"<b>Фрагменты:</b>\n\n"
+        f"🔮 УИ: <b>{user.ui_fragments}</b>\n"
+        f"<i>Тратить: Обучение → Навыки → Ультра Инстинкт</i>\n\n"
         f"🧪 Алхимия: <b>{user.alchemy_fragments}</b>\n"
-        f"🔷 Путь: <b>{path_frags}</b>   "
-        f"🏢 Бизнес: <b>{biz_frags}</b>\n\n"
-        f"<b>Прокачка:</b>\n"
-        f"👁 УИ: {ui_str}\n"
-        f"🩺 Гений медицины: {mg_str}\n\n"
+        f"<i>Тратить: Обучение → Навыки → Гений медицины</i>\n\n"
+        f"🔷 Путь: <b>{path_frags}</b>\n"
+        f"<i>Тратить: Обучение → Навыки → Путь</i>\n\n"
+        f"🏢 Бизнес: <b>{biz_frags}</b>\n"
+        f"<i>Тратить: Бизнес → Гений бизнеса</i>\n\n"
         f"Выбери цель для рейда:"
     )
-    await _send_or_edit_raid_photo(cb, None, menu_text, builder.as_markup())
+    return menu_text, builder.as_markup()
+
+
+@router.callback_query(F.data == "raid_menu")
+async def cb_raid_menu(cb: CallbackQuery, session: AsyncSession, user: User):
+    # Проверка кредитной блокировки
+    from app.services.bank.credits_service import credits_service
+    block_msg = await credits_service.block_message(session, user.id)
+    if block_msg:
+        from app.utils.keyboards.common import back_kb
+        await _send_or_edit_raid_photo(cb, None, block_msg, back_kb("bank_credits"))
+        await cb.answer()
+        return
+
+    menu_text, kb = await build_raid_menu_view(session, user)
+    await _send_or_edit_raid_photo(cb, None, menu_text, kb)
 
 
 # ── Выбор клана ─────────────────────────────────────────────────────────────
@@ -173,9 +174,9 @@ async def cb_raid_craft(cb: CallbackQuery, session: AsyncSession, user: User):
     craft_text = (
         f"🔨 <b>Крафт</b>\n\n"
         f"━━━ 💎 Ресурсы ━━━\n"
-        f"🔮 УИ: <b>{user.ui_fragments}</b>   "
+        f"🔮 УИ: <b>{user.ui_fragments}</b>\n"
         f"🧪 Алхимия: <b>{user.alchemy_fragments}</b>\n"
-        f"🔷 Путь: <b>{path_frags}</b>   "
+        f"🔷 Путь: <b>{path_frags}</b>\n"
         f"🏢 Бизнес: <b>{biz_frags}</b>\n"
         f"⚔️ Очки войны: <b>{war_points}</b>\n\n"
         f"━━━ 📊 Прогресс ━━━\n"

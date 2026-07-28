@@ -79,10 +79,8 @@ async def _show_players_page(message, session: AsyncSession, user: User, page: i
     builder.row(InlineKeyboardButton(text="🏆 Топ-10", callback_data="show_top"))
 
     if edit:
-        try:
-            await message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-        except Exception:
-            pass
+        from app.utils.menu_media import safe_edit_message
+        await safe_edit_message(message, text, builder.as_markup())
     else:
         await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
@@ -121,8 +119,6 @@ async def cb_show_top(cb: CallbackQuery, session: AsyncSession, user: User):
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="👥 Все игроки", callback_data="players_page:0"))
-    try:
-        await cb.message.edit_text("\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        pass
+    from app.utils.menu_media import safe_edit
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
     await cb.answer()

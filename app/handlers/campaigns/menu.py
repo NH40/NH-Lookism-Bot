@@ -38,6 +38,8 @@ from app.constants.campaigns import (
     STATIST_RANK_MULTIPLIER,
 )
 from app.utils.formatters import fmt_num, fmt_ttl
+from app.utils.keyboards.common import confirm_kb
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -232,10 +234,7 @@ async def cb_campaigns_new(cb: CallbackQuery, session: AsyncSession, user: User)
             for r in CAMPAIGN_RESOURCES
         )
     )
-    try:
-        await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        pass
+    await safe_edit(cb, text, builder.as_markup())
     await cb.answer()
 
 
@@ -274,10 +273,7 @@ async def cb_campaigns_res(cb: CallbackQuery, session: AsyncSession, user: User)
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="campaigns_new"))
 
-    try:
-        await cb.message.edit_text("\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
     await cb.answer()
 
 
@@ -322,10 +318,7 @@ async def cb_campaigns_rank(cb: CallbackQuery, session: AsyncSession, user: User
         callback_data=f"campaigns_res:{resource_id}",
     ))
 
-    try:
-        await cb.message.edit_text("\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
     await cb.answer()
 
 
@@ -394,10 +387,7 @@ async def cb_campaigns_dur(cb: CallbackQuery, session: AsyncSession, user: User)
         callback_data=f"campaigns_rank:{resource_id}:{task_rank}",
     ))
 
-    try:
-        await cb.message.edit_text("\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
     await cb.answer()
 
 
@@ -445,15 +435,25 @@ async def cb_campaigns_srank(cb: CallbackQuery, session: AsyncSession, user: Use
 
     # Варианты из конфига, ограниченные доступными
     options = [n for n in STATIST_COUNT_OPTIONS if n <= avail_count]
-    if avail_count not in options and avail_count <= MAX_STATISTS_PER_CAMPAIGN:
-        options.append(avail_count)
+    # Всегда добавляем «максимум, который реально можно отправить» (доступно,
+    # но не больше потолка похода) — если этого не сделать, при avail_count >
+    # MAX_STATISTS_PER_CAMPAIGN игрок не получит быструю кнопку «200» и должен
+    # каждый раз вводить число вручную.
+    max_sendable = min(avail_count, MAX_STATISTS_PER_CAMPAIGN)
+    if max_sendable not in options:
+        options.append(max_sendable)
     if not options:
-        options = [avail_count]
+        options = [max_sendable]
 
     for n in options:
         n_cap = min(n, avail_count, MAX_STATISTS_PER_CAMPAIGN)
         prev = campaign_service.calc_preview(avg_power, task_rank, resource_id, hours, n_cap, statist_rank)
-        label = f"Все ({n_cap})" if n_cap == avail_count else str(n_cap)
+        if n_cap == avail_count:
+            label = f"Все ({n_cap})"
+        elif n_cap == MAX_STATISTS_PER_CAMPAIGN:
+            label = f"Максимум ({n_cap})"
+        else:
+            label = str(n_cap)
         lines.append(
             f"👤 <b>{label}</b> — {prev['success_chance']}% успех | "
             f"выжив. ✅{prev['survival_on_success']}% / ❌{prev['survival_on_fail']}%\n"
@@ -476,10 +476,7 @@ async def cb_campaigns_srank(cb: CallbackQuery, session: AsyncSession, user: Use
         callback_data=f"campaigns_dur:{resource_id}:{task_rank}:{hours}",
     ))
 
-    try:
-        await cb.message.edit_text("\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
     await cb.answer()
 
 
@@ -540,22 +537,12 @@ async def cb_campaigns_cnt(cb: CallbackQuery, session: AsyncSession, user: User)
         f"   только по завершении (часть может погибнуть)."
     )
 
-    builder = InlineKeyboardBuilder()
-    builder.row(
-        InlineKeyboardButton(
-            text="✅ Отправить",
-            callback_data=f"campaigns_launch:{resource_id}:{task_rank}:{hours}:{statist_rank}:{cnt}",
-        ),
-        InlineKeyboardButton(
-            text="❌ Отмена",
-            callback_data="campaigns_menu",
-        ),
+    kb = confirm_kb(
+        f"campaigns_launch:{resource_id}:{task_rank}:{hours}:{statist_rank}:{cnt}",
+        "campaigns_menu",
     )
 
-    try:
-        await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        pass
+    await safe_edit(cb, text, kb)
     await cb.answer()
 
 
@@ -622,10 +609,7 @@ async def cb_campaigns_launch(cb: CallbackQuery, session: AsyncSession, user: Us
     builder.row(InlineKeyboardButton(text="🗺 К походам", callback_data="campaigns_menu"))
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
 
-    try:
-        await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        pass
+    await safe_edit(cb, text, builder.as_markup())
     await cb.answer("Поход начался! 🚀")
 
 
@@ -722,19 +706,12 @@ async def msg_campaigns_custom_count(msg: Message, session: AsyncSession, user: 
         f"   только по завершении (часть может погибнуть)."
     )
 
-    builder = InlineKeyboardBuilder()
-    builder.row(
-        InlineKeyboardButton(
-            text="✅ Отправить",
-            callback_data=f"campaigns_launch:{resource_id}:{task_rank}:{hours}:{statist_rank}:{cnt}",
-        ),
-        InlineKeyboardButton(
-            text="❌ Отмена",
-            callback_data="campaigns_menu",
-        ),
+    kb = confirm_kb(
+        f"campaigns_launch:{resource_id}:{task_rank}:{hours}:{statist_rank}:{cnt}",
+        "campaigns_menu",
     )
 
-    await msg.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    await msg.answer(text, reply_markup=kb, parse_mode="HTML")
 
 
 # ── Сбор результата ───────────────────────────────────────────────────────────
@@ -792,10 +769,7 @@ async def cb_campaigns_collect(cb: CallbackQuery, session: AsyncSession, user: U
     builder.row(InlineKeyboardButton(text="🗺 К походам", callback_data="campaigns_menu"))
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
 
-    try:
-        await cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        pass
+    await safe_edit(cb, text, builder.as_markup())
     await cb.answer("Результат получен!")
 
 
@@ -830,10 +804,7 @@ async def cb_campaigns_collect_all(cb: CallbackQuery, session: AsyncSession, use
     builder.row(InlineKeyboardButton(text="🗺 К походам", callback_data="campaigns_menu"))
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
 
-    try:
-        await cb.message.edit_text("\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML")
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
     await cb.answer("Собрано!")
 
 

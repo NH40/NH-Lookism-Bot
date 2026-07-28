@@ -10,11 +10,32 @@ def fmt_power(n: int) -> str:
     return str(n)
 
 
-def progress_bar(current: int, maximum: int, length: int = 10) -> str:
+def clamp_enemy_power(power: int, viewer_power: int) -> int:
+    """Ограничивает отображаемую/используемую в оценке силу противника,
+    чтобы аномальные значения (тестовые/служебные аккаунты с намеренно
+    завышенной мощью) не показывались игрокам как абсурдные числа
+    (например "-6,299,999,989,696"). Не меняет реальный исход боя —
+    только оценку "сила противника", которую видит игрок до атаки.
+    Потолок растёт вместе с мощью смотрящего, чтобы не устаревать по
+    мере прогресса игры."""
+    cap = max(viewer_power * 10_000, 100_000)
+    return min(power, cap)
+
+
+def progress_bar(current: int, maximum: int, length: int | None = None) -> str:
+    """Звёздный рейтинг (как «Уровень пути: ⭐⭐⭐⭐⭐» — уже был в боте и
+    смотрится хорошо), а не полоска из блоков: те либо не рендерились
+    частью шрифтов (▓░), либо были нечитаемы цветными эмодзи на тёмной
+    теме (🟩⬛). Длина = min(maximum, 5) — для шкал 4/5 звёзды совпадают
+    со шкалой один-в-один (4/4 = 4 звезды, не 5), а для шкал побольше
+    (например Гений бизнеса 0-10) звёзды не растягиваются в длинную
+    полоску, которая переносится на новую строку и ломает вёрстку."""
     if maximum <= 0:
         return ""
+    if length is None:
+        length = min(maximum, 5)
     filled = min(length, round(length * current / maximum))
-    return "▓" * filled + "░" * (length - filled)
+    return "⭐" * filled + "☆" * (length - filled)
 
 
 def fmt_ttl(seconds: int) -> str:
@@ -63,6 +84,50 @@ def skill_path_label(path: str | None) -> str:
         "monster":     "Монстр",
         "shadow":      "Тень",
     }.get(path, path)
+
+
+def influence_discount_pct(user) -> int:
+    """Скидка в магазине от Влияния — разная формула по фазам, кусочно-линейная,
+    без скачков (плавный переход от отрицательной скидки к положительной):
+
+    Банда: 0 влияния = 0%, линейно до +25% на 500 влияния (5%/100), дальше плато.
+    Король: <1000 влияния = -50% (наценка), плавно растёт до 0% на 4000,
+    затем плавно растёт до +25% на 8000, дальше плато."""
+    influence = getattr(user, "influence", 0) or 0
+    phase = getattr(user, "phase", None)
+
+    if phase == "gang":
+        return min(25, round(influence * 25 / 500))
+
+    if phase == "king":
+        if influence < 1000:
+            return -50
+        if influence <= 4000:
+            return round(-50 + (influence - 1000) * 50 / 3000)
+        if influence <= 8000:
+            return round((influence - 4000) * 25 / 4000)
+        return 25
+
+    return 0
+
+
+def biz_discount_pct(user) -> int:
+    """Скидка трека "Скидка" Гения бизнеса — действует везде, где тратятся
+    игровые ресурсы на прокачку: магазин, крафты рейдов (УИ/Путь/Гений
+    медицины/Гений войны), не только сам Гений бизнеса."""
+    from app.config.game_balance import BIZ_GENIUS_DISCOUNT_PCT_PER_LEVEL
+    return (
+        getattr(user, "business_genius_discount_level", 0) * BIZ_GENIUS_DISCOUNT_PCT_PER_LEVEL
+        + getattr(user, "building_discount_percent", 0)
+    )
+
+
+def apply_biz_discount(user, base_cost: int) -> int:
+    discount_pct = biz_discount_pct(user)
+    cost = int(base_cost * (1 - discount_pct / 100))
+    if getattr(user, "fame_charles_geniuses", False):
+        cost = cost // 2
+    return max(1, cost)
 
 
 def pair_lines(items: list[str], max_len: int = 38) -> list[str]:

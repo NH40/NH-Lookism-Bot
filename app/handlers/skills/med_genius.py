@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.utils.formatters import fmt_num, progress_bar
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
@@ -124,11 +125,14 @@ async def cb_med_genius(cb: CallbackQuery, session: AsyncSession, user: User):
         lines.append(f"<i>Открыть уровни: Рейды → Крафт → Гений медицины</i>\n")
 
     lines.append("━━━ 🧪 Авто-зелья ━━━")
+    lines.append("<i>Каждое зелье можно включить/выключить отдельно — кнопка «Вкл/Выкл авто-зелий» ниже</i>")
+    lines.append("")
     has_any = False
     for p in MG_POTIONS:
         max_lvl = MG_MAX_LEVEL if donat else getattr(user, p["level_field"], 0)
         if max_lvl == 0:
             lines.append(f"🔒 {p['name']} — не открыто")
+            lines.append("")
         else:
             has_any = True
             enabled  = getattr(user, p["toggle_field"], True)
@@ -136,10 +140,10 @@ async def cb_med_genius(cb: CallbackQuery, session: AsyncSession, user: User):
             pref_lvl = getattr(user, p["pref_field"], 0)
             auto_lvl = pref_lvl if pref_lvl > 0 else max_lvl
             tier     = MG_TIERS[p["type"]][auto_lvl - 1]
-            lines.append(
-                f"{status} {p['name']} {progress_bar(auto_lvl, max_lvl)} Ур.{auto_lvl}/{max_lvl} — "
-                f"+{tier.effect_value}% · {fmt_num(tier.price)} монет"
-            )
+            lines.append(f"{status} {p['name']} Ур.{auto_lvl}/{max_lvl}")
+            lines.append(f"Эффект: +{tier.effect_value}%")
+            lines.append(f"Стоимость: {fmt_num(tier.price)} монет")
+            lines.append("")
 
     builder = InlineKeyboardBuilder()
     if has_any or donat:
@@ -158,14 +162,7 @@ async def cb_med_genius(cb: CallbackQuery, session: AsyncSession, user: User):
         ))
     builder.row(InlineKeyboardButton(text="◀️ Навыки", callback_data="skills"))
 
-    try:
-        await cb.message.edit_text(
-            "\n".join(lines),
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
     await cb.answer()
 
 
@@ -205,14 +202,7 @@ async def cb_mg_toggles(cb: CallbackQuery, session: AsyncSession, user: User):
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="med_genius"))
 
-    try:
-        await cb.message.edit_text(
-            "\n".join(lines),
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
     await cb.answer()
 
 
@@ -263,16 +253,11 @@ async def cb_mg_buy_menu(cb: CallbackQuery, session: AsyncSession, user: User):
             text=f"{p['name']} [авто: Ур.{cur_auto}]",
             callback_data=f"mg_buy:{p['type']}",
         ))
-        lines.append(f"{p['name']} {progress_bar(cur_auto, max_lvl)} Ур.{cur_auto}/{max_lvl}")
+        lines.append(f"{p['name']} Ур.{cur_auto}/{max_lvl}")
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="med_genius"))
 
-    try:
-        await cb.message.edit_text(
-            "\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
     await cb.answer()
 
 
@@ -306,7 +291,7 @@ async def cb_mg_buy_select(cb: CallbackQuery, session: AsyncSession, user: User)
         tier = tiers[lvl - 1]
         mark = " ◀ текущий" if lvl == cur_auto else ""
         lines.append(
-            f"  Ур.{lvl}: +{tier.effect_value}% | "
+            f"Ур.{lvl}: +{tier.effect_value}% | "
             f"{tier.duration_minutes} мин | {tier.price:,} монет{mark}"
         )
         builder.row(InlineKeyboardButton(
@@ -316,12 +301,7 @@ async def cb_mg_buy_select(cb: CallbackQuery, session: AsyncSession, user: User)
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="mg_buy_menu"))
 
-    try:
-        await cb.message.edit_text(
-            "\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(cb, "\n".join(lines), builder.as_markup())
     await cb.answer()
 
 

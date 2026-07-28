@@ -11,6 +11,8 @@ from app.models.user import User
 from app.models.clan import Clan, ClanMember
 from app.services.clan import clan_service
 from app.utils.formatters import fmt_num
+from app.utils.menu_media import safe_edit
+from app.utils.keyboards.common import confirm_kb
 
 router = Router()
 
@@ -50,15 +52,12 @@ async def cb_clan_edit(cb: CallbackQuery, session: AsyncSession, user: User):
         builder.row(InlineKeyboardButton(text="🗑 Удалить клан", callback_data="clan_delete"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clans_menu"))
 
-    try:
-        await cb.message.edit_text(
-            f"✏️ <b>Редактирование клана {html.escape(clan.name)}</b>\n\n"
-            f"👥 Участников: {len(members)}/{clan.max_members}",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"✏️ <b>Редактирование клана {html.escape(clan.name)}</b>\n\n"
+        f"👥 Участников: {len(members)}/{clan.max_members}",
+        builder.as_markup(),
+    )
 
 
 @router.callback_query(F.data == "clan_rename")
@@ -66,13 +65,11 @@ async def cb_clan_rename(cb: CallbackQuery, state: FSMContext):
     await state.set_state(EditFSM.waiting_rename)
     cancel_kb = InlineKeyboardBuilder()
     cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="clan_edit"))
-    try:
-        await cb.message.edit_text(
-            "✏️ Введите новое название клана (2-32 символа):",
-            reply_markup=cancel_kb.as_markup(),
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        "✏️ Введите новое название клана (2-32 символа):",
+        cancel_kb.as_markup(),
+    )
 
 
 @router.message(EditFSM.waiting_rename)
@@ -117,15 +114,12 @@ async def cb_clan_kick_menu(cb: CallbackQuery, session: AsyncSession, user: User
             ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clans_menu"))
 
-    try:
-        await cb.message.edit_text(
-            f"🚫 <b>Исключить участника</b>\n\n"
-            f"👥 В клане: {len(members)}/{clan.max_members}",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"🚫 <b>Исключить участника</b>\n\n"
+        f"👥 В клане: {len(members)}/{clan.max_members}",
+        builder.as_markup(),
+    )
 
 
 @router.callback_query(F.data.startswith("clan_kick:"))
@@ -174,14 +168,11 @@ async def cb_clan_transfer(cb: CallbackQuery, session: AsyncSession, user: User)
             ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clan_edit"))
 
-    try:
-        await cb.message.edit_text(
-            "👑 Выбери нового владельца клана:",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        "👑 Выбери нового владельца клана:",
+        builder.as_markup(),
+    )
 
 
 @router.callback_query(F.data.startswith("clan_transfer_to:"))
@@ -196,23 +187,13 @@ async def cb_clan_transfer_to(cb: CallbackQuery, session: AsyncSession, user: Us
         await cb.answer("Игрок не найден", show_alert=True)
         return
 
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(
-        text="✅ Подтвердить передачу",
-        callback_data=f"clan_transfer_confirm:{new_owner_id}"
-    ))
-    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="clan_transfer"))
-
-    try:
-        await cb.message.edit_text(
-            f"👑 Передать права владельца игроку\n"
-            f"<b>{html.escape(new_owner.full_name)}</b>?\n\n"
-            f"Вы станете обычным участником клана.",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"👑 Передать права владельца игроку\n"
+        f"<b>{html.escape(new_owner.full_name)}</b>?\n\n"
+        f"Вы станете обычным участником клана.",
+        confirm_kb(f"clan_transfer_confirm:{new_owner_id}", "clan_transfer"),
+    )
 
 
 @router.callback_query(F.data.startswith("clan_transfer_confirm:"))
@@ -241,22 +222,12 @@ async def cb_clan_delete(cb: CallbackQuery, session: AsyncSession, user: User):
     if not clan or clan.owner_id != user.id:
         return
 
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(
-        text="⚠️ Подтвердить удаление",
-        callback_data="clan_delete_confirm"
-    ))
-    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="clan_edit"))
-
-    try:
-        await cb.message.edit_text(
-            f"🗑 <b>Удаление клана {html.escape(clan.name)}</b>\n\n"
-            f"⚠️ Все участники будут исключены!\nПодтвердить?",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"🗑 <b>Удаление клана {html.escape(clan.name)}</b>\n\n"
+        f"⚠️ Все участники будут исключены!\nПодтвердить?",
+        confirm_kb("clan_delete_confirm", "clan_edit"),
+    )
 
 
 @router.callback_query(F.data == "clan_delete_confirm")
@@ -312,31 +283,19 @@ async def cb_clan_leave(cb: CallbackQuery, session: AsyncSession, user: User):
                         callback_data=f"clan_leave_transfer:{target.id}"
                     ))
             builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="clans_menu"))
-            try:
-                await cb.message.edit_text(
-                    "🚪 Вы владелец. Передайте права перед выходом:",
-                    reply_markup=builder.as_markup(),
-                    parse_mode="HTML",
-                )
-            except Exception:
-                pass
+            await safe_edit(
+                cb,
+                "🚪 Вы владелец. Передайте права перед выходом:",
+                builder.as_markup(),
+            )
             return
 
     # Показываем подтверждение выхода
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(
-        text="✅ Да, покинуть клан",
-        callback_data="clan_leave_confirm"
-    ))
-    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="clans_menu"))
-    try:
-        await cb.message.edit_text(
-            f"🚪 Вы уверены, что хотите покинуть клан <b>{html.escape(clan.name)}</b>?",
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await safe_edit(
+        cb,
+        f"🚪 Вы уверены, что хотите покинуть клан <b>{html.escape(clan.name)}</b>?",
+        confirm_kb("clan_leave_confirm", "clans_menu"),
+    )
 
 
 @router.callback_query(F.data == "clan_leave_confirm")

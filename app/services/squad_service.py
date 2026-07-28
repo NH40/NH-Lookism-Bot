@@ -147,8 +147,10 @@ class SquadService:
         if not item_id:
             return {"ok": False, "reason": "Неизвестный ранг"}
 
+        from app.utils.formatters import total_recruit_discount_pct
+
         item = SHOP_MAP[item_id]
-        discount = user.recruit_discount_percent
+        discount = total_recruit_discount_pct(user)
         price_per = max(1, int(item.price * (1 - discount / 100)))
         total = price_per * count
 

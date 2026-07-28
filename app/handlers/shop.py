@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.utils.keyboards.shop import shop_kb
 from app.utils.keyboards.common import back_kb
-from app.utils.formatters import fmt_num, biz_discount_pct, influence_discount_pct
+from app.utils.formatters import fmt_num, total_recruit_discount_pct
 from app.utils.menu_media import safe_edit
 from app.data.shop import SHOP_ITEMS, SHOP_MAP, MG_TIERS, MG_TIER_MAP
 from app.services.cards.craft import craft_service
@@ -275,7 +275,7 @@ async def cb_shop_recruits(cb: CallbackQuery, session: AsyncSession, user: User)
     lines = [
         f"👥 <b>Покупка статистов</b>\n\n"
         f"💰 Баланс: {fmt_num(user.nh_coins)}\n"
-        f"Скидка: {user.recruit_discount_percent + biz_discount_pct(user) + influence_discount_pct(user)}%\n\n"
+        f"Скидка: {total_recruit_discount_pct(user)}%\n\n"
         f"Выберите ранг:"
     ]
 
@@ -284,7 +284,7 @@ async def cb_shop_recruits(cb: CallbackQuery, session: AsyncSession, user: User)
         item = SHOP_MAP.get(item_id)
         if not item:
             continue
-        discount = user.recruit_discount_percent + biz_discount_pct(user) + influence_discount_pct(user)
+        discount = total_recruit_discount_pct(user)
         price = max(1, int(item.price * (1 - discount / 100)))
         rank_cfg = RANKS_BY_ID.get(rank)
         power = rank_cfg.base_power if rank_cfg else 0
@@ -318,7 +318,7 @@ async def cb_shop_buy_rank(
         await cb.answer("Товар не найден", show_alert=True)
         return
 
-    discount = user.recruit_discount_percent + biz_discount_pct(user) + influence_discount_pct(user)
+    discount = total_recruit_discount_pct(user)
     price = max(1, int(item.price * (1 - discount / 100)))
     rank_cfg = RANKS_BY_ID.get(rank)
     power = rank_cfg.base_power if rank_cfg else 0
@@ -365,7 +365,7 @@ async def cb_shop_input_qty(
         await cb.answer("Товар не найден", show_alert=True)
         return
 
-    discount = user.recruit_discount_percent + biz_discount_pct(user) + influence_discount_pct(user)
+    discount = total_recruit_discount_pct(user)
     price = max(1, int(item.price * (1 - discount / 100)))
 
     await state.set_state(ShopFSM.waiting_recruit_count)

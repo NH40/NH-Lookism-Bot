@@ -89,7 +89,17 @@ class AuctionService:
     async def place_bid(
         self, session: AsyncSession, user: User, amount: int
     ) -> dict:
-        auction = await self.get_active_auction(session)
+        # FOR UPDATE сериализует ставки разных игроков на один лот — без
+        # лока два конкурента могут прочитать один и тот же final_bid до
+        # коммита и оба пройти проверку минимальной ставки.
+        auction_r = await session.execute(
+            select(Auction)
+            .where(Auction.is_active == True)
+            .order_by(Auction.started_at.desc())
+            .limit(1)
+            .with_for_update()
+        )
+        auction = auction_r.scalar_one_or_none()
         if not auction:
             return {"ok": False, "reason": "Нет активного аукциона"}
 
@@ -107,6 +117,9 @@ class AuctionService:
         if not lot:
             return {"ok": False, "reason": "Лот не найден"}
 
+        if auction.winner_id == user.id:
+            return {"ok": False, "reason": "Вы уже лидируете в этом раунде"}
+
         min_bid = max(lot.min_bid, auction.final_bid + 1)
         if amount < min_bid:
             return {"ok": False, "reason": f"Минимальная ставка: {min_bid:,} NHCoin"}
@@ -114,17 +127,14 @@ class AuctionService:
         if user.nh_coins < amount:
             return {"ok": False, "reason": "Недостаточно NHCoin"}
 
-        # Возврат денег предыдущему лидеру (в том числе если тот же игрок повторно ставит)
+        # Возврат денег предыдущему лидеру
         if auction.winner_id and auction.final_bid > 0:
-            if auction.winner_id == user.id:
-                user.nh_coins += auction.final_bid
-            else:
-                prev_r = await session.execute(
-                    select(User).where(User.id == auction.winner_id)
-                )
-                prev = prev_r.scalar_one_or_none()
-                if prev:
-                    prev.nh_coins += auction.final_bid
+            prev_r = await session.execute(
+                select(User).where(User.id == auction.winner_id)
+            )
+            prev = prev_r.scalar_one_or_none()
+            if prev:
+                prev.nh_coins += auction.final_bid
 
         user.nh_coins -= amount
         auction.winner_id = user.id

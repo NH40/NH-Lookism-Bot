@@ -272,6 +272,12 @@ async def cb_quest_swap_select(cb: CallbackQuery, session: AsyncSession, user: U
 @router.callback_query(F.data.startswith("quest_claim:"))
 async def cb_quest_claim(cb: CallbackQuery, session: AsyncSession, user: User):
     quest_id = cb.data.split(":")[1]
+
+    lock_key = f"lock:quest_claim:{user.id}:{quest_id}"
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("⏳ Подождите...", show_alert=False)
+        return
+
     result = await quest_service.claim_reward(session, user, quest_id)
 
     if not result["ok"]:

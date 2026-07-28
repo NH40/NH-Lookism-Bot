@@ -202,6 +202,11 @@ BIZ_GENIUS_CAPACITY_PCT_PER_LEVEL: int = 4
 BIZ_GENIUS_DISCOUNT_PCT_PER_LEVEL: int = 5
 BIZ_GENIUS_INCOME_PCT_PER_LEVEL: int = 20
 
+# Верхний кэп суммарной скидки в магазине (вербовка) — без него сумма
+# скидок из скилл-пути + гения бизнеса + влияния может уйти за 100%
+# и сделать товары бесплатными.
+MAX_RECRUIT_DISCOUNT_PCT: int = 70
+
 # ── Король/Вассал/Император (патч 1.3.1) ──────────────────────────────────────
 VASSAL_TRIBUTE_PERCENT: int = 20              # вассал отдаёт сюзерену
 SUZERAIN_INCOME_BONUS_PCT_PER_VASSAL: int = 10

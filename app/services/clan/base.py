@@ -199,9 +199,18 @@ class ClanBaseService:
     async def delete_clan(self, session: AsyncSession, clan: Clan, owner: User) -> dict:
         if clan.owner_id != owner.id:
             return {"ok": False, "reason": "Только владелец может удалить клан"}
+        member_ids = await self.get_clan_member_ids(session, clan.id)
         # Bulk DELETE вместо цикла
         await session.execute(sa_delete(ClanMember).where(ClanMember.clan_id == clan.id))
         await session.delete(clan)
+        await session.flush()
+        # Иначе бафы клановой земли (clan_land_*) остаются висеть на бывших
+        # участниках навсегда — клана уже нет, а бонус в статах не пропадает.
+        members = (await session.execute(
+            select(User).where(User.id.in_(member_ids))
+        )).scalars().all()
+        for m in members:
+            await self._remove_clan_bonuses_from_user(session, m)
         await session.flush()
         return {"ok": True}
 
@@ -247,6 +256,8 @@ class ClanBaseService:
             if not other_members:
                 await session.delete(clan)
                 await session.delete(member)
+                await session.flush()
+                await self._remove_clan_bonuses_from_user(session, user)
                 await session.flush()
                 return {"ok": True, "clan_deleted": True}
         await session.delete(member)

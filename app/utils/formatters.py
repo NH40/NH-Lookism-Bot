@@ -122,6 +122,19 @@ def biz_discount_pct(user) -> int:
     )
 
 
+def total_recruit_discount_pct(user) -> int:
+    """Суммарная скидка на вербовку статистов в магазине: скилл-путь +
+    Гений бизнеса + Влияние, зажатая сверху MAX_RECRUIT_DISCOUNT_PCT —
+    иначе сумма скидок уходит за 100% и товар становится бесплатным."""
+    from app.config.game_balance import MAX_RECRUIT_DISCOUNT_PCT
+    total = (
+        getattr(user, "recruit_discount_percent", 0)
+        + biz_discount_pct(user)
+        + influence_discount_pct(user)
+    )
+    return min(total, MAX_RECRUIT_DISCOUNT_PCT)
+
+
 def apply_biz_discount(user, base_cost: int) -> int:
     discount_pct = biz_discount_pct(user)
     cost = int(base_cost * (1 - discount_pct / 100))

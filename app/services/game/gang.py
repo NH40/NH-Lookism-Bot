@@ -122,7 +122,7 @@ class GameGangService(GameBase):
             user.total_wins += 1
             user.influence += ATTACK_WIN_INFLUENCE_BONUS["gang"]
             await business_service.apply_capture_influence(session, user, 1)
-            await business_service._recalc_income(session, user)
+            await business_service._recalc_income(session, user, recalc_tax=True)
             await session.flush()
             await session.refresh(city)
             if city.captured_districts >= city.total_districts:
@@ -156,7 +156,7 @@ class GameGangService(GameBase):
                 city.captured_districts = max(0, city.captured_districts - 1)
                 await session.flush()
                 await business_service.apply_capture_influence(session, user, -1)
-                await business_service._recalc_income(session, user)
+                await business_service._recalc_income(session, user, recalc_tax=True)
             my_districts = await self._get_my_districts_in_city(session, user.id, user.gang_city_id)
             if my_districts == 0:
                 return await self._destroy_gang(session, user)
@@ -235,9 +235,9 @@ class GameGangService(GameBase):
                 if def_last.income_owner_id is None:
                     def_last.income_owner_id = attacker.id
                 await business_service.apply_capture_influence(session, defender, -1)
-                await business_service._recalc_income(session, defender)
+                await business_service._recalc_income(session, defender, recalc_tax=True)
                 await business_service.apply_capture_influence(session, attacker, 1)
-                await business_service._recalc_income(session, attacker)
+                await business_service._recalc_income(session, attacker, recalc_tax=True)
             def_owned = await self._get_my_districts_in_city(session, defender.id, defender.gang_city_id or 0)
             if def_owned == 0:
                 await self._destroy_gang(session, defender)

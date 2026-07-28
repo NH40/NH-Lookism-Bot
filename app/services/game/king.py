@@ -143,7 +143,7 @@ class GameKingService(GameBase):
                         steal_user = await user_repo.get_by_id(session, steal_from)
                         if steal_user:
                             await business_service.apply_capture_influence(session, steal_user, -len(stolen))
-                            await business_service._recalc_income(session, steal_user)
+                            await business_service._recalc_income(session, steal_user, recalc_tax=True)
 
             # Синхронизируем captured_districts
             real_captured = await session.scalar(
@@ -158,7 +158,7 @@ class GameKingService(GameBase):
             user.influence += ATTACK_WIN_INFLUENCE_BONUS["king"]
             if districts_gained > 0:
                 await business_service.apply_capture_influence(session, user, districts_gained)
-                await business_service._recalc_income(session, user)
+                await business_service._recalc_income(session, user, recalc_tax=True)
 
             title_battle = None
             if districts_gained > 0:
@@ -238,9 +238,9 @@ class GameKingService(GameBase):
 
             if taken > 0:
                 await business_service.apply_capture_influence(session, defender, -taken)
-                await business_service._recalc_income(session, defender)
+                await business_service._recalc_income(session, defender, recalc_tax=True)
                 await business_service.apply_capture_influence(session, attacker, taken)
-                await business_service._recalc_income(session, attacker)
+                await business_service._recalc_income(session, attacker, recalc_tax=True)
 
             attacker.total_wins += 1
             attacker.influence += ATTACK_WIN_INFLUENCE_BONUS["king"]

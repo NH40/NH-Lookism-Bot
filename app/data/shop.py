@@ -21,26 +21,30 @@ class PotionConfig:
     price: int
 
 
-# Статисты: цены ÷2 от старых (армия строится вдвое медленнее — создаёт сопротивление)
+# Статисты: базовые цены ×2 (июль 2026). Сверх плоского удвоения — SSR/UR/MP/X
+# дополнительно подняты, чтобы выровнять мощь/цену: раньше MP (1000 силы за
+# 6,000) был локальным пиком выгоды между LR и X (лучше по соотношению, чем
+# соседи), из-за чего рационально было качать только его. Теперь мощь/цена
+# монотонно не растёт с рангом — нет ранга, который выгоднее соседних.
 SHOP_ITEMS: list[ShopItem] = [
-    ShopItem("recruit_f",   "⬛ Статист F",   "Боец F-ранга | 5 за шт.",              5,         "recruit"),
-    ShopItem("recruit_e",   "⬜ Статист E",   "Боец E-ранга | 50 за шт.",            50,         "recruit"),
-    ShopItem("recruit_d",   "🟦 Статист D",   "Боец D-ранга | 100 за шт.",          100,       "recruit"),
-    ShopItem("recruit_c",   "🟩 Статист C",   "Боец C-ранга | 250 за шт.",          250,       "recruit"),
-    ShopItem("recruit_b",   "🟨 Статист B",   "Боец B-ранга | 500 за шт.",          500,      "recruit"),
-    ShopItem("recruit_a",   "🟧 Статист A",   "Боец A-ранга | 750 за шт.",          750,      "recruit"),
-    ShopItem("recruit_s",   "🟥 Статист S",   "Боец S-ранга | 1,000 за шт.",      1_000,      "recruit"),
-    ShopItem("recruit_ss",  "💠 Статист SS",  "Боец SS-ранга | 1,200 за шт.",     1_200,     "recruit"),
-    ShopItem("recruit_sss", "🔷 Статист SSS", "Боец SSS-ранга | 1,500 за шт.",    1_500,     "recruit"),
-    ShopItem("recruit_sr",  "🌟 Статист SR",  "Боец SR-ранга | 2,250 за шт.",     2_250,     "recruit"),
-    ShopItem("recruit_ssr", "✨ Статист SSR", "Боец SSR-ранга | 2,500 за шт.",    2_500,   "recruit"),
-    ShopItem("recruit_ur",  "💎 Статист UR",  "Боец UR-ранга | 3,000 за шт.",     3_000,   "recruit"),
-    ShopItem("recruit_lr",  "👑 Статист LR",  "Боец LR-ранга | 5,000 за шт.",     5_000,  "recruit"),
-    ShopItem("recruit_mp",  "🔱 Статист MP",  "Боец MP-ранга | 6,000 за шт.",     6_000,  "recruit"),
-    ShopItem("recruit_x",   "⚡ Статист X",   "Боец X-ранга | 7,500 за шт.",      7_500, "recruit"),
-    ShopItem("recruit_xx",  "🌀 Статист XX",  "Боец XX-ранга | 12,500 за шт.",   12_500, "recruit"),
-    ShopItem("recruit_xxx", "🔥 Статист XXX", "Боец XXX-ранга | 20,000 за шт.", 20_000, "recruit"),
-    ShopItem("recruit_dx",  "💀 Статист DX",  "Боец DX-ранга | 25,000 за шт.", 25_000, "recruit"),
+    ShopItem("recruit_f",   "⬛ Статист F",   "Боец F-ранга | 10 за шт.",             10,         "recruit"),
+    ShopItem("recruit_e",   "⬜ Статист E",   "Боец E-ранга | 100 за шт.",           100,         "recruit"),
+    ShopItem("recruit_d",   "🟦 Статист D",   "Боец D-ранга | 200 за шт.",          200,       "recruit"),
+    ShopItem("recruit_c",   "🟩 Статист C",   "Боец C-ранга | 500 за шт.",          500,       "recruit"),
+    ShopItem("recruit_b",   "🟨 Статист B",   "Боец B-ранга | 1,000 за шт.",      1_000,      "recruit"),
+    ShopItem("recruit_a",   "🟧 Статист A",   "Боец A-ранга | 1,500 за шт.",      1_500,      "recruit"),
+    ShopItem("recruit_s",   "🟥 Статист S",   "Боец S-ранга | 2,000 за шт.",      2_000,      "recruit"),
+    ShopItem("recruit_ss",  "💠 Статист SS",  "Боец SS-ранга | 2,400 за шт.",     2_400,     "recruit"),
+    ShopItem("recruit_sss", "🔷 Статист SSS", "Боец SSS-ранга | 3,000 за шт.",    3_000,     "recruit"),
+    ShopItem("recruit_sr",  "🌟 Статист SR",  "Боец SR-ранга | 4,500 за шт.",     4_500,     "recruit"),
+    ShopItem("recruit_ssr", "✨ Статист SSR", "Боец SSR-ранга | 5,150 за шт.",    5_150,   "recruit"),
+    ShopItem("recruit_ur",  "💎 Статист UR",  "Боец UR-ранга | 6,450 за шт.",     6_450,   "recruit"),
+    ShopItem("recruit_lr",  "👑 Статист LR",  "Боец LR-ранга | 10,000 за шт.",    10_000,  "recruit"),
+    ShopItem("recruit_mp",  "🔱 Статист MP",  "Боец MP-ранга | 16,700 за шт.",    16_700,  "recruit"),
+    ShopItem("recruit_x",   "⚡ Статист X",   "Боец X-ранга | 20,000 за шт.",     20_000, "recruit"),
+    ShopItem("recruit_xx",  "🌀 Статист XX",  "Боец XX-ранга | 25,000 за шт.",   25_000, "recruit"),
+    ShopItem("recruit_xxx", "🔥 Статист XXX", "Боец XXX-ранга | 40,000 за шт.", 40_000, "recruit"),
+    ShopItem("recruit_dx",  "💀 Статист DX",  "Боец DX-ранга | 50,000 за шт.", 50_000, "recruit"),
 ]
 
 # ── Тировые зелья Гения медицины — 6 тиров по каждому типу ──────────────────

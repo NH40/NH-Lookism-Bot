@@ -132,7 +132,7 @@ class PromotionsMixin:
 
         from app.services.business_service import business_service
         await business_service.apply_capture_influence(session, user, -len(district_ids))
-        await business_service._recalc_income(session, user)
+        await business_service._recalc_income(session, user, recalc_tax=True)
         await session.flush()
 
     async def _promote_to_fist(self, session: AsyncSession, user: User) -> dict:
@@ -150,7 +150,7 @@ class PromotionsMixin:
         await session.execute(sql_delete(FistBot).where(FistBot.challenger_id == user.id))
         from app.services.business_service import business_service
         await business_service.apply_capture_influence(session, user, total_granted)
-        await business_service._recalc_income(session, user)
+        await business_service._recalc_income(session, user, recalc_tax=True)
         await session.flush()
         return {
             "ok": True, "promoted": True, "new_phase": "fist",

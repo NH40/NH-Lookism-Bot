@@ -202,7 +202,7 @@ class DistrictsMixin:
 
         if total_districts_lost > 0:
             await business_service.apply_capture_influence(session, user, -total_districts_lost)
-            await business_service._recalc_income(session, user)
+            await business_service._recalc_income(session, user, recalc_tax=True)
 
         await session.flush()
         return taken_cities
@@ -260,7 +260,7 @@ class DistrictsMixin:
 
         if total_districts_lost > 0:
             await business_service.apply_capture_influence(session, user, -total_districts_lost)
-            await business_service._recalc_income(session, user)
+            await business_service._recalc_income(session, user, recalc_tax=True)
 
         await session.flush()
         return taken_cities

@@ -129,8 +129,8 @@ class GameEmperorService(GameBase):
                 await session.flush()
                 for city in taken_cities:
                     await self._recalc_city_tax_for_city_residents(session, city.id)
-                await business_service._recalc_income(session, attacker)
-                await business_service._recalc_income(session, defender)
+                await business_service._recalc_income(session, attacker, recalc_tax=True)
+                await business_service._recalc_income(session, defender, recalc_tax=True)
 
         await notify_pvp_attack(attacker, defender, result["win"], "emperor_pvp")
         if result["win"] and captured_city_names:

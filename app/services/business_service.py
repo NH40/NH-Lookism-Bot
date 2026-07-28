@@ -60,7 +60,13 @@ class BusinessService:
                 delta = int(delta * (1 + bonus_pct / 100))
             user.influence = max(0, user.influence + delta)
 
-    async def _recalc_income(self, session: AsyncSession, user: User) -> None:
+    async def _recalc_income(
+        self, session: AsyncSession, user: User, recalc_tax: bool = False
+    ) -> None:
+        """recalc_tax=True только там, где реально меняются захваченные
+        районы пользователя (бой) — иначе городской налог (2-3 доп. запроса)
+        пересчитывался бы на КАЖДЫЙ вызов _recalc_income, включая скиллы,
+        донаты, титулы и клановые бонусы, где districts не меняются вовсе."""
         if not user.business_building_id:
             user.income_per_minute = 0
             await session.flush()
@@ -87,8 +93,9 @@ class BusinessService:
         charles_bonus = self._charles_bonus_percent(user, district_count)
         user.income_per_minute = int(interim_income * (1 + charles_bonus / 100))
 
-        from app.services.game_service import game_service
-        await game_service._recalc_city_tax(session, user)
+        if recalc_tax:
+            from app.services.game_service import game_service
+            await game_service._recalc_city_tax(session, user)
 
         await session.flush()
 
@@ -220,7 +227,7 @@ class BusinessService:
         city.total_districts += count
         city.captured_districts += count
         await session.flush()
-        await self._recalc_income(session, user)
+        await self._recalc_income(session, user, recalc_tax=True)
 
     async def get_income_breakdown(
         self, session: AsyncSession, user: User

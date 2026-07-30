@@ -161,7 +161,7 @@ class AdminBackupMixin:
         from app.models.character import UserCharacter
         from app.models.skill import UserPathSkills
         from app.models.king_bot import KingBot
-        from app.models.city import District, FistBot
+        from app.models.city import City, District, FistBot
         from app.models.bank import StorageCell, Investment
         from app.models.emperor_gang import EmperorGangRecord
         await session.execute(sa_delete(UserBuilding))
@@ -171,7 +171,20 @@ class AdminBackupMixin:
         await session.execute(sa_delete(UserPathSkills))
         await session.execute(sa_delete(KingBot))
         await session.execute(sa_delete(EmperorGangRecord))
-        await session.execute(sa_update(District).values(owner_id=None, is_captured=False))
+        await session.execute(sa_update(District).values(
+            owner_id=None, is_captured=False, income_owner_id=None,
+        ))
+        # Трон городов (City.owner_id) и вассалитет/налог (патч 1.3.1 фаза 3) —
+        # раньше вообще не чистились при массовом патч-сбросе, поэтому после
+        # "полного сброса прогресса" короли/императоры оставались "фантомными"
+        # владельцами городов, а вассалы продолжали платить дань несуществующим
+        # сюзеренам. Все игроки сбрасываются разом, поэтому чистим без разбора.
+        await session.execute(sa_update(City).values(
+            owner_id=None, captured_districts=0, is_fully_captured=False,
+        ))
+        await session.execute(sa_update(User).values(
+            suzerain_id=None, vassal_count=0, city_tax_percent=0, city_tax_recipient_id=None,
+        ))
         await session.execute(sa_update(FistBot).values(challenger_id=None))
         # Ячейки хранилища: очищаем содержимое, закрываем слоты
         await session.execute(
@@ -199,7 +212,6 @@ class AdminBackupMixin:
         from app.models.skill import UserMastery
         from app.models.title import UserAchievement
         from app.data.titles import ACHIEVEMENT_MAP
-        from app.models.city import City
 
         await session.execute(sa_delete(GaprenChallenge))
         await session.execute(sa_delete(Campaign))

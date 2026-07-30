@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from app.models.user import User
 from app.models.squad_member import SquadMember
 from app.models.building import UserBuilding
@@ -63,6 +63,11 @@ class PrestigeService:
         user.fist_wins = 0
         user.fist_cities_count = 0
         user.emperor_entry_power = 0
+        # ── Король/вассал/налог (патч 1.3.1 фаза 3) — всегда сбрасываются ─
+        user.suzerain_id = None
+        user.vassal_count = 0
+        user.city_tax_percent = 0
+        user.city_tax_recipient_id = None
         user.nh_coins = 0
         user.card_dust = 0
         user.influence = DEFAULT_INFLUENCE
@@ -197,6 +202,25 @@ class PrestigeService:
                     await city_repo.sync_captured_districts(session, city_id)
             await session.execute(
                 delete(UserPathSkills).where(UserPathSkills.user_id == user.id)
+            )
+            # Трон города/городов (City.owner_id) и вассалы, платящие ЭТОМУ
+            # игроку — не чистились раньше нигде в сбросе прогресса (только
+            # при боевом _destroy_king). Без этого игрок навсегда остаётся
+            # "фантомным королём": City.owner_id продолжает указывать на
+            # него, хотя он снова в фазе Банды — следующий претендент,
+            # дошедший до 100% города, будет драться с несуществующим
+            # королём вместо честного "город ничей".
+            from app.models.city import City
+            await session.execute(
+                update(City).where(City.owner_id == user.id).values(owner_id=None)
+            )
+            await session.execute(
+                update(User).where(User.suzerain_id == user.id).values(suzerain_id=None)
+            )
+            # Историческая привязка бизнес-дохода (District.income_owner_id) —
+            # тоже часть "прогресса", который сброс обещает игроку обнулить.
+            await session.execute(
+                update(District).where(District.income_owner_id == user.id).values(income_owner_id=None)
             )
             await session.execute(
                 delete(KingBot).where(KingBot.user_id == user.id)

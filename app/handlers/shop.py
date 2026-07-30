@@ -381,7 +381,7 @@ async def cb_shop_input_qty(
         f"✏️ <b>Введите количество статистов [{rank}]</b>\n\n"
         f"Цена: {fmt_num(price)}/шт\n"
         f"Баланс: {fmt_num(user.nh_coins)}\n\n"
-        f"Введите число от 1 до 1 000 000:",
+        f"Введите число от 1 до 20 000 000:",
         builder.as_markup(),
     )
 
@@ -417,10 +417,10 @@ async def msg_recruit_count(
 
     try:
         count = int(message.text.strip())
-        if count < 1 or count > 1000000:
+        if count < 1 or count > 20_000_000:
             raise ValueError
     except ValueError:
-        await message.answer("❌ Введите число от 1 до 1000000")
+        await message.answer("❌ Введите число от 1 до 20000000")
         return
 
     result = await _do_buy_recruits(session, user, rank, count)

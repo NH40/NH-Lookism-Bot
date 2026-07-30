@@ -77,7 +77,7 @@ class PromotionsMixin:
                 from app.services.combat_service import fight_player
                 from app.services.game.utils import apply_battle_casualties
                 fight = await fight_player(session, user, reigning_king)
-                await apply_battle_casualties(session, user, reigning_king)
+                await apply_battle_casualties(session, user, reigning_king, fight["win"])
                 if fight["win"]:
                     city.owner_id = user.id
                     await self._recalc_city_tax_for_city_residents(session, city.id)

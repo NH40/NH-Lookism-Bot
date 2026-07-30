@@ -1,7 +1,9 @@
-"""GameEmperorService — PvP между Императорами: бой стоит статистов и карточек
-ОБЕИМ сторонам (apply_battle_casualties, патч 1.3.1 v2 — раньше терял только
-проигравший), а победитель дополнительно забирает 30% денег проигравшего
-и 1-3 случайных города (заменяет собой убранную фазу Кулака)."""
+"""GameEmperorService — PvP между Императорами: атакующий всегда теряет 100%
+от статистов/карточек защитника (не больше своего запаса), защитник —
+дополнительно 60% своих, если проиграл (apply_battle_casualties, патч 1.3.1
+v3 — раньше терял только проигравший), а победитель дополнительно забирает
+30% денег проигравшего и 1-3 случайных города (заменяет собой убранную фазу
+Кулака)."""
 import random
 from sqlalchemy import select, update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,11 +46,11 @@ class GameEmperorService(GameBase):
         stolen_coins = 0
         captured_city_names: list[str] = []
 
-        # Оба Императора несут потери статистов/карточек от любого исхода боя —
-        # бой дорого обходится обеим сторонам, не только проигравшему.
-        casualties = await apply_battle_casualties(session, attacker, defender)
-        stolen_squad = casualties["statists_lost_b"]
-        stolen_cards = casualties["cards_lost_b"]
+        # Атакующий всегда теряет 100% от количества защитника (не больше
+        # своего), защитник — доп. 60% своих, если проиграл.
+        casualties = await apply_battle_casualties(session, attacker, defender, result["win"])
+        stolen_squad = casualties["defender_statists_lost"]
+        stolen_cards = casualties["defender_cards_lost"]
 
         if result["win"]:
             pct = EMPEROR_PVP_STEAL_PERCENT

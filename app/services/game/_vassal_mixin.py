@@ -24,7 +24,10 @@ class VassalMixin:
         result = await fight_player(session, challenger, reigning_king)
         winner, loser = (challenger, reigning_king) if result["win"] else (reigning_king, challenger)
 
-        casualties = await apply_battle_casualties(session, winner, loser)
+        # challenger — всегда "атакующий" по роли (это он полез отбирать
+        # трон), reigning_king — "защитник", независимо от того, кто в
+        # итоге выиграл сам бой.
+        casualties = await apply_battle_casualties(session, challenger, reigning_king, result["win"])
 
         city.owner_id = winner.id
 

@@ -172,8 +172,8 @@ class GameKingService(GameBase):
                     "message": (
                         "💀 Вы захватили районы, но проиграли битву за трон — "
                         "город остался за прежним королём.\n"
-                        f"Потери в бою: −{tc['statists_lost_b']} статистов, "
-                        f"−{tc['cards_lost_b']} карточек. Остальные владения при вас."
+                        f"Потери в бою: −{tc['attacker_statists_lost']} статистов, "
+                        f"−{tc['attacker_cards_lost']} карточек. Остальные владения при вас."
                     ),
                 }
 
@@ -228,9 +228,9 @@ class GameKingService(GameBase):
             return {"ok": False, "reason": f"{defender.full_name} находится под перемирием"}
         result = await fight_player(session, attacker, defender)
 
-        # Обе стороны несут потери статистов/карточек при любом исходе PvP —
-        # раньше терял всё только проигравший, теперь бой дорого обходится обоим.
-        casualties = await apply_battle_casualties(session, attacker, defender)
+        # Атакующий всегда теряет 100% от количества защитника (не больше
+        # своего), защитник — доп. 60% своих, если проиграл.
+        casualties = await apply_battle_casualties(session, attacker, defender, result["win"])
 
         if result["win"]:
             defender_districts_r = await session.execute(
@@ -269,8 +269,8 @@ class GameKingService(GameBase):
                     "message": (
                         "💀 Вы забрали районы, но проиграли битву за трон — "
                         "город остался за прежним королём.\n"
-                        f"Потери в бою: −{tc['statists_lost_b']} статистов, "
-                        f"−{tc['cards_lost_b']} карточек. Остальные владения при вас."
+                        f"Потери в бою: −{tc['attacker_statists_lost']} статистов, "
+                        f"−{tc['attacker_cards_lost']} карточек. Остальные владения при вас."
                     ),
                 }
 

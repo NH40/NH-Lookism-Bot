@@ -410,12 +410,17 @@ async def cb_emperor_pvp_attack(cb: CallbackQuery, session: AsyncSession, user: 
 
     crit_str = " ⚡КРИТ!" if result.get("is_crit") else ""
     cas = result.get("casualties") or {}
-    cas_str = (
-        f"\n💀 Потери в бою (с обеих сторон): −{cas.get('statists_lost_a', 0)} статистов, "
-        f"−{cas.get('cards_lost_a', 0)} карточек"
-        if cas.get("statists_lost_a") or cas.get("cards_lost_a") else ""
-    )
     if result["win"]:
+        cas_str = (
+            f"\n💀 Твои потери: −{cas.get('attacker_statists_lost', 0)} стат./"
+            f"−{cas.get('attacker_cards_lost', 0)} карт. "
+            f"Его потери: −{cas.get('defender_statists_lost', 0)} стат./"
+            f"−{cas.get('defender_cards_lost', 0)} карт"
+            if any(cas.get(k) for k in (
+                "attacker_statists_lost", "attacker_cards_lost",
+                "defender_statists_lost", "defender_cards_lost",
+            )) else ""
+        )
         cities = result.get("captured_cities") or []
         cities_str = (
             f"\n🏙 Захвачено городов: {len(cities)} ({', '.join(cities)})"
@@ -430,6 +435,11 @@ async def cb_emperor_pvp_attack(cb: CallbackQuery, session: AsyncSession, user: 
             + cas_str + cities_str
         )
     else:
+        cas_str = (
+            f"\n💀 Твои потери: −{cas.get('attacker_statists_lost', 0)} статистов, "
+            f"−{cas.get('attacker_cards_lost', 0)} карточек"
+            if cas.get("attacker_statists_lost") or cas.get("attacker_cards_lost") else ""
+        )
         text = (
             f"❌ <b>Поражение!</b>\n\n"
             f"Противник: {result['defender_name']}\n"

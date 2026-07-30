@@ -449,8 +449,12 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
             taken = result.get("districts_taken", 0)
             cas = result.get("casualties") or {}
             cas_str = (
-                f" | −{cas['statists_lost_a']} стат./−{cas['cards_lost_a']} карт у обоих"
-                if cas.get("statists_lost_a") or cas.get("cards_lost_a") else ""
+                f" | ты: −{cas['attacker_statists_lost']}стат/−{cas['attacker_cards_lost']}карт, "
+                f"он: −{cas['defender_statists_lost']}стат/−{cas['defender_cards_lost']}карт"
+                if any(cas.get(k) for k in (
+                    "attacker_statists_lost", "attacker_cards_lost",
+                    "defender_statists_lost", "defender_cards_lost",
+                )) else ""
             )
             await cb.answer(
                 f"✅ {crit_str}Победа PvP! +{taken} районов у {result['defender_name']}{cas_str}",
@@ -487,9 +491,9 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
     if is_pvp:
         cas = result.get("casualties") or {}
         cas_str = (
-            f"\n💀 Потери в бою (с обеих сторон): −{cas['statists_lost_a']} статистов, "
-            f"−{cas['cards_lost_a']} карточек"
-            if cas.get("statists_lost_a") or cas.get("cards_lost_a") else ""
+            f"\n💀 Твои потери в бою: −{cas['attacker_statists_lost']} статистов, "
+            f"−{cas['attacker_cards_lost']} карточек"
+            if cas.get("attacker_statists_lost") or cas.get("attacker_cards_lost") else ""
         )
         text = (
             f"❌ <b>Поражение в PvP!</b>\n\n"

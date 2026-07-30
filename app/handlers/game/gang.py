@@ -295,19 +295,35 @@ async def cb_gang_pvp(cb: CallbackQuery, session: AsyncSession, user: User):
         await fame_service.gain_overcome_stack(user.id)
 
     crit_str = " ⚡КРИТ!" if result.get("is_crit") else ""
+    cas = result.get("casualties") or {}
     if result["win"]:
+        cas_str = (
+            f"\n💀 Твои потери: −{cas['attacker_statists_lost']} стат./−{cas['attacker_cards_lost']} карт. "
+            f"Его потери: −{cas['defender_statists_lost']} стат./−{cas['defender_cards_lost']} карт"
+            if any(cas.get(k) for k in (
+                "attacker_statists_lost", "attacker_cards_lost",
+                "defender_statists_lost", "defender_cards_lost",
+            )) else ""
+        )
         text = (
             f"✅ <b>Победа в PvP!{crit_str}</b>\n\n"
             f"Противник: {html.escape(result['defender_name'])}\n"
             f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
             f"⚔️ Его мощь: {fmt_num(result['defender_power'])}\n\n"
             f"+1 район получен!"
+            + cas_str
         )
     else:
+        cas_str = (
+            f"\n💀 Твои потери: −{cas['attacker_statists_lost']} статистов, "
+            f"−{cas['attacker_cards_lost']} карточек"
+            if cas.get("attacker_statists_lost") or cas.get("attacker_cards_lost") else ""
+        )
         text = (
             f"❌ <b>Поражение в PvP!</b>\n\n"
             f"Противник: {html.escape(result['defender_name'])}\n"
             f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
             f"⚔️ Его мощь: {fmt_num(result['defender_power'])}"
+            + cas_str
         )
     await send_menu(cb, text, back_kb("attack"))

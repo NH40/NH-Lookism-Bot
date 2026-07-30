@@ -11,7 +11,7 @@ from app.repositories.user_repo import user_repo
 from app.data.squad import ATTACK_WIN_INFLUENCE_BONUS
 from app.services.business_service import business_service
 from app.services.game.base import GameBase
-from app.services.game.utils import notify_pvp_attack
+from app.services.game.utils import notify_pvp_attack, apply_battle_casualties
 from app.utils.truce import is_truce_active
 
 
@@ -246,6 +246,11 @@ class GameGangService(GameBase):
                     }
 
         result = await fight_player(session, attacker, defender)
+
+        # Атакующий всегда теряет 100% от количества защитника (не больше
+        # своего), защитник — доп. 60% своих, если проиграл.
+        casualties = await apply_battle_casualties(session, attacker, defender, result["win"])
+
         if result["win"]:
             attacker.total_wins += 1
             attacker.influence += ATTACK_WIN_INFLUENCE_BONUS["gang"]
@@ -282,4 +287,5 @@ class GameGangService(GameBase):
             "attacker_power": result["attacker_power"],
             "defender_power": result["defender_power"],
             "defender_name": defender.full_name,
+            "casualties": casualties,
         }

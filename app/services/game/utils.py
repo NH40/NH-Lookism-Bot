@@ -9,22 +9,37 @@ _STATIST_RANK_WEAKEST_FIRST = [
     "UR", "LR", "MP", "X", "XX", "XXX", "DX", "ERROR",
 ]
 
+# Слабейшие карточки гибнут первыми (реверс clan/exchange.py RANK_ORDER,
+# см. app/data/characters.py CharacterRankConfig — member слабее perfection).
+_CARD_RANK_WEAKEST_FIRST = [
+    "member", "boss", "king", "strong_king", "gen_zero",
+    "new_legend", "legend", "peak", "absolute", "perfection",
+]
+
 
 async def apply_battle_casualties(
-    session: AsyncSession, side_a: User, side_b: User
+    session: AsyncSession, attacker: User, defender: User, attacker_won: bool
 ) -> dict:
-    """Взаимные потери статистов и карточек в PvP-бою (патч 1.3.1: король/трон/
-    император больше не уничтожает проигравшего целиком — оба участника несут
-    потери). С каждой стороны гибнет min(общее_число_статистов_a, ...b) —
-    как в примере НХ (10 против 15 -> 10 гибнет с каждой стороны, у 15-й
-    остаётся 5). Та же пропорция (потери/общее число) применяется к
-    карточкам. Победитель/трофеи (районы, города, монеты) эта функция не
-    трогает — только живая сила."""
+    """Потери статистов и карточек в PvP-бою (патч 1.3.1: король/трон/император
+    больше не уничтожает проигравшего целиком — оба участника платят цену).
+
+    Правила зависят от РОЛИ, не суммируются друг с другом:
+      - Атакующий ВСЕГДА теряет 100% от количества защитника в каждой
+        категории (статисты/карточки), не больше собственного запаса —
+        независимо от исхода боя (даже проиграв, атакующий теряет ровно это,
+        никакого дополнительного штрафа сверху).
+      - Защитник, если он ПРОИГРАЛ, ДОПОЛНИТЕЛЬНО теряет
+        PVP_LOSER_CASUALTY_PERCENT% своих собственных статистов/карточек.
+        Победивший защитник по этой функции не теряет ничего.
+
+    Победитель/трофеи (районы, города, монеты) эта функция не трогает —
+    только живая сила."""
     from sqlalchemy import select, delete as sql_delete
     from app.models.squad_member import SquadMember
     from app.models.character import UserCharacter
     from app.models.card_deck import UserDeck
     from app.repositories.squad_repo import squad_repo
+    from app.config.game_balance import PVP_LOSER_CASUALTY_PERCENT
 
     async def _statist_rows(uid: int):
         rows = (await session.execute(
@@ -52,40 +67,68 @@ async def apply_battle_casualties(
                     await session.delete(r)
         return killed
 
-    async def _card_ids(uid: int) -> list[int]:
+    async def _card_rows(uid: int) -> list[tuple[int, str]]:
         return list((await session.execute(
-            select(UserCharacter.id).where(UserCharacter.user_id == uid)
-        )).scalars().all())
+            select(UserCharacter.id, UserCharacter.rank).where(UserCharacter.user_id == uid)
+        )).all())
 
-    async def _kill_cards(ids: list[int], n: int) -> int:
-        if n <= 0 or not ids:
+    async def _kill_cards(rows: list[tuple[int, str]], n: int) -> int:
+        if n <= 0 or not rows:
             return 0
-        chosen = random.sample(ids, min(n, len(ids)))
+        by_rank: dict[str, list[int]] = {}
+        for cid, rank in rows:
+            by_rank.setdefault(rank, []).append(cid)
+        chosen: list[int] = []
+        remaining = n
+        for rank in _CARD_RANK_WEAKEST_FIRST:
+            if remaining <= 0:
+                break
+            pool = by_rank.pop(rank, [])
+            if not pool:
+                continue
+            take = min(len(pool), remaining)
+            chosen.extend(random.sample(pool, take))
+            remaining -= take
+        if remaining > 0 and by_rank:
+            # Ранг вне списка (новый/неизвестный) — добираем что осталось.
+            leftover = [cid for pool in by_rank.values() for cid in pool]
+            take = min(len(leftover), remaining)
+            chosen.extend(random.sample(leftover, take))
+        if not chosen:
+            return 0
         await session.execute(sql_delete(UserDeck).where(UserDeck.char_id.in_(chosen)))
         await session.execute(sql_delete(UserCharacter).where(UserCharacter.id.in_(chosen)))
         return len(chosen)
 
-    rows_a, total_a = await _statist_rows(side_a.id)
-    rows_b, total_b = await _statist_rows(side_b.id)
-    statist_casualties = min(total_a, total_b)
+    def _loser_pct(total: int) -> int:
+        if total <= 0:
+            return 0
+        return max(1, round(total * PVP_LOSER_CASUALTY_PERCENT / 100))
 
-    lost_a = await _kill_statists(rows_a, statist_casualties)
-    lost_b = await _kill_statists(rows_b, statist_casualties)
+    atk_rows, atk_total = await _statist_rows(attacker.id)
+    def_rows, def_total = await _statist_rows(defender.id)
+    atk_cards = await _card_rows(attacker.id)
+    def_cards = await _card_rows(defender.id)
 
-    cards_a = await _card_ids(side_a.id)
-    cards_b = await _card_ids(side_b.id)
-    card_casualties = min(len(cards_a), len(cards_b))
+    # Атакующий: 100% от количества защитника, не больше своего запаса —
+    # всегда, независимо от исхода.
+    atk_statists_lost = await _kill_statists(atk_rows, min(atk_total, def_total))
+    atk_cards_lost = await _kill_cards(atk_cards, min(len(atk_cards), len(def_cards)))
 
-    cards_lost_a = await _kill_cards(cards_a, card_casualties)
-    cards_lost_b = await _kill_cards(cards_b, card_casualties)
+    # Защитник: доп. 60% своих, только если проиграл.
+    def_statists_lost = 0
+    def_cards_lost = 0
+    if attacker_won:
+        def_statists_lost = await _kill_statists(def_rows, _loser_pct(def_total))
+        def_cards_lost = await _kill_cards(def_cards, _loser_pct(len(def_cards)))
 
     await session.flush()
-    await squad_repo.update_user_combat_power(session, side_a)
-    await squad_repo.update_user_combat_power(session, side_b)
+    await squad_repo.update_user_combat_power(session, attacker)
+    await squad_repo.update_user_combat_power(session, defender)
 
     return {
-        "statists_lost_a": lost_a, "statists_lost_b": lost_b,
-        "cards_lost_a": cards_lost_a, "cards_lost_b": cards_lost_b,
+        "attacker_statists_lost": atk_statists_lost, "defender_statists_lost": def_statists_lost,
+        "attacker_cards_lost": atk_cards_lost, "defender_cards_lost": def_cards_lost,
     }
 
 

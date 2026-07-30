@@ -213,5 +213,6 @@ SUZERAIN_INCOME_BONUS_PCT_PER_VASSAL: int = 10
 SUZERAIN_INCOME_BONUS_CAP_PCT: int = 100
 KING_CHALLENGE_CD_SECONDS: int = 3600         # вызов трона — раз в час
 EMPEROR_PVP_CD_SECONDS: int = 3600
-EMPEROR_PVP_STEAL_PERCENT: int = 30           # % статистов/карточек/денег победителю (не всё)
+EMPEROR_PVP_STEAL_PERCENT: int = 30           # % денег победителю (не всё)
 CITY_TAX_PERCENT: int = 20                    # налог городу с чужим королём
+PVP_LOSER_CASUALTY_PERCENT: int = 60          # % своих статистов/карточек ДОПОЛНИТЕЛЬНО теряет защитник, если проиграл PvP (Банда/Король/Император)

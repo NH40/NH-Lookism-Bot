@@ -422,8 +422,8 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         await send_menu(cb, f"🎉 {html.escape(result['message'])}", back_kb("main_menu"))
         return
 
-    if result.get("destroyed"):
-        await send_menu(cb, f"💀 <b>{html.escape(result['message'])}</b>", back_kb("main_menu"))
+    if result.get("title_lost"):
+        await send_menu(cb, f"💀 <b>{html.escape(result['message'])}</b>", back_kb("attack"))
         return
 
     if not result["ok"]:
@@ -447,8 +447,13 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         is_pvp = result.get("defender_name") is not None
         if is_pvp:
             taken = result.get("districts_taken", 0)
+            cas = result.get("casualties") or {}
+            cas_str = (
+                f" | −{cas['statists_lost_a']} стат./−{cas['cards_lost_a']} карт у обоих"
+                if cas.get("statists_lost_a") or cas.get("cards_lost_a") else ""
+            )
             await cb.answer(
-                f"✅ {crit_str}Победа PvP! +{taken} районов у {result['defender_name']}",
+                f"✅ {crit_str}Победа PvP! +{taken} районов у {result['defender_name']}{cas_str}",
                 show_alert=False,
             )
         else:
@@ -480,6 +485,12 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
     ))
 
     if is_pvp:
+        cas = result.get("casualties") or {}
+        cas_str = (
+            f"\n💀 Потери в бою (с обеих сторон): −{cas['statists_lost_a']} статистов, "
+            f"−{cas['cards_lost_a']} карточек"
+            if cas.get("statists_lost_a") or cas.get("cards_lost_a") else ""
+        )
         text = (
             f"❌ <b>Поражение в PvP!</b>\n\n"
             f"{'─' * 20}\n"
@@ -489,6 +500,7 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
             f"{'─' * 20}\n"
             f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
             f"⚔️ Его мощь: {fmt_num(result['defender_power'])}"
+            + cas_str
         )
     else:
         text = (

@@ -106,6 +106,18 @@ class GameGangService(GameBase):
         district = district_r.scalar_one_or_none()
         if not district:
             return {"ok": False, "reason": "Район уже занят или недоступен"}
+
+        # Если это последний свободный район города, а трон уже принадлежит
+        # королю, который сейчас под перемирием — добить город нельзя, пока
+        # перемирие не спадёт (иначе перемирие ничего не защищает).
+        if city.owner_id and city.captured_districts + 1 >= city.total_districts:
+            reigning_king = await user_repo.get_by_id(session, city.owner_id)
+            if reigning_king and is_truce_active(reigning_king):
+                return {
+                    "ok": False,
+                    "reason": f"👑 {reigning_king.full_name} под перемирием — нельзя добить последний район города",
+                }
+
         district_power = self._get_district_power(district.number, city.district_power_multiplier)
         result = await fight_district(session, user, district_power)
         if result["win"]:
@@ -218,6 +230,21 @@ class GameGangService(GameBase):
         if await cooldown_service.is_on_cooldown(cd_key):
             ttl = await cooldown_service.get_ttl(cd_key)
             return {"ok": False, "reason": f"КД: {cooldown_service.format_ttl(ttl)}", "cd": ttl}
+
+        city = await city_repo.get_city(session, attacker.gang_city_id)
+
+        # Если эта победа отдаст последний район города, а трон уже занят
+        # королём под перемирием — нельзя добить город, пока перемирие не спадёт.
+        if city and city.owner_id:
+            my_before = await self._get_my_districts_in_city(session, attacker.id, attacker.gang_city_id)
+            if my_before + 1 >= city.total_districts:
+                reigning_king = await user_repo.get_by_id(session, city.owner_id)
+                if reigning_king and is_truce_active(reigning_king):
+                    return {
+                        "ok": False,
+                        "reason": f"👑 {reigning_king.full_name} под перемирием — нельзя добить последний район города",
+                    }
+
         result = await fight_player(session, attacker, defender)
         if result["win"]:
             attacker.total_wins += 1
@@ -241,7 +268,6 @@ class GameGangService(GameBase):
             def_owned = await self._get_my_districts_in_city(session, defender.id, defender.gang_city_id or 0)
             if def_owned == 0:
                 await self._destroy_gang(session, defender)
-            city = await city_repo.get_city(session, attacker.gang_city_id)
             if city:
                 my_districts = await self._get_my_districts_in_city(session, attacker.id, attacker.gang_city_id)
                 if my_districts >= city.total_districts:

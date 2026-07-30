@@ -57,12 +57,40 @@ class PromotionsMixin:
     ) -> dict:
         user.phase = "king"
         user.king_cities_count = 1
-        city.owner_id = user.id
         user.extra_attack_count = await self._get_max_extra_attacks_async(session, user)
         from sqlalchemy import delete as sql_delete, update as sql_update
         from app.models.king_bot import KingBot
         from app.models.city import District
         await session.execute(sql_delete(KingBot).where(KingBot.user_id == user.id))
+
+        # Город мог уже принадлежать другому королю (он освободил районы,
+        # когда сам получил корону/дорос до Императора, но трон — City.owner_id —
+        # остался за ним). Банда, заново заполнившая этот город, НЕ получает
+        # корону бесплатно — только бой за трон, как и при захвате районов
+        # уже действующего короля. Если city.owner_id пуст — это первый
+        # король этого города, трон достаётся без боя, как раньше.
+        title_message = ""
+        if city.owner_id and city.owner_id != user.id:
+            from app.repositories.user_repo import user_repo
+            reigning_king = await user_repo.get_by_id(session, city.owner_id)
+            if reigning_king:
+                from app.services.combat_service import fight_player
+                from app.services.game.utils import apply_battle_casualties
+                fight = await fight_player(session, user, reigning_king)
+                await apply_battle_casualties(session, user, reigning_king)
+                if fight["win"]:
+                    city.owner_id = user.id
+                    await self._recalc_city_tax_for_city_residents(session, city.id)
+                    title_message = "\n\n👑 Вы также выиграли битву за трон и забрали корону города!"
+                else:
+                    title_message = (
+                        f"\n\n💀 Но вы проиграли битву за трон — корона осталась "
+                        f"у {reigning_king.full_name}. Часть статистов и карточек погибла в бою."
+                    )
+            else:
+                city.owner_id = user.id
+        else:
+            city.owner_id = user.id
 
         # Трон города переходит новому Королю (city.owner_id — считается для
         # налога/вассалитета/права на Императора), но сами районы освобождаются
@@ -85,6 +113,7 @@ class PromotionsMixin:
             "message": (
                 f"🎉 Вы захватили <b>{city.name}</b> и стали Королём!\n\n"
                 f"Захватите все города своей страны, чтобы стать Императором."
+                + title_message
             )
         }
 

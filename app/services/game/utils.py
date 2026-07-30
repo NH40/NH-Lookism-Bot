@@ -1,6 +1,92 @@
+import random
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.utils.formatters import fmt_num
+
+# Слабейшие статисты гибнут первыми (реверс squad_service.py rank_order).
+_STATIST_RANK_WEAKEST_FIRST = [
+    "F", "E", "D", "C", "B", "A", "S", "SS", "SSS", "SR", "SSR",
+    "UR", "LR", "MP", "X", "XX", "XXX", "DX", "ERROR",
+]
+
+
+async def apply_battle_casualties(
+    session: AsyncSession, side_a: User, side_b: User
+) -> dict:
+    """Взаимные потери статистов и карточек в PvP-бою (патч 1.3.1: король/трон/
+    император больше не уничтожает проигравшего целиком — оба участника несут
+    потери). С каждой стороны гибнет min(общее_число_статистов_a, ...b) —
+    как в примере НХ (10 против 15 -> 10 гибнет с каждой стороны, у 15-й
+    остаётся 5). Та же пропорция (потери/общее число) применяется к
+    карточкам. Победитель/трофеи (районы, города, монеты) эта функция не
+    трогает — только живая сила."""
+    from sqlalchemy import select, delete as sql_delete
+    from app.models.squad_member import SquadMember
+    from app.models.character import UserCharacter
+    from app.models.card_deck import UserDeck
+    from app.repositories.squad_repo import squad_repo
+
+    async def _statist_rows(uid: int):
+        rows = (await session.execute(
+            select(SquadMember).where(SquadMember.user_id == uid)
+        )).scalars().all()
+        return rows, sum(r.count for r in rows)
+
+    async def _kill_statists(rows: list, n: int) -> int:
+        if n <= 0:
+            return 0
+        by_rank: dict[str, list] = {}
+        for r in rows:
+            by_rank.setdefault(r.rank, []).append(r)
+        killed = 0
+        for rank in _STATIST_RANK_WEAKEST_FIRST:
+            if killed >= n:
+                break
+            for r in by_rank.get(rank, []):
+                if killed >= n:
+                    break
+                take = min(r.count, n - killed)
+                r.count -= take
+                killed += take
+                if r.count <= 0:
+                    await session.delete(r)
+        return killed
+
+    async def _card_ids(uid: int) -> list[int]:
+        return list((await session.execute(
+            select(UserCharacter.id).where(UserCharacter.user_id == uid)
+        )).scalars().all())
+
+    async def _kill_cards(ids: list[int], n: int) -> int:
+        if n <= 0 or not ids:
+            return 0
+        chosen = random.sample(ids, min(n, len(ids)))
+        await session.execute(sql_delete(UserDeck).where(UserDeck.char_id.in_(chosen)))
+        await session.execute(sql_delete(UserCharacter).where(UserCharacter.id.in_(chosen)))
+        return len(chosen)
+
+    rows_a, total_a = await _statist_rows(side_a.id)
+    rows_b, total_b = await _statist_rows(side_b.id)
+    statist_casualties = min(total_a, total_b)
+
+    lost_a = await _kill_statists(rows_a, statist_casualties)
+    lost_b = await _kill_statists(rows_b, statist_casualties)
+
+    cards_a = await _card_ids(side_a.id)
+    cards_b = await _card_ids(side_b.id)
+    card_casualties = min(len(cards_a), len(cards_b))
+
+    cards_lost_a = await _kill_cards(cards_a, card_casualties)
+    cards_lost_b = await _kill_cards(cards_b, card_casualties)
+
+    await session.flush()
+    await squad_repo.update_user_combat_power(session, side_a)
+    await squad_repo.update_user_combat_power(session, side_b)
+
+    return {
+        "statists_lost_a": lost_a, "statists_lost_b": lost_b,
+        "cards_lost_a": cards_lost_a, "cards_lost_b": cards_lost_b,
+    }
 
 
 async def notify_pvp_attack(

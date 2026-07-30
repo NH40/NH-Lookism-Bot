@@ -1,19 +1,17 @@
-"""GameEmperorService — PvP между Императорами: победитель забирает 30%
-статистов, карточек и денег проигравшего, плюс 1-3 случайных города
-(патч 1.3.1, заменяет собой убранную фазу Кулака)."""
+"""GameEmperorService — PvP между Императорами: бой стоит статистов и карточек
+ОБЕИМ сторонам (apply_battle_casualties, патч 1.3.1 v2 — раньше терял только
+проигравший), а победитель дополнительно забирает 30% денег проигравшего
+и 1-3 случайных города (заменяет собой убранную фазу Кулака)."""
 import random
-from sqlalchemy import select, delete, update as sql_update
+from sqlalchemy import select, update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.models.city import City, District
-from app.models.squad_member import SquadMember
-from app.models.character import UserCharacter
-from app.models.card_deck import UserDeck
 from app.services.combat_service import fight_player
 from app.services.cooldown_service import cooldown_service
 from app.services.business_service import business_service
 from app.services.game.base import GameBase
-from app.services.game.utils import notify_pvp_attack, notify_country_city_loss
+from app.services.game.utils import notify_pvp_attack, notify_country_city_loss, apply_battle_casualties
 from app.utils.truce import is_truce_active
 from app.config.game_balance import EMPEROR_PVP_CD_SECONDS, EMPEROR_PVP_STEAL_PERCENT
 
@@ -44,62 +42,22 @@ class GameEmperorService(GameBase):
 
         result = await fight_player(session, attacker, defender)
         stolen_coins = 0
-        stolen_squad = 0
-        stolen_cards = 0
         captured_city_names: list[str] = []
+
+        # Оба Императора несут потери статистов/карточек от любого исхода боя —
+        # бой дорого обходится обеим сторонам, не только проигравшему.
+        casualties = await apply_battle_casualties(session, attacker, defender)
+        stolen_squad = casualties["statists_lost_b"]
+        stolen_cards = casualties["cards_lost_b"]
 
         if result["win"]:
             pct = EMPEROR_PVP_STEAL_PERCENT
-
-            # ── 30% статистов — построчно (SquadMember: составной PK) ──────
-            squad_rows = (await session.execute(
-                select(SquadMember).where(SquadMember.user_id == defender.id)
-            )).scalars().all()
-            for row in squad_rows:
-                take = int(row.count * pct / 100)
-                if take <= 0:
-                    continue
-                stolen_squad += take
-                row.count -= take
-                mine = await session.get(SquadMember, (attacker.id, row.rank, row.stars, row.base_power))
-                if mine:
-                    mine.count += take
-                else:
-                    session.add(SquadMember(
-                        user_id=attacker.id, rank=row.rank, stars=row.stars,
-                        base_power=row.base_power, count=take,
-                    ))
-                if row.count <= 0:
-                    await session.delete(row)
-
-            # ── 30% карточек — случайные экземпляры (не проценты от каждой) ─
-            char_ids = (await session.execute(
-                select(UserCharacter.id).where(UserCharacter.user_id == defender.id)
-            )).scalars().all()
-            take_n = int(len(char_ids) * pct / 100)
-            if take_n > 0:
-                stolen_ids = random.sample(char_ids, take_n)
-                stolen_cards = len(stolen_ids)
-                # Слоты колоды проигравшего, ссылающиеся именно на украденные карты
-                await session.execute(
-                    delete(UserDeck).where(
-                        UserDeck.user_id == defender.id,
-                        UserDeck.char_id.in_(stolen_ids),
-                    )
-                )
-                await session.execute(
-                    sql_update(UserCharacter).where(UserCharacter.id.in_(stolen_ids))
-                    .values(user_id=attacker.id)
-                )
 
             # ── 30% монет ────────────────────────────────────────────────────
             stolen_coins = int(defender.nh_coins * pct / 100)
             attacker.nh_coins += stolen_coins
             defender.nh_coins -= stolen_coins
 
-            from app.repositories.squad_repo import squad_repo
-            await squad_repo.update_user_combat_power(session, attacker)
-            await squad_repo.update_user_combat_power(session, defender)
             attacker.total_wins += 1
 
             # ── 1-3 случайных города проигравшего переходят победителю ──────
@@ -148,5 +106,6 @@ class GameEmperorService(GameBase):
             "stolen_coins": stolen_coins,
             "stolen_squad": stolen_squad,
             "stolen_cards": stolen_cards,
+            "casualties": casualties,
             "captured_cities": captured_city_names,
         }

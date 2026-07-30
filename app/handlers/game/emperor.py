@@ -409,6 +409,12 @@ async def cb_emperor_pvp_attack(cb: CallbackQuery, session: AsyncSession, user: 
         return
 
     crit_str = " ⚡КРИТ!" if result.get("is_crit") else ""
+    cas = result.get("casualties") or {}
+    cas_str = (
+        f"\n💀 Потери в бою (с обеих сторон): −{cas.get('statists_lost_a', 0)} статистов, "
+        f"−{cas.get('cards_lost_a', 0)} карточек"
+        if cas.get("statists_lost_a") or cas.get("cards_lost_a") else ""
+    )
     if result["win"]:
         cities = result.get("captured_cities") or []
         cities_str = (
@@ -420,10 +426,8 @@ async def cb_emperor_pvp_attack(cb: CallbackQuery, session: AsyncSession, user: 
             f"Противник: {result['defender_name']}\n"
             f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
             f"⚔️ Его мощь: {fmt_num(result['defender_power'])}\n\n"
-            f"💰 Забрано монет: {fmt_num(result['stolen_coins'])}\n"
-            f"👥 Забрано статистов: {fmt_num(result.get('stolen_squad', 0))}\n"
-            f"🃏 Забрано карточек: {result.get('stolen_cards', 0)}"
-            + cities_str
+            f"💰 Забрано монет: {fmt_num(result['stolen_coins'])}"
+            + cas_str + cities_str
         )
     else:
         text = (
@@ -431,6 +435,7 @@ async def cb_emperor_pvp_attack(cb: CallbackQuery, session: AsyncSession, user: 
             f"Противник: {result['defender_name']}\n"
             f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
             f"⚔️ Его мощь: {fmt_num(result['defender_power'])}"
+            + cas_str
         )
 
     builder = InlineKeyboardBuilder()

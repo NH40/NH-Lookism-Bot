@@ -45,11 +45,27 @@ async def build_gang_menu(session, user, page: int = 0):
         page = max(0, min(page, total_pages - 1))
         slice_ = cities[page * per_page:(page + 1) * per_page]
 
+        # Города, у которых уже есть король (City.owner_id) — предупреждаем
+        # заранее: захват всех районов такого города обернётся битвой за трон.
+        king_ids = [c.owner_id for c in slice_ if c.owner_id]
+        kings_by_id: dict[int, User] = {}
+        if king_ids:
+            kings_r = await session.execute(
+                select(User.id, User.full_name, User.combat_power).where(User.id.in_(king_ids))
+            )
+            kings_by_id = {row.id: row for row in kings_r.all()}
+
+        has_kings = False
         builder = InlineKeyboardBuilder()
         type_names = {1: "4р", 2: "8р", 3: "16р", 4: "32р"}
         for city in slice_:
+            king = kings_by_id.get(city.owner_id) if city.owner_id else None
+            king_str = ""
+            if king:
+                has_kings = True
+                king_str = f" 👑{king.full_name} 💪{fmt_num(king.combat_power)}"
             builder.button(
-                text=f"🏙 {city.name} [{type_names.get(city.type_id, '?')}]",
+                text=f"🏙 {city.name} [{type_names.get(city.type_id, '?')}]{king_str}",
                 callback_data=f"choose_city:{city.id}"
             )
         builder.adjust(1)
@@ -67,11 +83,19 @@ async def build_gang_menu(session, user, page: int = 0):
         builder.row(*nav1)
         builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="main_menu"))
         country = COUNTRY_BY_CODE[user.country]
+        king_warning = (
+            "\n\n👑 У городов с короной уже есть король — захватишь все "
+            "районы, и будет битва за трон с ним (можешь проиграть, если "
+            "он сильнее). Пока он под 🕊 перемирием, добить последний "
+            "район не получится."
+            if has_kings else ""
+        )
         return (
             f"⚔️ <b>Выбор города — {country.label}</b>\n\n"
             f"Выбери город. После выбора нельзя сменить\n"
             f"пока не завоюешь все районы!\n\n"
-            f"🏙 Доступно городов: {total}",
+            f"🏙 Доступно городов: {total}"
+            + king_warning,
             builder.as_markup(),
             country.image,
         )
@@ -97,13 +121,26 @@ async def build_gang_menu(session, user, page: int = 0):
             rival_power = clamp_enemy_power(r['combat_power'], user.combat_power)
             rival_str += f"\n  ⚔️ {r['name']} | 💪 {fmt_num(rival_power)} | 🏘 {r['districts']}р."
 
+    king_str = ""
+    if city.owner_id:
+        from app.repositories.user_repo import user_repo
+        from app.utils.truce import is_truce_active
+        reigning_king = await user_repo.get_by_id(session, city.owner_id)
+        if reigning_king:
+            king_power = clamp_enemy_power(reigning_king.combat_power, user.combat_power)
+            truce_str = " 🕊 под перемирием (последний район не забрать)" if is_truce_active(reigning_king) else ""
+            king_str = (
+                f"\n\n👑 Трон города: <b>{reigning_king.full_name}</b> | 💪 {fmt_num(king_power)}"
+                f"\nЗахватишь все районы — будет битва за трон.{truce_str}"
+            )
+
     text = (
         f"⚔️ <b>Атака — Фаза Банды</b>\n\n"
         f"🏙 Город: <b>{city.name}</b>\n"
         f"🏘 Твоих районов: {my_d}/{total_d}\n"
         f"💪 Твоя мощь: {fmt_num(user.combat_power)}\n"
         f"🎯 Влияние: {fmt_num(user.influence)}"
-        + extra_str + cd_str + rival_str +
+        + extra_str + cd_str + rival_str + king_str +
         "\n\n⭐ твой | 🔴 соперник | ⚔️ свободен/бот"
     )
 

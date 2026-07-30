@@ -12,23 +12,47 @@ class VassalMixin:
         self, session: AsyncSession, challenger: User, reigning_king: User, city: City
     ) -> dict:
         """challenger только что захватил 100% районов города, которым уже
-        владеет другой король. Победитель занимает трон, проигравший
-        (неважно, претендент или действующий король) уничтожается как King —
-        теряет районы/статистов/карточки, сохраняет мастерство/очки пути."""
+        владеет другой король. Победитель занимает трон города (владение
+        районами при этом не трогается — оно уже определено предыдущими
+        боями кражи районов). Обе стороны несут потери статистов/карточек
+        (apply_battle_casualties) — проигравший больше НЕ уничтожается
+        автоматически целиком; полное разжалование из Короля наступает
+        только естественно, если после боя у него не осталось ни одного
+        города с районами (как и при обычной потере районов по одному)."""
         from app.services.combat_service import fight_player
+        from app.services.game.utils import apply_battle_casualties
         result = await fight_player(session, challenger, reigning_king)
         winner, loser = (challenger, reigning_king) if result["win"] else (reigning_king, challenger)
 
+        casualties = await apply_battle_casualties(session, winner, loser)
+
         city.owner_id = winner.id
-        await self._destroy_king(session, loser)
-        await self._release_vassals_of(session, loser.id)
 
         from app.repositories.city_repo import city_repo
         await city_repo.sync_captured_districts(session, city.id)
         await self._recalc_city_tax_for_city_residents(session, city.id)
-        await self._check_emperor_eligibility(session, winner)
 
-        return {"battle": True, "fight": result, "winner_id": winner.id, "loser_id": loser.id}
+        loser_cities = await self._count_my_king_cities(session, loser.id)
+        loser_destroyed = False
+        if loser_cities == 0:
+            await self._destroy_king(session, loser)
+            loser_destroyed = True
+        else:
+            loser.king_cities_count = loser_cities
+
+        # Император проверяется только для инициатора боя (challenger).
+        # Если трон отстоял защищавшийся reigning_king, это не должно молча
+        # производить его в Императоры без его действия — иначе чужая атака,
+        # которую вы просто отбили, может внезапно завершить завоевание
+        # страны и мгновенно освободить все ваши королевские районы
+        # (баг "стал императором без своей воли").
+        if winner.id == challenger.id:
+            await self._check_emperor_eligibility(session, winner)
+
+        return {
+            "battle": True, "fight": result, "winner_id": winner.id, "loser_id": loser.id,
+            "casualties": casualties, "loser_destroyed": loser_destroyed,
+        }
 
     async def _check_and_resolve_city_ownership(
         self, session: AsyncSession, user: User, city: City

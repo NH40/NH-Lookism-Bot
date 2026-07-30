@@ -10,7 +10,7 @@ from app.repositories.user_repo import user_repo
 from app.data.squad import ATTACK_WIN_INFLUENCE_BONUS
 from app.services.business_service import business_service
 from app.services.game.base import GameBase, FIST_MIN_CITIES
-from app.services.game.utils import notify_pvp_attack
+from app.services.game.utils import notify_pvp_attack, apply_battle_casualties
 from app.utils.truce import is_truce_active
 
 
@@ -165,9 +165,16 @@ class GameKingService(GameBase):
                 title_battle = await self._check_and_resolve_city_ownership(session, user, city)
             if title_battle and title_battle["loser_id"] == user.id:
                 await session.flush()
+                tc = title_battle["casualties"]
                 return {
-                    "ok": True, "win": True, "title_battle": True, "destroyed": True,
-                    "message": "💀 Вы захватили город, но проиграли битву за трон и потеряли всё!",
+                    "ok": True, "win": True, "title_battle": True, "title_lost": True,
+                    "casualties": tc,
+                    "message": (
+                        "💀 Вы захватили районы, но проиграли битву за трон — "
+                        "город остался за прежним королём.\n"
+                        f"Потери в бою: −{tc['statists_lost_b']} статистов, "
+                        f"−{tc['cards_lost_b']} карточек. Остальные владения при вас."
+                    ),
                 }
 
             my_in_city = await self._get_my_districts_in_city(session, user.id, city_id)
@@ -220,6 +227,11 @@ class GameKingService(GameBase):
         if is_truce_active(defender):
             return {"ok": False, "reason": f"{defender.full_name} находится под перемирием"}
         result = await fight_player(session, attacker, defender)
+
+        # Обе стороны несут потери статистов/карточек при любом исходе PvP —
+        # раньше терял всё только проигравший, теперь бой дорого обходится обоим.
+        casualties = await apply_battle_casualties(session, attacker, defender)
+
         if result["win"]:
             defender_districts_r = await session.execute(
                 select(District).where(
@@ -250,17 +262,26 @@ class GameKingService(GameBase):
                 title_battle = await self._check_and_resolve_city_ownership(session, attacker, city)
             if title_battle and title_battle["loser_id"] == attacker.id:
                 await session.flush()
+                tc = title_battle["casualties"]
                 return {
-                    "ok": True, "win": True, "title_battle": True, "destroyed": True,
-                    "message": "💀 Вы забрали районы, но проиграли битву за трон и потеряли всё!",
+                    "ok": True, "win": True, "title_battle": True, "title_lost": True,
+                    "casualties": casualties, "title_casualties": tc,
+                    "message": (
+                        "💀 Вы забрали районы, но проиграли битву за трон — "
+                        "город остался за прежним королём.\n"
+                        f"Потери в бою: −{tc['statists_lost_b']} статистов, "
+                        f"−{tc['cards_lost_b']} карточек. Остальные владения при вас."
+                    ),
                 }
 
             my_cities_count = await self._count_my_king_cities(session, attacker.id)
             attacker.king_cities_count = my_cities_count
 
-            # defender мог быть уничтожен battle'ом выше (если он держал трон и проиграл) —
-            # тогда его прогресс уже сброшен _destroy_king внутри _resolve_city_title_battle
-            if not (title_battle and title_battle["loser_id"] == defender.id):
+            # defender мог потерять трон битвой выше — его king_cities_count
+            # (и, при необходимости, полное разжалование) уже обработаны
+            # внутри _resolve_city_title_battle; здесь считаем только
+            # "естественную" потерю статуса, если трон-битвы не было.
+            if not title_battle:
                 def_cities = await self._count_my_king_cities(session, defender.id)
                 defender.king_cities_count = def_cities
                 if def_cities == 0:
@@ -291,6 +312,8 @@ class GameKingService(GameBase):
                 "cities_count": my_cities_count,
                 "city_captured": city.captured_districts,
                 "city_total": city.total_districts,
+                "casualties": casualties,
+                "title_battle": bool(title_battle),
             }
         else:
             await notify_pvp_attack(attacker, defender, False, "king")
@@ -311,4 +334,5 @@ class GameKingService(GameBase):
                 "cities_count": attacker.king_cities_count,
                 "city_captured": city.captured_districts,
                 "city_total": city.total_districts,
+                "casualties": casualties,
             }

@@ -239,6 +239,20 @@ class PrestigeService:
             await session.execute(
                 delete(Campaign).where(Campaign.user_id == user.id)
             )
+            # Ячейки банковского хранилища — по требованию НХ сбрасываются
+            # (закрываются, содержимое очищается) ТОЛЬКО тут: удаление банды,
+            # пробуждение (престиж) и полный патч-сброс (см. admin/backup.py,
+            # у него свой bulk-путь, сюда не заходит с bulk_precleaned=False).
+            # Раньше содержимое ячеек терялось как побочный эффект
+            # storage_service.fee_tick(), когда после поражения/обнуления
+            # мощи не хватало монет на ежеминутную плату — это отдельно
+            # исправлено в fee_tick (теперь просто пропускает списание).
+            from app.models.bank import StorageCell
+            await session.execute(
+                update(StorageCell).where(StorageCell.user_id == user.id).values(
+                    is_open=False, item_type=None, item_data=None,
+                )
+            )
 
         # ── Мастерство — только при полном сбросе ────────────────────────
         if not keep_progress and not bulk_precleaned:

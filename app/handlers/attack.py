@@ -26,6 +26,19 @@ async def build_attack_menu(session, user):
         from app.handlers.game.gang import build_gang_menu
         return await build_gang_menu(session, user)
     elif user.phase == "king":
+        # Софтлок-фикс: _check_emperor_eligibility иначе срабатывает только
+        # как побочный эффект ПОБЕДЫ в атаке/битве за трон. Король, который
+        # уже владеет (сам + вассалы) всеми городами страны, но которому
+        # больше некого атаковать (все свободны/его, других королей не
+        # осталось) — никогда не совершает такое действие и застревает
+        # Королём навсегда, хотя формально уже выполнил условие Императора
+        # (см. репорт "захватила все города, а Императором не стала").
+        # Поэтому проверяем пассивно при каждом открытии меню атаки.
+        from app.services.game_service import game_service
+        promo = await game_service._check_emperor_eligibility(session, user)
+        if promo and promo.get("promoted"):
+            from app.utils.keyboards.common import back_kb
+            return f"🎉 {promo['message']}", back_kb("main_menu"), None
         from app.handlers.game.king import build_king_menu
         return await build_king_menu(session, user)
     elif user.phase == "emperor":

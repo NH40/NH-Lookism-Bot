@@ -42,13 +42,27 @@ async def referral_power_tick():
                             if not student or not teacher:
                                 continue
 
-                            student_own = max(0, student.combat_power - student.teacher_power_bonus)
+                            # Нельзя просто вычесть сырой teacher_power_bonus из
+                            # combat_power — combat_power считается с накрученными
+                            # ПОВЕРХ бонуса множителями (мастерство, клан. земли,
+                            # титулы, пробуждение, зелья), так что реальный вклад
+                            # бонуса в combat_power всегда БОЛЬШЕ его сырого
+                            # значения. Старая формула недооценивала этот вклад,
+                            # student_own получался завышенным, тик преждевременно
+                            # решал "ученик уже сильнее учителя" и обнулял бонус —
+                            # после чего combat_power реально проседал без боя.
+                            # Считаем "голую" мощь честно — временно убираем бонус
+                            # и пересчитываем через единственный источник истины.
+                            old_bonus = student.teacher_power_bonus
+                            student.teacher_power_bonus = 0
+                            student_own = await squad_repo.update_user_combat_power(session, student)
+
                             if student_own >= teacher.combat_power:
                                 student.teacher_power_bonus = 0
                             else:
                                 teacher_cap = int(teacher.combat_power * 0.05)
                                 new_bonus = min(int(student_own * 0.20), teacher_cap)
-                                student.teacher_power_bonus = max(student.teacher_power_bonus, new_bonus)
+                                student.teacher_power_bonus = max(old_bonus, new_bonus)
 
                             await squad_repo.update_user_combat_power(session, student)
                     except Exception as e:

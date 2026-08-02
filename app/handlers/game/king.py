@@ -117,7 +117,15 @@ async def build_king_menu(session, user, page: int = 0):
         for city in cities:
             cid = city.id
             row = counts.get(cid)
-            if row and (row.free_count or 0) == 0 and (row.not_mine or 0) == 0:
+            my_count_all = (row.my_count if row else 0) or 0
+            # Все районы уже мои, но трон (City.owner_id) ещё не мой — трон
+            # "завис" (владелец мог стать Императором/сменить страну уже
+            # ПОСЛЕ того, как я стал 100%-владельцем районов, и с тех пор
+            # нечего было захватывать, чтобы перепроверка сработала заново).
+            # Не прячем такой город из списка — иначе трон не забрать никогда
+            # (см. king_attack: там есть отдельная ветка "дожим трона").
+            throne_unclaimed = my_count_all >= city.total_districts and city.owner_id != user.id
+            if row and (row.free_count or 0) == 0 and (row.not_mine or 0) == 0 and not throne_unclaimed:
                 continue
 
             dominant_id = dominant_by_city.get(cid)
@@ -130,7 +138,9 @@ async def build_king_menu(session, user, page: int = 0):
             ):
                 continue
 
-            if defender and defender.phase == "king":
+            if throne_unclaimed:
+                def_str = "👑 забрать трон"
+            elif defender and defender.phase == "king":
                 def_power = clamp_enemy_power(int(defender.combat_power or 0), user.combat_power)
                 can = "✅" if user.combat_power >= def_power else "❌"
                 def_str = f"👤 {can} {fmt_num(def_power)}"
@@ -299,8 +309,34 @@ async def cb_king_city_info(cb: CallbackQuery, session: AsyncSession, user: User
     ) or 0
     if total_initialized == 0:
         free_count = city.total_districts
-    if free_count == 0 and not_mine == 0:
+    throne_unclaimed = free_count == 0 and not_mine == 0 and city.owner_id != user.id
+    if free_count == 0 and not_mine == 0 and not throne_unclaimed:
         await cb.answer("Все районы твои — нечего атаковать!", show_alert=True)
+        return
+
+    if throne_unclaimed:
+        # Все районы уже мои, но трон завис за прежним владельцем (стал
+        # Императором/сменил страну — это нормально для налога, но САМ
+        # трон должен перейти новому 100%-владельцу районов). Нет боя за
+        # районы — только "дожим" трона (см. king_attack).
+        builder = InlineKeyboardBuilder()
+        cd_key_throne = cooldown_service.attack_key(user.id)
+        cd_throne = await cooldown_service.get_ttl(cd_key_throne)
+        if cd_throne > 0:
+            builder.row(InlineKeyboardButton(text=f"⏳ КД: {fmt_ttl(cd_throne)}", callback_data="attack_cd"))
+        else:
+            builder.row(InlineKeyboardButton(text="👑 Забрать трон", callback_data=f"king_attack:{city_id}"))
+        builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="attack"))
+
+        size_emoji = {1: "🏘", 2: "🏙", 3: "🌆", 4: "🌇", 5: "🌃"}.get(city.type_id or 1, "🏙")
+        await send_menu(
+            cb,
+            f"{size_emoji} <b>{html.escape(city.name)}</b>\n\n"
+            f"{'─' * 20}\n"
+            f"Ты владеешь всеми районами города, но трон ещё не перешёл к тебе.\n\n"
+            f"{'─' * 20}",
+            builder.as_markup(),
+        )
         return
 
     # Определяем противника
@@ -422,8 +458,16 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
         select(func.count(District.id)).where(District.city_id == city_id)
     ) or 0
     if free_count == 0 and not_mine == 0 and total_initialized > 0:
-        await cb.answer("Все районы твои — нечего атаковать!", show_alert=True)
-        return
+        # Все районы мои — но если трон города (City.owner_id) ещё не мой,
+        # пропускаем дальше в king_attack: там есть отдельная ветка "дожим
+        # трона" (см. king.py service) для случая, когда трон завис за
+        # владельцем, который давно не защищается (стал Императором/сменил
+        # страну — это нормально, налог должен идти ему, но САМ трон должен
+        # переходить новому 100%-владельцу районов).
+        city = await city_repo.get_city(session, city_id)
+        if not city or city.owner_id == user.id:
+            await cb.answer("Все районы твои — нечего атаковать!", show_alert=True)
+            return
 
     lock_key = cooldown_service.attack_lock_key(user.id)
     if not await cooldown_service.acquire_lock(lock_key, ttl=10):
@@ -442,6 +486,10 @@ async def cb_king_attack(cb: CallbackQuery, session: AsyncSession, user: User):
 
     if result.get("title_lost"):
         await send_menu(cb, f"💀 <b>{html.escape(result['message'])}</b>", back_kb("attack"))
+        return
+
+    if result.get("throne_claimed"):
+        await send_menu(cb, f"👑 {html.escape(result['message'])}", back_kb("attack"))
         return
 
     if not result["ok"]:

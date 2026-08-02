@@ -38,6 +38,42 @@ class GameKingService(GameBase):
         if city.country != (user.country or DEFAULT_COUNTRY):
             return {"ok": False, "reason": "Этот город не в твоей стране"}
 
+        # ── Дожим трона: игрок уже держит 100% районов, но трон (City.owner_id)
+        # так и не перешёл к нему — бывает, если трон принадлежит "фантомному"
+        # владельцу (уже Император/сменил страну — это НОРМАЛЬНО, налог должен
+        # идти ему) и с момента, как районы стали 100% его, не было НОВОГО
+        # захвата, который перезапустил бы проверку трона. Раз атаковать
+        # больше нечего (свободных районов и чужих нет), город даже не
+        # попадает в список городов для атаки — без этой ветки трон завис бы
+        # навсегда. Резолвим трон напрямую, без боя за районы.
+        my_in_city_now = await self._get_my_districts_in_city(session, user.id, city_id)
+        if my_in_city_now >= city.total_districts and city.owner_id != user.id:
+            title_battle = await self._check_and_resolve_city_ownership(session, user, city)
+            my_cities_count = await self._count_my_king_cities(session, user.id)
+            user.king_cities_count = my_cities_count
+            await session.flush()
+            if title_battle and title_battle["loser_id"] == user.id:
+                tc = title_battle["casualties"]
+                return {
+                    "ok": True, "win": True, "title_battle": True, "title_lost": True,
+                    "casualties": tc,
+                    "message": (
+                        "💀 Ты владеешь всеми районами города, но проиграл битву за трон — "
+                        "город остался за прежним королём.\n"
+                        f"Потери в бою: −{tc['attacker_statists_lost']} статистов, "
+                        f"−{tc['attacker_cards_lost']} карточек."
+                    ),
+                }
+            emperor_result = await self._check_emperor_eligibility(session, user)
+            if emperor_result:
+                return emperor_result
+            return {
+                "ok": True, "win": True, "throne_claimed": True,
+                "city": city.name,
+                "cities_count": my_cities_count,
+                "message": f"👑 Трон города <b>{city.name}</b> теперь твой!",
+            }
+
         # ── Определяем доминирующего игрока ──────────────────────────────
         dominant_id = await self._get_city_dominant_player(session, city_id, user.id)
         dominant_defender = None

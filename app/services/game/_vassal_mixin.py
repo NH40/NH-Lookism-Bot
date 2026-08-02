@@ -78,7 +78,15 @@ class VassalMixin:
 
         from app.repositories.user_repo import user_repo
         old_king = await user_repo.get_by_id(session, city.owner_id)
-        if not old_king:
+        if not old_king or old_king.phase != "king":
+            # Владелец трона не найден либо уже не в фазе Короля (ушёл в
+            # Императоры — трон остаётся за ним навсегда ради налога, см.
+            # _promote_to_emperor, но сам он в фазе king больше не участвует
+            # и не может "защищаться"). Заставлять претендента драться с
+            # ЖИВОЙ (вечно растущей) мощью ушедшего Императора несправедливо
+            # и блокирует завоевание страны намертво — тот же класс бага,
+            # что и в _promote_to_king (баг 13/16), только здесь для
+            # king-фазных атак вместо gang-фазных. Трон переходит без боя.
             city.owner_id = user.id
             await self._recalc_city_tax_for_city_residents(session, city.id)
             return None

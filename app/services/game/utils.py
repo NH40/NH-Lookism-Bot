@@ -141,13 +141,22 @@ async def apply_battle_casualties(
     atk_card_power = sum(p for _, _, p in atk_cards)
     def_card_power = sum(p for _, _, p in def_cards)
 
-    atk_total_power = atk_squad_power + atk_card_power
-    def_total_power = def_squad_power + def_card_power
-
     # Атакующий: его итоговая мощь падает ровно на мощь защитника (не ниже
     # нуля) — реализуем как единую долю мощи, снятую равномерно с обеих
     # категорий его состава, независимо от исхода боя.
-    atk_fraction = min(def_total_power / atk_total_power, 1.0) if atk_total_power > 0 else 0.0
+    #
+    # Доля считается по ФИНАЛЬНОЙ combat_power (attacker.combat_power /
+    # defender.combat_power), а НЕ по сырым суммам atk_total_power/
+    # def_total_power — combat_power включает престиж/донат-титул/
+    # мастерство/клан-земли множители поверх сырой суммы статистов+карт,
+    # и эти множители у разных игроков разные. Доля по сырым суммам могла
+    # схлопнуться к 100% даже когда финальная мощь атакующего в разы
+    # больше защитника (репро: "на королях всю мощь потеряли", 02.08.2026,
+    # после первого прохода фикса бага 17).
+    atk_fraction = (
+        min(defender.combat_power / attacker.combat_power, 1.0)
+        if attacker.combat_power > 0 else 0.0
+    )
     atk_statists_lost = await _kill_statists_by_power(atk_rows, atk_squad_power * atk_fraction)
     atk_cards_lost = await _kill_cards_by_power(atk_cards, atk_card_power * atk_fraction)
 

@@ -215,4 +215,4 @@ KING_CHALLENGE_CD_SECONDS: int = 3600         # вызов трона — раз
 EMPEROR_PVP_CD_SECONDS: int = 3600
 EMPEROR_PVP_STEAL_PERCENT: int = 30           # % денег победителю (не всё)
 CITY_TAX_PERCENT: int = 20                    # налог городу с чужим королём
-PVP_LOSER_CASUALTY_PERCENT: int = 60          # % своих статистов/карточек ДОПОЛНИТЕЛЬНО теряет защитник, если проиграл PvP (Банда/Король/Император)
+PVP_LOSER_CASUALTY_PERCENT: int = 50          # % своей мощи ДОПОЛНИТЕЛЬНО теряет защитник, если проиграл PvP (Банда/Король/Император)

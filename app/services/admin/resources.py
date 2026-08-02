@@ -6,35 +6,35 @@ from app.models.user import User
 class AdminResourcesMixin:
 
     async def give_mastery_points(self, session: AsyncSession, user: User, amount: int) -> None:
-        user.mastery_points += amount
+        user.mastery_points = max(0, user.mastery_points + amount)
         await session.flush()
 
     async def give_path_points(self, session: AsyncSession, user: User, amount: int) -> None:
-        user.skill_path_points += amount
+        user.skill_path_points = max(0, user.skill_path_points + amount)
         await session.flush()
 
     async def give_ui_fragments(self, session: AsyncSession, user: User, amount: int) -> None:
-        user.ui_fragments += amount
+        user.ui_fragments = max(0, user.ui_fragments + amount)
         await session.flush()
 
     async def give_alchemy_fragments(self, session: AsyncSession, user: User, amount: int) -> None:
-        user.alchemy_fragments = getattr(user, "alchemy_fragments", 0) + amount
+        user.alchemy_fragments = max(0, getattr(user, "alchemy_fragments", 0) + amount)
         await session.flush()
 
     async def give_path_fragments(self, session: AsyncSession, user: User, amount: int) -> None:
-        user.path_fragments = getattr(user, "path_fragments", 0) + amount
+        user.path_fragments = max(0, getattr(user, "path_fragments", 0) + amount)
         await session.flush()
 
     async def give_business_fragments(self, session: AsyncSession, user: User, amount: int) -> None:
-        user.business_fragments = getattr(user, "business_fragments", 0) + amount
+        user.business_fragments = max(0, getattr(user, "business_fragments", 0) + amount)
         await session.flush()
 
     async def give_war_points(self, session: AsyncSession, user: User, amount: int) -> None:
-        user.war_points = getattr(user, "war_points", 0) + amount
+        user.war_points = max(0, getattr(user, "war_points", 0) + amount)
         await session.flush()
 
     async def give_donate(self, session: AsyncSession, user: User, amount: int) -> None:
-        user.nh_donate = getattr(user, "nh_donate", 0) + amount
+        user.nh_donate = max(0, getattr(user, "nh_donate", 0) + amount)
         await session.flush()
 
     async def give_squad_member(self, session: AsyncSession, user: User, rank: str, count: int = 1) -> dict:

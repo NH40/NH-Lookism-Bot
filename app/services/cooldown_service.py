@@ -131,6 +131,25 @@ class CooldownService:
         return f"lock:emperor_challenge:{user_id}"
 
     @staticmethod
+    def emperor_challenge_progress_key(king_id: int, emperor_id: int) -> str:
+        """Счёт побед подряд: Король атакует Императора за трон Империи."""
+        return f"progress:emp_challenge:{king_id}:{emperor_id}"
+
+    @staticmethod
+    def emperor_defend_key(emperor_id: int) -> str:
+        """КД Императора на атаку конкретного готового-к-вызову Короля (симметрично challenge_key)."""
+        return f"cd:emperor_defend:{emperor_id}"
+
+    @staticmethod
+    def emperor_defend_lock_key(emperor_id: int) -> str:
+        return f"lock:emperor_defend:{emperor_id}"
+
+    @staticmethod
+    def emperor_defend_progress_key(emperor_id: int, king_id: int) -> str:
+        """Счёт побед подряд: Император атакует Короля, чтобы сбить угрозу трону."""
+        return f"progress:emp_defend:{emperor_id}:{king_id}"
+
+    @staticmethod
     def raid_lock_key(user_id: int) -> str:
         return f"lock:raid:{user_id}"
 

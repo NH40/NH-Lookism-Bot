@@ -16,6 +16,7 @@ from app.constants.emperor import (
 from app.utils.formatters import fmt_num, fmt_ttl
 from app.utils.menu_media import safe_edit
 from app.utils.truce import truce_button_label
+from app.utils.keyboards.common import back_kb
 
 router = Router()
 
@@ -396,31 +397,102 @@ async def cb_emperor_kings_list(cb: CallbackQuery, session: AsyncSession, user: 
 
     from app.data.cities import DEFAULT_COUNTRY
     from app.services.game_service import game_service
+    from app.services.cooldown_service import cooldown_service
+    from app.config.game_balance import EMPEROR_CHALLENGE_ROUNDS_TO_WIN
+    from app.utils.truce import is_truce_active
+
     country = user.country or DEFAULT_COUNTRY
     kings = await game_service.get_kings_conquest_progress(session, country)
 
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="emperor_gangs"))
+    lines: list[str] = []
 
     if not kings:
-        lines = ["В твоей стране нет Королей."]
+        lines.append("В твоей стране нет Королей.")
     else:
-        lines = []
         for k in kings[:15]:
             pct = int(k["cities"] * 100 / k["total_cities"]) if k["total_cities"] else 0
-            threat = "🔴" if k["cities"] >= k["total_cities"] else "⚪"
+            is_threat = k["cities"] >= k["total_cities"]
+            threat = "🔴" if is_threat else "⚪"
             lines.append(
                 f"{threat} <b>{k['name']}</b> | 💪 {fmt_num(k['combat_power'])} | "
                 f"🏙 {k['cities']}/{k['total_cities']} ({pct}%)"
             )
+            if not is_threat:
+                continue
+            king_obj = await session.get(User, k["id"])
+            if king_obj and is_truce_active(king_obj):
+                builder.row(InlineKeyboardButton(
+                    text=f"🕊 {k['name']} (перемирие)", callback_data="noop"
+                ))
+                continue
+            progress_key = cooldown_service.emperor_defend_progress_key(user.id, k["id"])
+            wins = int(await cooldown_service.redis.get(progress_key) or 0)
+            round_str = f" [{wins}/{EMPEROR_CHALLENGE_ROUNDS_TO_WIN}]" if wins else ""
+            builder.row(InlineKeyboardButton(
+                text=f"⚔️ Атаковать {k['name']}{round_str}",
+                callback_data=f"emperor_defend_attack:{k['id']}",
+            ))
+
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="emperor_gangs"))
 
     await safe_edit(
         cb,
         "👑 <b>Короли твоей страны</b>\n\n"
-        "🔴 — захватил всю страну, может бросить тебе вызов за трон.\n\n"
+        "🔴 — захватил всю страну, готов бросить тебе вызов за трон — можешь ударить первым.\n"
+        f"Нужно {EMPEROR_CHALLENGE_ROUNDS_TO_WIN} победы подряд (раз в час), поражение сбрасывает счёт.\n\n"
         + "\n".join(lines),
         builder.as_markup(),
     )
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("emperor_defend_attack:"))
+async def cb_emperor_defend_attack(cb: CallbackQuery, session: AsyncSession, user: User):
+    king_id = int(cb.data.split(":")[1])
+    from app.services.cooldown_service import cooldown_service
+    from app.services.game_service import game_service
+    import html
+
+    lock_key = cooldown_service.emperor_defend_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
+        await cb.answer("⏳ Атака уже обрабатывается", show_alert=True)
+        return
+
+    try:
+        result = await game_service.challenge_king(session, user, king_id)
+        await session.commit()
+    finally:
+        await cooldown_service.release_lock(lock_key)
+
+    if not result["ok"]:
+        await cb.answer(result.get("reason", "Ошибка"), show_alert=True)
+        return
+
+    if result.get("king_destroyed"):
+        await safe_edit(cb, f"🎉 {html.escape(result['message'])}", back_kb("main_menu"))
+        await cb.answer()
+        return
+
+    crit_str = " ⚡КРИТ!" if result.get("is_crit") else ""
+    if result["win"]:
+        text = (
+            f"✅ <b>Победа в раунде!{crit_str}</b>\n\n"
+            f"Противник: {html.escape(result['defender_name'])}\n"
+            f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
+            f"⚔️ Его мощь: {fmt_num(result['defender_power'])}\n\n"
+            f"Счёт побед: {result['rounds_won']}/{result['rounds_needed']} — "
+            f"побеждай подряд, поражение сбросит счёт."
+        )
+    else:
+        text = (
+            f"❌ <b>Поражение!</b>\n\n"
+            f"Противник: {html.escape(result['defender_name'])}\n"
+            f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
+            f"⚔️ Его мощь: {fmt_num(result['defender_power'])}\n\n"
+            f"Счёт побед сброшен в 0."
+        )
+    await safe_edit(cb, text, back_kb("emperor_kings_list"))
     await cb.answer()
 
 

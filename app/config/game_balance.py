@@ -216,4 +216,5 @@ EMPEROR_PVP_CD_SECONDS: int = 3600
 EMPEROR_PVP_STEAL_PERCENT: int = 30           # % денег победителю (не всё)
 CITY_TAX_PERCENT: int = 20                    # налог городу с чужим королём
 PVP_LOSER_CASUALTY_PERCENT: int = 50          # % своей мощи ДОПОЛНИТЕЛЬНО теряет защитник, если проиграл PvP (Банда/Король/Император)
-EMPEROR_CHALLENGE_CD_SECONDS: int = 3600      # вызов Императора страны (Король, захвативший всю страну) — раз в час
+EMPEROR_CHALLENGE_CD_SECONDS: int = 3600      # вызов трона Империи (в обе стороны: Король↔Император) — раз в час
+EMPEROR_CHALLENGE_ROUNDS_TO_WIN: int = 3      # серия побед подряд нужна для полного свержения; поражение раунда сбрасывает счёт в 0

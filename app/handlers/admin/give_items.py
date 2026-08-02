@@ -163,7 +163,8 @@ async def cb_adm_cgq(cb: CallbackQuery, user: User, state: FSMContext):
     lbl = LEVEL_LABELS.get(level, f"Ур.{level}")
     try:
         await cb.message.edit_text(
-            f"✅ <b>Выдать карточку</b>\n👤 {char_data['name']} [{lbl}]\n\nВведите количество (1-100):",
+            f"✅ <b>Выдать карточку</b>\n👤 {char_data['name']} [{lbl}]\n\n"
+            f"Введите количество от -100 до 100 (отрицательное — забрать):",
             reply_markup=back_kb(f"adm_cards_menu:{tg_id}"), parse_mode="HTML",
         )
     except Exception:
@@ -178,9 +179,9 @@ async def msg_adm_card_give_qty(message: Message, session: AsyncSession, user: U
     await state.clear()
     try:
         qty = int(message.text.strip())
-        assert 1 <= qty <= 100
+        assert -100 <= qty <= 100 and qty != 0
     except (ValueError, AssertionError):
-        await message.answer("Введите число от 1 до 100")
+        await message.answer("Введите ненулевое число от -100 до 100")
         return
     tg_id = data["card_give_tg_id"]
     level = data["card_give_level"]
@@ -200,22 +201,42 @@ async def msg_adm_card_give_qty(message: Message, session: AsyncSession, user: U
         await message.answer("❌ Игрок не найден")
         return
     from app.constants.cards import LEVEL_MULTIPLIERS, LEVEL_LABELS
-    base_power = char_data["power"]
-    eff_power = int(base_power * LEVEL_MULTIPLIERS[level])
-    for _ in range(qty):
-        session.add(UserCharacter(
-            user_id=found.id, character_id=char_data["name"], rank=char_data["rank"],
-            base_power=base_power, power=eff_power, level=level,
-        ))
-    await session.flush()
-    from app.repositories.squad_repo import squad_repo
-    await squad_repo.update_user_combat_power(session, found)
-    await session.commit()
     lbl = LEVEL_LABELS.get(level, f"Ур.{level}")
-    await message.answer(
-        f"✅ Выдано {qty} × {char_data['name']} [{lbl}] игроку {html.escape(found.full_name)}",
-        parse_mode="HTML",
-    )
+
+    if qty > 0:
+        base_power = char_data["power"]
+        eff_power = int(base_power * LEVEL_MULTIPLIERS[level])
+        for _ in range(qty):
+            session.add(UserCharacter(
+                user_id=found.id, character_id=char_data["name"], rank=char_data["rank"],
+                base_power=base_power, power=eff_power, level=level,
+            ))
+        await session.flush()
+        from app.repositories.squad_repo import squad_repo
+        await squad_repo.update_user_combat_power(session, found)
+        await session.commit()
+        await message.answer(
+            f"✅ Выдано {qty} × {char_data['name']} [{lbl}] игроку {html.escape(found.full_name)}",
+            parse_mode="HTML",
+        )
+    else:
+        cards = (await session.execute(
+            select(UserCharacter).where(
+                UserCharacter.user_id == found.id,
+                UserCharacter.character_id == char_data["name"],
+                UserCharacter.level == level,
+            ).limit(-qty)
+        )).scalars().all()
+        for c in cards:
+            await session.delete(c)
+        await session.flush()
+        from app.repositories.squad_repo import squad_repo
+        await squad_repo.update_user_combat_power(session, found)
+        await session.commit()
+        await message.answer(
+            f"✅ Забрано {len(cards)} × {char_data['name']} [{lbl}] у {html.escape(found.full_name)}",
+            parse_mode="HTML",
+        )
     await _show_user_card(message, session, found)
 
 
@@ -412,7 +433,8 @@ async def cb_adm_give_squad(cb: CallbackQuery, user: User, state: FSMContext):
     rank_label = f"{rank_cfg.emoji} {rank}" if rank_cfg else rank
     try:
         await cb.message.edit_text(
-            f"👥 Введите количество статистов {rank_label} для выдачи:",
+            f"👥 Введите количество статистов {rank_label} для выдачи "
+            f"(отрицательное число — забрать):",
             reply_markup=back_kb(f"adm_squads:{tg_id}"),
         )
     except Exception:
@@ -429,10 +451,10 @@ async def msg_adm_give_squad(message: Message, session: AsyncSession, user: User
     await state.clear()
     try:
         count = int(message.text.strip())
-        if count <= 0:
+        if count == 0:
             raise ValueError
     except ValueError:
-        await message.answer("Введите положительное число")
+        await message.answer("Введите ненулевое число (отрицательное — забрать)")
         return
     found = await admin_service.find_user(session, str(tg_id))
     if not found:
@@ -440,8 +462,9 @@ async def msg_adm_give_squad(message: Message, session: AsyncSession, user: User
         return
     result = await admin_service.give_squad_member(session, found, rank, count)
     if result["ok"]:
+        verb = "Выдано" if count > 0 else "Забрано"
         await message.answer(
-            f"✅ Выдано {count} статистов {rank} игроку {html.escape(found.full_name)}",
+            f"✅ {verb} {abs(count)} статистов {rank} игроку {html.escape(found.full_name)}",
             parse_mode="HTML",
         )
         await _show_user_card(message, session, found)
@@ -700,7 +723,8 @@ async def cb_adm_give_dust(cb: CallbackQuery, user: User, state: FSMContext):
     await state.update_data(dust_target_tg_id=tg_id)
     try:
         await cb.message.edit_text(
-            "💎 <b>Выдать пыль</b>\n\nВведи количество пыли (1-9999999):",
+            "💎 <b>Выдать пыль</b>\n\nВведи количество пыли от -9999999 до 9999999 "
+            "(отрицательное — забрать):",
             reply_markup=back_kb("admin_main"), parse_mode="HTML",
         )
     except Exception:
@@ -713,9 +737,9 @@ async def msg_admin_dust_amount(message: Message, session: AsyncSession, user: U
         return
     try:
         amount = int(message.text.strip())
-        assert 1 <= amount <= 9_999_999
+        assert -9_999_999 <= amount <= 9_999_999 and amount != 0
     except (ValueError, AssertionError):
-        await message.answer("❌ Введи число от 1 до 9999999:")
+        await message.answer("❌ Введи ненулевое число от -9999999 до 9999999:")
         return
     data = await state.get_data()
     await state.clear()
@@ -723,11 +747,12 @@ async def msg_admin_dust_amount(message: Message, session: AsyncSession, user: U
     if not found:
         await message.answer("❌ Игрок не найден", reply_markup=back_kb("admin_main"))
         return
-    found.card_dust = (found.card_dust or 0) + amount
+    found.card_dust = max(0, (found.card_dust or 0) + amount)
     await session.commit()
+    sign = "+" if amount > 0 else ""
     await message.answer(
-        f"✅ Пыль выдана!\n\n👤 {html.escape(found.full_name)}\n"
-        f"💎 +{fmt_num(amount)} пыли\nИтого: {fmt_num(found.card_dust)}",
+        f"✅ Пыль изменена!\n\n👤 {html.escape(found.full_name)}\n"
+        f"💎 {sign}{fmt_num(amount)} пыли\nИтого: {fmt_num(found.card_dust)}",
         reply_markup=back_kb("admin_main"), parse_mode="HTML",
     )
 

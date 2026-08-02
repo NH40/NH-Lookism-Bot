@@ -253,27 +253,83 @@ class VassalMixin:
         result.sort(key=lambda r: r["cities"], reverse=True)
         return result
 
-    async def _demote_emperor_to_king(self, session: AsyncSession, emperor: User) -> None:
-        """Проигранный вызов трона Императора: теряет ВСЕ свои города (трон
-        каждого из них освобождается), возвращается на этап Короля с нуля
-        городов. В отличие от _destroy_king это НЕ полный сброс банды/
-        престижа — только откат фазы и владений."""
+    async def _demote_to_gang(self, session: AsyncSession, user: User) -> None:
+        """Полное поражение в серии вызовов за трон Империи (в любую сторону,
+        3 победы подряд соперника) — теряет ВСЕ города/трон, откатывается на
+        этап Банды с нуля (заново выбирает страну и город). НЕ трогает
+        статистов/карточки/монеты/навыки — в отличие от _destroy_king это НЕ
+        полный сброс прогресса, только владения и фаза."""
         await session.execute(
-            sql_update(City).where(City.owner_id == emperor.id).values(owner_id=None)
+            sql_update(City).where(City.owner_id == user.id).values(owner_id=None)
         )
-        emperor.phase = "king"
-        emperor.king_cities_count = 0
-        emperor.extra_attack_count = await self._get_max_extra_attacks_async(session, emperor)
+        await self._release_vassals_of(session, user.id)
+        user.phase = "gang"
+        user.country = None
+        user.sector = None
+        user.gang_city_id = None
+        user.king_cities_count = 0
+        user.suzerain_id = None
+        user.city_tax_percent = 0
+        user.city_tax_recipient_id = None
+        user.extra_attack_count = 0
         await session.flush()
+        from app.services.business_service import business_service
+        await business_service._recalc_income(session, user, recalc_tax=True)
+
+    async def _resolve_throne_challenge(
+        self, session: AsyncSession, attacker: User, defender: User,
+        progress_key: str, cd_key: str,
+    ) -> dict:
+        """Общая логика для challenge_emperor/challenge_king — один раунд боя
+        за трон Империи (см. game_balance.EMPEROR_CHALLENGE_ROUNDS_TO_WIN).
+        Побеждает серией из N побед ПОДРЯД — поражение любого раунда сбрасывает
+        счёт этой пары в 0 (нужно начинать серию заново)."""
+        from app.services.cooldown_service import cooldown_service
+        from app.config.game_balance import EMPEROR_CHALLENGE_CD_SECONDS, EMPEROR_CHALLENGE_ROUNDS_TO_WIN
+        from app.services.combat_service import fight_player
+        from app.services.game.utils import notify_pvp_attack
+
+        result = await fight_player(session, attacker, defender)
+        await cooldown_service.set_cooldown(cd_key, EMPEROR_CHALLENGE_CD_SECONDS)
+
+        if result["win"]:
+            wins = await cooldown_service.redis.incr(progress_key)
+            final = wins >= EMPEROR_CHALLENGE_ROUNDS_TO_WIN
+            if final:
+                await cooldown_service.redis.delete(progress_key)
+            await notify_pvp_attack(
+                attacker, defender, True, "emperor_challenge",
+                result["attacker_power"], result["defender_power"],
+            )
+            await session.flush()
+            return {
+                "ok": True, "win": True, "final": final,
+                "rounds_won": wins, "rounds_needed": EMPEROR_CHALLENGE_ROUNDS_TO_WIN,
+                "attacker_power": result["attacker_power"], "defender_power": result["defender_power"],
+                "defender_name": defender.full_name,
+            }
+
+        await cooldown_service.redis.delete(progress_key)
+        await notify_pvp_attack(
+            attacker, defender, False, "emperor_challenge",
+            result["attacker_power"], result["defender_power"],
+        )
+        await session.flush()
+        return {
+            "ok": True, "win": False, "final": False,
+            "rounds_won": 0, "rounds_needed": EMPEROR_CHALLENGE_ROUNDS_TO_WIN,
+            "attacker_power": result["attacker_power"], "defender_power": result["defender_power"],
+            "defender_name": defender.full_name,
+        }
 
     async def challenge_emperor(
         self, session: AsyncSession, king: User, emperor_id: int
     ) -> dict:
         """Король, захвативший все города своей страны (сам + вассалы),
         бросает вызов действующему Императору этой страны за его трон.
-        Победа — Император теряет все города и откатывается до Короля,
-        победитель сам занимает Императорский трон. Поражение — ничего не
-        меняется, кроме КД."""
+        Нужно выиграть EMPEROR_CHALLENGE_ROUNDS_TO_WIN раз ПОДРЯД (раз в час
+        за попытку) — поражение раунда сбрасывает счёт. На решающей победе
+        Император теряет всё и уходит на этап Банды, победитель занимает трон."""
         if king.phase != "king":
             return {"ok": False, "reason": "Только для фазы Короля"}
         from app.utils.truce import is_truce_active
@@ -294,41 +350,65 @@ class VassalMixin:
             return {"ok": False, "reason": f"{emperor.full_name} находится под перемирием"}
 
         from app.services.cooldown_service import cooldown_service
-        from app.config.game_balance import EMPEROR_CHALLENGE_CD_SECONDS
         cd_key = cooldown_service.emperor_challenge_key(king.id)
         if await cooldown_service.is_on_cooldown(cd_key):
             ttl = await cooldown_service.get_ttl(cd_key)
             return {"ok": False, "reason": f"КД: {cooldown_service.format_ttl(ttl)}", "cd": ttl}
 
-        from app.services.combat_service import fight_player
-        from app.services.game.utils import notify_pvp_attack
-        result = await fight_player(session, king, emperor)
-        await cooldown_service.set_cooldown(cd_key, EMPEROR_CHALLENGE_CD_SECONDS)
+        progress_key = cooldown_service.emperor_challenge_progress_key(king.id, emperor.id)
+        result = await self._resolve_throne_challenge(session, king, emperor, progress_key, cd_key)
 
-        if result["win"]:
-            await self._demote_emperor_to_king(session, emperor)
+        if result["win"] and result["final"]:
+            await self._demote_to_gang(session, emperor)
             promo = await self._promote_to_emperor(session, king)
-            await notify_pvp_attack(
-                king, emperor, True, "emperor_challenge",
-                result["attacker_power"], result["defender_power"],
+            result["promoted"] = True
+            result["message"] = (
+                f"👑 Ты победил Императора {emperor.full_name} в решающем "
+                f"{result['rounds_needed']}/{result['rounds_needed']} раунде и занял его трон!\n\n"
+                f"{promo['message']}"
             )
-            await session.flush()
-            return {
-                "ok": True, "win": True, "promoted": True,
-                "message": (
-                    f"👑 Вы победили Императора {emperor.full_name} и заняли его "
-                    f"трон!\n\n{promo['message']}"
-                ),
-            }
+        return result
 
-        await notify_pvp_attack(
-            king, emperor, False, "emperor_challenge",
-            result["attacker_power"], result["defender_power"],
-        )
-        await session.flush()
-        return {
-            "ok": True, "win": False,
-            "attacker_power": result["attacker_power"],
-            "defender_power": result["defender_power"],
-            "defender_name": emperor.full_name,
-        }
+    async def challenge_king(
+        self, session: AsyncSession, emperor: User, king_id: int
+    ) -> dict:
+        """Симметричное действие: Император атаковает Короля своей страны,
+        который уже готов бросить ему вызов (захватил всю страну), чтобы
+        сбить угрозу трону раньше, чем тот успеет ударить первым. Та же
+        серия из N побед подряд — на решающей победе Король теряет всё и
+        уходит на этап Банды."""
+        if emperor.phase != "emperor":
+            return {"ok": False, "reason": "Только для фазы Императора"}
+        from app.utils.truce import is_truce_active
+        if is_truce_active(emperor):
+            return {"ok": False, "reason": "Во время перемирия нельзя атаковать"}
+
+        from app.repositories.user_repo import user_repo
+        king = await user_repo.get_by_id(session, king_id)
+        if not king or king.phase != "king":
+            return {"ok": False, "reason": "Король не найден"}
+        from app.data.cities import DEFAULT_COUNTRY
+        if (king.country or DEFAULT_COUNTRY) != (emperor.country or DEFAULT_COUNTRY):
+            return {"ok": False, "reason": "Можно атаковать только Короля своей страны"}
+        if not await self._is_emperor_eligible(session, king):
+            return {"ok": False, "reason": "Этот Король ещё не готов бросить тебе вызов"}
+        if is_truce_active(king):
+            return {"ok": False, "reason": f"{king.full_name} находится под перемирием"}
+
+        from app.services.cooldown_service import cooldown_service
+        cd_key = cooldown_service.emperor_defend_key(emperor.id)
+        if await cooldown_service.is_on_cooldown(cd_key):
+            ttl = await cooldown_service.get_ttl(cd_key)
+            return {"ok": False, "reason": f"КД: {cooldown_service.format_ttl(ttl)}", "cd": ttl}
+
+        progress_key = cooldown_service.emperor_defend_progress_key(emperor.id, king.id)
+        result = await self._resolve_throne_challenge(session, emperor, king, progress_key, cd_key)
+
+        if result["win"] and result["final"]:
+            await self._demote_to_gang(session, king)
+            result["king_destroyed"] = True
+            result["message"] = (
+                f"👑 Ты в решающем {result['rounds_needed']}/{result['rounds_needed']} раунде "
+                f"победил {king.full_name} — он потерял все города и вернулся на этап Банды!"
+            )
+        return result

@@ -22,11 +22,11 @@ class AdminBaseService:
         return r.scalar_one_or_none()
 
     async def give_coins(self, session: AsyncSession, user: User, amount: int) -> None:
-        user.nh_coins += amount
+        user.nh_coins = max(0, user.nh_coins + amount)
         await session.flush()
 
     async def give_tickets(self, session: AsyncSession, user: User, count: int) -> None:
-        user.tickets += count
+        user.tickets = max(0, user.tickets + count)
         await session.flush()
 
     async def give_tui(self, session: AsyncSession, user: User) -> None:

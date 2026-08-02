@@ -699,9 +699,13 @@ async def cb_emperor_challenge_list(cb: CallbackQuery, session: AsyncSession, us
         await cb.answer("В твоей стране больше нет Императора", show_alert=True)
         return
 
+    from app.config.game_balance import EMPEROR_CHALLENGE_ROUNDS_TO_WIN
     builder = InlineKeyboardBuilder()
     for e in emperors:
         power = clamp_enemy_power(int(e.combat_power), user.combat_power)
+        progress_key = cooldown_service.emperor_challenge_progress_key(user.id, e.id)
+        wins = int(await cooldown_service.redis.get(progress_key) or 0)
+        round_str = f" [{wins}/{EMPEROR_CHALLENGE_ROUNDS_TO_WIN}]" if wins else ""
         if is_truce_active(e):
             builder.row(InlineKeyboardButton(
                 text=f"🕊 {e.full_name} | 💪 {fmt_num(power)} (перемирие)",
@@ -709,7 +713,7 @@ async def cb_emperor_challenge_list(cb: CallbackQuery, session: AsyncSession, us
             ))
         else:
             builder.row(InlineKeyboardButton(
-                text=f"⚔️ {e.full_name} | 💪 {fmt_num(power)}",
+                text=f"⚔️ {e.full_name} | 💪 {fmt_num(power)}{round_str}",
                 callback_data=f"emperor_challenge_attack:{e.id}"
             ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="attack"))
@@ -717,10 +721,11 @@ async def cb_emperor_challenge_list(cb: CallbackQuery, session: AsyncSession, us
     await send_menu(
         cb,
         "🏆 <b>Вызов Императору страны</b>\n\n"
-        "Победишь — займёшь его трон и станешь Императором, а он потеряет "
-        "все города и вернётся на этап Короля с нуля.\n"
-        "Проиграешь — ничего не изменится, кроме КД.\n"
-        "Вызов раз в час, только внутри своей страны.\n\n"
+        f"Нужно победить {EMPEROR_CHALLENGE_ROUNDS_TO_WIN} раза ПОДРЯД (раз в час за попытку) — "
+        f"поражение сбрасывает счёт побед в 0, придётся начинать серию заново.\n"
+        f"На решающей победе — займёшь трон и станешь Императором, а он потеряет "
+        f"все города и вернётся на этап Банды (прокачка не теряется).\n"
+        "Вызов только внутри своей страны.\n\n"
         f"💪 Твоя мощь: {fmt_num(user.combat_power)}",
         builder.as_markup(),
     )
@@ -750,11 +755,22 @@ async def cb_emperor_challenge_attack(cb: CallbackQuery, session: AsyncSession, 
         await send_menu(cb, f"🎉 {html.escape(result['message'])}", back_kb("main_menu"))
         return
 
-    text = (
-        f"❌ <b>Поражение!</b>\n\n"
-        f"Противник: {html.escape(result['defender_name'])}\n"
-        f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
-        f"⚔️ Его мощь: {fmt_num(result['defender_power'])}\n\n"
-        f"Трон остался за прежним Императором."
-    )
+    crit_str = " ⚡КРИТ!" if result.get("is_crit") else ""
+    if result["win"]:
+        text = (
+            f"✅ <b>Победа в раунде!{crit_str}</b>\n\n"
+            f"Противник: {html.escape(result['defender_name'])}\n"
+            f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
+            f"⚔️ Его мощь: {fmt_num(result['defender_power'])}\n\n"
+            f"Счёт побед: {result['rounds_won']}/{result['rounds_needed']} — "
+            f"побеждай подряд, поражение сбросит счёт."
+        )
+    else:
+        text = (
+            f"❌ <b>Поражение!</b>\n\n"
+            f"Противник: {html.escape(result['defender_name'])}\n"
+            f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
+            f"⚔️ Его мощь: {fmt_num(result['defender_power'])}\n\n"
+            f"Счёт побед сброшен в 0 — трон остался за прежним Императором."
+        )
     await send_menu(cb, text, back_kb("attack"))

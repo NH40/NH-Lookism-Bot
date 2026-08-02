@@ -118,6 +118,21 @@ async def build_king_menu(session, user, page: int = 0):
             cid = city.id
             row = counts.get(cid)
             my_count_all = (row.my_count if row else 0) or 0
+            free_count_all = (row.free_count if row else 0) or 0
+            not_mine_all = (row.not_mine if row else 0) or 0
+            # Строки District могут существовать не для ВСЕХ total_districts —
+            # если исторически город недоинициализирован (реальный кейс:
+            # city_id 17869 имел только 30 строк District при total_districts=32),
+            # my/free/not_mine посчитанные ТОЛЬКО по существующим строкам могут
+            # давать 0/0/0 (город выглядит "полностью захваченным"), хотя на
+            # самом деле есть ещё непроинициализированные районы — они появятся
+            # (свободными) как только кто-то попробует атаковать город и сработает
+            # самовосстанавливающийся city_repo.init_city_districts(). Считаем их
+            # как "есть что атаковать", иначе город навсегда пропадает из списка
+            # и самовосстановление никогда не запускается (баг: "трон не могу
+            # забрать именно в этом городе").
+            uninitialized = max(0, city.total_districts - (my_count_all + free_count_all + not_mine_all))
+
             # Все районы уже мои, но трон (City.owner_id) ещё не мой — трон
             # "завис" (владелец мог стать Императором/сменить страну уже
             # ПОСЛЕ того, как я стал 100%-владельцем районов, и с тех пор
@@ -125,7 +140,8 @@ async def build_king_menu(session, user, page: int = 0):
             # Не прячем такой город из списка — иначе трон не забрать никогда
             # (см. king_attack: там есть отдельная ветка "дожим трона").
             throne_unclaimed = my_count_all >= city.total_districts and city.owner_id != user.id
-            if row and (row.free_count or 0) == 0 and (row.not_mine or 0) == 0 and not throne_unclaimed:
+            has_attackable = free_count_all > 0 or not_mine_all > 0 or uninitialized > 0
+            if row and not has_attackable and not throne_unclaimed:
                 continue
 
             dominant_id = dominant_by_city.get(cid)
@@ -309,8 +325,14 @@ async def cb_king_city_info(cb: CallbackQuery, session: AsyncSession, user: User
     ) or 0
     if total_initialized == 0:
         free_count = city.total_districts
-    throne_unclaimed = free_count == 0 and not_mine == 0 and city.owner_id != user.id
-    if free_count == 0 and not_mine == 0 and not throne_unclaimed:
+    # Строки District могут существовать не для ВСЕХ total_districts (реальный
+    # кейс: город с total_districts=32 имел всего 30 строк) — такой пробел
+    # ведёт себя как "есть что атаковать", иначе город выглядит "100% моим"
+    # хотя настоящих 100% ещё нет (см. тот же фикс в build_king_menu).
+    uninitialized = max(0, city.total_districts - (my_in_city + free_count + not_mine))
+    throne_unclaimed = my_in_city >= city.total_districts and city.owner_id != user.id
+    has_attackable = free_count > 0 or not_mine > 0 or uninitialized > 0
+    if not has_attackable and not throne_unclaimed:
         await cb.answer("Все районы твои — нечего атаковать!", show_alert=True)
         return
 

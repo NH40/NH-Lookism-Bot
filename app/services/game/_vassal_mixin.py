@@ -147,10 +147,13 @@ class VassalMixin:
                 await self._recalc_city_tax(session, resident)
         await session.flush()
 
-    async def _count_ruled_cities(self, session: AsyncSession, user_id: int) -> int:
-        return await session.scalar(
-            select(func.count(City.id)).where(City.owner_id == user_id, City.phase == "gang")
-        ) or 0
+    async def _count_ruled_cities(
+        self, session: AsyncSession, user_id: int, country: str | None = None
+    ) -> int:
+        conditions = [City.owner_id == user_id, City.phase == "gang"]
+        if country is not None:
+            conditions.append(City.country == country)
+        return await session.scalar(select(func.count(City.id)).where(*conditions)) or 0
 
     async def _check_emperor_eligibility(self, session: AsyncSession, king: User) -> dict | None:
         """Король + его вассалы владеют ВСЕМИ gang-городами своей страны → Император."""
@@ -165,7 +168,14 @@ class VassalMixin:
         if total_country_cities == 0:
             return None
 
-        own = await self._count_ruled_cities(session, king.id)
+        # Считаем города СТРОГО в текущей стране игрока. City.owner_id
+        # никогда не очищается при пробуждении (Императоры навсегда сохраняют
+        # налог со старых городов, см. prestige_service._reset_progress) —
+        # без фильтра по стране трон-города из ПРЕДЫДУЩЕЙ жизни (другая
+        # страна) молча засчитывались бы в захват НОВОЙ страны, позволяя
+        # стать Императором почти сразу с 0-1 городом (баг 4: "можно стать
+        # Императором вообще без городов").
+        own = await self._count_ruled_cities(session, king.id, country=country)
         vassal_ids = (await session.execute(
             select(User.id).where(User.suzerain_id == king.id)
         )).scalars().all()
@@ -173,7 +183,7 @@ class VassalMixin:
         if vassal_ids:
             vassal_cities = await session.scalar(
                 select(func.count(City.id)).where(
-                    City.owner_id.in_(vassal_ids), City.phase == "gang"
+                    City.owner_id.in_(vassal_ids), City.country == country, City.phase == "gang"
                 )
             ) or 0
 

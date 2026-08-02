@@ -48,6 +48,13 @@ class GameKingChallengeService(GameBase):
                 if old_suzerain:
                     old_suzerain.vassal_count = max(0, old_suzerain.vassal_count - 1)
                     await business_service._recalc_income(session, old_suzerain)
+            # Атакующий мог сам быть вассалом защитника — освобождаем его
+            # ПЕРЕД тем, как защитник станет вассалом атакующего, иначе
+            # получается взаимный цикл (A вассал B и B вассал A одновременно,
+            # репро от тестера: "я вассал колумбины, колумбина мой вассал").
+            if attacker.suzerain_id == defender.id:
+                attacker.suzerain_id = None
+                defender.vassal_count = max(0, defender.vassal_count - 1)
             if defender.suzerain_id != attacker.id:
                 defender.suzerain_id = attacker.id
                 attacker.vassal_count += 1
@@ -55,7 +62,10 @@ class GameKingChallengeService(GameBase):
             await business_service._recalc_income(session, defender)
             await self._check_emperor_eligibility(session, attacker)
 
-        await notify_pvp_attack(attacker, defender, result["win"], "king_challenge")
+        await notify_pvp_attack(
+            attacker, defender, result["win"], "king_challenge",
+            result["attacker_power"], result["defender_power"],
+        )
         await session.flush()
 
         return {

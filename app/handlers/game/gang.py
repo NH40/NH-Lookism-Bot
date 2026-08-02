@@ -63,7 +63,8 @@ async def build_gang_menu(session, user, page: int = 0):
             king_str = ""
             if king:
                 has_kings = True
-                king_str = f" 👑{king.full_name} 💪{fmt_num(king.combat_power)}"
+                king_power = clamp_enemy_power(king.combat_power, user.combat_power)
+                king_str = f" 👑{king.full_name} 💪{fmt_num(king_power)}"
             builder.button(
                 text=f"🏙 {city.name} [{type_names.get(city.type_id, '?')}]{king_str}",
                 callback_data=f"choose_city:{city.id}"
@@ -224,6 +225,10 @@ async def cb_gang_attack_district(cb: CallbackQuery, session: AsyncSession, user
         await send_menu(cb, f"🎉 {result['message']}", back_kb("main_menu"))
         return
 
+    if result.get("title_lost"):
+        await send_menu(cb, f"💀 <b>{result['message']}</b>", back_kb("main_menu"))
+        return
+
     if result.get("destroyed"):
         await send_menu(cb, f"💀 <b>{result['message']}</b>", back_kb("main_menu"))
         return
@@ -278,6 +283,10 @@ async def cb_gang_pvp(cb: CallbackQuery, session: AsyncSession, user: User):
 
     if result.get("promoted"):
         await send_menu(cb, f"🎉 {result['message']}", back_kb("main_menu"))
+        return
+
+    if result.get("title_lost"):
+        await send_menu(cb, f"💀 <b>{result['message']}</b>", back_kb("main_menu"))
         return
 
     if not result["ok"]:

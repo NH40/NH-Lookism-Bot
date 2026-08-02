@@ -1,4 +1,3 @@
-import random
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.utils.formatters import fmt_num
@@ -17,19 +16,33 @@ _CARD_RANK_WEAKEST_FIRST = [
 ]
 
 
+_STAR_MULT = {1: 1.10, 2: 1.20, 3: 1.30, 4: 1.40, 5: 1.50}
+
+
+def _star_mult(stars: int) -> float:
+    return _STAR_MULT.get(stars, 1.0)
+
+
 async def apply_battle_casualties(
     session: AsyncSession, attacker: User, defender: User, attacker_won: bool
 ) -> dict:
     """Потери статистов и карточек в PvP-бою (патч 1.3.1: король/трон/император
     больше не уничтожает проигравшего целиком — оба участника платят цену).
 
+    Потери считаются ПО ВКЛАДУ В МОЩЬ, а не по количеству юнитов — иначе
+    атакующий с малым числом мощных бойцов гарантированно теряет 100% своего
+    состава против защитника с большой толпой слабых статистов, даже если
+    реальная боевая мощь атакующего в разы больше (баг патча 1.3.1, отчёт
+    владельца от 02.08.2026: "170 млрд мощи → 0" против втрое более слабой
+    цели). Слабейшие юниты (по рангу, затем по мощи) гибнут первыми.
+
     Правила зависят от РОЛИ, не суммируются друг с другом:
-      - Атакующий ВСЕГДА теряет 100% от количества защитника в каждой
-        категории (статисты/карточки), не больше собственного запаса —
-        независимо от исхода боя (даже проиграв, атакующий теряет ровно это,
-        никакого дополнительного штрафа сверху).
+      - Атакующий ВСЕГДА теряет долю СВОЕГО состава, равную
+        min(мощь_защитника / мощь_атакующего, 100%) — то есть его итоговая
+        боевая мощь падает ровно на мощь защитника, но не ниже нуля.
+        Действует независимо от исхода боя.
       - Защитник, если он ПРОИГРАЛ, ДОПОЛНИТЕЛЬНО теряет
-        PVP_LOSER_CASUALTY_PERCENT% своих собственных статистов/карточек.
+        PVP_LOSER_CASUALTY_PERCENT% СВОЕЙ ЖЕ мощи (не количества юнитов).
         Победивший защитник по этой функции не теряет ничего.
 
     Победитель/трофеи (районы, города, монеты) эта функция не трогает —
@@ -45,82 +58,106 @@ async def apply_battle_casualties(
         rows = (await session.execute(
             select(SquadMember).where(SquadMember.user_id == uid)
         )).scalars().all()
-        return rows, sum(r.count for r in rows)
+        total_power = sum(r.base_power * _star_mult(r.stars) * r.count for r in rows)
+        return rows, total_power
 
-    async def _kill_statists(rows: list, n: int) -> int:
-        if n <= 0:
+    async def _kill_statists_by_power(rows: list, power_budget: float) -> int:
+        if power_budget <= 0:
             return 0
         by_rank: dict[str, list] = {}
         for r in rows:
             by_rank.setdefault(r.rank, []).append(r)
+        for pool in by_rank.values():
+            pool.sort(key=lambda r: r.base_power * _star_mult(r.stars))
         killed = 0
+        remaining = power_budget
         for rank in _STATIST_RANK_WEAKEST_FIRST:
-            if killed >= n:
+            if remaining <= 0:
                 break
             for r in by_rank.get(rank, []):
-                if killed >= n:
+                if remaining <= 0:
                     break
-                take = min(r.count, n - killed)
+                unit_power = r.base_power * _star_mult(r.stars)
+                if unit_power <= 0:
+                    continue
+                row_power = unit_power * r.count
+                if row_power <= remaining:
+                    take = r.count
+                else:
+                    take = min(r.count, int(remaining // unit_power))
+                    if take <= 0:
+                        take = 1  # добираем хотя бы 1 юнит, чтобы не зависнуть на дробном остатке
                 r.count -= take
                 killed += take
+                remaining -= take * unit_power
                 if r.count <= 0:
                     await session.delete(r)
         return killed
 
-    async def _card_rows(uid: int) -> list[tuple[int, str]]:
+    async def _card_rows(uid: int) -> list[tuple[int, str, int]]:
         return list((await session.execute(
-            select(UserCharacter.id, UserCharacter.rank).where(UserCharacter.user_id == uid)
+            select(UserCharacter.id, UserCharacter.rank, UserCharacter.power).where(
+                UserCharacter.user_id == uid
+            )
         )).all())
 
-    async def _kill_cards(rows: list[tuple[int, str]], n: int) -> int:
-        if n <= 0 or not rows:
+    async def _kill_cards_by_power(rows: list[tuple[int, str, int]], power_budget: float) -> int:
+        if power_budget <= 0 or not rows:
             return 0
-        by_rank: dict[str, list[int]] = {}
-        for cid, rank in rows:
-            by_rank.setdefault(rank, []).append(cid)
+        by_rank: dict[str, list[tuple[int, int]]] = {}
+        for cid, rank, power in rows:
+            by_rank.setdefault(rank, []).append((cid, power))
         chosen: list[int] = []
-        remaining = n
+        remaining = power_budget
         for rank in _CARD_RANK_WEAKEST_FIRST:
             if remaining <= 0:
                 break
-            pool = by_rank.pop(rank, [])
-            if not pool:
-                continue
-            take = min(len(pool), remaining)
-            chosen.extend(random.sample(pool, take))
-            remaining -= take
+            pool = sorted(by_rank.pop(rank, []), key=lambda x: x[1])
+            for cid, power in pool:
+                if remaining <= 0:
+                    break
+                chosen.append(cid)
+                remaining -= power
         if remaining > 0 and by_rank:
             # Ранг вне списка (новый/неизвестный) — добираем что осталось.
-            leftover = [cid for pool in by_rank.values() for cid in pool]
-            take = min(len(leftover), remaining)
-            chosen.extend(random.sample(leftover, take))
+            leftover = sorted(
+                (cp for pool in by_rank.values() for cp in pool), key=lambda x: x[1]
+            )
+            for cid, power in leftover:
+                if remaining <= 0:
+                    break
+                chosen.append(cid)
+                remaining -= power
         if not chosen:
             return 0
         await session.execute(sql_delete(UserDeck).where(UserDeck.char_id.in_(chosen)))
         await session.execute(sql_delete(UserCharacter).where(UserCharacter.id.in_(chosen)))
         return len(chosen)
 
-    def _loser_pct(total: int) -> int:
-        if total <= 0:
-            return 0
-        return max(1, round(total * PVP_LOSER_CASUALTY_PERCENT / 100))
-
-    atk_rows, atk_total = await _statist_rows(attacker.id)
-    def_rows, def_total = await _statist_rows(defender.id)
+    atk_rows, atk_squad_power = await _statist_rows(attacker.id)
+    def_rows, def_squad_power = await _statist_rows(defender.id)
     atk_cards = await _card_rows(attacker.id)
     def_cards = await _card_rows(defender.id)
+    atk_card_power = sum(p for _, _, p in atk_cards)
+    def_card_power = sum(p for _, _, p in def_cards)
 
-    # Атакующий: 100% от количества защитника, не больше своего запаса —
-    # всегда, независимо от исхода.
-    atk_statists_lost = await _kill_statists(atk_rows, min(atk_total, def_total))
-    atk_cards_lost = await _kill_cards(atk_cards, min(len(atk_cards), len(def_cards)))
+    atk_total_power = atk_squad_power + atk_card_power
+    def_total_power = def_squad_power + def_card_power
 
-    # Защитник: доп. 60% своих, только если проиграл.
+    # Атакующий: его итоговая мощь падает ровно на мощь защитника (не ниже
+    # нуля) — реализуем как единую долю мощи, снятую равномерно с обеих
+    # категорий его состава, независимо от исхода боя.
+    atk_fraction = min(def_total_power / atk_total_power, 1.0) if atk_total_power > 0 else 0.0
+    atk_statists_lost = await _kill_statists_by_power(atk_rows, atk_squad_power * atk_fraction)
+    atk_cards_lost = await _kill_cards_by_power(atk_cards, atk_card_power * atk_fraction)
+
+    # Защитник: доп. PVP_LOSER_CASUALTY_PERCENT% своей же мощи, только если проиграл.
     def_statists_lost = 0
     def_cards_lost = 0
     if attacker_won:
-        def_statists_lost = await _kill_statists(def_rows, _loser_pct(def_total))
-        def_cards_lost = await _kill_cards(def_cards, _loser_pct(len(def_cards)))
+        def_fraction = PVP_LOSER_CASUALTY_PERCENT / 100
+        def_statists_lost = await _kill_statists_by_power(def_rows, def_squad_power * def_fraction)
+        def_cards_lost = await _kill_cards_by_power(def_cards, def_card_power * def_fraction)
 
     await session.flush()
     await squad_repo.update_user_combat_power(session, attacker)
@@ -134,8 +171,15 @@ async def apply_battle_casualties(
 
 async def notify_pvp_attack(
     attacker: User, defender: User,
-    win: bool, phase: str
+    win: bool, phase: str,
+    attacker_power: int | None = None, defender_power: int | None = None,
 ) -> None:
+    """attacker_power/defender_power — сила НА МОМЕНТ БОЯ (result["attacker_power"]/
+    ["defender_power"] из fight_player). Передавать явно там, где после боя
+    вызывается apply_battle_casualties — она мутирует combat_power ДО этого
+    уведомления, поэтому чтение .combat_power здесь показывало бы игроку
+    уже урезанную посмертную мощь атакующего вместо той, что реально решила
+    бой (баг: "Его мощь: 0" у реального победившего игрока)."""
     try:
         if not defender.notifications_enabled or not getattr(defender, "notif_pvp", True):
             return
@@ -143,6 +187,8 @@ async def notify_pvp_attack(
         bot = get_bot()
         if not bot:
             return
+        atk_power = attacker.combat_power if attacker_power is None else attacker_power
+        def_power = defender.combat_power if defender_power is None else defender_power
         phase_names = {
             "gang": "банды", "king": "королей",
             "king_challenge": "за трон", "emperor_pvp": "императоров",
@@ -153,16 +199,16 @@ async def notify_pvp_attack(
                 f"⚔️ <b>На вас напали!</b>\n\n"
                 f"<b>{attacker.full_name}</b> атаковал вас "
                 f"в PvP {phase_str} и победил!\n\n"
-                f"💪 Его мощь: {fmt_num(attacker.combat_power)}\n"
-                f"⚔️ Ваша мощь: {fmt_num(defender.combat_power)}"
+                f"💪 Его мощь: {fmt_num(atk_power)}\n"
+                f"⚔️ Ваша мощь: {fmt_num(def_power)}"
             )
         else:
             text = (
                 f"🛡 <b>Атака отражена!</b>\n\n"
                 f"<b>{attacker.full_name}</b> атаковал вас "
                 f"в PvP {phase_str} и проиграл!\n\n"
-                f"💪 Его мощь: {fmt_num(attacker.combat_power)}\n"
-                f"⚔️ Ваша мощь: {fmt_num(defender.combat_power)}"
+                f"💪 Его мощь: {fmt_num(atk_power)}\n"
+                f"⚔️ Ваша мощь: {fmt_num(def_power)}"
             )
         await bot.send_message(defender.tg_id, text, parse_mode="HTML")
     except Exception:

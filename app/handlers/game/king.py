@@ -131,7 +131,7 @@ async def build_king_menu(session, user, page: int = 0):
                 continue
 
             if defender and defender.phase == "king":
-                def_power = int(defender.combat_power or 0)
+                def_power = clamp_enemy_power(int(defender.combat_power or 0), user.combat_power)
                 can = "✅" if user.combat_power >= def_power else "❌"
                 def_str = f"👤 {can} {fmt_num(def_power)}"
             else:

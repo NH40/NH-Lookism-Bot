@@ -55,13 +55,9 @@ class PromotionsMixin:
     async def _promote_to_king(
         self, session: AsyncSession, user: User, city
     ) -> dict:
-        user.phase = "king"
-        user.king_cities_count = 1
-        user.extra_attack_count = await self._get_max_extra_attacks_async(session, user)
         from sqlalchemy import delete as sql_delete, update as sql_update
         from app.models.king_bot import KingBot
         from app.models.city import District
-        await session.execute(sql_delete(KingBot).where(KingBot.user_id == user.id))
 
         # Город мог уже принадлежать другому королю (он освободил районы,
         # когда сам получил корону/дорос до Императора, но трон — City.owner_id —
@@ -70,10 +66,11 @@ class PromotionsMixin:
         # уже действующего короля. Если city.owner_id пуст — это первый
         # король этого города, трон достаётся без боя, как раньше.
         title_message = ""
+        became_king = True
         if city.owner_id and city.owner_id != user.id:
             from app.repositories.user_repo import user_repo
             reigning_king = await user_repo.get_by_id(session, city.owner_id)
-            if reigning_king:
+            if reigning_king and reigning_king.phase == "king":
                 from app.services.combat_service import fight_player
                 from app.services.game.utils import apply_battle_casualties
                 fight = await fight_player(session, user, reigning_king)
@@ -83,12 +80,30 @@ class PromotionsMixin:
                     await self._recalc_city_tax_for_city_residents(session, city.id)
                     title_message = "\n\n👑 Вы также выиграли битву за трон и забрали корону города!"
                 else:
+                    # Проиграли бой за трон — короны не получаем и НЕ становимся
+                    # Королём: раньше фаза менялась безусловно, из-за чего
+                    # проигравший становился "безземельным королём" — фаза king
+                    # без единого города и трона (softlock, баг 1; такого
+                    # "короля" потом можно завассалить, но его несуществующий
+                    # город никогда не засчитывается в захват страны — баг 16).
+                    became_king = False
                     title_message = (
                         f"\n\n💀 Но вы проиграли битву за трон — корона осталась "
                         f"у {reigning_king.full_name}. Часть статистов и карточек погибла в бою."
                     )
             else:
+                # Владелец трона либо не найден, либо больше не в фазе Короля
+                # (ушёл в Императоры — трон формально остаётся за ним навсегда
+                # ради налога, см. _promote_to_emperor, но сам он в фазе king
+                # больше не участвует и не может "защищаться"). Заставлять
+                # новичка драться с ЖИВОЙ (вечно растущей) мощью ушедшего
+                # Императора несправедливо и не имеет смысла — репорт
+                # 01.08.2026: "умираю об бота" с мощью ушедшего в трлн игрока.
+                # Трон переходит новому претенденту без боя, как за бесхозный
+                # город.
                 city.owner_id = user.id
+                if reigning_king:
+                    await self._recalc_city_tax_for_city_residents(session, city.id)
         else:
             city.owner_id = user.id
 
@@ -98,7 +113,8 @@ class PromotionsMixin:
         # город, как за любой другой ещё не захваченный (см. gang_attack_pvp —
         # без этого освобождения районы навсегда "зависают" ничейными
         # соперниками, которых нельзя атаковать, т.к. их владелец — Король —
-        # больше не участвует в фазе Банды).
+        # больше не участвует в фазе Банды). Освобождаем независимо от исхода
+        # боя за трон — контест за город закончен в любом случае.
         await session.execute(
             sql_update(District)
             .where(District.city_id == city.id, District.is_captured == True)
@@ -106,6 +122,21 @@ class PromotionsMixin:
         )
         city.captured_districts = 0
         city.is_fully_captured = False
+
+        if not became_king:
+            await session.flush()
+            return {
+                "ok": True, "promoted": False, "title_lost": True,
+                "message": (
+                    f"⚔️ Вы захватили все районы города <b>{city.name}</b>."
+                    + title_message
+                ),
+            }
+
+        user.phase = "king"
+        user.king_cities_count = 1
+        user.extra_attack_count = await self._get_max_extra_attacks_async(session, user)
+        await session.execute(sql_delete(KingBot).where(KingBot.user_id == user.id))
 
         await session.flush()
         return {

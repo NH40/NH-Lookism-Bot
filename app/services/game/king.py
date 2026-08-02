@@ -287,7 +287,10 @@ class GameKingService(GameBase):
                 if def_cities == 0:
                     await self._destroy_king(session, defender)
 
-            await notify_pvp_attack(attacker, defender, True, "king")
+            await notify_pvp_attack(
+                attacker, defender, True, "king",
+                result["attacker_power"], result["defender_power"],
+            )
             await session.flush()
 
             emperor_result = await self._check_emperor_eligibility(session, attacker)
@@ -316,7 +319,10 @@ class GameKingService(GameBase):
                 "title_battle": bool(title_battle),
             }
         else:
-            await notify_pvp_attack(attacker, defender, False, "king")
+            await notify_pvp_attack(
+                attacker, defender, False, "king",
+                result["attacker_power"], result["defender_power"],
+            )
             await self._handle_attack_cd(session, attacker, cd_key, "king")
             await session.flush()
 

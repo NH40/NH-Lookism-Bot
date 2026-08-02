@@ -67,8 +67,6 @@ class CityQueriesMixin:
     async def _get_max_extra_attacks_async(
         self, session: AsyncSession, user: User
     ) -> int:
-        if not user.double_attack:
-            return 0
         from app.models.skill import UserPathSkills
         from app.data.skills import PATH_SKILLS
         all_skills = {s.skill_id: s for skills in PATH_SKILLS.values() for s in skills}
@@ -83,7 +81,16 @@ class CityQueriesMixin:
         from app.repositories.title_repo import title_repo
         if await title_repo.has_set(session, user.id, "monster"):
             count += 1
-        return max(count, 1)
+        # "Двойная атака" (double_attack) сама по себе не даёт extra_attack_count,
+        # но гарантирует минимум 1 доп. атаку (см. rebuild_base_bonuses).
+        # Раньше эта функция ПОЛНОСТЬЮ обнуляла счётчик при отсутствии
+        # double_attack, из-за чего скиллы "Берсерк"/"Неудержимый"/"Ярость
+        # монстра" (дают +1 extra_attack_count каждый БЕЗ double_attack)
+        # срабатывали один раз и переставали работать при первом же
+        # пополнении после обычного КД.
+        if user.double_attack:
+            count = max(count, 1)
+        return count
 
     async def _handle_attack_cd(
         self, session: AsyncSession, user: User, cd_key: str, phase: str

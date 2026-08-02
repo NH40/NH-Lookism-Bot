@@ -92,7 +92,10 @@ class GameEmperorService(GameBase):
                 await business_service._recalc_income(session, attacker, recalc_tax=True)
                 await business_service._recalc_income(session, defender, recalc_tax=True)
 
-        await notify_pvp_attack(attacker, defender, result["win"], "emperor_pvp")
+        await notify_pvp_attack(
+            attacker, defender, result["win"], "emperor_pvp",
+            result["attacker_power"], result["defender_power"],
+        )
         if result["win"] and captured_city_names:
             country = defender.country or "unknown"
             await notify_country_city_loss(session, country, defender, attacker, captured_city_names)

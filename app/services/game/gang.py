@@ -276,9 +276,15 @@ class GameGangService(GameBase):
             if city:
                 my_districts = await self._get_my_districts_in_city(session, attacker.id, attacker.gang_city_id)
                 if my_districts >= city.total_districts:
-                    await notify_pvp_attack(attacker, defender, True, "gang")
+                    await notify_pvp_attack(
+                        attacker, defender, True, "gang",
+                        result["attacker_power"], result["defender_power"],
+                    )
                     return await self._promote_to_king(session, attacker, city)
-        await notify_pvp_attack(attacker, defender, result["win"], "gang")
+        await notify_pvp_attack(
+            attacker, defender, result["win"], "gang",
+            result["attacker_power"], result["defender_power"],
+        )
         await self._handle_attack_cd(session, attacker, cd_key, "gang")
         await session.flush()
         return {

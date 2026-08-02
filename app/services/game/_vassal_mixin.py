@@ -163,10 +163,10 @@ class VassalMixin:
             conditions.append(City.country == country)
         return await session.scalar(select(func.count(City.id)).where(*conditions)) or 0
 
-    async def _check_emperor_eligibility(self, session: AsyncSession, king: User) -> dict | None:
-        """Король + его вассалы владеют ВСЕМИ gang-городами своей страны → Император."""
+    async def _is_emperor_eligible(self, session: AsyncSession, king: User) -> bool:
+        """Король + его вассалы владеют ВСЕМИ gang-городами своей страны."""
         if king.phase != "king":
-            return None
+            return False
         from app.data.cities import DEFAULT_COUNTRY
         country = king.country or DEFAULT_COUNTRY
 
@@ -174,7 +174,7 @@ class VassalMixin:
             select(func.count(City.id)).where(City.country == country, City.phase == "gang")
         ) or 0
         if total_country_cities == 0:
-            return None
+            return False
 
         # Считаем города СТРОГО в текущей стране игрока. City.owner_id
         # никогда не очищается при пробуждении (Императоры навсегда сохраняют
@@ -195,6 +195,140 @@ class VassalMixin:
                 )
             ) or 0
 
-        if own + vassal_cities >= total_country_cities:
-            return await self._promote_to_emperor(session, king)
-        return None
+        return own + vassal_cities >= total_country_cities
+
+    async def _check_emperor_eligibility(self, session: AsyncSession, king: User) -> dict | None:
+        """Если Король выполнил условие захвата всей страны (сам + вассалы
+        владеют всеми gang-городами) — либо становится Императором СРАЗУ
+        (страна ещё ни разу не была завоёвана, некого свергать), либо, если
+        в стране уже есть действующий Император, ничего не происходит
+        автоматически: Король получает доступ к явному вызову "Бросить вызов
+        Императору" (см. challenge_emperor) — раньше конкурента просто молча
+        промотировало мимо уже коронованного Императора, что и не давало
+        игроку способа реально сразиться за трон страны."""
+        if not await self._is_emperor_eligible(session, king):
+            return None
+        from app.data.cities import DEFAULT_COUNTRY
+        country = king.country or DEFAULT_COUNTRY
+
+        existing_emperor = await session.scalar(
+            select(func.count(User.id)).where(User.phase == "emperor", User.country == country)
+        ) or 0
+        if existing_emperor > 0:
+            return None
+        return await self._promote_to_emperor(session, king)
+
+    async def get_kings_conquest_progress(
+        self, session: AsyncSession, country: str
+    ) -> list[dict]:
+        """Для экрана Императора: список Королей его страны с прогрессом
+        захвата (свои + вассальные города / всего городов страны) и их
+        боевой мощью — Император должен видеть, кто и насколько близок к
+        вызову за его трон (см. challenge_emperor)."""
+        total_country_cities = await session.scalar(
+            select(func.count(City.id)).where(City.country == country, City.phase == "gang")
+        ) or 0
+
+        kings = (await session.execute(
+            select(User).where(User.phase == "king", User.country == country)
+        )).scalars().all()
+
+        result = []
+        for king in kings:
+            own = await self._count_ruled_cities(session, king.id, country=country)
+            vassal_ids = (await session.execute(
+                select(User.id).where(User.suzerain_id == king.id)
+            )).scalars().all()
+            vassal_cities = 0
+            if vassal_ids:
+                vassal_cities = await session.scalar(
+                    select(func.count(City.id)).where(
+                        City.owner_id.in_(vassal_ids), City.country == country, City.phase == "gang"
+                    )
+                ) or 0
+            result.append({
+                "id": king.id, "name": king.full_name, "combat_power": king.combat_power,
+                "cities": own + vassal_cities, "total_cities": total_country_cities,
+            })
+        result.sort(key=lambda r: r["cities"], reverse=True)
+        return result
+
+    async def _demote_emperor_to_king(self, session: AsyncSession, emperor: User) -> None:
+        """Проигранный вызов трона Императора: теряет ВСЕ свои города (трон
+        каждого из них освобождается), возвращается на этап Короля с нуля
+        городов. В отличие от _destroy_king это НЕ полный сброс банды/
+        престижа — только откат фазы и владений."""
+        await session.execute(
+            sql_update(City).where(City.owner_id == emperor.id).values(owner_id=None)
+        )
+        emperor.phase = "king"
+        emperor.king_cities_count = 0
+        emperor.extra_attack_count = await self._get_max_extra_attacks_async(session, emperor)
+        await session.flush()
+
+    async def challenge_emperor(
+        self, session: AsyncSession, king: User, emperor_id: int
+    ) -> dict:
+        """Король, захвативший все города своей страны (сам + вассалы),
+        бросает вызов действующему Императору этой страны за его трон.
+        Победа — Император теряет все города и откатывается до Короля,
+        победитель сам занимает Императорский трон. Поражение — ничего не
+        меняется, кроме КД."""
+        if king.phase != "king":
+            return {"ok": False, "reason": "Только для фазы Короля"}
+        from app.utils.truce import is_truce_active
+        if is_truce_active(king):
+            return {"ok": False, "reason": "Во время перемирия нельзя атаковать"}
+
+        if not await self._is_emperor_eligible(session, king):
+            return {"ok": False, "reason": "Сначала захватите все города своей страны (сами + вассалы)"}
+
+        from app.repositories.user_repo import user_repo
+        emperor = await user_repo.get_by_id(session, emperor_id)
+        if not emperor or emperor.phase != "emperor":
+            return {"ok": False, "reason": "Император не найден"}
+        from app.data.cities import DEFAULT_COUNTRY
+        if (emperor.country or DEFAULT_COUNTRY) != (king.country or DEFAULT_COUNTRY):
+            return {"ok": False, "reason": "Вызов — только Императору своей страны"}
+        if is_truce_active(emperor):
+            return {"ok": False, "reason": f"{emperor.full_name} находится под перемирием"}
+
+        from app.services.cooldown_service import cooldown_service
+        from app.config.game_balance import EMPEROR_CHALLENGE_CD_SECONDS
+        cd_key = cooldown_service.emperor_challenge_key(king.id)
+        if await cooldown_service.is_on_cooldown(cd_key):
+            ttl = await cooldown_service.get_ttl(cd_key)
+            return {"ok": False, "reason": f"КД: {cooldown_service.format_ttl(ttl)}", "cd": ttl}
+
+        from app.services.combat_service import fight_player
+        from app.services.game.utils import notify_pvp_attack
+        result = await fight_player(session, king, emperor)
+        await cooldown_service.set_cooldown(cd_key, EMPEROR_CHALLENGE_CD_SECONDS)
+
+        if result["win"]:
+            await self._demote_emperor_to_king(session, emperor)
+            promo = await self._promote_to_emperor(session, king)
+            await notify_pvp_attack(
+                king, emperor, True, "emperor_challenge",
+                result["attacker_power"], result["defender_power"],
+            )
+            await session.flush()
+            return {
+                "ok": True, "win": True, "promoted": True,
+                "message": (
+                    f"👑 Вы победили Императора {emperor.full_name} и заняли его "
+                    f"трон!\n\n{promo['message']}"
+                ),
+            }
+
+        await notify_pvp_attack(
+            king, emperor, False, "emperor_challenge",
+            result["attacker_power"], result["defender_power"],
+        )
+        await session.flush()
+        return {
+            "ok": True, "win": False,
+            "attacker_power": result["attacker_power"],
+            "defender_power": result["defender_power"],
+            "defender_name": emperor.full_name,
+        }

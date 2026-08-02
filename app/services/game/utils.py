@@ -201,6 +201,7 @@ async def notify_pvp_attack(
         phase_names = {
             "gang": "банды", "king": "королей",
             "king_challenge": "за трон", "emperor_pvp": "императоров",
+            "emperor_challenge": "за трон Императора",
         }
         phase_str = phase_names.get(phase, "")
         if win:

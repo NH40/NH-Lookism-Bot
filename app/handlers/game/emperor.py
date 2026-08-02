@@ -75,6 +75,7 @@ async def _compute_speed_pct(session: AsyncSession, user: User) -> int:
 async def _build_gang_list(session: AsyncSession, user: User) -> tuple[str, any]:
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="⚔️ PvP Императоров", callback_data="emperor_pvp_list"))
+    builder.row(InlineKeyboardButton(text="👑 Короли моей страны", callback_data="emperor_kings_list"))
     builder.row(InlineKeyboardButton(text="🌟 Пробуждение", callback_data="emperor_awakening_wip"))
     builder.row(InlineKeyboardButton(text=truce_button_label(user), callback_data="truce_menu"))
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
@@ -382,6 +383,42 @@ async def cb_emperor_pvp_list(cb: CallbackQuery, session: AsyncSession, user: Us
         f"противника, плюс 1-3 случайных города его страны!\n\n"
         f"💪 Твоя мощь: {fmt_num(user.combat_power)}\n\n"
         "Выбери соперника:",
+        builder.as_markup(),
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data == "emperor_kings_list")
+async def cb_emperor_kings_list(cb: CallbackQuery, session: AsyncSession, user: User):
+    if user.phase != "emperor":
+        await cb.answer("Только для Императора!", show_alert=True)
+        return
+
+    from app.data.cities import DEFAULT_COUNTRY
+    from app.services.game_service import game_service
+    country = user.country or DEFAULT_COUNTRY
+    kings = await game_service.get_kings_conquest_progress(session, country)
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="emperor_gangs"))
+
+    if not kings:
+        lines = ["В твоей стране нет Королей."]
+    else:
+        lines = []
+        for k in kings[:15]:
+            pct = int(k["cities"] * 100 / k["total_cities"]) if k["total_cities"] else 0
+            threat = "🔴" if k["cities"] >= k["total_cities"] else "⚪"
+            lines.append(
+                f"{threat} <b>{k['name']}</b> | 💪 {fmt_num(k['combat_power'])} | "
+                f"🏙 {k['cities']}/{k['total_cities']} ({pct}%)"
+            )
+
+    await safe_edit(
+        cb,
+        "👑 <b>Короли твоей страны</b>\n\n"
+        "🔴 — захватил всю страну, может бросить тебе вызов за трон.\n\n"
+        + "\n".join(lines),
         builder.as_markup(),
     )
     await cb.answer()

@@ -123,6 +123,14 @@ class CooldownService:
         return f"cd:emperor_pvp:{user_id}"
 
     @staticmethod
+    def emperor_challenge_key(user_id: int) -> str:
+        return f"cd:emperor_challenge:{user_id}"
+
+    @staticmethod
+    def emperor_challenge_lock_key(user_id: int) -> str:
+        return f"lock:emperor_challenge:{user_id}"
+
+    @staticmethod
     def raid_lock_key(user_id: int) -> str:
         return f"lock:raid:{user_id}"
 

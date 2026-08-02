@@ -197,6 +197,24 @@ async def build_king_menu(session, user, page: int = 0):
     cities_count = my_cities_count
     ruled_count = await game_service._count_ruled_cities(session, user.id)
     builder.row(InlineKeyboardButton(text="👑 Борьба за трон", callback_data="king_challenge_list"))
+
+    emperor_challenge_str = ""
+    if await game_service._is_emperor_eligible(session, user):
+        from app.data.cities import DEFAULT_COUNTRY as _DC
+        _country = user.country or _DC
+        _emperors_count = await session.scalar(
+            select(func.count(User.id)).where(User.phase == "emperor", User.country == _country)
+        ) or 0
+        if _emperors_count > 0:
+            builder.row(InlineKeyboardButton(
+                text="⚔️ Бросить вызов Императору",
+                callback_data="emperor_challenge_list",
+            ))
+            emperor_challenge_str = (
+                "\n\n🏆 Вы захватили всю страну! Доступен вызов Императору — "
+                "победите его и займите трон."
+            )
+
     builder.row(InlineKeyboardButton(text=truce_button_label(user), callback_data="truce_menu"))
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="main_menu"))
 
@@ -211,7 +229,7 @@ async def build_king_menu(session, user, page: int = 0):
         f"🤝 Вассалов: <b>{user.vassal_count}</b>"
         + (f" | 🫡 Плачу дань королю" if user.suzerain_id else "") +
         f"\n💪 Твоя мощь: <b>{fmt_num(user.combat_power)}</b>"
-        + extra_str + cd_str +
+        + extra_str + cd_str + emperor_challenge_str +
         f"\n{'─' * 20}\n\n"
         f"Выбери город для атаки:"
     )
@@ -608,4 +626,87 @@ async def cb_king_challenge_attack(cb: CallbackQuery, session: AsyncSession, use
             f"⚔️ Его мощь: {fmt_num(result['defender_power'])}\n\n"
             f"🫡 Ты стал вассалом {html.escape(result['defender_name'])} — платишь ему 20% дохода."
         )
+    await send_menu(cb, text, back_kb("attack"))
+
+
+# ── Вызов Императора страны (Король, захвативший всю страну) ─────────────────
+
+@router.callback_query(F.data == "emperor_challenge_list")
+async def cb_emperor_challenge_list(cb: CallbackQuery, session: AsyncSession, user: User):
+    if user.phase != "king":
+        await cb.answer("Только для фазы Короля", show_alert=True)
+        return
+    if not await game_service._is_emperor_eligible(session, user):
+        await cb.answer("Сначала захватите все города своей страны (сами + вассалы)", show_alert=True)
+        return
+
+    from app.data.cities import DEFAULT_COUNTRY
+    from app.utils.truce import is_truce_active
+    country = user.country or DEFAULT_COUNTRY
+    emperors_r = await session.execute(
+        select(User).where(User.phase == "emperor", User.country == country)
+    )
+    emperors = emperors_r.scalars().all()
+    if not emperors:
+        await cb.answer("В твоей стране больше нет Императора", show_alert=True)
+        return
+
+    builder = InlineKeyboardBuilder()
+    for e in emperors:
+        power = clamp_enemy_power(int(e.combat_power), user.combat_power)
+        if is_truce_active(e):
+            builder.row(InlineKeyboardButton(
+                text=f"🕊 {e.full_name} | 💪 {fmt_num(power)} (перемирие)",
+                callback_data="noop_king"
+            ))
+        else:
+            builder.row(InlineKeyboardButton(
+                text=f"⚔️ {e.full_name} | 💪 {fmt_num(power)}",
+                callback_data=f"emperor_challenge_attack:{e.id}"
+            ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="attack"))
+
+    await send_menu(
+        cb,
+        "🏆 <b>Вызов Императору страны</b>\n\n"
+        "Победишь — займёшь его трон и станешь Императором, а он потеряет "
+        "все города и вернётся на этап Короля с нуля.\n"
+        "Проиграешь — ничего не изменится, кроме КД.\n"
+        "Вызов раз в час, только внутри своей страны.\n\n"
+        f"💪 Твоя мощь: {fmt_num(user.combat_power)}",
+        builder.as_markup(),
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("emperor_challenge_attack:"))
+async def cb_emperor_challenge_attack(cb: CallbackQuery, session: AsyncSession, user: User):
+    emperor_id = int(cb.data.split(":")[1])
+
+    lock_key = cooldown_service.emperor_challenge_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
+        await cb.answer("⏳ Вызов уже обрабатывается", show_alert=True)
+        return
+
+    try:
+        result = await game_service.challenge_emperor(session, user, emperor_id)
+        await session.commit()
+    finally:
+        await cooldown_service.release_lock(lock_key)
+
+    if not result["ok"]:
+        await cb.answer(result.get("reason", "Ошибка"), show_alert=True)
+        return
+
+    if result.get("promoted"):
+        await send_menu(cb, f"🎉 {html.escape(result['message'])}", back_kb("main_menu"))
+        return
+
+    text = (
+        f"❌ <b>Поражение!</b>\n\n"
+        f"Противник: {html.escape(result['defender_name'])}\n"
+        f"💪 Твоя мощь: {fmt_num(result['attacker_power'])}\n"
+        f"⚔️ Его мощь: {fmt_num(result['defender_power'])}\n\n"
+        f"Трон остался за прежним Императором."
+    )
     await send_menu(cb, text, back_kb("attack"))

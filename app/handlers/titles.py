@@ -80,6 +80,7 @@ async def cb_fame_titles_menu(cb: CallbackQuery, session: AsyncSession, user: Us
 
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="🔨 Кузница славы", callback_data="fame_forge"))
+    builder.row(InlineKeyboardButton(text="🎁 Передать", callback_data="fame_transfer_pick_set"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="titles"))
 
     await safe_edit(cb, "\n\n".join(lines), builder.as_markup())

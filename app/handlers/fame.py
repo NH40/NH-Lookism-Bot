@@ -230,6 +230,34 @@ async def cb_fame_forge_do(cb: CallbackQuery, session: AsyncSession, user: User)
     await cb_fame_set_detail(cb, session, user)
 
 
+@router.callback_query(F.data == "fame_transfer_pick_set")
+async def cb_fame_transfer_pick_set(cb: CallbackQuery, session: AsyncSession, user: User):
+    """Прямой путь Титулы → Слава → Передать → сет — минуя список Кузницы,
+    сразу показывает только те сеты, где у игрока есть хотя бы 1 фрагмент."""
+    owned = await fame_service.get_owned_fragments(session, user.id)
+
+    builder = InlineKeyboardBuilder()
+    has_any = False
+    for s in FAME_SETS:
+        if s.stub:
+            continue
+        count = sum(1 for f in s.fragments if fame_fragment_key(s.set_key, f.key) in owned)
+        if count == 0:
+            continue
+        has_any = True
+        builder.row(InlineKeyboardButton(
+            text=f"📦 {s.name} [{count}/{len(s.fragments)}]",
+            callback_data=f"fame_transfer_menu:{s.set_key}",
+        ))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="fame_titles_menu"))
+
+    if not has_any:
+        await cb.answer("У тебя нет ни одного фрагмента для передачи", show_alert=True)
+        return
+
+    await safe_edit(cb, "🎁 <b>Передать</b>\n\nВыбери сет:", builder.as_markup())
+
+
 @router.callback_query(F.data.startswith("fame_transfer_menu:"))
 async def cb_fame_transfer_menu(cb: CallbackQuery, session: AsyncSession, user: User):
     set_key = cb.data.split(":")[1]

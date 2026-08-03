@@ -23,6 +23,7 @@
   circ_daily_districts     — только круговые
   circ_dragon_active       — только круговые
   circ_clan_cashback       — только круговые
+  circ_clan_income_skim_pct — только круговые
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,6 +52,7 @@ _CIRC_ONLY_FIELDS = (
     "circ_daily_districts",
     "circ_dragon_active",
     "circ_clan_cashback",
+    "circ_clan_income_skim_pct",
     # path_unique_1 и path_unique_2 тоже только от кругов (не от титулов)
     "path_unique_1",
     "path_unique_2",
@@ -92,6 +94,8 @@ def _apply_one_donat(user: User, donat_id: str, circles: int) -> None:
         # Клан-вайд +5% сила/доход/вербовка/влияние всем членам клана — отдельно.
         user.squad_power_bonus += 10 * circles
         user.influence_bonus_percent += 5 * circles
+        if circles >= 3:
+            user.circ_clan_income_skim_pct = 10
         if circles >= 5:
             user.circ_clan_cashback = True
 
@@ -182,6 +186,7 @@ async def rebuild_circular_bonuses(session: AsyncSession, user: User) -> None:
     user.circ_daily_districts = 0
     user.circ_dragon_active = False
     user.circ_clan_cashback = False
+    user.circ_clan_income_skim_pct = 0
     user.circ_mountain_extra = False
     user.circ_trainer_discount = 0
     # path_unique_1/2 НЕ сбрасываем здесь: rebuild_base_bonuses (вызывается

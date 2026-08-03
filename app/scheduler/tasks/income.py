@@ -103,6 +103,38 @@ async def income_tick():
 
             user_ids = [u.id for u in users]
 
+            # ── 1b. Скимминг "Глава клана" (круг ≥3): владелец кругов получает
+            # доп. % от дохода КАЖДОГО члена своего клана поверх их обычного
+            # начисления — доход самих членов клана при этом не уменьшается.
+            from app.models.clan import ClanMember
+
+            skim_buyers = (await session.execute(
+                select(User.id, User.circ_clan_income_skim_pct).where(
+                    User.circ_clan_income_skim_pct > 0
+                )
+            )).all()
+            clan_skim_members: dict[int, list[int]] = {}
+            buyer_clan_pct: list[tuple[int, int, int]] = []
+            if skim_buyers:
+                buyer_ids = [b.id for b in skim_buyers]
+                buyer_clan_map = dict((await session.execute(
+                    select(ClanMember.user_id, ClanMember.clan_id).where(
+                        ClanMember.user_id.in_(buyer_ids)
+                    )
+                )).all())
+                relevant_clan_ids = list(set(buyer_clan_map.values()))
+                if relevant_clan_ids:
+                    for clan_id, uid in (await session.execute(
+                        select(ClanMember.clan_id, ClanMember.user_id).where(
+                            ClanMember.clan_id.in_(relevant_clan_ids)
+                        )
+                    )).all():
+                        clan_skim_members.setdefault(clan_id, []).append(uid)
+                    for b in skim_buyers:
+                        clan_id = buyer_clan_map.get(b.id)
+                        if clan_id is not None:
+                            buyer_clan_pct.append((b.id, clan_id, b.circ_clan_income_skim_pct))
+
             # ── 2. Один запрос: сумма income-бонусов от зелий per user ──────
             pot_result = await session.execute(
                 select(
@@ -125,6 +157,7 @@ async def income_tick():
             # тех же строк users в рамках одной транзакции (см. _bulk_update_sql).
             net_deltas: dict[int, int] = {}
             quest_deltas: dict[int, int] = {}  # трекинг квестов — ДО вычета налога/дани (эффорт, не чистый доход)
+            member_net_income: dict[int, int] = {}  # фактически начисленный бизнес-доход (для скимминга "Глава клана")
 
             for u in users:
                 potion_bonus = income_bonuses.get(u.id, 0)
@@ -176,6 +209,7 @@ async def income_tick():
                             net_deltas[u.referred_by] = net_deltas.get(u.referred_by, 0) + teacher_share
 
                         net_deltas[u.id] = net_deltas.get(u.id, 0) + remaining
+                        member_net_income[u.id] = remaining
 
                 # Пассивный доход: circ-донаты (налог/дань не затрагивают — отдельный источник)
                 circ = u.circ_passive_income or 0
@@ -186,6 +220,16 @@ async def income_tick():
                     per_tick = max(0, int(circ * (1 + circ_total_bonus / 100) * title_mult))
                     if per_tick > 0:
                         net_deltas[u.id] = net_deltas.get(u.id, 0) + per_tick
+
+            # ── 3b. Скимминг "Глава клана": владелец кругов получает % от
+            # фактического дохода каждого члена клана ДОПОЛНИТЕЛЬНО, поверх
+            # net_deltas — доход самих членов клана не уменьшается.
+            for buyer_id, clan_id, pct in buyer_clan_pct:
+                member_ids = clan_skim_members.get(clan_id, [])
+                total_members_income = sum(member_net_income.get(mid, 0) for mid in member_ids)
+                skim_amt = int(total_members_income * pct / 100)
+                if skim_amt > 0:
+                    net_deltas[buyer_id] = net_deltas.get(buyer_id, 0) + skim_amt
 
             # ── 4. Bulk UPDATE — один SQL через VALUES ────────────────────────
             # VALUES безопасен: все значения явно приводятся к int выше

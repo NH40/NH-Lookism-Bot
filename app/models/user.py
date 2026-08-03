@@ -209,6 +209,7 @@ class User(Base):
     circ_daily_districts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # когда последний раз выдавался город
     circ_dragon_active: Mapped[bool] = mapped_column(Boolean, default=False)     # спутник-дракон
     circ_clan_cashback: Mapped[bool] = mapped_column(Boolean, default=False)     # кешбек казны клана
+    circ_clan_income_skim_pct: Mapped[int] = mapped_column(Integer, default=0)   # % от дохода каждого члена клана себе (Глава клана ≥3 круга)
     circ_mountain_extra: Mapped[bool] = mapped_column(Boolean, default=False)    # +районов при захвате (Хозяин горы ≥2)
     circ_trainer_discount: Mapped[int] = mapped_column(Integer, default=0)       # % скидка у Тома Ли/Чон Гона (Император)
 

@@ -103,6 +103,11 @@ async def _build_business_main(
     if vassal_income:
         vassal_line = f"\n🫡 От вассалов: +{fmt_num(vassal_income)}/мин"
 
+    clan_skim_line = ""
+    clan_skim_income = info.get("clan_skim_income", 0)
+    if clan_skim_income:
+        clan_skim_line = f"\n👑 От членов клана: +{fmt_num(clan_skim_income)}/мин"
+
     archangel_timer_line = ""
     if getattr(user, "circ_daily_districts", 0) > 0:
         last_at = getattr(user, "circ_daily_districts_at", None)
@@ -125,7 +130,7 @@ async def _build_business_main(
                 m, s = divmod(rem, 60)
                 archangel_timer_line = f"\n👼 Город Архангела (64р.): через <b>{h}ч {m}м {s}с</b>"
 
-    extra_income_lines = [l for l in (circ_line, vassal_line, archangel_timer_line) if l]
+    extra_income_lines = [l for l in (circ_line, vassal_line, clan_skim_line, archangel_timer_line) if l]
     extra_income_section = ""
     if extra_income_lines:
         extra_income_section = "\n\n━━━ 🌐 Доп. доход ━━━" + "".join(extra_income_lines)

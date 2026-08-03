@@ -296,6 +296,26 @@ class BusinessService:
         ) or 0
         vassal_tribute_income = int(vassal_income_sum * VASSAL_TRIBUTE_PERCENT / 100)
 
+        # Круговой донат "Глава клана" круг 3: скимминг % от дохода каждого
+        # члена клана себе (доход самих членов клана НЕ уменьшается) —
+        # начисляется в income_tick, здесь только оценка для отображения.
+        clan_skim_income = 0
+        skim_pct = getattr(user, "circ_clan_income_skim_pct", 0)
+        if skim_pct:
+            from app.models.clan import ClanMember
+            clan_member_ids = (await session.execute(
+                select(ClanMember.user_id).where(ClanMember.clan_id.in_(
+                    select(ClanMember.clan_id).where(ClanMember.user_id == user.id)
+                ))
+            )).scalars().all()
+            if clan_member_ids:
+                members_income_sum = await session.scalar(
+                    select(func.coalesce(func.sum(_User.income_per_minute), 0)).where(
+                        _User.id.in_(clan_member_ids)
+                    )
+                ) or 0
+                clan_skim_income = int(members_income_sum * skim_pct / 100)
+
         return {
             "has_business": has_business,
             "building_name": cfg.name if cfg else None,
@@ -329,6 +349,7 @@ class BusinessService:
             "circ_passive_income": circ_passive,
             "circ_passive_per_min": circ_per_min,
             "vassal_tribute_income": vassal_tribute_income,
+            "clan_skim_income": clan_skim_income,
         }
 
 

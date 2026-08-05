@@ -51,7 +51,9 @@ class SquadRepo:
         )
         if rank:
             q = q.where(SquadMember.rank == rank)
-        return await session.scalar(q) or 0
+        # SUM(BIGINT) в Postgres возвращает NUMERIC → Decimal в asyncpg;
+        # без приведения к int эта Decimal не сериализуется в JSON (FSM-стейт).
+        return int(await session.scalar(q) or 0)
 
     async def get_rank_counts(self, session: AsyncSession, user_id: int) -> dict[str, int]:
         """{ранг: суммарное количество} — для меню обмена/продажи."""

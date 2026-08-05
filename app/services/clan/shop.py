@@ -9,12 +9,16 @@ from app.services.clan.base import ClanBaseService
 
 class ClanShopService(ClanBaseService):
 
-    async def buy_clan_shop(self, session: AsyncSession, clan: Clan, buyer: User, item_id: str) -> dict:
+    async def buy_clan_shop(self, session: AsyncSession, clan: Clan, buyer: User, item_id: str, qty: int = 1) -> dict:
         item = CLAN_SHOP_MAP.get(item_id)
         if not item:
             return {"ok": False, "reason": "Товар не найден"}
+        if qty < 1:
+            return {"ok": False, "reason": "Количество должно быть > 0"}
+        if qty > 1 and item.item_type not in ("tickets", "squad"):
+            qty = 1
         discount_pct = await self.get_shop_discount_pct(session, clan.id)
-        price = int(item.price * (1 - discount_pct / 100))
+        price = int(item.price * (1 - discount_pct / 100)) * qty
         if clan.treasury < price:
             return {"ok": False, "reason": f"Недостаточно в казне (нужно {price:,})"}
 
@@ -31,8 +35,9 @@ class ClanShopService(ClanBaseService):
 
         if item.item_type == "tickets":
             from app.config.game_balance import ticket_hard_cap
+            ticket_amount = item.value * qty
             for u in users:
-                u.tickets = min(u.tickets + item.value, ticket_hard_cap(u))
+                u.tickets = min(u.tickets + ticket_amount, ticket_hard_cap(u))
 
         elif item.item_type == "potion":
             from app.services.potion_service import potion_service
@@ -41,12 +46,13 @@ class ClanShopService(ClanBaseService):
 
         elif item.item_type == "squad":
             val = item.value
+            squad_amount = val["amount"] * qty
             from app.data.squad import RANKS_BY_ID
             from app.repositories.squad_repo import squad_repo
             rank_cfg = RANKS_BY_ID.get(val["rank"])
             base_power = rank_cfg.base_power if rank_cfg else 1000
             for u in users:
-                await squad_repo.add_count(session, u.id, val["rank"], 0, val["amount"], base_power=base_power)
+                await squad_repo.add_count(session, u.id, val["rank"], 0, squad_amount, base_power=base_power)
                 await squad_repo.update_user_combat_power(session, u)
             await self.recalc_power(session, clan)
 
@@ -82,22 +88,23 @@ class ClanShopService(ClanBaseService):
         tg_ids = [u.tg_id for u in users if u.id != buyer.id]
         clan_name = clan.name
         buyer_name = buyer.full_name
-        asyncio.create_task(self._notify_shop_purchase(clan_name, buyer_name, item, price, tg_ids))
+        asyncio.create_task(self._notify_shop_purchase(clan_name, buyer_name, item, price, tg_ids, qty))
 
-        return {"ok": True, "item": item, "price": price}
+        return {"ok": True, "item": item, "price": price, "qty": qty}
 
-    async def _notify_shop_purchase(self, clan_name: str, buyer_name: str, item, price: int, tg_ids: list) -> None:
+    async def _notify_shop_purchase(self, clan_name: str, buyer_name: str, item, price: int, tg_ids: list, qty: int = 1) -> None:
         try:
             from app.bot_instance import get_bot
             import asyncio
             bot = get_bot()
             if not bot:
                 return
+            qty_str = f" x{qty}" if qty > 1 else ""
             text = (
                 f"🛒 <b>Покупка в магазине клана!</b>\n\n"
                 f"🏯 Клан: {clan_name}\n"
                 f"👤 Куплено: {buyer_name}\n"
-                f"🎁 {item.name}\n"
+                f"🎁 {item.name}{qty_str}\n"
                 f"💰 Потрачено из казны: {price:,} NHCoin"
             )
             for tg_id in tg_ids:

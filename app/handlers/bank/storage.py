@@ -22,6 +22,7 @@ router = Router()
 
 class StorageFSM(StatesGroup):
     waiting_store_amount = State()
+    waiting_retrieve_amount = State()
 
 
 # ── Вспомогательные ──────────────────────────────────────────────────────────
@@ -56,7 +57,7 @@ def _storage_kb(cells: list[StorageCell], user: User) -> "InlineKeyboardMarkup":
             amount = data.get("amount", 0)
             builder.row(InlineKeyboardButton(
                 text=f"📤 Достать из слота {cell.slot} ({label}: {fmt_num(amount)})",
-                callback_data=f"storage_retrieve:{cell.slot}"
+                callback_data=f"storage_retrieve_menu:{cell.slot}"
             ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="bank_menu"))
     return builder.as_markup()
@@ -190,8 +191,50 @@ async def msg_storage_amount(message: Message, session: AsyncSession, user: User
 
 # ── Достать из ячейки ────────────────────────────────────────────────────────
 
-@router.callback_query(F.data.startswith("storage_retrieve:"))
-async def cb_storage_retrieve(cb: CallbackQuery, session: AsyncSession, user: User):
+async def _refresh_storage_menu(cb: CallbackQuery, session: AsyncSession, user: User) -> None:
+    cells = await storage_service.get_cells(session, user.id)
+    open_count = sum(1 for c in cells if c.is_open)
+    non_empty = sum(1 for c in cells if c.is_open and c.item_type is not None)
+    lines = [
+        "🗄 <b>Ячейки хранилища</b>\n",
+        f"Открыто: {open_count}/{MAX_SLOTS} ячеек",
+        f"Плата: {fmt_num(FEE_PER_MINUTE)} NHCoin/мин (за непустые ячейки)",
+        f"Активных: {non_empty} ячеек\n",
+        "— Содержимое сохраняется при сносе банды —\n",
+    ]
+    for c in cells:
+        lines.append(_cell_display(c))
+    await safe_edit(cb, "\n".join(lines), _storage_kb(cells, user))
+
+
+@router.callback_query(F.data.startswith("storage_retrieve_menu:"))
+async def cb_storage_retrieve_menu(cb: CallbackQuery, session: AsyncSession, user: User):
+    slot = int(cb.data.split(":")[1])
+    cell = await storage_service.get_cell(session, user.id, slot)
+    if not cell or not cell.item_type:
+        await cb.answer("❌ Ячейка пуста.", show_alert=True)
+        return
+
+    data = json.loads(cell.item_data or "{}")
+    amount = data.get("amount", 0)
+    label = RESOURCE_ITEMS.get(cell.item_type, (cell.item_type,))[0]
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="📤 Достать всё", callback_data=f"storage_retrieve_all:{slot}"))
+    builder.row(InlineKeyboardButton(text="🔢 Достать часть", callback_data=f"storage_retrieve_part:{slot}"))
+    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="bank_storage"))
+    await safe_edit(
+        cb,
+        f"📤 <b>Слот {slot} — {label}</b>\n\n"
+        f"В ячейке: {fmt_num(amount)}\n\n"
+        f"Сколько достать?",
+        builder.as_markup(),
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("storage_retrieve_all:"))
+async def cb_storage_retrieve_all(cb: CallbackQuery, session: AsyncSession, user: User):
     slot = int(cb.data.split(":")[1])
     cell = await storage_service.get_cell(session, user.id, slot)
     if not cell or not cell.item_type:
@@ -208,17 +251,58 @@ async def cb_storage_retrieve(cb: CallbackQuery, session: AsyncSession, user: Us
         return
 
     await cb.answer(f"✅ Получено: {fmt_num(amount)} {label}", show_alert=True)
-    # Обновим меню
-    cells = await storage_service.get_cells(session, user.id)
-    open_count = sum(1 for c in cells if c.is_open)
-    non_empty = sum(1 for c in cells if c.is_open and c.item_type is not None)
-    lines = [
-        "🗄 <b>Ячейки хранилища</b>\n",
-        f"Открыто: {open_count}/{MAX_SLOTS} ячеек",
-        f"Плата: {fmt_num(FEE_PER_MINUTE)} NHCoin/мин (за непустые ячейки)",
-        f"Активных: {non_empty} ячеек\n",
-        "— Содержимое сохраняется при сносе банды —\n",
-    ]
-    for c in cells:
-        lines.append(_cell_display(c))
-    await safe_edit(cb, "\n".join(lines), _storage_kb(cells, user))
+    await _refresh_storage_menu(cb, session, user)
+
+
+@router.callback_query(F.data.startswith("storage_retrieve_part:"))
+async def cb_storage_retrieve_part(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
+    slot = int(cb.data.split(":")[1])
+    cell = await storage_service.get_cell(session, user.id, slot)
+    if not cell or not cell.item_type:
+        await cb.answer("❌ Ячейка пуста.", show_alert=True)
+        return
+
+    data = json.loads(cell.item_data or "{}")
+    amount = data.get("amount", 0)
+    label = RESOURCE_ITEMS.get(cell.item_type, (cell.item_type,))[0]
+
+    await state.set_state(StorageFSM.waiting_retrieve_amount)
+    await state.update_data(slot=slot)
+
+    cancel_kb = InlineKeyboardBuilder()
+    cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="bank_storage"))
+    await safe_edit(
+        cb,
+        f"🔢 <b>Слот {slot} — {label}</b>\n\n"
+        f"В ячейке: {fmt_num(amount)}\n\n"
+        f"Введите количество для снятия:",
+        cancel_kb.as_markup(),
+    )
+    await cb.answer()
+
+
+@router.message(StorageFSM.waiting_retrieve_amount)
+async def msg_storage_retrieve_amount(message: Message, session: AsyncSession, user: User, state: FSMContext):
+    data = await state.get_data()
+    slot = data.get("slot", 1)
+    await state.clear()
+
+    try:
+        amount = int(message.text.strip().replace(" ", "").replace(",", ""))
+    except ValueError:
+        await message.answer("❌ Введите целое число.", reply_markup=back_kb("bank_storage"), parse_mode="HTML")
+        return
+
+    cell = await storage_service.get_cell(session, user.id, slot)
+    label = RESOURCE_ITEMS.get(cell.item_type, (cell.item_type,))[0] if cell and cell.item_type else "?"
+
+    ok, err = await storage_service.retrieve_resource(session, user, slot, amount)
+    if not ok:
+        await message.answer(err, reply_markup=back_kb("bank_storage"), parse_mode="HTML")
+        return
+
+    await message.answer(
+        f"✅ <b>{fmt_num(amount)} {label}</b> получено из слота {slot}.",
+        reply_markup=back_kb("bank_storage"),
+        parse_mode="HTML",
+    )

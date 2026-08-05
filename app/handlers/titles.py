@@ -90,8 +90,8 @@ async def cb_fame_titles_menu(cb: CallbackQuery, session: AsyncSession, user: Us
 
 _ACH_CATEGORIES = [
     ("⚔️ Боевая мощь",  ["power_10k", "power_50k", "power_100k", "power_500k", "power_1m"]),
-    ("📍 Фазы",          ["first_king", "king_5_cities", "first_fist", "fist_10_cities", "emperor"]),
-    ("🌟 Престиж",       ["prestige_3"]),
+    ("📍 Фазы",          ["first_king", "king_5_cities", "fist_10_cities", "emperor"]),
+    ("🌟 Престиж",       ["prestige_3", "prestige_max"]),
     ("🏆 Топ",           ["top_10", "top_5", "top_1"]),
     ("💸 Траты",         ["spend_100k", "spend_1m", "spend_5m"]),
     ("⚔️ Победы",        ["wins_10", "wins_100", "wins_500", "wins_1000"]),

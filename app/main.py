@@ -25,7 +25,6 @@ from app.handlers import quests
 from app.handlers import horse_shop
 from app.handlers.clan import router as clan_router
 from app.handlers import fame as fame_handler
-from app.handlers import quick_menu
 
 logging.basicConfig(
     level=logging.INFO,
@@ -87,11 +86,6 @@ async def main():
 
     # pre_checkout_query — нужен DbSession для записи (UserLoader не нужен, ответ быстрый)
     dp.pre_checkout_query.middleware(DbSessionMiddleware())
-
-    # quick_menu — ПЕРВЫЙ роутер: точный текст reply-кнопки быстрого меню
-    # должен перехватывать нажатие раньше любого активного FSM-хэндлера
-    # (например, ввода суммы) в остальных роутерах ниже.
-    dp.include_router(quick_menu.router)
 
     dp.include_router(common.router)
     dp.include_router(attack.router)

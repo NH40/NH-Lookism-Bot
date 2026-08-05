@@ -9,7 +9,6 @@ from app.utils.keyboards.common import (
     main_menu_kb, back_kb,
     menu_other_kb,
 )
-from app.utils.keyboards.reply_menu import quick_menu_kb
 from app.utils.formatters import fmt_num, phase_label, progress_bar
 from app.data.cities import COUNTRY_BY_CODE
 from ._common import _main_menu_text, _phase_emoji
@@ -46,11 +45,6 @@ async def cmd_start(message: Message, session: AsyncSession, user: User, is_new_
         event = await horse_shop_service.get_current_event(session)
         text = await _main_menu_text(session, user)
         await message.answer(text, reply_markup=main_menu_kb(horse_shop_active=bool(event)), parse_mode="HTML")
-
-    # Reply-клавиатура — постоянное быстрое меню внизу экрана (отдельным
-    # сообщением: Telegram не позволяет одновременно inline- и reply-разметку
-    # на одном сообщении).
-    await message.answer("⌨️ Быстрое меню снизу экрана — открывает разделы в один тап.", reply_markup=quick_menu_kb())
 
 
 # ── Главное меню ────────────────────────────────────────────────────────────

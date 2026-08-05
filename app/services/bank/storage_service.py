@@ -115,8 +115,9 @@ class StorageService:
     # ── Достать ресурс ────────────────────────────────────────────────────────
 
     async def retrieve_resource(
-        self, session: AsyncSession, user: User, slot: int
+        self, session: AsyncSession, user: User, slot: int, amount: int | None = None
     ) -> tuple[bool, str]:
+        """Достать содержимое ячейки. Если amount не задан — достаёт всё."""
         cell = await self.get_cell(session, user.id, slot)
         if not cell or not cell.is_open:
             return False, "❌ Ячейка не открыта."
@@ -126,12 +127,24 @@ class StorageService:
             return False, "❌ Неизвестный тип предмета (обратитесь в поддержку)."
 
         data = json.loads(cell.item_data or "{}")
-        amount = data.get("amount", 0)
+        stored = data.get("amount", 0)
+
+        if amount is None:
+            amount = stored
+        if amount <= 0:
+            return False, "❌ Количество должно быть > 0."
+        if amount > stored:
+            return False, f"❌ В ячейке только {stored}."
+
         attr = RESOURCE_ITEMS[cell.item_type][1]
         setattr(user, attr, getattr(user, attr, 0) + amount)
 
-        cell.item_type = None
-        cell.item_data = None
+        remaining = stored - amount
+        if remaining > 0:
+            cell.item_data = json.dumps({"amount": remaining})
+        else:
+            cell.item_type = None
+            cell.item_data = None
         await session.flush()
         return True, ""
 

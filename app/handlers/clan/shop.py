@@ -1,6 +1,8 @@
 import html
 from aiogram import Router, F
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +15,7 @@ from app.constants.clan import (
     CLAN_DONAT_PACKAGES,
 )
 from app.utils.formatters import fmt_num
+from app.utils.keyboards.common import back_kb
 from app.utils.menu_media import safe_edit
 
 router = Router()
@@ -20,6 +23,11 @@ router = Router()
 
 _SHOP_ALLOWED_RANKS = {"owner", "deputy", "captain"}
 _UPGRADE_ALLOWED_RANKS = {"owner", "deputy"}
+_QTY_CATEGORIES = {"squad", "tickets"}
+
+
+class ClanShopFSM(StatesGroup):
+    waiting_buy_qty = State()
 
 
 async def _get_member_rank(session: AsyncSession, clan_id: int, user_id: int) -> str:
@@ -158,9 +166,10 @@ async def _show_category(cb: CallbackQuery, clan: Clan, cat_id: str, can_buy_upg
     builder = InlineKeyboardBuilder()
     for item in items:
         can = "✅" if clan.treasury >= item.price else "❌"
+        cb_data = f"clan_buy_menu:{item.item_id}" if cat_id in _QTY_CATEGORIES else f"clan_buy:{item.item_id}"
         builder.row(InlineKeyboardButton(
             text=f"{can} {item.name} — {fmt_num(item.price)}",
-            callback_data=f"clan_buy:{item.item_id}"
+            callback_data=cb_data
         ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clan_shop"))
 
@@ -233,6 +242,151 @@ async def cb_clan_potion_type(cb: CallbackQuery, session: AsyncSession, user: Us
         f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin\n\n"
         f"Выбери уровень:",
         builder.as_markup(),
+    )
+
+
+@router.callback_query(F.data.startswith("clan_buy_menu:"))
+async def cb_clan_buy_menu(cb: CallbackQuery, session: AsyncSession, user: User):
+    item_id = cb.data.split(":")[1]
+    clan = await clan_service.get_user_clan(session, user.id)
+    if not clan:
+        await cb.answer("Вы не в клане", show_alert=True)
+        return
+    rank = await _get_member_rank(session, clan.id, user.id)
+    if rank not in _SHOP_ALLOWED_RANKS:
+        await cb.answer("Покупки из казны доступны с ранга ⚔️ Капитан", show_alert=True)
+        return
+
+    item = CLAN_SHOP_MAP.get(item_id)
+    if not item:
+        await cb.answer("Товар не найден", show_alert=True)
+        return
+
+    discount_pct = await clan_service.get_shop_discount_pct(session, clan.id)
+    price = int(item.price * (1 - discount_pct / 100))
+
+    builder = InlineKeyboardBuilder()
+    for qty in [1, 5, 10, 50, 100]:
+        total = price * qty
+        can = "✅" if clan.treasury >= total else "❌"
+        builder.button(text=f"{can} x{qty} = {fmt_num(total)}", callback_data=f"clan_buy_qty:{item_id}:{qty}")
+    builder.adjust(2)
+    builder.row(InlineKeyboardButton(text="✏️ Своё количество", callback_data=f"clan_buy_input:{item_id}"))
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"clan_shop_cat:{item.category}"))
+
+    await safe_edit(
+        cb,
+        f"🛒 <b>{item.name}</b>\n\n"
+        f"🏦 Казна: {fmt_num(clan.treasury)} NHCoin\n"
+        f"Цена за лот: {fmt_num(price)}\n\n"
+        f"Сколько лотов купить? (применится ко всем участникам клана)",
+        builder.as_markup(),
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("clan_buy_qty:"))
+async def cb_clan_buy_qty(cb: CallbackQuery, session: AsyncSession, user: User):
+    from app.services.cooldown_service import cooldown_service
+    parts = cb.data.split(":")
+    item_id, qty = parts[1], int(parts[2])
+
+    clan = await clan_service.get_user_clan(session, user.id)
+    if not clan:
+        await cb.answer("Вы не в клане", show_alert=True)
+        return
+    rank = await _get_member_rank(session, clan.id, user.id)
+    if rank not in _SHOP_ALLOWED_RANKS:
+        await cb.answer("Покупки из казны доступны с ранга ⚔️ Капитан", show_alert=True)
+        return
+
+    item = CLAN_SHOP_MAP.get(item_id)
+    if not item:
+        await cb.answer("Товар не найден", show_alert=True)
+        return
+
+    lock_key = cooldown_service.clan_shop_lock_key(clan.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("⏳ Подожди...", show_alert=False)
+        return
+
+    result = await clan_service.buy_clan_shop(session, clan, user, item_id, qty=qty)
+    if not result["ok"]:
+        await cb.answer(result["reason"], show_alert=True)
+        return
+
+    await cb.answer(f"✅ {item.name} x{qty} куплено для всего клана!", show_alert=True)
+    await session.refresh(clan)
+    rank = await _get_member_rank(session, clan.id, user.id)
+    await _show_category(cb, clan, item.category, can_buy_upgrades=rank in _UPGRADE_ALLOWED_RANKS)
+
+
+@router.callback_query(F.data.startswith("clan_buy_input:"))
+async def cb_clan_buy_input(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
+    item_id = cb.data.split(":")[1]
+    item = CLAN_SHOP_MAP.get(item_id)
+    if not item:
+        await cb.answer("Товар не найден", show_alert=True)
+        return
+
+    await state.set_state(ClanShopFSM.waiting_buy_qty)
+    await state.update_data(item_id=item_id)
+
+    cancel_kb = InlineKeyboardBuilder()
+    cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data=f"clan_buy_menu:{item_id}"))
+    await safe_edit(
+        cb,
+        f"✏️ <b>{item.name}</b>\n\n"
+        f"Введите количество лотов (число от 1 до 1 000 000):",
+        cancel_kb.as_markup(),
+    )
+    await cb.answer()
+
+
+@router.message(ClanShopFSM.waiting_buy_qty)
+async def msg_clan_buy_qty(message: Message, session: AsyncSession, user: User, state: FSMContext):
+    from app.services.cooldown_service import cooldown_service
+    data = await state.get_data()
+    item_id = data.get("item_id")
+    await state.clear()
+
+    item = CLAN_SHOP_MAP.get(item_id)
+    if not item:
+        await message.answer("❌ Товар не найден.", reply_markup=back_kb("clan_shop"), parse_mode="HTML")
+        return
+
+    try:
+        qty = int(message.text.strip().replace(" ", ""))
+        if qty < 1 or qty > 1_000_000:
+            raise ValueError
+    except ValueError:
+        await message.answer("❌ Введите целое число от 1 до 1 000 000.", reply_markup=back_kb("clan_shop"), parse_mode="HTML")
+        return
+
+    clan = await clan_service.get_user_clan(session, user.id)
+    if not clan:
+        await message.answer("❌ Вы не в клане.", reply_markup=back_kb("clan_shop"), parse_mode="HTML")
+        return
+    rank = await _get_member_rank(session, clan.id, user.id)
+    if rank not in _SHOP_ALLOWED_RANKS:
+        await message.answer("❌ Покупки из казны доступны с ранга ⚔️ Капитан.", reply_markup=back_kb("clan_shop"), parse_mode="HTML")
+        return
+
+    lock_key = cooldown_service.clan_shop_lock_key(clan.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await message.answer("⏳ Подожди...", reply_markup=back_kb("clan_shop"), parse_mode="HTML")
+        return
+
+    result = await clan_service.buy_clan_shop(session, clan, user, item_id, qty=qty)
+    if not result["ok"]:
+        await message.answer(f"❌ {result['reason']}", reply_markup=back_kb("clan_shop"), parse_mode="HTML")
+        return
+
+    await message.answer(
+        f"✅ <b>{item.name} x{qty}</b> куплено для всего клана!\n"
+        f"💰 Потрачено: {fmt_num(result['price'])} NHCoin",
+        reply_markup=back_kb("clan_shop"),
+        parse_mode="HTML",
     )
 
 

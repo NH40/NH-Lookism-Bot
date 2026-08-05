@@ -293,6 +293,35 @@ async def reset_emperor(tg_id: int | None = None):
                 print(f"✅ Сброшено {result.rowcount} записей группировок Императора (все игроки)")
 
 
+async def rebuild_circ_bonuses():
+    """Backfill: пересчитывает бонусы круговых донатов для всех игроков с
+    купленными кругами. Нужно прогнать один раз после добавления нового
+    производного circ-поля (например circ_clan_income_skim_pct) — иначе
+    оно применяется только при следующей покупке/продаже круга у игрока,
+    а не задним числом для тех, кто купил круги раньше."""
+    from app.database import AsyncSessionFactory, init_db
+    from app.models.circular_donat import UserCircularDonat
+    from app.models.user import User
+    from app.services.title_service import title_service
+    from sqlalchemy import select
+
+    await init_db()
+    async with AsyncSessionFactory() as session:
+        async with session.begin():
+            user_ids = (await session.execute(
+                select(UserCircularDonat.user_id).where(UserCircularDonat.circles > 0).distinct()
+            )).scalars().all()
+            if not user_ids:
+                print("Нет игроков с круговыми донатами")
+                return
+            users = (await session.execute(
+                select(User).where(User.id.in_(user_ids))
+            )).scalars().all()
+            for u in users:
+                await title_service.reapply_all_titles(session, u)
+    print(f"✅ Пересчитаны круговые бонусы для {len(users)} игроков")
+
+
 async def auto_backup_loop():
     """Авто-бэкап каждые 6 часов."""
     print("🔄 Запущен авто-бэкап каждые 6 часов")
@@ -318,6 +347,7 @@ Lookism Battle Planet — Manager
   spawnboss <boss_id>           Вызвать конкретного босса (nikita/archangel/manager/brothers)
   reset_emperor                 Сбросить группировки Императора для всех игроков
   reset_emperor <tg_id>         Сбросить группировки Императора для одного игрока
+  rebuild_circ_bonuses          Пересчитать бонусы круговых донатов для всех (backfill)
     """)
 
 
@@ -347,5 +377,7 @@ if __name__ == "__main__":
     elif args[0] == "reset_emperor":
         tg_id = int(args[1]) if len(args) > 1 else None
         asyncio.run(reset_emperor(tg_id))
+    elif args[0] == "rebuild_circ_bonuses":
+        asyncio.run(rebuild_circ_bonuses())
     else:
         print_help()

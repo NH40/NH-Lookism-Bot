@@ -7,141 +7,153 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
-from app.services.bank.casino.common import CASINO_RESOURCES
 from app.services.bank.casino.slots_service import slots_service
-from app.constants.bank import SLOTS_SYMBOLS, SLOTS_SYMBOL_EMOJI, SLOTS_MULTIPLIERS
+from app.services.bank.casino.common import CASINO_RESOURCES
+from app.constants.bank import SLOTS_MULTIPLIERS, SLOTS_SYMBOL_EMOJI, SLOTS_SYMBOLS
 from app.utils.formatters import fmt_num
-from app.utils.safe_edit import safe_edit
 from app.utils.keyboards.common import back_kb
+from app.utils.menu_media import safe_edit
 
 router = Router()
 
 
 class SlotsFSM(StatesGroup):
-    waiting_amount = State()
+    waiting_bet = State()
 
+
+# ── Вспомогательные ──────────────────────────────────────────────────────────
 
 def _slots_main_kb() -> "InlineKeyboardMarkup":
     builder = InlineKeyboardBuilder()
     for res, label in CASINO_RESOURCES.items():
-        builder.row(InlineKeyboardButton(text=f"🎰 Поставить {label}", callback_data=f"slots_pick:{res}"))
-    builder.row(InlineKeyboardButton(text="📜 Таблица выплат", callback_data="slots_paytable"))
+        # Пропускаем статистов — они только в блэкджеке
+        if res == "squad":
+            continue
+        builder.row(InlineKeyboardButton(
+            text=label,
+            callback_data=f"slots_pick:{res}"
+        ))
+    builder.row(InlineKeyboardButton(text="📊 Таблица выплат", callback_data="slots_paytable"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="bank_casino"))
     return builder.as_markup()
 
 
 def _paytable_text() -> str:
-    lines = ["🎰 <b>Таблица выплат</b>\n"]
-    for s in SLOTS_SYMBOLS:
-        emoji = SLOTS_SYMBOL_EMOJI[s]
-        lines.append(f"{emoji}{emoji}{emoji} — x{SLOTS_MULTIPLIERS[s]}")
-    lines.append("\nЛюбые 2 одинаковых символа — возврат ставки.")
+    lines = ["📊 <b>Таблица выплат (слоты)</b>\n"]
+    for symbol in SLOTS_SYMBOLS:
+        emoji = SLOTS_SYMBOL_EMOJI[symbol]
+        mult = SLOTS_MULTIPLIERS[symbol]
+        lines.append(f"{emoji} {symbol} → x{mult:.1f}")
+    lines.append("\n<i>Три одинаковых символа = выигрыш.</i>")
+    lines.append("<i>Два одинаковых = возврат ставки.</i>")
     return "\n".join(lines)
 
 
+def _paytable_kb() -> "InlineKeyboardMarkup":
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="slots_menu"))
+    return builder.as_markup()
+
+
+# ── Главное меню слотов ──────────────────────────────────────────────────────
+
 @router.callback_query(F.data == "bank_casino_slots")
-async def cb_slots_menu(cb: CallbackQuery, session: AsyncSession, user: User):
-    await safe_edit(
-        cb.message,
-        "🎰 <b>Слоты</b>\n\nВыберите ресурс для ставки:",
-        reply_markup=_slots_main_kb(),
-    )
+async def cb_slots_menu(cb: CallbackQuery):
+    await safe_edit(cb, "🎰 <b>Слоты</b>\n\nВыберите ресурс для ставки:", _slots_main_kb())
+    await cb.answer()
+
+
+@router.callback_query(F.data == "slots_menu")
+async def cb_slots_menu_back(cb: CallbackQuery):
+    await safe_edit(cb, "🎰 <b>Слоты</b>\n\nВыберите ресурс для ставки:", _slots_main_kb())
     await cb.answer()
 
 
 @router.callback_query(F.data == "slots_paytable")
 async def cb_slots_paytable(cb: CallbackQuery):
-    await safe_edit(cb.message, _paytable_text(), reply_markup=back_kb("bank_casino_slots"))
+    await safe_edit(cb, _paytable_text(), _paytable_kb())
     await cb.answer()
 
+
+# ── Выбор ресурса ────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("slots_pick:"))
 async def cb_slots_pick(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
     resource = cb.data.split(":")[1]
+
     if resource not in CASINO_RESOURCES:
         await cb.answer("❌ Неизвестный ресурс.", show_alert=True)
         return
 
-    label = CASINO_RESOURCES[resource]
-    balance = getattr(user, resource, 0)
+    # Статистов в слотах нет
+    if resource == "squad":
+        await cb.answer("❌ Статисты доступны только в блэкджеке.", show_alert=True)
+        return
 
-    await state.set_state(SlotsFSM.waiting_amount)
+    balance = getattr(user, resource, 0)
+    await state.set_state(SlotsFSM.waiting_bet)
     await state.update_data(resource=resource)
 
-    cancel_kb = InlineKeyboardBuilder()
-    cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="bank_casino_slots"))
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="slots_menu"))
+
     await safe_edit(
-        cb.message,
-        f"🎰 <b>Ставка: {label}</b>\n\n"
-        f"Ваш баланс: <b>{fmt_num(balance)}</b>\n\n"
-        f"Введите размер ставки:",
-        reply_markup=cancel_kb.as_markup(),
+        cb,
+        f"🎰 <b>Слоты — {CASINO_RESOURCES[resource]}</b>\n\n"
+        f"Баланс: {fmt_num(balance)}\n\n"
+        f"Введите сумму ставки:",
+        builder.as_markup()
     )
     await cb.answer()
 
 
-@router.message(SlotsFSM.waiting_amount)
+# ── Ввод суммы ставки ────────────────────────────────────────────────────────
+
+@router.message(SlotsFSM.waiting_bet)
 async def msg_slots_bet(message: Message, session: AsyncSession, user: User, state: FSMContext):
     data = await state.get_data()
-    resource = data.get("resource", "nh_coins")
+    resource = data.get("resource")
     await state.clear()
+
+    if not resource:
+        await message.answer("❌ Ресурс не выбран.", reply_markup=back_kb("slots_menu"), parse_mode="HTML")
+        return
 
     try:
         amount = int(message.text.strip().replace(" ", "").replace(",", ""))
     except ValueError:
-        await message.answer("❌ Введите целое число.", reply_markup=back_kb("bank_casino_slots"), parse_mode="HTML")
+        await message.answer("❌ Введите целое число.", reply_markup=back_kb("slots_menu"), parse_mode="HTML")
         return
 
-    from app.services.cooldown_service import cooldown_service
-    lock_key = cooldown_service.slots_lock_key(user.id)
-    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
-        await message.answer("⏳ Подождите, предыдущая ставка ещё обрабатывается.", reply_markup=back_kb("bank_casino_slots"))
+    if amount <= 0:
+        await message.answer("❌ Ставка должна быть больше нуля.", reply_markup=back_kb("slots_menu"), parse_mode="HTML")
         return
 
     result = await slots_service.play(session, user, resource, amount)
 
-    if not result.get("ok"):
-        builder = InlineKeyboardBuilder()
+    if not result.get("ok", False):
         if result.get("x3_warn"):
-            builder.row(InlineKeyboardButton(text="🔄 Изменить ставку", callback_data=f"slots_pick:{resource}"))
-        builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="bank_casino_slots"))
-        await message.answer(result["msg"], reply_markup=builder.as_markup(), parse_mode="HTML")
+            await message.answer(result["msg"], reply_markup=back_kb("slots_menu"), parse_mode="HTML")
+        else:
+            await message.answer(result.get("msg", "❌ Ошибка."), reply_markup=back_kb("slots_menu"), parse_mode="HTML")
         return
 
-    reel = result["reel"]
+    reel_str = slots_service.render_reel(result["reel"])
     outcome = result["outcome"]
-    label = result["resource_label"]
-    payout = result["payout"]
-    new_balance = getattr(user, resource, 0)
-    reel_text = slots_service.render_reel(reel)
 
     if outcome == "triple":
-        profit = payout - amount
-        text = (
-            f"🎰 {reel_text} 🎰\n\n"
-            f"🎉 <b>ДЖЕКПОТ!</b>\n\n"
-            f"Ставка: {fmt_num(amount)} {label}\n"
-            f"Выигрыш: +{fmt_num(profit)} {label}\n"
-            f"Итого получено: {fmt_num(payout)} {label}\n\n"
-            f"Новый баланс: {fmt_num(new_balance)} {label}"
-        )
+        outcome_text = "🎉 ТРИ В ОДИНАКОВЫХ! ВЫИГРЫШ!"
     elif outcome == "pair":
-        text = (
-            f"🎰 {reel_text} 🎰\n\n"
-            f"🔁 <b>Возврат ставки</b>\n\n"
-            f"Ставка: {fmt_num(amount)} {label} — возвращена\n\n"
-            f"Баланс: {fmt_num(new_balance)} {label}"
-        )
+        outcome_text = "🔄 Два одинаковых — возврат ставки."
     else:
-        text = (
-            f"🎰 {reel_text} 🎰\n\n"
-            f"😔 <b>Проигрыш!</b>\n\n"
-            f"Ставка: {fmt_num(amount)} {label}\n"
-            f"Потеряно: -{fmt_num(amount)} {label}\n\n"
-            f"Новый баланс: {fmt_num(new_balance)} {label}"
-        )
+        outcome_text = "💔 Проигрыш."
 
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="🎰 Крутить снова", callback_data=f"slots_pick:{resource}"))
-    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="bank_casino_slots"))
-    await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+    msg = (
+        f"🎰 <b>Результат</b>\n\n"
+        f"{reel_str}\n\n"
+        f"{outcome_text}\n"
+        f"Ставка: {fmt_num(amount)} {result['resource_label']}\n"
+        f"Выигрыш: {fmt_num(result['payout'])} {result['resource_label']}"
+    )
+
+    await message.answer(msg, reply_markup=back_kb("slots_menu"), parse_mode="HTML")

@@ -49,40 +49,40 @@ async def cmd_start(message: Message, session: AsyncSession, user: User):
     )
 
 
-    # @router.message(CommandStart())
-    # async def cmd_start(message: Message, session: AsyncSession, user: User, is_new_user: bool):
-    #     args = message.text.split()
-    #     if is_new_user and len(args) > 1 and args[1].startswith("ref_"):
-    #         try:
-    #             teacher_tg_id = int(args[1].replace("ref_", ""))
-    #             from app.services.referral_service import referral_service
-    #             await referral_service.register_with_referral(session, user, teacher_tg_id)
-    #             user.nh_coins += 2000
-    #             await session.flush()
-    #         except Exception:
-    #             pass
+# @router.message(CommandStart())
+# async def cmd_start(message: Message, session: AsyncSession, user: User, is_new_user: bool):
+#     args = message.text.split()
+#     if is_new_user and len(args) > 1 and args[1].startswith("ref_"):
+#         try:
+#             teacher_tg_id = int(args[1].replace("ref_", ""))
+#             from app.services.referral_service import referral_service
+#             await referral_service.register_with_referral(session, user, teacher_tg_id)
+#             user.nh_coins += 2000
+#             await session.flush()
+#         except Exception:
+#             pass
 
-    #     if is_new_user:
-    #         await message.answer(
-    #             f"👋 Добро пожаловать, <b>{html.escape(user.full_name)}</b>!\n\n"
-    #             f"Ты начинаешь путь уличного бойца.\n"
-    #             f"Цель — стать Императором!\n\n"
-    #             f"🏴 Банда → 👑 Король → ✊ Кулак → 🏛 Император",
-    #             reply_markup=main_menu_kb(),
-    #             parse_mode="HTML",
-    #         )
-    #     else:
-    #         from app.services.horse_shop_service import horse_shop_service
-    #         # Убираем старую reply-клавиатуру (quick_menu), удалённую из кода —
-    #         # Telegram хранит её на клиенте и не снимает сама без явного ReplyKeyboardRemove.
-    #         try:
-    #             stub = await message.answer("​", reply_markup=ReplyKeyboardRemove())
-    #             await stub.delete()
-    #         except Exception:
-    #             pass
-    #         event = await horse_shop_service.get_current_event(session)
-    #         text = await _main_menu_text(session, user)
-    #         await message.answer(text, reply_markup=main_menu_kb(horse_shop_active=bool(event)), parse_mode="HTML")
+#     if is_new_user:
+#         await message.answer(
+#             f"👋 Добро пожаловать, <b>{html.escape(user.full_name)}</b>!\n\n"
+#             f"Ты начинаешь путь уличного бойца.\n"
+#             f"Цель — стать Императором!\n\n"
+#             f"🏴 Банда → 👑 Король → ✊ Кулак → 🏛 Император",
+#             reply_markup=main_menu_kb(),
+#             parse_mode="HTML",
+#         )
+#     else:
+#         from app.services.horse_shop_service import horse_shop_service
+#         # Убираем старую reply-клавиатуру (quick_menu), удалённую из кода —
+#         # Telegram хранит её на клиенте и не снимает сама без явного ReplyKeyboardRemove.
+#         try:
+#             stub = await message.answer("​", reply_markup=ReplyKeyboardRemove())
+#             await stub.delete()
+#         except Exception:
+#             pass
+#         event = await horse_shop_service.get_current_event(session)
+#         text = await _main_menu_text(session, user)
+#         await message.answer(text, reply_markup=main_menu_kb(horse_shop_active=bool(event)), parse_mode="HTML")
 
 
 

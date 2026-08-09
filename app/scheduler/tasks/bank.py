@@ -183,14 +183,13 @@ async def investment_tick():
                 if matured:
                     from sqlalchemy import select
                     from app.models.user import User as UserModel
-                    user_ids = [inv.user_id for inv in matured]
+                    from app.services.bank.casino.common import CASINO_RESOURCES
+                    
+                    user_ids = [inv["user_id"] for inv in matured]
                     users_r = await session.execute(
-                        select(UserModel.id, UserModel.tg_id).where(
-                            UserModel.id.in_(user_ids)
-                        )
+                        select(UserModel).where(UserModel.id.in_(user_ids))
                     )
-                    # Сохраняем только tg_id — не нужно тянуть весь объект
-                    users_map = {row.id: row.tg_id for row in users_r.all()}
+                    users_map = {u.id: u for u in users_r.scalars().all()}
             except Exception as e:
                 logger.error(f"investment_tick DB error: {e}")
                 return
@@ -211,20 +210,25 @@ async def investment_tick():
         return
 
     from app.utils.formatters import fmt_num
-    for inv in matured:
-        tg_id = users_map.get(inv.user_id)
-        if not tg_id:
+    from app.services.bank.casino.common import CASINO_RESOURCES
+
+    for inv_data in matured:
+        user = users_map.get(inv_data["user_id"])
+        if not user:
             continue
-        payout = inv.amount + int(inv.amount * inv.interest_pct / 100)
+        
+        resource_label = CASINO_RESOURCES.get(inv_data["resource"], inv_data["resource"])
+        payout = inv_data["payout"]
+        
         try:
             await bot_instance.send_message(
-                tg_id,
+                user.tg_id,
                 f"📈 <b>Вклад созрел!</b>\n\n"
-                f"Сумма: {fmt_num(inv.amount)} NHCoin\n"
-                f"Прибыль: +{inv.interest_pct}%\n"
-                f"К получению: <b>{fmt_num(payout)} NHCoin</b>\n\n"
-                f"Забери деньги в <b>Банк → Инвестиции</b>!",
+                f"Ресурс: {resource_label}\n"
+                f"Сумма: {fmt_num(inv_data['amount'])}\n"
+                f"К получению: <b>{fmt_num(payout)} {resource_label}</b>\n\n"
+                f"Забери в <b>Банк → Инвестиции</b>!",
                 parse_mode="HTML",
             )
         except Exception as e:
-            logger.warning(f"investment notif error for tg_id={tg_id}: {e}")
+            logger.warning(f"investment notif error for user_id={inv_data['user_id']}: {e}")

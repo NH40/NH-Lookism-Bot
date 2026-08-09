@@ -1,6 +1,5 @@
 """Инвестиции: создание вкладов, просмотр и вывод."""
 from datetime import datetime, timezone
-
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
@@ -11,18 +10,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.models.bank import Investment
 from app.services.bank.investments_service import (
-    investments_service, DURATION_OPTIONS, MAX_INVESTMENTS, MAX_DEPOSIT
+    investments_service, MAX_INVESTMENTS, MAX_DEPOSIT, INVEST_RESOURCES, get_interest_pct
 )
+from app.constants.bank import INVEST_DURATION_OPTIONS, INVEST_DURATION_OPTIONS_OLD
+from app.services.bank.casino.common import CASINO_RESOURCES
 from app.utils.formatters import fmt_num, fmt_ttl
 from app.utils.keyboards.common import back_kb
 from app.utils.menu_media import safe_edit
 
 router = Router()
 
-
 class InvestFSM(StatesGroup):
+    waiting_resource = State()
+    waiting_duration = State()
     waiting_amount = State()
-
 
 # ── Вспомогательные ──────────────────────────────────────────────────────────
 
@@ -35,115 +36,171 @@ def _inv_status(inv: Investment) -> str:
     remaining = int((inv.matures_at - now).total_seconds())
     return f"⏳ {fmt_ttl(remaining)}"
 
-
-def _investments_text(active: list[Investment], user_balance: int) -> str:
+def _investments_text(active: list[Investment], user: User) -> str:
     lines = [
         "📈 <b>Инвестиции</b>\n",
         "Открывайте вклады и получайте проценты!\n",
         "📌 Условия:",
-        "  1ч → +3%  |  3ч → +5%",
-        "  6ч → +10% |  12ч → +15%",
-        "  24ч → +20%",
-        f"  Максимум: {fmt_num(MAX_DEPOSIT)} NHCoin\n",
-        f"💰 Ваш баланс: {fmt_num(user_balance)} NHCoin",
-        f"📋 Активных: {len(active)}/{MAX_INVESTMENTS}\n",
     ]
+    
+    lines.append("  <b>Для NHCoin:</b>")
+    for hours, pct in INVEST_DURATION_OPTIONS.items():
+        lines.append(f"    {hours}ч → +{pct:.0f}%")
+    
+    lines.append("  <b>Для остальных ресурсов:</b>")
+    for hours, pct in INVEST_DURATION_OPTIONS_OLD.items():
+        lines.append(f"    {hours}ч → +{pct:.0f}%")
+    
+    lines.append(f"  Максимум: {fmt_num(MAX_DEPOSIT)} единиц ресурса")
+    lines.append(f"  Максимум вкладов: {MAX_INVESTMENTS}\n")
+
     if active:
+        lines.append("📋 <b>Ваши вклады:</b>")
         for i, inv in enumerate(active, 1):
-            payout = inv.amount + int(inv.amount * inv.interest_pct / 100)
+            label = CASINO_RESOURCES.get(inv.resource, inv.resource)
+            # Хранится как 3% → 30, 20% → 200
+            # ДЕЛИМ НА 10, чтобы получить реальный процент
+            real_pct = inv.interest_pct / 10
+            payout = int(inv.amount * (1 + real_pct / 100))
             lines.append(
-                f"<b>Вклад #{i}</b>\n"
-                f"  Сумма: {fmt_num(inv.amount)} NHCoin\n"
-                f"  Срок: {inv.duration_hours}ч (+{inv.interest_pct}%)\n"
-                f"  Выплата: {fmt_num(payout)} NHCoin\n"
-                f"  Статус: {_inv_status(inv)}"
+                f"<b>#{i}</b> — {label}: {fmt_num(inv.amount)} → "
+                f"{fmt_num(payout)} (+{real_pct:.1f}%) — {_inv_status(inv)}"
             )
     else:
         lines.append("Вкладов нет.")
     return "\n".join(lines)
 
-
 def _investments_kb(active: list[Investment], can_create: bool) -> "InlineKeyboardMarkup":
     builder = InlineKeyboardBuilder()
     if can_create:
-        builder.row(InlineKeyboardButton(text="➕ Открыть вклад", callback_data="invest_choose_duration"))
+        builder.row(InlineKeyboardButton(text="➕ Открыть вклад", callback_data="invest_choose_resource"))
     for inv in active:
         now = datetime.now(timezone.utc)
         if now >= inv.matures_at and not inv.is_withdrawn:
-            payout = inv.amount + int(inv.amount * inv.interest_pct / 100)
+            label = CASINO_RESOURCES.get(inv.resource, inv.resource)
+            # Хранится как 3% → 30, 20% → 200
+            # ДЕЛИМ НА 10, чтобы получить реальный процент
+            real_pct = inv.interest_pct / 10
+            payout = int(inv.amount * (1 + real_pct / 100))
             builder.row(InlineKeyboardButton(
-                text=f"💰 Получить {fmt_num(payout)} NHCoin (вклад #{inv.id})",
+                text=f"💰 Получить {fmt_num(payout)} {label} (вклад #{inv.id})",
                 callback_data=f"invest_withdraw:{inv.id}"
             ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="bank_menu"))
     return builder.as_markup()
 
-
-# ── Главное меню вкладов ──────────────────────────────────────────────────────
+# ── Главное меню ──────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "bank_investments")
 async def cb_bank_investments(cb: CallbackQuery, session: AsyncSession, user: User):
     active = await investments_service.get_active(session, user.id)
     can_create = len(active) < MAX_INVESTMENTS
-    await safe_edit(cb, _investments_text(active, user.nh_coins), _investments_kb(active, can_create))
+    await safe_edit(cb, _investments_text(active, user), _investments_kb(active, can_create))
     await cb.answer()
 
+# ── Выбор ресурса ─────────────────────────────────────────────────────────────
 
-# ── Выбрать срок ────────────────────────────────────────────────────────────────
-
-@router.callback_query(F.data == "invest_choose_duration")
-async def cb_invest_choose_duration(cb: CallbackQuery, session: AsyncSession, user: User):
+@router.callback_query(F.data == "invest_choose_resource")
+async def cb_invest_choose_resource(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
     active = await investments_service.get_active(session, user.id)
     if len(active) >= MAX_INVESTMENTS:
         await cb.answer(f"❌ Максимум {MAX_INVESTMENTS} вклада.", show_alert=True)
         return
 
     builder = InlineKeyboardBuilder()
-    for hours, pct in DURATION_OPTIONS.items():
+    for res, label in INVEST_RESOURCES.items():
+        balance = getattr(user, res, 0)
         builder.row(InlineKeyboardButton(
-            text=f"⏱ {hours}ч → +{pct}%",
-            callback_data=f"invest_pick_dur:{hours}"
+            text=f"{label} (баланс: {fmt_num(balance)})",
+            callback_data=f"invest_pick_res:{res}"
         ))
     builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="bank_investments"))
+
     await safe_edit(
         cb,
-        "📈 <b>Выберите срок вклада</b>\n\n"
-        "Чем дольше срок — тем выше процент!",
-        builder.as_markup(),
+        "📈 <b>Выберите ресурс для вклада</b>\n\n"
+        "Вы можете вложить любой ресурс (кроме статистов).",
+        builder.as_markup()
     )
     await cb.answer()
 
+@router.callback_query(F.data.startswith("invest_pick_res:"))
+async def cb_invest_pick_res(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
+    resource = cb.data.split(":")[1]
+    if resource not in INVEST_RESOURCES:
+        await cb.answer("❌ Недопустимый ресурс.", show_alert=True)
+        return
+    await state.update_data(resource=resource)
+    await state.set_state(InvestFSM.waiting_duration)
+
+    builder = InlineKeyboardBuilder()
+    # Используем INVEST_DURATION_OPTIONS для всех ресурсов
+    for hours in INVEST_DURATION_OPTIONS.keys():
+        if resource == "nh_coins":
+            pct = INVEST_DURATION_OPTIONS.get(hours)
+        else:
+            pct = INVEST_DURATION_OPTIONS_OLD.get(hours)
+        builder.row(InlineKeyboardButton(
+            text=f"⏱ {hours}ч → +{pct:.1f}%",
+            callback_data=f"invest_pick_dur:{hours}"
+    ))
+    builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="bank_investments"))
+    
+    label = INVEST_RESOURCES[resource]
+    await safe_edit(
+        cb,
+        f"📈 <b>Вклад в {label}</b>\n\n"
+        f"{'NHCoin' if resource == 'nh_coins' else 'Остальные ресурсы'}: "
+        f"{'полные' if resource == 'nh_coins' else 'уменьшенные в 2 раза'} проценты\n\n"
+        f"Выберите срок:",
+        builder.as_markup()
+    )
+    await cb.answer()
 
 @router.callback_query(F.data.startswith("invest_pick_dur:"))
 async def cb_invest_pick_dur(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
     hours = int(cb.data.split(":")[1])
-    if hours not in DURATION_OPTIONS:
+    
+    data = await state.get_data()
+    resource = data.get("resource")
+    if not resource:
+        await cb.answer("❌ Ресурс не выбран.", show_alert=True)
+        return
+
+    # Проверяем, что часы есть в словаре
+    if hours not in INVEST_DURATION_OPTIONS:
         await cb.answer("❌ Неверный срок.", show_alert=True)
         return
 
-    pct = DURATION_OPTIONS[hours]
+    await state.update_data(duration_hours=hours)
     await state.set_state(InvestFSM.waiting_amount)
-    await state.update_data(duration_hours=hours, interest_pct=pct)
 
+    pct = get_interest_pct(resource, hours)
+    balance = getattr(user, resource, 0)
     cancel_kb = InlineKeyboardBuilder()
     cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="bank_investments"))
+
     await safe_edit(
         cb,
-        f"📈 <b>Вклад на {hours}ч (+{pct}%)</b>\n\n"
-        f"Максимум: {fmt_num(MAX_DEPOSIT)} NHCoin\n"
-        f"Ваш баланс: {fmt_num(user.nh_coins)} NHCoin\n\n"
+        f"📈 <b>Вклад на {hours}ч (+{pct:.1f}%)</b>\n\n"
+        f"Ресурс: {INVEST_RESOURCES[resource]}\n"
+        f"Доступно: {fmt_num(balance)}\n"
+        f"Максимум: {fmt_num(MAX_DEPOSIT)}\n\n"
         f"Введите сумму вклада:",
-        cancel_kb.as_markup(),
+        cancel_kb.as_markup()
     )
     await cb.answer()
-
 
 @router.message(InvestFSM.waiting_amount)
 async def msg_invest_amount(message: Message, session: AsyncSession, user: User, state: FSMContext):
     data = await state.get_data()
-    hours = data.get("duration_hours", 1)
-    pct = data.get("interest_pct", 3)
+    resource = data.get("resource")
+    hours = data.get("duration_hours")
     await state.clear()
+
+    if not resource or not hours:
+        await message.answer("❌ Ошибка выбора. Начните заново.", reply_markup=back_kb("bank_investments"), parse_mode="HTML")
+        return
 
     try:
         amount = int(message.text.strip().replace(" ", "").replace(",", ""))
@@ -151,15 +208,11 @@ async def msg_invest_amount(message: Message, session: AsyncSession, user: User,
         await message.answer("❌ Введите целое число.", reply_markup=back_kb("bank_investments"), parse_mode="HTML")
         return
 
-    # Redis-лок: предотвращает параллельное создание вклада.
-    from app.services.cooldown_service import cooldown_service
-    lock_key = cooldown_service.invest_lock_key(user.id)
-    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
-        await message.answer("⏳ Подождите, предыдущий запрос ещё обрабатывается.",
-                             reply_markup=back_kb("bank_investments"), parse_mode="HTML")
+    if amount <= 0:
+        await message.answer("❌ Сумма должна быть больше нуля.", reply_markup=back_kb("bank_investments"), parse_mode="HTML")
         return
 
-    ok, err = await investments_service.create(session, user, amount, hours)
+    ok, err = await investments_service.create(session, user, resource, amount, hours)
     if not ok:
         await message.answer(err, reply_markup=back_kb("bank_investments"), parse_mode="HTML")
         return
@@ -167,25 +220,25 @@ async def msg_invest_amount(message: Message, session: AsyncSession, user: User,
     from app.utils.region_activity import record
     await record(session, user.id, "bank")
 
-    payout = amount + int(amount * pct / 100)
+    pct = get_interest_pct(resource, hours)
+    payout = int(amount * (1 + pct / 100))
     await message.answer(
         f"✅ <b>Вклад открыт!</b>\n\n"
-        f"Сумма: {fmt_num(amount)} NHCoin\n"
+        f"Ресурс: {INVEST_RESOURCES[resource]}\n"
+        f"Сумма: {fmt_num(amount)}\n"
         f"Срок: {hours} ч\n"
-        f"Выплата через {hours}ч: <b>{fmt_num(payout)} NHCoin</b> (+{pct}%)\n\n"
-        f"<i>Деньги заморожены до истечения срока.</i>",
+        f"Выплата через {hours}ч: <b>{fmt_num(payout)} {INVEST_RESOURCES[resource]}</b> (+{pct:.1f}%)\n\n"
+        f"<i>Ресурс заморожен до истечения срока.</i>",
         reply_markup=back_kb("bank_investments"),
         parse_mode="HTML",
     )
 
-
-# ── Вывести вклад ─────────────────────────────────────────────────────────────
+# ── Вывод вклада ─────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("invest_withdraw:"))
 async def cb_invest_withdraw(cb: CallbackQuery, session: AsyncSession, user: User):
     inv_id = int(cb.data.split(":")[1])
 
-    # Redis-лок по ID вклада: предотвращает двойной вывод.
     from app.services.cooldown_service import cooldown_service
     lock_key = cooldown_service.invest_withdraw_lock_key(inv_id)
     if not await cooldown_service.acquire_lock(lock_key, ttl=10):
@@ -199,11 +252,14 @@ async def cb_invest_withdraw(cb: CallbackQuery, session: AsyncSession, user: Use
         except Exception:
             await cb.answer(err, show_alert=True)
         return
+
+    inv = await session.get(Investment, inv_id)
+    label = CASINO_RESOURCES.get(inv.resource, inv.resource) if inv else "ресурс"
     await safe_edit(
         cb,
         f"✅ <b>Вклад получен!</b>\n\n"
-        f"Зачислено: <b>{fmt_num(payout)} NHCoin</b>\n"
-        f"Баланс: {fmt_num(user.nh_coins)} NHCoin",
+        f"Зачислено: <b>{fmt_num(payout)} {label}</b>\n"
+        f"Баланс: {fmt_num(getattr(user, inv.resource, 0))} {label}",
         back_kb("bank_investments"),
     )
     await cb.answer()

@@ -71,7 +71,7 @@ class CreditsService:
             return False, f"❌ Максимум {MAX_CREDITS} кредита одновременно."
 
         # Проверка суммы
-        max_amount = locked_user.income_per_minute * CREDIT_INCOME_MINUTES
+        max_amount = locked_user.income_per_minute * 60 * 24
         if max_amount <= 0:
             return False, "❌ У вас нет дохода. Постройте бизнес, чтобы взять кредит."
         if amount < 1000:

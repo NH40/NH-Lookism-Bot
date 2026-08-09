@@ -67,19 +67,17 @@ class StorageCell(Base):
 # ─── Инвестиции ───────────────────────────────────────────────────────────────
 
 class Investment(Base):
-    """Банковский вклад игрока."""
     __tablename__ = "bank_investments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
 
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    duration_hours: Mapped[int] = mapped_column(Integer, nullable=False)    # 1/3/6/12/24
-    interest_pct: Mapped[int] = mapped_column(Integer, nullable=False)      # 3/5/10/15/20
+    resource: Mapped[str] = mapped_column(String(32), nullable=False, default="nh_coins")
+    duration_hours: Mapped[int] = mapped_column(Integer, nullable=False)
+    interest_pct: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     matures_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     is_matured: Mapped[bool] = mapped_column(Boolean, default=False)

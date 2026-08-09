@@ -10,8 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.models.bank import BankCredit
-from app.services.bank.credits_service import (
-    credits_service, MAX_CREDITS, REPAY_FACTOR, BLOCK_HOURS, DELETE_HOURS
+from app.services.bank.credits_service import credits_service
+from app.constants.bank import (
+    CREDIT_MAX, CREDIT_REPAY_FACTOR, CREDIT_BLOCK_HOURS, CREDIT_DELETE_HOURS, CREDIT_INCOME_MINUTES
 )
 from app.utils.formatters import fmt_num, fmt_ttl
 from app.utils.keyboards.common import back_kb
@@ -45,15 +46,15 @@ def _credits_text(credits: list[BankCredit], max_amount: int) -> str:
     lines = [
         "💳 <b>Кредиты</b>\n",
         f"Максимальная сумма: <b>{fmt_num(max_amount)} NHCoin</b>",
-        f"  (Доход/час = доход/мин × 60)\n",
+        f"  (Доход/сутки = доход/мин × {CREDIT_INCOME_MINUTES})\n",
         f"📌 Условия:",
-        f"  • Срок: {BLOCK_HOURS}ч — выплата до {int(REPAY_FACTOR*100)}% от суммы",
-        f"  • Через {BLOCK_HOURS}ч блокируются действия",
-        f"  • Через {DELETE_HOURS}ч банда <b>удаляется</b>",
+        f"  • Срок: {CREDIT_BLOCK_HOURS}ч — выплата до {int(CREDIT_REPAY_FACTOR*100)}% от суммы",
+        f"  • Через {CREDIT_BLOCK_HOURS}ч блокируются действия",
+        f"  • Через {CREDIT_DELETE_HOURS}ч банда <b>удаляется</b>",
         f"  • Кредит не обнуляется при сносе банды/престиже\n",
     ]
     if credits:
-        lines.append(f"📋 Активных: {len(credits)}/{MAX_CREDITS}\n")
+        lines.append(f"📋 Активных: {len(credits)}/{CREDIT_MAX}\n")
         for i, c in enumerate(credits, 1):
             remaining = c.due_amount - c.paid_amount
             lines.append(
@@ -86,8 +87,9 @@ def _credits_kb(credits: list[BankCredit], can_take: bool) -> "InlineKeyboardMar
 @router.callback_query(F.data == "bank_credits")
 async def cb_bank_credits(cb: CallbackQuery, session: AsyncSession, user: User):
     credits = await credits_service.get_active_credits(session, user.id)
-    max_amount = user.income_per_minute * 60
-    can_take = len(credits) < MAX_CREDITS
+    # Максимальная сумма кредита = доход за CREDIT_INCOME_MINUTES минут (сутки)
+    max_amount = user.income_per_minute * CREDIT_INCOME_MINUTES
+    can_take = len(credits) < CREDIT_MAX
     await safe_edit(cb, _credits_text(credits, max_amount), _credits_kb(credits, can_take))
     await cb.answer()
 
@@ -96,14 +98,14 @@ async def cb_bank_credits(cb: CallbackQuery, session: AsyncSession, user: User):
 
 @router.callback_query(F.data == "credit_take")
 async def cb_credit_take(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
-    max_amount = user.income_per_minute * 60
+    max_amount = user.income_per_minute * CREDIT_INCOME_MINUTES
     if max_amount <= 0:
         await cb.answer("❌ Нет дохода для получения кредита.", show_alert=True)
         return
 
     active = await credits_service.get_active_credits(session, user.id)
-    if len(active) >= MAX_CREDITS:
-        await cb.answer(f"❌ Максимум {MAX_CREDITS} кредита.", show_alert=True)
+    if len(active) >= CREDIT_MAX:
+        await cb.answer(f"❌ Максимум {CREDIT_MAX} кредита.", show_alert=True)
         return
 
     await state.set_state(CreditFSM.waiting_amount)
@@ -115,7 +117,7 @@ async def cb_credit_take(cb: CallbackQuery, session: AsyncSession, user: User, s
         cb,
         f"💳 <b>Взять кредит</b>\n\n"
         f"Максимум: <b>{fmt_num(max_amount)} NHCoin</b>\n"
-        f"К выплате: <b>{int(REPAY_FACTOR*100)}%</b> от суммы\n\n"
+        f"К выплате: <b>{int(CREDIT_REPAY_FACTOR*100)}%</b> от суммы\n\n"
         f"Введите сумму кредита:",
         cancel_kb.as_markup(),
     )
@@ -133,7 +135,6 @@ async def msg_credit_amount(message: Message, session: AsyncSession, user: User,
         return
 
     # Redis-лок: предотвращает параллельный вход в выдачу кредита.
-    # DB-уровень (SELECT FOR UPDATE) защищает как второй эшелон.
     from app.services.cooldown_service import cooldown_service
     lock_key = cooldown_service.credit_lock_key(user.id)
     if not await cooldown_service.acquire_lock(lock_key, ttl=10):
@@ -149,13 +150,13 @@ async def msg_credit_amount(message: Message, session: AsyncSession, user: User,
     from app.utils.region_activity import record
     await record(session, user.id, "bank")
 
-    due = int(amount * REPAY_FACTOR)
+    due = int(amount * CREDIT_REPAY_FACTOR)
     await message.answer(
         f"✅ <b>Кредит выдан!</b>\n\n"
         f"Сумма: {fmt_num(amount)} NHCoin зачислены на счёт\n"
         f"К выплате: {fmt_num(due)} NHCoin\n"
-        f"⏰ Срок: {BLOCK_HOURS} часа (до блокировки)\n"
-        f"💀 Снос банды через: {DELETE_HOURS} часов\n\n"
+        f"⏰ Срок: {CREDIT_BLOCK_HOURS} часа (до блокировки)\n"
+        f"💀 Снос банды через: {CREDIT_DELETE_HOURS} часов\n\n"
         f"<i>Кредит сохранится даже после сноса банды и престижа!</i>",
         reply_markup=back_kb("bank_credits"),
         parse_mode="HTML",

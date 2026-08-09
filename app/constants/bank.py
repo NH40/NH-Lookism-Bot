@@ -9,11 +9,11 @@ CREDIT_MAX: int = 3
 # Коэффициент возврата: выплатить CREDIT_REPAY_FACTOR × сумму кредита
 CREDIT_REPAY_FACTOR: float = 1.25
 # Через сколько часов после просрочки блокируются действия (банда, атака, рейд)
-CREDIT_BLOCK_HOURS: int = 3
+CREDIT_BLOCK_HOURS: int = 9          # было 24 → теперь 9 часов
 # Через сколько часов после просрочки сносится банда
-CREDIT_DELETE_HOURS: int = 6
+CREDIT_DELETE_HOURS: int = 72        # 3 дня (не менялось)
 # Максимальная сумма одного кредита: доход за CREDIT_INCOME_MINUTES минут
-CREDIT_INCOME_MINUTES: int = 60
+CREDIT_INCOME_MINUTES: int = 1440    # было 60 → теперь сутки (24*60)
 
 # ── Казино: общее ────────────────────────────────────────────────────────────
 # TTL истории ставок в Redis для детектора стратегии x3 (секунды)
@@ -82,12 +82,24 @@ STORAGE_FEE_PER_MINUTE: int = 65
 # Максимальное число одновременных вкладов
 INVEST_MAX_SLOTS: int = 3
 # Максимальная сумма одного вклада (NHCoin)
-INVEST_MAX_DEPOSIT: int = 67_000_000
+INVEST_MAX_DEPOSIT: int = 100_000_000
+
 # Срок (часы) → доходность (%)
-INVEST_DURATION_OPTIONS: dict[int, int] = {
-    1:  3,
-    3:  5,
-    6:  10,
-    12: 15,
-    24: 20,
+# Для NHCoin — увеличенные в 4 раза (12, 20, 40, 60, 80)
+# Для остальных ресурсов — старые проценты (3, 5, 10, 15, 20)
+INVEST_DURATION_OPTIONS: dict[int, float] = {
+    1:  12.0,   # для NHCoin
+    3:  20.0,
+    6:  40.0,
+    12: 60.0,
+    24: 80.0,
+}
+
+# Старые проценты для остальных ресурсов
+INVEST_DURATION_OPTIONS_OLD: dict[int, float] = {
+    1:  3.0,
+    3:  5.0,
+    6:  10.0,
+    12: 15.0,
+    24: 20.0,
 }

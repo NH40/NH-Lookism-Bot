@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.services.bank.credits_service import credits_service
-from app.services.bank.investments_service import investments_service, DURATION_OPTIONS
+from app.services.bank.investments_service import investments_service
 from app.utils.formatters import fmt_num
 from app.utils.menu_media import safe_edit
 

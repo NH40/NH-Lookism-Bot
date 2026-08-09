@@ -6,10 +6,11 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
 from app.models.user import User
 from app.models.clan import Clan, ClanMember
 from app.services.clan import clan_service
-from sqlalchemy import select
 from app.constants.clan import (
     CLAN_SHOP_ITEMS, CLAN_SHOP_MAP, CLAN_SHOP_CATEGORIES, CLAN_UPGRADES,
     CLAN_DONAT_PACKAGES,
@@ -163,12 +164,17 @@ async def _show_category(cb: CallbackQuery, clan: Clan, cat_id: str, can_buy_upg
     cat_name = CLAN_SHOP_CATEGORIES.get(cat_id, cat_id)
     items = [i for i in CLAN_SHOP_ITEMS if i.category == cat_id]
 
+    # Получаем скидку для отображения цен
+    discount_pct = await clan_service.get_shop_discount_pct(session, clan.id)
+
     builder = InlineKeyboardBuilder()
     for item in items:
-        can = "✅" if clan.treasury >= item.price else "❌"
+        # Применяем скидку к цене для отображения
+        price_display = int(item.price * (1 - discount_pct / 100))
+        can = "✅" if clan.treasury >= price_display else "❌"
         cb_data = f"clan_buy_menu:{item.item_id}" if cat_id in _QTY_CATEGORIES else f"clan_buy:{item.item_id}"
         builder.row(InlineKeyboardButton(
-            text=f"{can} {item.name} — {fmt_num(item.price)}",
+            text=f"{can} {item.name} — {fmt_num(price_display)}",
             callback_data=cb_data
         ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="clan_shop"))
@@ -310,7 +316,12 @@ async def cb_clan_buy_qty(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer("⏳ Подожди...", show_alert=False)
         return
 
-    result = await clan_service.buy_clan_shop(session, clan, user, item_id, qty=qty)
+    # Передаём цену со скидкой в сервис
+    discount_pct = await clan_service.get_shop_discount_pct(session, clan.id)
+    price_per = int(item.price * (1 - discount_pct / 100))
+    total_price = price_per * qty
+    
+    result = await clan_service.buy_clan_shop(session, clan, user, item_id, qty=qty, price=total_price)
     if not result["ok"]:
         await cb.answer(result["reason"], show_alert=True)
         return
@@ -377,7 +388,12 @@ async def msg_clan_buy_qty(message: Message, session: AsyncSession, user: User, 
         await message.answer("⏳ Подожди...", reply_markup=back_kb("clan_shop"), parse_mode="HTML")
         return
 
-    result = await clan_service.buy_clan_shop(session, clan, user, item_id, qty=qty)
+    # Передаём цену со скидкой в сервис
+    discount_pct = await clan_service.get_shop_discount_pct(session, clan.id)
+    price_per = int(item.price * (1 - discount_pct / 100))
+    total_price = price_per * qty
+    
+    result = await clan_service.buy_clan_shop(session, clan, user, item_id, qty=qty, price=total_price)
     if not result["ok"]:
         await message.answer(f"❌ {result['reason']}", reply_markup=back_kb("clan_shop"), parse_mode="HTML")
         return
@@ -413,7 +429,11 @@ async def cb_clan_buy(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer("⏳ Подожди...", show_alert=False)
         return
 
-    result = await clan_service.buy_clan_shop(session, clan, user, item_id)
+    # Передаём цену со скидкой в сервис
+    discount_pct = await clan_service.get_shop_discount_pct(session, clan.id)
+    price = int(item.price * (1 - discount_pct / 100))
+    
+    result = await clan_service.buy_clan_shop(session, clan, user, item_id, price=price)
     if not result["ok"]:
         await cb.answer(result["reason"], show_alert=True)
         return

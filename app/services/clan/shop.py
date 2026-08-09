@@ -9,7 +9,7 @@ from app.services.clan.base import ClanBaseService
 
 class ClanShopService(ClanBaseService):
 
-    async def buy_clan_shop(self, session: AsyncSession, clan: Clan, buyer: User, item_id: str, qty: int = 1) -> dict:
+    async def buy_clan_shop(self, session: AsyncSession, clan: Clan, buyer: User, item_id: str, qty: int = 1, price: int = None) -> dict:
         item = CLAN_SHOP_MAP.get(item_id)
         if not item:
             return {"ok": False, "reason": "Товар не найден"}
@@ -17,8 +17,12 @@ class ClanShopService(ClanBaseService):
             return {"ok": False, "reason": "Количество должно быть > 0"}
         if qty > 1 and item.item_type not in ("tickets", "squad"):
             qty = 1
-        discount_pct = await self.get_shop_discount_pct(session, clan.id)
-        price = int(item.price * (1 - discount_pct / 100)) * qty
+        
+        # Если цена не передана — применяем скидку (для обратной совместимости)
+        if price is None:
+            discount_pct = await self.get_shop_discount_pct(session, clan.id)
+            price = int(item.price * (1 - discount_pct / 100)) * qty
+        
         if clan.treasury < price:
             return {"ok": False, "reason": f"Недостаточно в казне (нужно {price:,})"}
 
@@ -77,10 +81,6 @@ class ClanShopService(ClanBaseService):
             )
             session.add(auction)
 
-        # Казну списываем ПОСЛЕ всех per-user операций (squad_repo.update_user_combat_power
-        # трогает users, затем clan) — иначе списание тут заранее лочит clan и при
-        # конкурентной операции, которая лочит users->clan в этом порядке (например,
-        # emperor.py при дропе карты), возникает deadlock (users->clan vs clan->users).
         clan.treasury -= price
         await session.flush()
 
@@ -145,10 +145,6 @@ class ClanShopService(ClanBaseService):
                 return {"ok": False, "reason": "Уже куплено"}
             new_bonus_train_pct = clan.bonus_train_pct + upgrade.value
 
-        # Сначала применяем бонусы к users (передавая ещё не сохранённые новые
-        # значения через override-параметры), и только потом мутируем сам clan —
-        # порядок блокировок users->clan, единообразно со squad_repo и emperor.py
-        # (иначе deadlock с конкурентными операциями по тем же двум строкам).
         await self._apply_clan_bonuses(
             session, clan,
             bonus_income_pct=new_bonus_income_pct,

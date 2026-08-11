@@ -5,6 +5,7 @@
   admin_user_kb → кнопка "🔄 Круговые донаты" (adm_circ_menu:{tg_id})
   → список донатов с текущим количеством кругов
   → нажать донат → показать детали + кнопки [+Круг] [−Круг]
+  → для Архангела: кнопка "♟ Выдать сверх круг" (игнорирует лимит)
 """
 import html
 from aiogram import Router, F
@@ -16,7 +17,7 @@ from app.models.user import User
 from app.services.admin_service import admin_service
 from app.services.circular_donat_service import add_circle, remove_circle, get_user_circles
 from app.data.titles import CIRCULAR_DONATS, CIRCULAR_DONAT_MAP
-from app.handlers.admin._common import is_admin, _show_user_card
+from app.handlers.admin._common import is_admin
 
 router = Router()
 
@@ -82,47 +83,7 @@ async def cb_adm_circ_detail(cb: CallbackQuery, session: AsyncSession, user: Use
         await cb.answer("Донат не найден", show_alert=True)
         return
 
-    circles_map = await get_user_circles(session, found.id)
-    n = circles_map.get(donat_id, 0)
-
-    builder = InlineKeyboardBuilder()
-    if n < d.max_circles:
-        builder.row(InlineKeyboardButton(
-            text=f"➕ Добавить круг ({n} → {n + 1})",
-            callback_data=f"adm_circ_add:{tg_id}:{donat_id}",
-        ))
-    else:
-        builder.row(InlineKeyboardButton(text=f"✅ Максимум ({d.max_circles})", callback_data="noop"))
-
-    if n > 0:
-        builder.row(InlineKeyboardButton(
-            text=f"➖ Убрать круг ({n} → {n - 1})",
-            callback_data=f"adm_circ_rem:{tg_id}:{donat_id}",
-        ))
-
-    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"adm_circ_menu:{tg_id}"))
-
-    lines = [
-        f"{d.emoji} <b>{d.name}</b>",
-        f"👤 Игрок: {html.escape(found.full_name)}",
-        f"🔄 Кругов: <b>{n}/{d.max_circles}</b>",
-        f"💰 Цена: {d.price_per_circle}₽/круг",
-        f"\n<b>Бонус за круг:</b> {d.circle_bonus}",
-    ]
-    if d.special_bonuses:
-        lines.append("\n<b>Особые бонусы:</b>")
-        for circle_n, bonus_desc in d.special_bonuses:
-            mark = "✅" if n >= circle_n else "🔒"
-            lines.append(f"  {mark} Круг {circle_n}: {bonus_desc}")
-
-    try:
-        await cb.message.edit_text(
-            "\n".join(lines),
-            reply_markup=builder.as_markup(),
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+    await _render_circ_detail(cb.message, session, tg_id, donat_id, found)
     await cb.answer()
 
 
@@ -151,11 +112,8 @@ async def cb_adm_circ_add(cb: CallbackQuery, session: AsyncSession, user: User):
         f"✅ {d.emoji} {d.name}: {result['circles']}/{d.max_circles} кругов",
         show_alert=True,
     )
-    # Обновляем детальный экран
-    await cb.data.__class__  # no-op to avoid lint warning
-    # Обновляем found из сессии (данные изменились)
     found2 = await admin_service.find_user(session, str(tg_id))
-    await _show_circ_detail(cb.message, session, tg_id, donat_id, found2)
+    await _render_circ_detail(cb.message, session, tg_id, donat_id, found2)
 
 
 @router.callback_query(F.data.startswith("adm_circ_rem:"))
@@ -184,10 +142,44 @@ async def cb_adm_circ_rem(cb: CallbackQuery, session: AsyncSession, user: User):
         show_alert=True,
     )
     found2 = await admin_service.find_user(session, str(tg_id))
-    await _show_circ_detail(cb.message, session, tg_id, donat_id, found2)
+    await _render_circ_detail(cb.message, session, tg_id, donat_id, found2)
 
 
-async def _show_circ_detail(message, session: AsyncSession, tg_id: int, donat_id: str, found) -> None:
+# ── СВЕРХ КРУГИ АРХАНГЕЛА (админская выдача, игнорирует лимиты) ────────────
+
+@router.callback_query(F.data.startswith("adm_circ_archangel_infinite:"))
+async def cb_adm_circ_archangel_infinite(cb: CallbackQuery, session: AsyncSession, user: User):
+    """Админ: принудительно добавляет 1 сверх круг Архангела (игнорируя условия)."""
+    if not is_admin(user.tg_id):
+        return
+    
+    parts = cb.data.split(":")
+    tg_id = int(parts[1])
+
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await cb.answer("Игрок не найден", show_alert=True)
+        return
+
+    # Добавляем круг с force=True (игнорирует все лимиты)
+    result = await add_circle(session, found, "archangel", force=True)
+    await session.commit()
+
+    if not result["ok"]:
+        await cb.answer(f"❌ {result['reason']}", show_alert=True)
+        return
+
+    await cb.answer(
+        f"♟ Выдан сверх круг Архангела! Всего: {result['circles']} кругов",
+        show_alert=True,
+    )
+    found2 = await admin_service.find_user(session, str(tg_id))
+    await _render_circ_detail(cb.message, session, tg_id, "archangel", found2)
+
+
+# ── Рендер детального экрана ─────────────────────────────────────────────────
+
+async def _render_circ_detail(message, session: AsyncSession, tg_id: int, donat_id: str, found) -> None:
     """Перерисовывает детальный экран после изменения кругов."""
     d = CIRCULAR_DONAT_MAP.get(donat_id)
     if not d or not found:
@@ -197,6 +189,8 @@ async def _show_circ_detail(message, session: AsyncSession, tg_id: int, donat_id
     n = circles_map.get(donat_id, 0)
 
     builder = InlineKeyboardBuilder()
+    
+    # Обычная кнопка добавления круга (с учётом лимита)
     if n < d.max_circles:
         builder.row(InlineKeyboardButton(
             text=f"➕ Добавить круг ({n} → {n + 1})",
@@ -204,6 +198,13 @@ async def _show_circ_detail(message, session: AsyncSession, tg_id: int, donat_id
         ))
     else:
         builder.row(InlineKeyboardButton(text=f"✅ Максимум ({d.max_circles})", callback_data="noop"))
+
+    # Кнопка "Сверх круг" — только для Архангела (игнорирует лимит)
+    if donat_id == "archangel":
+        builder.row(InlineKeyboardButton(
+            text=f"♟ Выдать сверх круг (бесконечно) — {n + 1}",
+            callback_data=f"adm_circ_archangel_infinite:{tg_id}",
+        ))
 
     if n > 0:
         builder.row(InlineKeyboardButton(
@@ -213,10 +214,26 @@ async def _show_circ_detail(message, session: AsyncSession, tg_id: int, donat_id
 
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"adm_circ_menu:{tg_id}"))
 
+    # Показываем max как "∞" если у игрока уже открыты бесконечные круги
+    max_display = d.max_circles
+    if donat_id == "archangel" and getattr(d, "infinite_after_all", False):
+        from app.repositories.title_repo import title_repo
+        has_all_sets = await title_repo.has_all_sets(session, found.id)
+        user_circles = await get_user_circles(session, found.id)
+        all_circular_done = True
+        for d_id, d_cfg in CIRCULAR_DONAT_MAP.items():
+            if d_id == "archangel":
+                continue
+            if user_circles.get(d_id, 0) < d_cfg.max_circles:
+                all_circular_done = False
+                break
+        if has_all_sets and all_circular_done:
+            max_display = "∞"
+
     lines = [
         f"{d.emoji} <b>{d.name}</b>",
         f"👤 Игрок: {html.escape(found.full_name)}",
-        f"🔄 Кругов: <b>{n}/{d.max_circles}</b>",
+        f"🔄 Кругов: <b>{n}/{max_display}</b>",
         f"💰 Цена: {d.price_per_circle}₽/круг",
         f"\n<b>Бонус за круг:</b> {d.circle_bonus}",
     ]

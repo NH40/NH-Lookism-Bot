@@ -32,6 +32,7 @@ from sqlalchemy import select
 from app.models.user import User
 from app.models.circular_donat import UserCircularDonat
 from app.data.titles import CIRCULAR_DONAT_MAP
+from app.repositories.title_repo import title_repo
 
 
 # Поля, которые круговые донаты добавляют к уже-выставленным титульным бонусам.
@@ -206,8 +207,9 @@ async def rebuild_circular_bonuses(session: AsyncSession, user: User) -> None:
     await session.flush()
 
 
-async def add_circle(session: AsyncSession, user: User, donat_id: str) -> dict:
-    """Добавить 1 круг игроку. Возвращает {'ok': True/False, 'circles': n}."""
+async def add_circle(session: AsyncSession, user: User, donat_id: str, force: bool = False) -> dict:
+    """Добавить 1 круг игроку. force=True — игнорирует все лимиты (только для админов).
+    Возвращает {'ok': True/False, 'circles': n}."""
     cfg = CIRCULAR_DONAT_MAP.get(donat_id)
     if not cfg:
         return {"ok": False, "reason": "Донат не найден"}
@@ -223,8 +225,36 @@ async def add_circle(session: AsyncSession, user: User, donat_id: str) -> dict:
         session.add(rec)
         await session.flush()
 
-    if rec.circles >= cfg.max_circles:
-        return {"ok": False, "reason": f"Достигнут максимум {cfg.max_circles} кругов"}
+    # Проверка максимальных кругов
+    max_allowed = cfg.max_circles
+    
+    # Для Архангела — если выполнены условия, снимаем лимит (только если не force)
+    if not force and donat_id == "archangel" and getattr(cfg, "infinite_after_all", False):
+        # Проверяем все 5 донатных сетов
+        has_all_sets = await title_repo.has_all_sets(session, user.id)
+        
+        # Проверяем все круговые донаты (кроме архангела) на максимум
+        from app.services.circular_donat_service import get_user_circles
+        user_circles = await get_user_circles(session, user.id)
+        all_circular_done = True
+        for d_id, d_cfg in CIRCULAR_DONAT_MAP.items():
+            if d_id == "archangel":
+                continue
+            if user_circles.get(d_id, 0) < d_cfg.max_circles:
+                all_circular_done = False
+                break
+        
+        if has_all_sets and all_circular_done:
+            max_allowed = 999999  # бесконечно
+
+    # Если force=True — игнорируем все лимиты
+    if force:
+        max_allowed = 999999
+
+    if rec.circles >= max_allowed:
+        if max_allowed == 999999:
+            return {"ok": False, "reason": "Достигнут бесконечный лимит? Это баг, напишите администратору"}
+        return {"ok": False, "reason": f"Достигнут максимум {max_allowed} кругов"}
 
     rec.circles += 1
     await session.flush()

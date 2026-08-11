@@ -52,9 +52,6 @@ ACHIEVEMENTS: list[Achievement] = [
         "+3 очка пути", "path_points", 3),
 
     # ─── Престиж ───
-    # "Первое пробуждение" (prestige_level>=1, +3 очка пути) убрано:
-    # твинки достигают prestige_level 1 и фармят очки пути бесплатно,
-    # затем сливают их на основной аккаунт через клановый обмен (fee-less).
     Achievement("prestige_3", "Трижды рождённый",
         "Достигни третьего уровня пробуждения", "prestige_level", 3,
         "+30,000 NHCoin + +5% к доходу", "coins_and_income", 30_000),
@@ -185,11 +182,9 @@ ACHIEVEMENTS: list[Achievement] = [
         parent_id="future_masterpiece"),
 
     # ─── Коллекция ───
-    # Несекретных без self: 26 старых + 14 новых = 40
     Achievement("all_achievements", "Коллекционер",
         "Собери все несекретные достижения", "achievements_count", 40,
         "+75,000 NHCoin + +7% к доходу", "coins_and_income_7", 75_000),
-    # Все (40 несекрет + 2 секрет + 1 all_achievements) = 43
     Achievement("absolute", "Абсолют",
         "Собери абсолютно все достижения", "achievements_count_all", 43,
         "+200,000 NHCoin + +15% к доходу", "coins_and_income_15", 200_000,
@@ -293,6 +288,7 @@ class CircularDonat:
     max_circles: int
     circle_bonus: str              # бонус за каждый оплаченный круг
     special_bonuses: tuple         # ((circle_n, description), ...)
+    infinite_after_all: bool = False  # <-- ДОБАВЛЕНО
 
 
 CIRCULAR_DONATS: list[CircularDonat] = [
@@ -305,6 +301,7 @@ CIRCULAR_DONATS: list[CircularDonat] = [
             (5,  "Отражает 3% урона при атаке по вам"),
             (10, "1 раз в день выдаётся 64 района"),
         ),
+        infinite_after_all=True,  # <-- ДОБАВЛЕНО
     ),
     CircularDonat(
         "clan_head", "Глава клана", "👑",

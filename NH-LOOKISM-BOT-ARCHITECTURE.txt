@@ -1,2524 +1,662 @@
-================================================================================
-NH-LOOKISM-BOT — ПОЛНАЯ АРХИТЕКТУРА ПРОЕКТА
-================================================================================
-Дата генерации: 2026-08-07
-Язык: Python 3, aiogram 3, SQLAlchemy async, PostgreSQL, Redis, APScheduler.
+📌 ОГЛАВЛЕНИЕ
+Назначение
 
---------------------------------------------------------------------------------
+Слои архитектуры
+
+Жизненный цикл обновления Telegram
+
+Точка входа
+
+Фазы игры
+
+Планировщик задач
+
+Ключевые файлы конфигурации
+
+Корень репозитория
+
+Дерево папок app/
+
+Каталог файлов и функций
+
+Список изменений (патч 2.0)
+
+Как читать подписи
+
 1. НАЗНАЧЕНИЕ
---------------------------------------------------------------------------------
-Telegram-бот — текстовая MMORPG по мотивам Lookism: фазы Gang→King→Fist→Emperor,
-кланы, карты, рейды, банк/казино, биржа, аукционы, квесты, донат через Telegram Stars.
+Telegram-бот — текстовая MMORPG по мотивам веб-сериала Lookism:
 
---------------------------------------------------------------------------------
-2. СЛОИ (ПАТТЕРН)
---------------------------------------------------------------------------------
-Handlers (aiogram routers) → Services (бизнес-логика) → Repositories (запросы)
-→ SQLAlchemy ORM → PostgreSQL.
-Redis: FSM (состояния диалогов), все cooldown/lock, rate limit, кэш топов.
+Фазы прогрессии: Gang → King → Fist (убрана) → Emperor
 
---------------------------------------------------------------------------------
+Кланы: создание, войны, казна, земля, магазин, ранги
+
+Карточная система: гача, колода, слияние, дуэли, PvP
+
+Рейды: клановые боссы, крафт фрагментов (УИ, МГ, Путь, Бизнес)
+
+Банк/Казино: кредиты, вклады, хранилище, блэкджек, слоты, покер
+
+Биржа: продажа/покупка/аукцион лотов между игроками
+
+Квесты: ежедневные задания с наградами
+
+Донат: Telegram Stars → NHDonate, круговые донаты, титулы
+
+2. СЛОИ АРХИТЕКТУРЫ (ПАТТЕРН)
+text
+Handlers (aiogram routers)
+    ↓
+Services (бизнес-логика)
+    ↓
+Repositories (запросы к БД)
+    ↓
+SQLAlchemy ORM
+    ↓
+PostgreSQL
+Redis используется для:
+
+FSM (состояния диалогов)
+
+Все cooldown/lock
+
+Rate limiting
+
+Кэш топов
+
+Кэш карточек пользователей (админка)
+
 3. ЖИЗНЕННЫЙ ЦИКЛ ОБНОВЛЕНИЯ TELEGRAM
---------------------------------------------------------------------------------
 Порядок middleware (message и callback_query):
-  1) DbSessionMiddleware — async-сессия SQLAlchemy в data["session"]
-  2) UserLoaderMiddleware — загрузка/создание User по tg_id, бан
-  3) NetworkErrorMiddleware — повтор при сетевых ошибках Telegram API
-  4) RateLimitMiddleware — лимит callback ~0.5 req/s на пользователя (Redis)
-pre_checkout_query: только DbSessionMiddleware (оплата Stars).
+
+DbSessionMiddleware — async-сессия SQLAlchemy в data["session"]
+
+UserLoaderMiddleware — загрузка/создание User по tg_id, проверка бана
+
+NetworkErrorMiddleware — повтор при сетевых ошибках Telegram API
+
+RateLimitMiddleware — лимит callback ~0.5 req/s на пользователя (Redis)
+
+pre_checkout_query: только DbSessionMiddleware (оплата Stars)
 
 Каждый handler получает session и user через middleware (dependency injection).
 
---------------------------------------------------------------------------------
 4. ТОЧКА ВХОДА (app/main.py)
---------------------------------------------------------------------------------
-  init_db() — create_all таблиц
-  init_cities() — идемпотентное создание gang-городов
-  init_fame() — seed фрагментов славы
-  Bot + RedisStorage FSM + Dispatcher + все routers
-  setup_scheduler() — фоновые задачи APScheduler
-  _heartbeat_loop() — файл /app/heartbeat для Docker HEALTHCHECK
-  dp.start_polling()
-
---------------------------------------------------------------------------------
+python
+async def main():
+    init_db() — create_all таблиц
+    init_cities() — идемпотентное создание gang-городов
+    init_fame() — seed фрагментов славы
+    Bot + RedisStorage FSM + Dispatcher + все routers
+    setup_scheduler() — фоновые задачи APScheduler
+    _heartbeat_loop() — файл /app/heartbeat для Docker HEALTHCHECK
+    dp.start_polling()
 5. ФАЗЫ ИГРЫ
---------------------------------------------------------------------------------
-  gang   — захват районов в городах по странам
-  king   — бои с King Bot, влияние
-  fist   — бои с Fist Bot
-  emperor — престиж, PvP, банды, Gapren
-Продвижение: app/services/game/_promotions_mixin.py, attack.py → build_attack_menu.
+Фаза	Описание
+Gang	Захват районов в городах по секторам (странам)
+King	Бои с King Bot, влияние, вассалитет
+Fist	❌ УБРАНА из прогрессии (патч 1.3.1)
+Emperor	Престиж, PvP, группировки, Gapren (гейт пробуждения)
+Продвижение: app/services/game/_promotions_mixin.py → attack.py → build_attack_menu
 
---------------------------------------------------------------------------------
 6. ПЛАНИРОВЩИК (app/scheduler/setup.py)
---------------------------------------------------------------------------------
-  income_tick, ultra_instinct_tick, auction_round/start_tick, referral_power_tick,
-  clan_war_tick, clan_auction_tick, daily_tick (00:00 UTC),
-  bank_credit_tick, storage_fee_tick, investment_tick,
-  campaign_tick, boss_tick, war_genius_tick, achievement_tick,
-  poker_tick, casino_rating_tick (пн 00:00 UTC), market_auction_tick,
-  clan_power_reconcile_tick, horse_shop_tick
-
---------------------------------------------------------------------------------
+Задача	Интервал	Описание
+income_tick	1 мин	Начисление дохода игрокам
+ultra_instinct_tick	1 мин	Авто-вербовка/тренировка
+auction_round_tick	10 сек	Глобальный аукцион — раунды
+auction_start_tick	15 мин	Запуск нового аукциона
+referral_power_tick	30 мин	Бонус мощи учителя
+clan_war_tick	1 мин	Завершение войн кланов
+clan_auction_tick	1 мин	Клановые аукционы
+daily_tick	00:00 UTC	Ежедневные бонусы
+bank_credit_tick	1 мин	Кредиты (блокировка/удаление)
+storage_fee_tick	1 мин	Плата за ячейки хранилища
+investment_tick	1 мин	Созревание вкладов
+campaign_tick	2 мин	Завершение походов
+boss_tick	1 мин	Спавн/завершение боссов
+war_genius_tick	1 мин	Авто-атака рейдов
+achievement_tick	5 мин	Проверка достижений
+poker_tick	10 сек	Покерные столы (раздачи)
+casino_rating_tick	Пн 00:00 UTC	Сброс рейтинга казино
+market_auction_tick	1 мин	Биржевые аукционы
+clan_power_reconcile_tick	5 мин	Пересчет силы клана
+horse_shop_tick	1 мин	Ивент-магазин «Лавка коня»
 7. КЛЮЧЕВЫЕ ФАЙЛЫ КОНФИГУРАЦИИ
---------------------------------------------------------------------------------
-  app/config/settings.py      — .env (BOT_TOKEN, Postgres, Redis, ADMIN_IDS)
-  app/config/game_balance.py  — ВСЕ числовые константы баланса
-  app/config/scheduler_config.py — интервалы scheduler
-  app/config/rate_limit.py    — лимиты rate limit
-  app/constants/*             — enum-подобные конфиги доменов (аукцион, клан, рейд…)
-  app/data/*                  — статические справочники (города, скиллы, титулы…)
-
---------------------------------------------------------------------------------
+Файл	Назначение
+app/config/settings.py	.env (BOT_TOKEN, Postgres, Redis, ADMIN_IDS)
+app/config/game_balance.py	ВСЕ числовые константы баланса
+app/config/scheduler_config.py	Интервалы scheduler
+app/config/rate_limit.py	Лимиты rate limit
+app/constants/*	enum-подобные конфиги доменов
+app/data/*	Статические справочники (города, скиллы, титулы)
 8. КОРЕНЬ РЕПОЗИТОРИЯ (не app/)
---------------------------------------------------------------------------------
-  manager.py        — CLI: backup, restore, migrate, stats, служебные команды
-  docker-compose.yml — bot + postgres + redis
-  Dockerfile        — образ бота
-  requirements.txt  — зависимости Python
-  README.md, CLAUDE.md — документация для разработчиков
-  AGENTS.md, SOUL.md, USER.md, TOOLS.md, HEARTBEAT.md — meta для агентов
-
---------------------------------------------------------------------------------
+Файл	Назначение
+manager.py	CLI: backup, restore, migrate, stats, служебные команды
+docker-compose.yml	bot + postgres + redis
+Dockerfile	Образ бота
+requirements.txt	Зависимости Python
+README.md, CLAUDE.md	Документация для разработчиков
+AGENTS.md, SOUL.md, USER.md, TOOLS.md, HEARTBEAT.md	Meta для агентов
 9. ДЕРЕВО ПАПОК app/
---------------------------------------------------------------------------------
-  app/
-    bot_instance.py     — глобальная ссылка на Bot (get_bot для scheduler)
-    main.py             — запуск
-    database.py         — engine, AsyncSessionFactory, init_db
-    config/             — настройки и баланс
-    constants/          — константы доменов
-    data/               — статические данные игры
-    middlewares/        — 4 middleware
-    models/             — ORM-модели SQLAlchemy
-    repositories/       — слой доступа к БД (выборки/агрегации)
-    services/           — бизнес-логика (крупнейший слой)
-    handlers/           — Telegram UI (routers, callbacks, FSM)
-    scheduler/          — setup + tasks/
-    utils/              — форматирование, клавиатуры, safe_edit
-
---------------------------------------------------------------------------------
-9.1 РОУТЕРЫ, ПОДКЛЮЧЁННЫЕ В main.py (порядок include_router)
---------------------------------------------------------------------------------
-  common, attack, business, squad, cards, skills, titles, shop, auction,
-  training, raid, market, horse_shop, clan, quests, campaigns, bosses, bank,
-  settings, guide, black_market, donate, fame, admin (последним)
-
---------------------------------------------------------------------------------
+text
+app/
+├── bot_instance.py          # Глобальная ссылка на Bot
+├── main.py                  # Точка входа
+├── database.py              # Engine, AsyncSessionFactory, init_db
+├── config/                  # Настройки и баланс
+├── constants/               # Константы доменов
+├── data/                    # Статические данные игры
+├── middlewares/             # 4 middleware
+├── models/                  # ORM-модели SQLAlchemy
+├── repositories/            # Слой доступа к БД
+├── services/                # Бизнес-логика (крупнейший слой)
+├── handlers/                # Telegram UI (routers, callbacks, FSM)
+├── scheduler/               # setup + tasks/
+└── utils/                   # Форматирование, клавиатуры, safe_edit
+9.1 РОУТЕРЫ, ПОДКЛЮЧЁННЫЕ В main.py
+text
+common, attack, business, squad, cards, skills, titles, shop, auction,
+training, raid, market, horse_shop, clan, quests, campaigns, bosses, bank,
+settings, guide, black_market, donate, fame, admin (последним)
 9.2 ПАПКИ handlers/ — НАЗНАЧЕНИЕ
---------------------------------------------------------------------------------
-  common/     — /start, главное меню, топы, /slava, промокоды, /admin
-  game/       — UI фаз gang, king, emperor, gapren (логика в services/game)
-  attack.py   — меню «Атака», престиж, перемирие
-  business/   — выбор и прокачка бизнеса, доход
-  squad.py    — набор и тренировка отряда
-  cards/      — гача, колода, fusion, duel, коллекция
-  skills/     — мастерство, путь, UI-авто, мед-гений, war genius
-  titles.py   — достижения и донат-титулы
-  shop.py     — магазин (билеты, зелья, рекруты)
-  auction.py  — глобальный аукцион наград
-  training.py — тренеры (Tom, Jeon Gon, Manager Kim)
-  raid/       — клановые рейды, крафт фрагментов, награды
-  market/     — биржа игроков (продажа/покупка/аукцион лотов)
-  horse_shop.py — временный ивент-магазин
-  clan/       — клан: создание, войны, казна, земля, магазин, ранги
-  quests.py   — ежедневные квесты
-  campaigns/  — походы отряда
-  bosses/     — мировые боссы (отдельно от raid boss)
-  bank/       — кредиты, вклады, хранилище, казино (BJ/slots/poker)
-  settings.py — реферал, имя банды, уведомления, удаление банды
-  guide.py    — внутриигровой гайд
-  black_market.py — чёрный рынок (VVIP)
-  donate.py   — Telegram Stars, пополнение
-  fame.py     — кузница славы, передача фрагментов
-  admin/      — панель администратора (бан, выдача ресурсов, патчи, бэкапы)
-
---------------------------------------------------------------------------------
+Папка	Назначение
+common/	/start, главное меню, топы, /slava, промокоды, /admin
+game/	UI фаз gang, king, emperor, gapren
+attack.py	Меню «Атака», престиж, перемирие
+business/	Выбор и прокачка бизнеса, доход
+squad.py	Набор и тренировка отряда
+cards/	Гача, колода, fusion, duel, коллекция
+skills/	Мастерство, путь, UI-авто, мед-гений, war genius
+titles.py	Достижения и донат-титулы
+shop.py	Магазин (билеты, зелья, рекруты)
+auction.py	Глобальный аукцион наград
+training.py	Тренеры (Tom, Jeon Gon, Manager Kim)
+raid/	Клановые рейды, крафт фрагментов, награды
+market/	Биржа игроков (продажа/покупка/аукцион лотов)
+horse_shop.py	Временный ивент-магазин
+clan/	Клан: создание, войны, казна, земля, магазин, ранги
+quests.py	Ежедневные квесты
+campaigns/	Походы отряда
+bosses/	Мировые боссы
+bank/	Кредиты, вклады, хранилище, казино (BJ/slots/poker)
+settings.py	Реферал, имя банды, уведомления, удаление банды
+guide.py	Внутриигровой гайд
+black_market.py	Чёрный рынок (VVIP)
+donate.py	Telegram Stars, пополнение
+fame.py	Кузница славы, передача фрагментов
+admin/	Панель администратора
 9.3 ПАПКИ services/ — НАЗНАЧЕНИЕ
---------------------------------------------------------------------------------
-  game/       — захват районов, PvP, промоушены фаз, вассалы, челленджи тронов
-  clan/       — весь клановый функционал (9 mixins → ClanService)
-  admin/      — админские операции над пользователями и миром
-  bank/       — финансы и casino (poker engine отдельно)
-  cards/      — gacha, fusion, duel, craft ticket, deck slots
-  raid/       — сессии рейда, дроп, UI/MG крафт
-  auction/    — глобальный аукцион
-  skill/      — mastery + path skills
-  title/      — титулы, сеты, достижения
-  + отдельные: combat, cooldown, market, quest, prestige, promo, referral,
-    business, campaign, boss, horse_shop, circular_donat, fame, potion, …
+Папка	Назначение
+game/	Захват районов, PvP, промоушены фаз, вассалы, челленджи тронов
+clan/	Весь клановый функционал (9 mixins → ClanService)
+admin/	Админские операции над пользователями и миром
+bank/	Финансы и casino (poker engine отдельно)
+cards/	Gacha, fusion, duel, craft ticket, deck slots
+raid/	Сессии рейда, дроп, UI/MG крафт
+auction/	Глобальный аукцион
+skill/	Mastery + path skills
+title/	Титулы, сеты, достижения
+Отдельные сервисы: combat, cooldown, market, quest, prestige, promo, referral,
+business, campaign, boss, horse_shop, circular_donat, fame, potion
 
---------------------------------------------------------------------------------
 9.4 ПАПКИ constants/ и data/ — СОДЕРЖИМОЕ
---------------------------------------------------------------------------------
-constants/auction.py, bank.py, market.py, poker.py, raid.py, squad.py,
-  training.py, king_bots.py, prestige.py — числа и лимиты домена
-constants/bosses.py — BossConfig; campaigns.py — ранги/ресурсы походов
-constants/cards.py — calc_dust; clan.py — донат/магазин/апгрейды клана
-constants/emperor.py — EmperorGangConfig; quests.py — QuestConfig
+constants/
 
-data/achievements.py — список достижений; buildings.py — типы зданий
-data/card_images.py — кэш file_id картинок Telegram
-data/characters.py — персонажи гача по рангам
-data/cities.py — страны, типы городов, имена (init_cities)
-data/fame.py — наборы фрагментов славы
-data/shop.py — товары и зелья; skills.py — мастерство и навыки пути
-data/squad.py — ранги отряда; titles.py — титулы, донат-сеты, circ donat
+auction.py, bank.py, market.py, poker.py, raid.py, squad.py
 
+training.py, king_bots.py, prestige.py — числа и лимиты домена
 
+bosses.py — BossConfig
 
---------------------------------------------------------------------------------
-10. КАТАЛОГ ФАЙЛОВ И ФУНКЦИЙ (подписи только здесь, в .py код не трогаем)
---------------------------------------------------------------------------------
+campaigns.py — ранги/ресурсы походов
 
+cards.py — calc_dust
 
-=== app/bot_instance.py ===
-  set_bot(...) — регистрирует экземпляр Bot для фоновых задач
-  get_bot(...) — возвращает Bot из глобального singleton
+clan.py — донат/магазин/апгрейды клана
 
-=== app/config/__init__.py ===
-  (только импорты и router, без своих функций)
+emperor.py — EmperorGangConfig
 
-=== app/config/game_balance.py ===
-  Модуль: Игровой баланс — легко изменяемые числовые параметры.
-  ticket_hard_cap(...) — 500 без переполнения, 1000 с донатом.
+quests.py — QuestConfig
 
-=== app/config/rate_limit.py ===
-  Модуль: Настройки rate-limiter для Telegram-обработчиков.
+data/
 
-=== app/config/scheduler_config.py ===
-  Модуль: Интервалы фоновых задач APScheduler.
+achievements.py — список достижений
 
-=== app/config/settings.py ===
-  class Settings
-    database_url(...) — служебная функция модуля
-    redis_url(...) — служебная функция модуля
-    admin_ids_list(...) — служебная функция модуля
+buildings.py — типы зданий
 
-=== app/constants/__init__.py ===
-  (только импорты и router, без своих функций)
+card_images.py — кэш file_id картинок Telegram
 
-=== app/constants/auction.py ===
-  (только импорты и router, без своих функций)
+characters.py — персонажи гача по рангам
 
-=== app/constants/bank.py ===
-  Модуль: Банковские константы — все числа патча 1.2.0 в одном месте.
+cities.py — страны, типы городов, имена (init_cities)
 
-=== app/constants/bosses.py ===
-  Модуль: Балансные константы системы Боссов.
-  class BossConfig
+fame.py — наборы фрагментов славы
 
-=== app/constants/campaigns.py ===
-  Модуль: Балансные константы системы Походов.
-  class CampaignRankConfig
-  class CampaignResourceConfig
+shop.py — товары и зелья
 
-=== app/constants/cards.py ===
-  calc_dust(...) — Вычислить количество пыли за распыление карточки (ранг + уровень).
+skills.py — мастерство и навыки пути
 
-=== app/constants/clan.py ===
-  class ClanDonatPackage
-  class ClanShopItem
-  class ClanUpgrade
-
-=== app/constants/emperor.py ===
-  class EmperorGangConfig
-
-=== app/constants/king_bots.py ===
-  (только импорты и router, без своих функций)
-
-=== app/constants/market.py ===
-  (только импорты и router, без своих функций)
-
-=== app/constants/poker.py ===
-  Модуль: PvP-покер (Texas Hold'em). Стол играет раздачу за раздачей без остановки —
-
-=== app/constants/prestige.py ===
-  (только импорты и router, без своих функций)
-
-=== app/constants/quests.py ===
-  class QuestConfig
-
-=== app/constants/raid.py ===
-  (только импорты и router, без своих функций)
-
-=== app/constants/squad.py ===
-  (только импорты и router, без своих функций)
-
-=== app/constants/training.py ===
-  (только импорты и router, без своих функций)
-
-=== app/data/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/data/achievements.py ===
-  class Achievement
-
-=== app/data/buildings.py ===
-  class BuildingConfig
-
-=== app/data/card_images.py ===
-  Модуль: Маппинг персонаж → путь к изображению карточки.
-  _load_cache(...) — служебная функция модуля
-  _save_cache(...) — служебная функция модуля
-  get_image_path(...) — Возвращает относительный путь к изображению или None.
-  get_cached_file_id(...) — Возвращает кэшированный Telegram file_id или None.
-  cache_file_id(...) — Сохраняет file_id в память и на диск.
-
-=== app/data/characters.py ===
-  class CharacterRankConfig
-  get_random_character(...) — Выбор персонажа: сначала ранг по фиксированному %-шансу, затем равномерно внутри ранга.
-  get_random_character_by_rank(...) — Случайный персонаж конкретного ранга (без взвешивания по редкости).
-
-=== app/data/cities.py ===
-  class CountryConfig
-  class CityTypeConfig
-
-=== app/data/fame.py ===
-  class FameFragmentDef
-  class FameSetDef
-  fame_fragment_key(...) — ключ Redis (cooldown или lock)
-  get_fragment_def(...) — служебная функция модуля
-
-=== app/data/shop.py ===
-  class ShopItem
-  class PotionConfig
-
-=== app/data/skills.py ===
-  class MasteryLevelConfig
-  class MasteryConfig
-  class PathSkill
-
-=== app/data/squad.py ===
-  class RankConfig
-
-=== app/data/titles.py ===
-  class Achievement
-  class DonatTitle
-  class DonatSet
-  class CircularDonat
-  class ClanDonatItem
-
-=== app/database.py ===
-  class Base
-  async get_session(...) — служебная функция модуля
-  async init_db(...) — служебная функция модуля
-
-=== app/handlers/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/handlers/admin/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/handlers/admin/_common.py ===
-  _redis(...) — Telegram handler
-  is_admin(...) — Telegram handler
-  class AdminFSM — группа состояний FSM
-  async _build_user_card_text(...) — Возвращает (текст карточки, donat_duel_cd, is_banned). Использует кэш Redis.
-  async invalidate_admin_card_cache(...) — Сбросить кэш карточки пользователя после изменения данных.
-  async _show_user_card(...) — Telegram handler
-  async _show_set_panel(...) — Telegram handler
-  async _render_untitle(...) — Telegram handler
-  async _render_untset(...) — Telegram handler
-  async _show_clan_donat_panel(...) — Telegram handler
-
-=== app/handlers/admin/ban.py ===
-  Модуль: Административный модуль бана / разбана игроков.
-  _dur_label(...) — Telegram handler
-  _ban_until(...) — Telegram handler
-  async cb_adm_ban(...) — TG callback prefix="adm_ban:"
-  async cb_adm_ban_pick(...) — TG callback prefix="adm_ban_pick:"
-  async msg_ban_reason(...) — обработчик ввода пользователя (FSM)
-  async cb_adm_unban(...) — TG callback prefix="adm_unban:"
-
-=== app/handlers/admin/broadcast.py ===
-  async cb_admin_broadcast(...) — TG callback data="admin_broadcast"
-  async msg_broadcast(...) — обработчик ввода пользователя (FSM)
-  async cb_admin_bulk(...) — TG callback data="admin_bulk"
-  async cb_admin_bulk_coins(...) — TG callback data="admin_bulk_coins"
-  async msg_bulk_coins(...) — обработчик ввода пользователя (FSM)
-  async cb_admin_bulk_tickets(...) — TG callback data="admin_bulk_tickets"
-  async msg_bulk_tickets(...) — обработчик ввода пользователя (FSM)
-  async cb_admin_bulk_reapply(...) — TG callback data="admin_bulk_reapply"
-
-=== app/handlers/admin/circular_donat.py ===
-  Модуль: Администраторский интерфейс управления круговыми донатами.
-  async _show_circ_menu(...) — Telegram handler
-  async cb_adm_circ_menu(...) — TG callback prefix="adm_circ_menu:"
-  async cb_adm_circ_detail(...) — TG callback prefix="adm_circ_detail:"
-  async cb_adm_circ_add(...) — TG callback prefix="adm_circ_add:"
-  async cb_adm_circ_rem(...) — TG callback prefix="adm_circ_rem:"
-  async _show_circ_detail(...) — Перерисовывает детальный экран после изменения кругов.
-
-=== app/handlers/admin/clan_donat.py ===
-  async cb_admin_clan_donat(...) — TG callback data="admin_clan_donat"
-  async msg_clan_donat_search(...) — обработчик ввода пользователя (FSM)
-  async cb_adm_clan_donat_view(...) — TG callback prefix="adm_clan_donat_view:"
-  async cb_adm_clan_donat_apply(...) — TG callback prefix="adm_clan_donat_apply:"
-  async cb_adm_clan_vvip_level(...) — TG callback prefix="adm_clan_vvip_level:"
-  async cb_adm_clan_donat_reset(...) — TG callback prefix="adm_clan_donat_reset:"
-  async cmd_unban(...) — TG команда /unban
-  async cb_noop(...) — TG callback data="noop"
-
-=== app/handlers/admin/clan_owner.py ===
-  class ClanOwnerFSM — группа состояний FSM
-  async cb_admin_clan_owner(...) — TG callback data="admin_clan_owner"
-  async msg_clan_owner_search(...) — обработчик ввода пользователя (FSM)
-  async cb_adm_clan_owner_view(...) — TG callback prefix="adm_clan_owner_view:"
-  async _show_clan_owner_panel(...) — Telegram handler
-  async cb_adm_clan_owner_confirm(...) — TG callback prefix="adm_clan_owner_confirm:"
-  async cb_adm_clan_owner_apply(...) — TG callback prefix="adm_clan_owner_apply:"
-
-=== app/handlers/admin/fragments.py ===
-  Модуль: Выдача фрагментов и очков (мастерство, путь, УИ, алхимия).
-  async cb_adm_mastery(...) — TG callback prefix="adm_mastery:"
-  async msg_adm_mastery(...) — обработчик ввода пользователя (FSM)
-  async cb_adm_pathpts(...) — TG callback prefix="adm_pathpts:"
-  async msg_adm_pathpts(...) — обработчик ввода пользователя (FSM)
-  async cb_adm_uifrag(...) — TG callback prefix="adm_uifrag:"
-  async msg_adm_uifrag(...) — обработчик ввода пользователя (FSM)
-  async cb_adm_alchfrag(...) — TG callback prefix="adm_alchfrag:"
-  async msg_adm_alchfrag(...) — обработчик ввода пользователя (FSM)
-  async cb_adm_pathfrag(...) — TG callback prefix="adm_pathfrag:"
-  async msg_adm_pathfrag(...) — обработчик ввода пользователя (FSM)
-  async cb_adm_bizfrag(...) — TG callback prefix="adm_bizfrag:"
-  async msg_adm_bizfrag(...) — обработчик ввода пользователя (FSM)
-  async cb_adm_warpts(...) — TG callback prefix="adm_warpts:"
-  async msg_adm_warpts(...) — обработчик ввода пользователя (FSM)
-
-=== app/handlers/admin/give_items.py ===
-  Модуль: Выдача игровых предметов: статисты, карточки, пыль, города, абсолютные карты, duel CD.
-  async cb_adm_cards_menu(...) — TG callback prefix="adm_cards_menu:"
-  async cb_adm_card_give_rank(...) — TG callback prefix="adm_card_give_rank:"
-  async cb_adm_card_give_chars(...) — TG callback prefix="adm_card_give_chars:"
-  async cb_adm_card_give_level(...) — Legacy handler — kept for backward compat but now unused. [TG callback prefix="adm_card_give_level:"]
-  async cb_adm_cgl(...) — adm_cgl:{tg_id}:{char_global_idx} — choose level for card give. [TG callback prefix="adm_cgl:"]
-  async cb_adm_card_give_qty(...) — Legacy handler — kept for backward compat. [TG callback prefix="adm_card_give_qty:"]
-  async cb_adm_cgq(...) — adm_cgq:{tg_id}:{char_global_idx}:{level} — enter qty for card give. [TG callback prefix="adm_cgq:"]
-  async msg_adm_card_give_qty(...) — обработчик ввода пользователя (FSM)
-  async cb_adm_card_take_rank(...) — TG callback prefix="adm_card_take_rank:"
-  async cb_adm_card_take_chars(...) — TG callback prefix="adm_card_take_chars:"
-  async cb_adm_card_take_confirm(...) — TG callback prefix="adm_card_take_confirm:"
-  async msg_adm_card_take_qty(...) — обработчик ввода пользователя (FSM)
-  async cb_adm_squads(...) — TG callback prefix="adm_squads:"
-  async cb_adm_give_squad(...) — TG callback prefix="adm_give_squad:"
-  async msg_adm_give_squad(...) — обработчик ввода пользователя (FSM)
-  async cb_adm_give_abs(...) — TG callback prefix="adm_give_abs:"
-  async cb_adm_pick_abs(...) — TG callback prefix="adm_pick_abs:"
-  async cb_adm_take_abs(...) — TG callback prefix="adm_take_abs:"
-  async cb_adm_take_abs_do(...) — TG callback prefix="adm_take_abs_do:"
-  async cb_adm_give_city(...) — TG callback prefix="adm_give_city:"
-  async cb_adm_take_cities(...) — TG callback prefix="adm_take_cities:"
-  async cb_adm_take_cities_do(...) — TG callback prefix="adm_take_cities_do:"
-  async cb_adm_give_card(...) — TG callback prefix="adm_give_card:"
-  async msg_admin_card_char(...) — обработчик ввода пользователя (FSM)
-  async msg_admin_card_level(...) — обработчик ввода пользователя (FSM)
-  async cb_adm_give_dust(...) — TG callback prefix="adm_give_dust:"
-  async msg_admin_dust_amount(...) — обработчик ввода пользователя (FSM)
-  async cb_adm_toggle_duel_cd(...) — TG callback prefix="adm_toggle_duel_cd:"
-
-=== app/handlers/admin/main.py ===
-  async _maintenance_on(...) — Telegram handler
-  async cb_admin_main(...) — TG callback data="admin_main"
-  async cb_admin_maintenance_toggle(...) — TG callback data="admin_maintenance_toggle"
-  async cb_admin_real_top(...) — TG callback prefix="admin_real_top"
-  async cb_admin_delete_zeros(...) — TG callback data="admin_delete_zeros"
-  async cb_admin_delete_zeros_confirm(...) — TG callback data="admin_delete_zeros_confirm"
-  async cb_admin_stats(...) — TG callback data="admin_stats"
-
-=== app/handlers/admin/patch.py ===
-  async cb_admin_patch(...) — TG callback data="admin_patch"
-  async cb_admin_patch_reset(...) — TG callback data="admin_patch_reset"
-  async cb_admin_version_only(...) — TG callback data="admin_version_only"
-  async msg_version_only(...) — обработчик ввода пользователя (FSM)
-  async msg_patch_version(...) — обработчик ввода пользователя (FSM)
-  async cb_admin_patch_confirm(...) — TG callback prefix="admin_patch_confirm:"
-  async _broadcast_patch(...) — Telegram handler
-  async cb_admin_backup(...) — TG callback data="admin_backup"
-  async cb_admin_backup_create(...) — TG callback data="admin_backup_create"
-  async cb_admin_restore(...) — TG callback prefix="admin_restore:"
-  async cb_admin_restore_confirm(...) — TG callback prefix="admin_restore_confirm:"
-
-=== app/handlers/admin/promo.py ===
-  async cb_admin_promos(...) — TG callback data="admin_promos"
-  async cb_admin_promo_create(...) — TG callback data="admin_promo_create"
-  async msg_promo_create(...) — обработчик ввода пользователя (FSM)
-  async cb_admin_promo_info(...) — TG callback prefix="admin_promo_info:"
-  async cb_admin_promo_deactivate(...) — TG callback prefix="admin_promo_deactivate:"
-  async cb_admin_promo_delete(...) — TG callback prefix="admin_promo_delete:"
-
-=== app/handlers/admin/resources.py ===
-  Модуль: Меню раздела ресурсов (входная точка → fragments.py и give_items.py).
-  async cb_adm_resources(...) — TG callback prefix="adm_resources:"
-  async cb_adm_mg_donat_on(...) — TG callback prefix="adm_mg_donat_on:"
-  async cb_adm_mg_donat_off(...) — TG callback prefix="adm_mg_donat_off:"
-  async cb_adm_user_vvip_on(...) — TG callback prefix="adm_user_vvip_on:"
-  async cb_adm_user_vvip_off(...) — TG callback prefix="adm_user_vvip_off:"
-
-=== app/handlers/admin/titles.py ===
-  async cb_adm_title(...) — TG callback prefix="adm_title:"
-  async cb_adm_grantset(...) — TG callback prefix="adm_grantset:"
-  async cb_adm_grantset_all(...) — TG callback prefix="adm_grantset_all:"
-  async cb_adm_grant_title(...) — TG callback prefix="adm_grant_title:"
-  async cb_adm_untitle(...) — TG callback prefix="adm_untitle:"
-  async cb_adm_untset(...) — TG callback prefix="adm_untset:"
-  async cb_adm_revset(...) — TG callback prefix="adm_revset:"
-  async cb_adm_revoke(...) — TG callback prefix="adm_revoke:"
-  async cb_adm_all(...) — TG callback prefix="adm_all:"
-  async cb_adm_none(...) — TG callback prefix="adm_none:"
-
-=== app/handlers/admin/users.py ===
-  async cb_admin_find(...) — TG callback data="admin_find"
-  async msg_admin_search(...) — обработчик ввода пользователя (FSM)
-  async cb_adm_user(...) — TG callback prefix="adm_user:"
-  async cb_adm_coins(...) — TG callback prefix="adm_coins:"
-  async msg_adm_coins(...) — обработчик ввода пользователя (FSM)
-  async cb_adm_tickets(...) — TG callback prefix="adm_tickets:"
-  async msg_adm_tickets(...) — обработчик ввода пользователя (FSM)
-  async cb_adm_donate(...) — TG callback prefix="adm_donate:"
-  async msg_adm_donate(...) — обработчик ввода пользователя (FSM)
-  async cb_adm_prestige(...) — TG callback prefix="adm_prestige:"
-  async cb_adm_unprestige(...) — TG callback prefix="adm_unprestige:"
-  async cb_adm_delete_confirm(...) — TG callback prefix="adm_delete_confirm:"
-  async cb_adm_delete_do(...) — TG callback prefix="adm_delete_do:"
-  async cb_adm_clear_buildings(...) — TG callback prefix="adm_clear_buildings:"
-
-=== app/handlers/attack.py ===
-  class AttackFSM — группа состояний FSM
-  async build_attack_menu(...) — сборка текста и клавиатуры экрана
-  async cb_attack(...) — TG callback data="attack"
-  async cb_attack_cd(...) — TG callback data="attack_cd"
-  async cb_do_prestige(...) — TG callback data="do_prestige"
-  async cb_prestige_confirm(...) — TG callback data="prestige_confirm"
-  async cb_truce_menu(...) — TG callback data="truce_menu"
-  async cb_truce_confirm(...) — TG callback data="truce_confirm"
-  async cb_truce_activate(...) — TG callback data="truce_activate"
-  async cb_truce_deactivate(...) — TG callback data="truce_deactivate"
-
-=== app/handlers/auction.py ===
-  class AuctionFSM — группа состояний FSM
-  _fmt_time(...) — Telegram handler
-  async _build_auction_view(...) — Чистый билдер (текст, клавиатура) без CallbackQuery — переиспользуется
-  async _render_auction(...) — Telegram handler
-  async cb_auction(...) — TG callback data="auction"
-  async cb_auction_bid(...) — TG callback prefix="auction_bid:"
-  async cb_auction_custom(...) — TG callback data="auction_custom"
-  async msg_auction_bid(...) — обработчик ввода пользователя (FSM)
-
-=== app/handlers/bank/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/handlers/bank/casino/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/handlers/bank/casino/blackjack.py ===
-  Модуль: Блэкджек против дилера.
-  class BlackjackFSM — группа состояний FSM
-  _bj_main_kb(...) — Telegram handler
-  _play_kb(...) — Telegram handler
-  _render_playing(...) — Telegram handler
-  _render_finished(...) — Telegram handler
-  _finish_kb(...) — Telegram handler
-  async cb_bj_menu(...) — TG callback data="bank_casino_blackjack"
-  async cb_bj_pick(...) — TG callback prefix="bj_pick:"
-  async msg_bj_bet(...) — обработчик ввода пользователя (FSM)
-  async _finish_and_render(...) — Telegram handler
-  async cb_bj_hit(...) — TG callback data="bj_hit"
-  async cb_bj_stand(...) — TG callback data="bj_stand"
-  async cb_bj_double(...) — TG callback data="bj_double"
-
-=== app/handlers/bank/casino/menu.py ===
-  Модуль: Хаб казино: слоты, блэкджек, покер, рейтинг.
-  casino_menu_kb(...) — Telegram handler
-  async cb_bank_casino(...) — TG callback data="bank_casino"
-
-=== app/handlers/bank/casino/poker.py ===
-  Модуль: PvP-покер: меню, создание стола, лобби, вход, действия за столом.
-  class PokerCreateFSM — группа состояний FSM
-  class PokerRaiseFSM — группа состояний FSM
-  _poker_menu_kb(...) — Telegram handler
-  async cb_poker_menu(...) — TG callback data="poker_menu"
-  _lobby_card_text(...) — Telegram handler
-  _lobby_card_kb(...) — Telegram handler
-  async cb_poker_create(...) — TG callback data="poker_create"
-  async msg_poker_buyin(...) — обработчик ввода пользователя (FSM)
-  async cb_poker_create_players(...) — TG callback prefix="poker_create_players:"
-  async cb_poker_create_wait(...) — TG callback prefix="poker_create_wait:"
-  async cb_poker_lobby(...) — TG callback data="poker_lobby"
-  async cb_poker_view(...) — TG callback prefix="poker_view:"
-  async cb_poker_join(...) — TG callback prefix="poker_join:"
-  async cb_poker_cancel(...) — TG callback prefix="poker_cancel:"
-  async cb_poker_act(...) — TG callback prefix="poker_act:"
-  async cb_poker_bet_menu(...) — TG callback prefix="poker_bet_menu:"
-  async cb_poker_raise(...) — TG callback prefix="poker_raise:"
-  async cb_poker_raise_custom(...) — TG callback prefix="poker_raise_custom:"
-  async msg_poker_raise_amount(...) — обработчик ввода пользователя (FSM)
-  async cb_poker_leave(...) — TG callback prefix="poker_leave:"
-  async cb_poker_help(...) — TG callback prefix="poker_help:"
-  async cb_poker_back_to_table(...) — TG callback prefix="poker_back_to_table:"
-
-=== app/handlers/bank/casino/rating.py ===
-  Модуль: Еженедельный рейтинг казино.
-  async cb_casino_rating(...) — TG callback data="bank_casino_rating"
-
-=== app/handlers/bank/casino/slots.py ===
-  Модуль: Слоты: выбор ресурса, ставка, прокрутка барабана.
-  class SlotsFSM — группа состояний FSM
-  _slots_main_kb(...) — Telegram handler
-  _paytable_text(...) — Telegram handler
-  async cb_slots_menu(...) — TG callback data="bank_casino_slots"
-  async cb_slots_paytable(...) — TG callback data="slots_paytable"
-  async cb_slots_pick(...) — TG callback prefix="slots_pick:"
-  async msg_slots_bet(...) — обработчик ввода пользователя (FSM)
-
-=== app/handlers/bank/credits.py ===
-  Модуль: Раздел 'Кредиты' в банке.
-  class CreditFSM — группа состояний FSM
-  _credit_status(...) — Telegram handler
-  _credits_text(...) — Telegram handler
-  _credits_kb(...) — Telegram handler
-  async cb_bank_credits(...) — TG callback data="bank_credits"
-  async cb_credit_take(...) — TG callback data="credit_take"
-  async msg_credit_amount(...) — обработчик ввода пользователя (FSM)
-  async cb_credit_repay(...) — TG callback prefix="credit_repay:"
-  async cb_credit_repay_full(...) — TG callback prefix="credit_repay_full:"
-  async msg_repay_amount(...) — обработчик ввода пользователя (FSM)
-
-=== app/handlers/bank/investments.py ===
-  Модуль: Инвестиции: создание вкладов, просмотр и вывод.
-  class InvestFSM — группа состояний FSM
-  _inv_status(...) — Telegram handler
-  _investments_text(...) — Telegram handler
-  _investments_kb(...) — Telegram handler
-  async cb_bank_investments(...) — TG callback data="bank_investments"
-  async cb_invest_choose_duration(...) — TG callback data="invest_choose_duration"
-  async cb_invest_pick_dur(...) — TG callback prefix="invest_pick_dur:"
-  async msg_invest_amount(...) — обработчик ввода пользователя (FSM)
-  async cb_invest_withdraw(...) — TG callback prefix="invest_withdraw:"
-
-=== app/handlers/bank/menu.py ===
-  Модуль: Главное меню Банка.
-  async _bank_menu_text(...) — Telegram handler
-  bank_menu_kb(...) — Telegram handler
-  async cb_bank_menu(...) — TG callback data="bank_menu"
-
-=== app/handlers/bank/storage.py ===
-  Модуль: Ячейки хранилища: открытие, хранение ресурсов, извлечение.
-  class StorageFSM — группа состояний FSM
-  _cell_display(...) — Telegram handler
-  _storage_kb(...) — Telegram handler
-  async cb_bank_storage(...) — TG callback data="bank_storage"
-  async cb_storage_open(...) — TG callback prefix="storage_open:"
-  async cb_storage_store(...) — TG callback prefix="storage_store:"
-  async cb_storage_pick_res(...) — TG callback prefix="storage_pick_res:"
-  async msg_storage_amount(...) — обработчик ввода пользователя (FSM)
-  async _refresh_storage_menu(...) — Telegram handler
-  async cb_storage_retrieve_menu(...) — TG callback prefix="storage_retrieve_menu:"
-  async cb_storage_retrieve_all(...) — TG callback prefix="storage_retrieve_all:"
-  async cb_storage_retrieve_part(...) — TG callback prefix="storage_retrieve_part:"
-  async msg_storage_retrieve_amount(...) — обработчик ввода пользователя (FSM)
-
-=== app/handlers/black_market.py ===
-  Модуль: Чёрный рынок — эксклюзивный раздел для VVIP игроков (круговые донаты).
-  async _vvip_check(...) — VVIP = купил все 5 донатных сетов титулов. 1 запрос вместо 5.
-  async cb_black_market(...) — TG callback data="black_market"
-  async cb_bm_detail(...) — TG callback prefix="bm_detail:"
-  async cb_bm_buy_circle(...) — Покупка 1 круга кругового доната за NHDonate. [TG callback prefix="bm_buy_circle:"]
-  async cb_bm_clan_donats(...) — TG callback data="bm_clan_donats"
-
-=== app/handlers/bosses/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/handlers/bosses/menu.py ===
-  Модуль: Хэндлеры системы Боссов.
-  _boss_photo(...) — Возвращает FSInputFile для изображения босса или None.
-  _progress_bar_str(...) — Telegram handler
-  async _boss_main_screen(...) — Возвращает (текст, клавиатура, boss_id | None) для главного экрана боссов.
-  async _send_boss_screen(...) — Удаляет текущее сообщение и отправляет экран босса:
-  async cb_bosses_menu(...) — TG callback data="bosses_menu"
-  async cb_boss_cd_info(...) — TG callback data="boss_cd_info"
-  async cb_boss_attack(...) — TG callback prefix="boss_attack:"
-  async cb_boss_top(...) — TG callback data="boss_top"
-
-=== app/handlers/business/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/handlers/business/_common.py ===
-  async _build_business_main(...) — Чистый билдер (текст, клавиатура) без зависимости от CallbackQuery —
-  async _show_business_main(...) — Telegram handler
-
-=== app/handlers/business/menu.py ===
-  async cb_business(...) — TG callback data="business"
-  async cb_biz_choose(...) — TG callback prefix="biz_choose:"
-
-=== app/handlers/campaigns/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/handlers/campaigns/menu.py ===
-  Модуль: Хэндлеры системы Походов.
-  class CampaignFSM — группа состояний FSM
-  _duration_label(...) — Telegram handler
-  _resource_emoji(...) — Telegram handler
-  _resource_label(...) — Telegram handler
-  _rank_emoji(...) — Эмодзи ранга задания (из констант кампании).
-  _sr_emoji(...) — Эмодзи ранга статиста.
-  async _campaigns_text_kb(...) — Собирает текст и клавиатуру главного экрана походов.
-  async cb_campaigns_menu(...) — TG callback data="campaigns_menu"
-  async cb_campaigns_full(...) — TG callback data="campaigns_full"
-  async cb_campaigns_new(...) — TG callback data="campaigns_new"
-  async cb_campaigns_res(...) — TG callback prefix="campaigns_res:"
-  async cb_campaigns_rank(...) — TG callback prefix="campaigns_rank:"
-  async cb_campaigns_dur(...) — TG callback prefix="campaigns_dur:"
-  async cb_campaigns_srank(...) — TG callback prefix="campaigns_srank:"
-  async cb_campaigns_cnt(...) — TG callback prefix="campaigns_cnt:"
-  async cb_campaigns_launch(...) — TG callback prefix="campaigns_launch:"
-  async cb_campaigns_custom(...) — TG callback prefix="campaigns_custom:"
-  async msg_campaigns_custom_count(...) — обработчик ввода пользователя (FSM)
-  async cb_campaigns_collect(...) — TG callback prefix="campaigns_collect:"
-  async cb_campaigns_collect_all(...) — TG callback data="campaigns_collect_all"
-  async cb_campaigns_repeat(...) — TG callback prefix="campaigns_repeat:"
-
-=== app/handlers/cards/__init__.py ===
-  Модуль: Пакет хэндлеров карточек v1.2.0.
-
-=== app/handlers/cards/collection.py ===
-  Модуль: Просмотр коллекции карточек и действия: распыление.
-  async _safe_edit(...) — Редактирует сообщение. Если не получается (фото и т.п.) — удаляет и присылает новое.
-  async cb_collection(...) — TG callback data="collection"
-  async cb_collection_rank(...) — TG callback prefix="collection_rank:"
-  async cb_card_act(...) — TG callback prefix="card_act:"
-  async cb_noop(...) — TG callback data="noop"
-  async cb_collection_discard_rank(...) — Распылить все свободные (не в колоде) карточки указанного ранга. [TG callback prefix="collection_discard_rank:"]
-  async cb_card_discard(...) — TG callback prefix="card_discard:"
-
-=== app/handlers/cards/duel.py ===
-  Модуль: UI дуэлей карточек (vs бот / vs игрок).
-  class DuelFSM — группа состояний FSM
-  async cb_duel_menu(...) — TG callback data="duel_menu"
-  async cb_duel_auto_deck(...) — TG callback data="duel_auto_deck"
-  async cb_duel_bot(...) — TG callback prefix="duel_bot:"
-  async cb_duel_pvp(...) — TG callback data="duel_pvp"
-  async msg_duel_opponent(...) — обработчик ввода пользователя (FSM)
-  async cb_duel_accept(...) — TG callback data="duel_accept"
-  async cb_duel_decline(...) — TG callback data="duel_decline"
-
-=== app/handlers/cards/fusion.py ===
-  Модуль: Меню слияния карточек и подтверждение/выполнение слияния.
-  async _safe_edit(...) — edit_text если получится, иначе — delete + answer.
-  async cb_fusion_menu(...) — Показывает персонажей с достаточным числом дубликатов для слияния. [TG callback data="fusion_menu"]
-  async cb_card_fuse_confirm(...) — TG callback prefix="card_fuse_confirm:"
-  async cb_fuse_all(...) — Выполняет все доступные слияния батчем (2 DB-запроса вместо 2×N). [TG callback data="fuse_all"]
-  async cb_card_fuse_do(...) — TG callback prefix="card_fuse_do:"
-
-=== app/handlers/cards/gacha.py ===
-  Модуль: Тикеты и прокрутки (pull_one / pull_10).
-  async cb_try_ticket(...) — TG callback data="try_ticket"
-  async _pull_one_bg(...) — Telegram handler
-  async _pull_10_bg(...) — Telegram handler
-  async cb_pull_one(...) — TG callback data="pull_one"
-  async cb_pull_10(...) — TG callback data="pull_10"
-
-=== app/handlers/cards/menu.py ===
-  Модуль: Главное меню колоды + шансы выпадения.
-  async build_deck_view(...) — Чистый билдер (текст, клавиатура) без CallbackQuery — переиспользуется
-  async cb_deck(...) — TG callback data="deck"
-  async cb_deck_notix(...) — TG callback data="deck_notix"
-  _build_rank_weights(...) — Возвращает фиксированные шансы рангов (weight = % ранга) и список персонажей.
-  async cb_deck_rates(...) — TG callback data="deck_rates"
-  async cb_deck_rates_rank(...) — TG callback prefix="deck_rates_rank:"
-
-=== app/handlers/cards/my_deck.py ===
-  Модуль: Управление активной колодой из 5 слотов.
-  async _safe_edit(...) — edit_text если получится, иначе — delete + answer.
-  async cb_my_deck(...) — TG callback data="my_deck"
-  async cb_deck_clear_all(...) — TG callback data="deck_clear_all"
-  async cb_deck_slot(...) — TG callback prefix="deck_slot:"
-  async cb_deck_slot_clear(...) — TG callback prefix="deck_slot_clear:"
-  async cb_deck_slot_pick(...) — TG callback prefix="deck_slot_pick:"
-  async _show_rank_picker(...) — Показывает кнопки рангов (только те, где есть карточки у игрока).
-  async cb_deck_slot_rank(...) — TG callback prefix="deck_slot_rank:"
-  async cb_deck_slot_preview(...) — TG callback prefix="deck_slot_preview:"
-  async cb_deck_slot_set(...) — TG callback prefix="deck_slot_set:"
-
-=== app/handlers/clan/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/handlers/clan/auction.py ===
-  class ClanAuctionFSM — группа состояний FSM
-  async cb_clan_auction_info(...) — TG callback data="clan_auction_info"
-  async cb_clan_auction(...) — TG callback prefix="clan_auction:"
-  async cb_clan_bid(...) — TG callback prefix="clan_bid:"
-  async msg_clan_bid(...) — обработчик ввода пользователя (FSM)
-
-=== app/handlers/clan/edit.py ===
-  class EditFSM — группа состояний FSM
-  async _get_my_rank(...) — Telegram handler
-  async cb_clan_edit(...) — TG callback data="clan_edit"
-  async cb_clan_rename(...) — TG callback data="clan_rename"
-  async msg_clan_rename(...) — обработчик ввода пользователя (FSM)
-  async cb_clan_kick_menu(...) — TG callback data="clan_kick_menu"
-  async cb_clan_kick(...) — TG callback prefix="clan_kick:"
-  async cb_clan_transfer(...) — TG callback data="clan_transfer"
-  async cb_clan_transfer_to(...) — TG callback prefix="clan_transfer_to:"
-  async cb_clan_transfer_confirm(...) — TG callback prefix="clan_transfer_confirm:"
-  async cb_clan_delete(...) — TG callback data="clan_delete"
-  async cb_clan_delete_confirm(...) — TG callback data="clan_delete_confirm"
-  async cb_clan_leave(...) — TG callback data="clan_leave"
-  async cb_clan_leave_confirm(...) — TG callback data="clan_leave_confirm"
-  async cb_clan_leave_transfer(...) — TG callback prefix="clan_leave_transfer:"
-
-=== app/handlers/clan/exchange.py ===
-  class ExchangeFSM — группа состояний FSM
-  async cb_clan_exchange(...) — TG callback data="clan_exchange"
-  async cb_clan_exch_target(...) — TG callback prefix="clan_exch_target:"
-  async cb_clan_exch_res(...) — TG callback prefix="clan_exch_res:"
-  async cb_clan_exch_squad_rank(...) — TG callback prefix="clan_exch_squad_rank:"
-  async cb_clan_exch_squad_all(...) — TG callback prefix="clan_exch_squad_all:"
-  async cb_clan_exch_char_rank(...) — TG callback prefix="clan_exch_char_rank:"
-  async cb_clan_exch_char_all(...) — TG callback prefix="clan_exch_char_all:"
-  async cb_clan_exch_char_name(...) — TG callback prefix="clan_exch_char_name:"
-  async cb_clan_exch_char_nameall(...) — TG callback prefix="clan_exch_char_nameall:"
-  async msg_exchange_amount(...) — обработчик ввода пользователя (FSM)
-
-=== app/handlers/clan/invite.py ===
-  class InviteFSM — группа состояний FSM
-  async cb_clan_invite(...) — TG callback data="clan_invite"
-  async cb_clan_invite_input(...) — TG callback data="clan_invite_input"
-  async msg_invite_username(...) — обработчик ввода пользователя (FSM)
-  async cb_clan_accept(...) — TG callback prefix="clan_accept:"
-  async cb_clan_decline(...) — TG callback prefix="clan_decline:"
-  async cb_clan_accept_req(...) — TG callback prefix="clan_accept_req:"
-  async cb_clan_decline_req(...) — TG callback prefix="clan_decline_req:"
-  async cb_clan_cancel_request(...) — TG callback data="clan_cancel_request"
-
-=== app/handlers/clan/land.py ===
-  _split_name(...) — cfg['name'] выглядит как '🏷 Скидка в магазине клана' — режем на (эмодзи, текст).
-  async cb_clan_land(...) — TG callback data="clan_land"
-  async cb_clan_land_detail(...) — TG callback prefix="clan_land_detail:"
-  async cb_clan_land_build(...) — TG callback prefix="clan_land_build:"
-  async cb_clan_land_demolish(...) — TG callback prefix="clan_land_demolish:"
-  async cb_clan_land_upgrade(...) — TG callback data="clan_land_upgrade"
-
-=== app/handlers/clan/main.py ===
-  class ClanCreateFSM — группа состояний FSM
-  async cb_clans_menu(...) — TG callback data="clans_menu"
-  async _build_clan_main(...) — Чистый билдер (текст, клавиатура) без CallbackQuery — переиспользуется
-  async _show_clan_main(...) — Telegram handler
-  async cb_clan_members(...) — TG callback data="clan_members"
-  async cb_clan_create(...) — TG callback data="clan_create"
-  async msg_clan_name(...) — обработчик ввода пользователя (FSM)
-  async cb_clan_search(...) — TG callback prefix="clan_search:"
-  async cb_clan_view(...) — TG callback prefix="clan_view:"
-  async cb_clan_request(...) — TG callback prefix="clan_request:"
-  async cmd_topclan(...) — TG команда /topclan
-  async cb_noop_clan(...) — TG callback data="noop_clan"
-
-=== app/handlers/clan/ranks.py ===
-  async _reply(...) — Telegram handler
-  async cb_manage_ranks(...) — TG callback data="clan_manage_ranks"
-  async cb_rank_menu(...) — TG callback prefix="clan_rank_menu:"
-  async cb_set_rank(...) — TG callback prefix="clan_set_rank:"
-
-=== app/handlers/clan/shop.py ===
-  class ClanShopFSM — группа состояний FSM
-  async _get_member_rank(...) — Telegram handler
-  async cb_clan_shop(...) — TG callback data="clan_shop"
-  async _show_upgrades(...) — Telegram handler
-  async _show_donate(...) — Telegram handler
-  async _show_category(...) — Telegram handler
-  async _show_potion_types(...) — Показывает категории зелий (по типу) для кланового магазина.
-  async cb_clan_shop_cat(...) — TG callback prefix="clan_shop_cat:"
-  async cb_clan_potion_type(...) — TG callback prefix="clan_potion_type:"
-  async cb_clan_buy_menu(...) — TG callback prefix="clan_buy_menu:"
-  async cb_clan_buy_qty(...) — TG callback prefix="clan_buy_qty:"
-  async cb_clan_buy_input(...) — TG callback prefix="clan_buy_input:"
-  async msg_clan_buy_qty(...) — обработчик ввода пользователя (FSM)
-  async cb_clan_buy(...) — TG callback prefix="clan_buy:"
-  async cb_clan_upgrade(...) — TG callback prefix="clan_upgrade:"
-
-=== app/handlers/clan/treasury.py ===
-  class TreasuryFSM — группа состояний FSM
-  async cb_clan_treasury(...) — TG callback data="clan_treasury"
-  async cb_clan_treasury_deposit_coin(...) — TG callback data="clan_treasury_deposit_coin"
-  async msg_treasury_amount(...) — обработчик ввода пользователя (FSM)
-
-=== app/handlers/clan/war.py ===
-  class WarFSM — группа состояний FSM
-  async cb_clan_war(...) — TG callback data="clan_war"
-  async cb_clan_war_type(...) — TG callback prefix="clan_war_type:"
-  async cb_clan_war_start(...) — TG callback prefix="clan_war_start:"
-  async cb_clan_war_status(...) — TG callback prefix="clan_war_status:"
-
-=== app/handlers/common/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/handlers/common/_common.py ===
-  _redis(...) — Telegram handler
-  async _get_top_cached(...) — Telegram handler
-  async _get_slava_top_cached(...) — Telegram handler
-  async _get_fame_alltime_top_cached(...) — Telegram handler
-  async _get_fame_patch_top_cached(...) — Telegram handler
-  async _get_players_page_cached(...) — Telegram handler
-  class CommonFSM — группа состояний FSM
-  _phase_emoji(...) — Telegram handler
-  async _main_menu_text(...) — Telegram handler
-
-=== app/handlers/common/admin_cmd.py ===
-  async cmd_admin(...) — TG команда /admin
-
-=== app/handlers/common/fame_alltime.py ===
-  async cmd_fame_alltime(...) — TG команда /aleya
-
-=== app/handlers/common/fame_patch.py ===
-  async cmd_fame_patch(...) — TG команда /zal
-
-=== app/handlers/common/menu.py ===
-  async cmd_start(...) — обработчик команды /start
-  async cb_main_menu(...) — TG callback data="main_menu"
-  async _edit_or_resend(...) — Telegram handler
-  async cb_menu_other(...) — TG callback data="menu_other"
-  async cb_profile(...) — TG callback data="profile"
-
-=== app/handlers/common/promo.py ===
-  async cmd_promo(...) — TG команда /promo
-  async msg_promo(...) — обработчик ввода пользователя (FSM)
-
-=== app/handlers/common/slava.py ===
-  async cmd_slava(...) — TG команда /slava
-
-=== app/handlers/common/top.py ===
-  async cmd_top(...) — TG команда /top
-  async cmd_players(...) — TG команда /players
-  async _show_players_page(...) — Telegram handler
-  async cb_players_page(...) — TG callback prefix="players_page:"
-  async cb_noop_players(...) — TG callback data="noop_players"
-  async cb_show_top(...) — TG callback data="show_top"
-
-=== app/handlers/deck.py ===
-  Модуль: Shim — логика перенесена в app/handlers/cards/ (patch 1.2.0).
-
-=== app/handlers/donate.py ===
-  Модуль: Система пополнения NHDonate через YooKassa (Telegram Payments).
-  class DonateFSM — группа состояний FSM
-  async _show_donate_menu(...) — Отрисовывает главное меню доната (nh_donate баланс + кнопки).
-  async cmd_donate(...) — TG команда /donate
-  async cb_donate_menu(...) — TG callback data="donate_menu"
-  async cb_donate_topup(...) — TG callback data="donate_topup"
-  async cb_donate_quick(...) — TG callback prefix="donate_quick:"
-  async msg_donate_amount(...) — обработчик ввода пользователя (FSM)
-  async _send_invoice(...) — Отправляет Telegram-счёт через YooKassa.
-  async handle_pre_checkout(...) — Подтверждаем оплату. Должен ответить в течение 10 секунд. [TG pre_checkout (Stars)]
-  async handle_successful_payment(...) — Зачисляет NHDonate и сохраняет историю платежа. [TG successful_payment]
-
-=== app/handlers/duel.py ===
-  Модуль: Shim — логика перенесена в app/handlers/cards/duel.py (patch 1.2.0).
-
-=== app/handlers/fame.py ===
-  async cb_adm_fame_menu(...) — TG callback prefix="adm_fame_menu:"
-  async cb_adm_fame_set(...) — TG callback prefix="adm_fame_set:"
-  async cb_adm_fame_give_set(...) — TG callback prefix="adm_fame_give_set:"
-  async cb_adm_fame_give(...) — TG callback prefix="adm_fame_give:"
-  class FameTransferFSM — группа состояний FSM
-  async cb_fame_forge(...) — TG callback data="fame_forge"
-  async cb_fame_set_detail(...) — TG callback prefix="fame_set:"
-  async cb_fame_forge_do(...) — TG callback prefix="fame_forge_do:"
-  async cb_fame_transfer_pick_set(...) — Прямой путь Титулы → Слава → Передать → сет — минуя список Кузницы, [TG callback data="fame_transfer_pick_set"]
-  async cb_fame_transfer_menu(...) — TG callback prefix="fame_transfer_menu:"
-  async cb_fame_transfer_frag(...) — TG callback prefix="fame_transfer_frag:"
-  async cb_fame_transfer_full(...) — TG callback prefix="fame_transfer_full:"
-  async msg_fame_transfer_target(...) — обработчик ввода пользователя (FSM)
-
-=== app/handlers/game/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/handlers/game/emperor.py ===
-  _gang_power(...) — Мощь группировки с учётом роста после каждой победы (+20%).
-  async _batch_get_records(...) — Загружает все записи пользователя одним запросом.
-  async _compute_speed_pct(...) — Вычисляет % снижения КД с учётом мастерства и титулов. 2 запроса вместо 4.
-  async _build_gang_list(...) — Telegram handler
-  async cb_emperor_awakening_wip(...) — TG callback data="emperor_awakening_wip"
-  async cb_emperor_gangs(...) — TG callback data="emperor_gangs"
-  async cb_emperor_gang_info(...) — TG callback prefix="emperor_gang_info:"
-  async cb_emperor_gang_cd(...) — TG callback prefix="emperor_gang_cd:"
-  async cb_emperor_gang_attack(...) — TG callback prefix="emperor_gang_attack:"
-  async cb_emperor_pvp_list(...) — TG callback data="emperor_pvp_list"
-  async cb_emperor_kings_list(...) — TG callback data="emperor_kings_list"
-  async cb_emperor_defend_attack(...) — TG callback prefix="emperor_defend_attack:"
-  async cb_emperor_pvp_attack(...) — TG callback prefix="emperor_pvp_attack:"
-
-=== app/handlers/game/gang.py ===
-  async build_gang_menu(...) — сборка текста и клавиатуры экрана
-  async cb_noop(...) — TG callback data="noop"
-  async cb_city_page(...) — TG callback prefix="city_page:"
-  async cb_choose_country(...) — TG callback prefix="choose_country:"
-  async cb_choose_city(...) — TG callback prefix="choose_city:"
-  async cb_gang_attack_district(...) — TG callback prefix="gang_district:"
-  async cb_gang_pvp(...) — TG callback prefix="gang_pvp:"
-
-=== app/handlers/game/gapren.py ===
-  async _build_awakening_screen(...) — Telegram handler
-  async cb_emperor_awakening(...) — TG callback data="emperor_awakening"
-  async cb_gapren_cd(...) — TG callback data="gapren_cd"
-  async cb_gapren_attack(...) — TG callback data="gapren_attack"
-
-=== app/handlers/game/king.py ===
-  async build_king_menu(...) — сборка текста и клавиатуры экрана
-  async cb_king_page(...) — TG callback prefix="king_page:"
-  async cb_king_city_info(...) — Подробная информация о городе перед атакой — как у ботов. [TG callback prefix="king_city_info:"]
-  async cb_king_attack(...) — TG callback prefix="king_attack:"
-  async cb_noop_king(...) — TG callback data="noop_king"
-  async cb_king_challenge_list(...) — TG callback data="king_challenge_list"
-  async cb_king_challenge_attack(...) — TG callback prefix="king_challenge_attack:"
-  async cb_emperor_challenge_list(...) — TG callback data="emperor_challenge_list"
-  async cb_emperor_challenge_attack(...) — TG callback prefix="emperor_challenge_attack:"
-
-=== app/handlers/guide.py ===
-  _guide_main_kb(...) — Telegram handler
-  _section_kb(...) — Telegram handler
-  async cmd_gaid(...) — TG команда /guid
-  async cb_guide(...) — TG callback data="guide"
-  async cb_guide_section(...) — TG callback prefix="guide_section:"
-
-=== app/handlers/horse_shop.py ===
-  async _build_shop_screen(...) — Telegram handler
-  async cb_horse_shop(...) — TG callback data="horse_shop"
-  async cb_horse_item(...) — TG callback prefix="horse_item:"
-  async cb_horse_buy(...) — TG callback prefix="horse_buy:"
-
-=== app/handlers/market/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/handlers/market/auction.py ===
-  Модуль: Аукционы на бирже: просмотр, ставки, свои лоты.
-  class AuctionBidFSM — группа состояний FSM
-  _now(...) — Telegram handler
-  _ttl(...) — Telegram handler
-  async cb_market_auction_menu(...) — TG callback data="market_auction_menu"
-  async cb_market_auction_browse(...) — TG callback data="market_auction_browse"
-  async cb_market_auction_cat(...) — TG callback prefix="market_auction_cat:"
-  _meta_str(...) — Telegram handler
-  async cb_market_auction_item(...) — TG callback prefix="market_auction_item:"
-  async _render_auction_item(...) — Telegram handler
-  async cb_market_auction_bid_menu(...) — TG callback prefix="market_auction_bid_menu:"
-  async _place_bid_and_render(...) — Telegram handler
-  async cb_market_auction_bid(...) — TG callback prefix="market_auction_bid:"
-  async cb_market_auction_bid_custom(...) — TG callback prefix="market_auction_bid_custom:"
-  async msg_market_auction_bid_amount(...) — обработчик ввода пользователя (FSM)
-  async cb_market_my_auctions(...) — TG callback data="market_my_auctions"
-  async cb_market_my_auction(...) — TG callback prefix="market_my_auction:"
-  async cb_market_auction_cancel(...) — TG callback prefix="market_auction_cancel:"
-
-=== app/handlers/market/buy.py ===
-  async cb_market_buyer(...) — TG callback data="market_buyer"
-  async cb_market_browse(...) — TG callback prefix="market_browse:"
-  async cb_market_item(...) — TG callback prefix="market_item:"
-  async cb_market_buy(...) — TG callback prefix="market_buy:"
-
-=== app/handlers/market/menu.py ===
-  async cb_market_menu(...) — TG callback data="market_menu"
-
-=== app/handlers/market/my_lots.py ===
-  async cb_market_my_listings(...) — TG callback data="market_my_listings"
-  async cb_market_my_item(...) — TG callback prefix="market_my_item:"
-  async cb_market_cancel(...) — TG callback prefix="market_cancel:"
-
-=== app/handlers/market/sell.py ===
-  class MarketFSM — группа состояний FSM
-  async cb_market_seller(...) — TG callback data="market_seller"
-  async cb_market_create_cancel(...) — TG callback data="market_create_cancel"
-  async cb_market_create(...) — TG callback data="market_create"
-  async cb_market_create_mode(...) — TG callback prefix="market_create_mode:"
-  async cb_market_create_type(...) — TG callback prefix="market_create_type:"
-  async cb_market_create_rank(...) — TG callback prefix="market_create_rank:"
-  async cb_market_char_rank(...) — TG callback prefix="market_char_rank:"
-  async cb_market_char_select(...) — TG callback prefix="market_char_select:"
-  async msg_market_amount(...) — обработчик ввода пользователя (FSM)
-  async cb_market_resource(...) — TG callback prefix="market_resource:"
-  async msg_market_min_bid(...) — обработчик ввода пользователя (FSM)
-  async cb_market_auction_duration(...) — TG callback prefix="market_auction_duration:"
-  async msg_market_price(...) — обработчик ввода пользователя (FSM)
-
-=== app/handlers/market.py ===
-  (только импорты и router, без своих функций)
-
-=== app/handlers/quests.py ===
-  _fmt_millions(...) — Telegram handler
-  _time_to_reset(...) — Telegram handler
-  _build_quest_page(...) — Telegram handler
-  async _show_quests(...) — Telegram handler
-  async _show_reroll_menu(...) — Telegram handler
-  async _show_swap_select(...) — Telegram handler
-  async cb_daily_quests(...) — TG callback data="daily_quests"
-  async cb_quests_page(...) — TG callback prefix="quests_page:"
-  async cb_quest_reroll_menu(...) — TG callback data="quest_reroll_menu"
-  async cb_quest_swap_select(...) — TG callback data="quest_swap_select"
-  async cb_quest_claim(...) — TG callback prefix="quest_claim:"
-  async cb_quest_swap(...) — TG callback prefix="quest_swap:"
-  async cb_quest_full_reroll(...) — TG callback data="quest_full_reroll"
-  async cb_noop_quest(...) — TG callback data="noop_quest"
-
-=== app/handlers/raid/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/handlers/raid/attack.py ===
-  async cb_raid_status(...) — TG callback prefix="raid_status:"
-  async cb_raid_attack(...) — TG callback prefix="raid_attack:"
-
-=== app/handlers/raid/boss.py ===
-  _raid_boss_photo(...) — Telegram handler
-  async _send_or_edit_raid_photo(...) — Telegram handler
-  _build_boss_text_and_kb(...) — Строит текст и клавиатуру карточки босса с выбором тира.
-  async cb_raid_boss(...) — TG callback prefix="raid_boss:"
-  async cb_raid_boss_tier(...) — TG callback prefix="raid_boss_tier:"
-  async cb_raid_start(...) — TG callback prefix="raid_start:"
-  async cb_craft_boss_tier_menu(...) — TG callback data="craft_boss_tier_menu"
-  async cb_boss_tier_unlock(...) — TG callback prefix="boss_tier_unlock:"
-
-=== app/handlers/raid/menu.py ===
-  async build_raid_menu_view(...) — Чистый билдер (текст, клавиатура) без CallbackQuery — переиспользуется
-  async cb_raid_menu(...) — TG callback data="raid_menu"
-  async cb_raid_clan(...) — TG callback prefix="raid_clan:"
-  async cb_raid_craft(...) — TG callback data="raid_craft"
-  async cb_noop_raid(...) — TG callback data="noop_raid"
-
-=== app/handlers/raid/rewards.py ===
-  async cb_raid_claim(...) — TG callback prefix="raid_claim:"
-  async cb_craft_ui_menu(...) — TG callback data="craft_ui_menu"
-  async cb_craft_ui(...) — TG callback prefix="craft_ui:"
-  async cb_craft_mg_menu(...) — TG callback data="craft_mg_menu"
-  async cb_craft_mg_buy(...) — TG callback prefix="craft_mg_buy:"
-  async cb_craft_path_menu(...) — TG callback data="craft_path_menu"
-  async cb_craft_path_level(...) — TG callback data="craft_path_level"
-  async cb_craft_path_spin(...) — TG callback data="craft_path_spin"
-  _genius_track_cost(...) — Telegram handler
-  async _biz_genius_page(...) — Общая функция отображения страницы Гения бизнеса.
-  async cb_craft_biz_menu(...) — TG callback data="craft_biz_menu"
-  async cb_biz_genius_menu(...) — TG callback data="biz_genius_menu"
-  async cb_biz_genius_upgrade(...) — TG callback prefix="biz_genius_upgrade:"
-  async cb_craft_biz_district(...) — TG callback data="craft_biz_district"
-  async cb_craft_biz_district_5(...) — TG callback data="craft_biz_district_5"
-  class FragExchangeFSM — группа состояний FSM
-  _exch_calc(...) — Сколько фрагментов to_key получит пользователь за amount фрагментов from_key.
-  _exch_rate_str(...) — Возвращает строку вида '3 🧪 → 1 🏢' (минимальная единица обмена).
-  _exch_menu_text(...) — Telegram handler
-  async cb_craft_exchange_menu(...) — TG callback data="craft_exchange_menu"
-  async cb_exch_from(...) — TG callback prefix="exch_from:"
-  async cb_exch_to(...) — TG callback prefix="exch_to:"
-  async msg_exch_amount(...) — обработчик ввода пользователя (FSM)
-
-=== app/handlers/raid.py ===
-  (только импорты и router, без своих функций)
-
-=== app/handlers/settings.py ===
-  class SettingsFSM — группа состояний FSM
-  async get_current_version(...) — Telegram handler
-  async cb_settings(...) — TG callback data="settings"
-  async cb_referral_info(...) — TG callback data="referral_info"
-  async cb_change_gang_name(...) — TG callback data="change_gang_name"
-  async msg_gang_name(...) — обработчик ввода пользователя (FSM)
-  _notif_icon(...) — Telegram handler
-  _on_off(...) — Telegram handler
-  async cb_notifications_menu(...) — TG callback data="notifications_menu"
-  async cb_toggle_notif(...) — TG callback prefix="toggle_notif:"
-  async cb_delete_gang_confirm(...) — TG callback data="delete_gang_confirm"
-  async cb_delete_gang_do(...) — TG callback data="delete_gang_do"
-
-=== app/handlers/shop.py ===
-  class ShopFSM — группа состояний FSM
-  async cb_shop(...) — TG callback data="shop"
-  async cb_shop_craft(...) — TG callback data="shop_craft"
-  async cb_craft_ticket_1(...) — TG callback data="craft_ticket_1"
-  async cb_craft_ticket_max(...) — TG callback data="craft_ticket_max"
-  async cb_shop_potions(...) — TG callback data="shop_potions"
-  async _render_pot_type(...) — Отрисовывает страницу тира зелий без изменения cb.data.
-  async cb_shop_pot_type(...) — TG callback prefix="shop_pot_type:"
-  async cb_buy_potion(...) — TG callback prefix="buy_potion:"
-  async cb_shop_recruits(...) — TG callback data="shop_recruits"
-  async cb_shop_buy_rank(...) — TG callback prefix="shop_buy_rank:"
-  async cb_shop_input_qty(...) — TG callback prefix="shop_input_qty:"
-  async cb_shop_buy_qty(...) — TG callback prefix="shop_buy_qty:"
-  async msg_recruit_count(...) — обработчик ввода пользователя (FSM)
-  async _do_buy_recruits(...) — Telegram handler
-
-=== app/handlers/skills/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/handlers/skills/mastery.py ===
-  async cb_mastery_menu(...) — TG callback data="mastery_menu"
-  async cb_mastery_upgrade(...) — TG callback prefix="mastery_upgrade:"
-
-=== app/handlers/skills/med_genius.py ===
-  Модуль: Гений медицины — тировая система авто-зелий.
-  is_donat(...) — Telegram handler
-  potion_level(...) — Текущий уровень зелья (6 если донат).
-  mg_level(...) — Уровень Зелья силы (для совместимости с menu.py, profile).
-  any_unlocked(...) — Telegram handler
-  _unlocked_count(...) — Telegram handler
-  async cb_med_genius(...) — TG callback data="med_genius"
-  async cb_mg_toggles(...) — TG callback data="mg_toggles"
-  async cb_mg_toggle(...) — TG callback prefix="mg_toggle:"
-  async cb_mg_toggle_power(...) — TG callback data="mg_toggle_power"
-  async cb_mg_buy_menu(...) — Список типов зелий — выбор авто-уровня. [TG callback data="mg_buy_menu"]
-  async cb_mg_buy_select(...) — Выбор уровня авто-покупки для конкретного зелья. [TG callback prefix="mg_buy:"]
-  async cb_mg_buy_do(...) — Сохранить выбранный уровень как авто-уровень (без немедленной покупки). [TG callback prefix="mg_buy_do:"]
-
-=== app/handlers/skills/menu.py ===
-  async build_skills_view(...) — Чистый билдер (текст, клавиатура) без CallbackQuery — переиспользуется
-  async cb_skills(...) — TG callback data="skills"
-  async cb_war_genius_menu(...) — TG callback data="war_genius_menu"
-  async cb_war_genius_buy(...) — TG callback prefix="war_genius_buy:"
-  async cb_noop(...) — TG callback data="noop"
-
-=== app/handlers/skills/path.py ===
-  _path_photo(...) — Telegram handler
-  async cb_path_choose(...) — TG callback data="path_choose"
-  async cb_choose_path(...) — TG callback prefix="choose_path:"
-  async cb_path_menu(...) — TG callback data="path_menu"
-  async cb_extra_skills_menu(...) — TG callback data="extra_skills_menu"
-  async cb_buy_extra_skill(...) — TG callback prefix="buy_extra_skill:"
-  async cb_buy_path_skill(...) — TG callback prefix="buy_path_skill:"
-  async cb_shadow_stealth_toggle(...) — TG callback data="shadow_stealth_toggle"
-
-=== app/handlers/skills/shop.py ===
-  async cb_ui_settings(...) — TG callback data="ui_settings"
-  async toggle_ui_recruit(...) — TG callback data="toggle_ui_recruit"
-  async toggle_ui_train(...) — TG callback data="toggle_ui_train"
-  async toggle_ui_ticket(...) — TG callback data="toggle_ui_ticket"
-  async toggle_ui_pull(...) — TG callback data="toggle_ui_pull"
-
-=== app/handlers/skills.py ===
-  (только импорты и router, без своих функций)
-
-=== app/handlers/squad.py ===
-  _phase_ranks_str(...) — Telegram handler
-  async build_squad_view(...) — Чистый билдер (текст, клавиатура) без CallbackQuery — переиспользуется
-  async cb_squad(...) — TG callback data="squad"
-  async cb_do_recruit(...) — TG callback data="do_recruit"
-  async cb_do_train(...) — TG callback data="do_train"
-  async cb_squad_list(...) — TG callback data="squad_list"
-
-=== app/handlers/titles.py ===
-  async cb_titles(...) — TG callback data="titles"
-  async cb_game_titles_menu(...) — TG callback data="game_titles_menu"
-  async cb_fame_titles_menu(...) — TG callback data="fame_titles_menu"
-  async _show_achievements(...) — Telegram handler
-  async cb_achievements_menu(...) — TG callback data="achievements_menu"
-  async cb_ach_page(...) — TG callback prefix="ach_page:"
-  async cb_check_achievements(...) — TG callback data="check_achievements"
-  async cb_donat_sets_menu(...) — TG callback data="donat_sets_menu"
-  async cb_donat_set_detail(...) — TG callback prefix="donat_set_detail:"
-  async cb_buy_title(...) — Покупка донатного титула за NHDonate. [TG callback prefix="buy_title:"]
-
-=== app/handlers/training.py ===
-  async build_training_menu_view(...) — Чистый билдер (текст, клавиатура) без CallbackQuery — переиспользуется
-  async cb_training_menu(...) — TG callback data="training_menu"
-  async cb_trainer_info(...) — TG callback prefix="trainer_info:"
-  async cb_trainer_back(...) — TG callback data="trainer_back"
-  async cb_train_with(...) — TG callback prefix="train_with:"
-  async cb_noop_training(...) — TG callback data="noop_training"
-
-=== app/main.py ===
-  async _heartbeat_loop(...) — Пишет текущее время в файл каждые 15с, пока крутится event loop.
-  async main(...) — точка входа: БД, роутеры, scheduler, polling
-  async init_fame(...) — служебная функция модуля
-  async init_cities(...) — служебная функция модуля
-
-=== app/middlewares/db_session.py ===
-  class DbSessionMiddleware — Создаёт AsyncSession на каждый апдейт.
-    async __call__(...) — пропуск update через цепочку middleware
-
-=== app/middlewares/network_error.py ===
-  class NetworkErrorMiddleware — middleware aiogram
-    async __call__(...) — пропуск update через цепочку middleware
-
-=== app/middlewares/rate_limit.py ===
-  class RateLimitMiddleware — Redis-backed sliding window rate limiter with escalating auto-ban.
-    __init__(...) — middleware aiogram
-    async _is_banned(...) — middleware aiogram
-    async _record_request(...) — middleware aiogram
-    async _record_violation(...) — middleware aiogram
-    async _ban(...) — middleware aiogram
-    async __call__(...) — пропуск update через цепочку middleware
-
-=== app/middlewares/user_loader.py ===
-  _ban_text(...) — middleware aiogram
-  class UserLoaderMiddleware — middleware aiogram
-    async __call__(...) — пропуск update через цепочку middleware
-
-=== app/models/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/models/auction.py ===
-  class Auction
-  class AuctionLot
-  class AuctionBid
-
-=== app/models/bank.py ===
-  Модуль: Банк: кредиты, хранилища, инвестиции.
-  class BankCredit — Кредит игрока. Сохраняется через снос банды и престиж; удаляется только патчем.
-  class StorageCell — Ячейка хранилища (5 штук). Сохраняет предмет через снос банды.
-  class Investment — Банковский вклад игрока.
-
-=== app/models/boss.py ===
-  class ActiveBoss
-    get_state(...) — ORM-модель SQLAlchemy
-    set_state(...) — ORM-модель SQLAlchemy
-
-=== app/models/boss_attack.py ===
-  class BossAttack
-
-=== app/models/building.py ===
-  class UserBuilding
-
-=== app/models/campaign.py ===
-  Модуль: Модель активного/завершённого похода.
-  class Campaign
-
-=== app/models/card_deck.py ===
-  class UserDeck — Активная колода игрока: до 5 слотов, каждый ссылается на UserCharacter.id.
-
-=== app/models/character.py ===
-  class UserCharacter
-
-=== app/models/circular_donat.py ===
-  class UserCircularDonat — Хранит сколько кругов у игрока по каждому круговому донату.
-
-=== app/models/city.py ===
-  class City
-  class District
-  class FistBot
-
-=== app/models/clan.py ===
-  class Clan
-  class ClanMember
-  class ClanInvite
-  class ClanWar
-  class ClanAuction
-
-=== app/models/clan_land.py ===
-  class ClanLandBuilding — Здание, построенное кланом на клановой земле (патч 4).
-
-=== app/models/daily_quest.py ===
-  class DailyQuest
-
-=== app/models/emperor_gang.py ===
-  class EmperorGangRecord — Отслеживает победы игрока над группировками на этапе Императора.
-
-=== app/models/fame.py ===
-  class FameFragment — Один экземпляр фрагмента сета Кузницы славы — на весь сервер только одна строка
-
-=== app/models/game_version.py ===
-  class GameVersion
-
-=== app/models/gapren.py ===
-  class GaprenChallenge — Серия побед подряд над Гапрёном на этапе Императора — гейт пробуждения.
-
-=== app/models/horse_shop.py ===
-  class HorseShopEvent — Временное окно лавки коня — раз в 24-36 часов, на 2 часа.
-  class HorseShopPurchase — Сколько единиц конкретного товара купил игрок за конкретное событие (лимит 40/шт.).
-
-=== app/models/king_bot.py ===
-  class KingBot
-
-=== app/models/market.py ===
-  class MarketListing
-  class MarketAuction
-  class MarketAuctionBid
-
-=== app/models/payment.py ===
-  class Payment — История платежей YooKassa (Telegram Payments).
-
-=== app/models/poker.py ===
-  class PokerTable
-  class PokerPlayer
-
-=== app/models/potion.py ===
-  class ActivePotion
-
-=== app/models/promo.py ===
-  class PromoCode
-  class PromoUse
-
-=== app/models/raid.py ===
-  class RaidSession
-
-=== app/models/referral.py ===
-  class Referral
-
-=== app/models/skill.py ===
-  class UserMastery — Мастерство: сила, скорость, выносливость, техника, богатство.
-  class UserPathSkills — Прокачанные навыки выбранного пути.
-
-=== app/models/squad_member.py ===
-  class SquadMember — Агрегированная запись отряда: одна строка на (user_id, rank, stars, base_power)
-
-=== app/models/title.py ===
-  class UserAchievement
-  class UserDonatTitle
-
-=== app/models/user.py ===
-  class User
-    __repr__(...) — ORM-модель SQLAlchemy
-
-=== app/repositories/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/repositories/boss_repo.py ===
-  class BossRepo — repository (SQL)
-    async get_current_boss(...) — Возвращает активного босса (status=active и expires_at ещё не прошло).
-    async get_current_boss_for_update(...) — Активный босс с блокировкой строки (SELECT FOR UPDATE).
-    async get_expired_active(...) — Активный босс, у которого истёк expires_at.
-    async get_last_boss(...) — Последний завершённый/истёкший босс.
-    async get_pending_spawn(...) — Самый последний завершённый босс, у которого next_spawn_at уже наступил.
-    async create_boss(...) — запрос к PostgreSQL
-    async finish_boss(...) — запрос к PostgreSQL
-    async get_attack_record(...) — запрос к PostgreSQL
-    async get_or_create_attack(...) — запрос к PostgreSQL
-    async get_top_attackers(...) — запрос к PostgreSQL
-    async get_all_attackers(...) — запрос к PostgreSQL
-
-=== app/repositories/building_repo.py ===
-  class BuildingRepo — repository (SQL)
-    async get_user_buildings(...) — запрос к PostgreSQL
-    async get_used_districts(...) — запрос к PostgreSQL
-    async get_used_districts_in_city(...) — запрос к PostgreSQL
-    async get_used_districts_per_city(...) — Возвращает {city_id: used_districts} за один запрос.
-    async get_city_buildings(...) — запрос к PostgreSQL
-    async calc_base_income(...) — запрос к PostgreSQL
-    async deactivate_buildings_on_district_loss(...) — При потере районов деактивирует здания (самые новые первыми).
-    async get_buildings_display(...) — запрос к PostgreSQL
-
-=== app/repositories/campaign_repo.py ===
-  Модуль: DB-запросы для системы Походов.
-  class CampaignRepo — repository (SQL)
-    async get_active(...) — Все активные (ещё не завершённые) походы игрока.
-    async get_finished(...) — Завершённые походы, которые ещё не забрал игрок.
-    async count_active(...) — Количество активных походов.
-    async get_by_id(...) — запрос к PostgreSQL
-    async create(...) — запрос к PostgreSQL
-    async finish(...) — запрос к PostgreSQL
-    async delete(...) — запрос к PostgreSQL
-    async get_expired_active(...) — запрос к PostgreSQL
-
-=== app/repositories/character_repo.py ===
-  class CharacterRepo — repository (SQL)
-    async get_total_power(...) — запрос к PostgreSQL
-    async get_collection(...) — запрос к PostgreSQL
-    async get_collection_display(...) — запрос к PostgreSQL
-
-=== app/repositories/city_repo.py ===
-  class CityRepo — repository (SQL)
-    async get_city(...) — запрос к PostgreSQL
-    async get_cities_by_sector(...) — запрос к PostgreSQL
-    async get_next_district(...) — запрос к PostgreSQL
-    async capture_district(...) — запрос к PostgreSQL
-    async lose_district(...) — запрос к PostgreSQL
-    async get_user_district_count(...) — Считает районы игрока: те, что он держит СЕЙЧАС (owner_id, боевая
-    async get_total_districts(...) — запрос к PostgreSQL
-    async get_district_power(...) — запрос к PostgreSQL
-    async init_city_districts(...) — запрос к PostgreSQL
-    async sync_captured_districts(...) — Синхронизирует captured_districts с реальными данными.
-    async get_king_cities_count(...) — запрос к PostgreSQL
-    async get_available_gang_cities(...) — запрос к PostgreSQL
-    async get_available_king_cities(...) — запрос к PostgreSQL
-    async get_city_districts(...) — запрос к PostgreSQL
-
-=== app/repositories/horse_shop_repo.py ===
-  class HorseShopRepo — repository (SQL)
-    async get_current_event(...) — запрос к PostgreSQL
-    async get_current_event_for_update(...) — запрос к PostgreSQL
-    async get_expired_active(...) — запрос к PostgreSQL
-    async get_last_event(...) — запрос к PostgreSQL
-    async get_pending_spawn(...) — запрос к PostgreSQL
-    async create_event(...) — запрос к PostgreSQL
-    async finish_event(...) — запрос к PostgreSQL
-    async get_or_create_purchase(...) — запрос к PostgreSQL
-    async get_user_purchases(...) — запрос к PostgreSQL
-
-=== app/repositories/squad_repo.py ===
-  class SquadRepo — repository (SQL)
-    async add_count(...) — Атомарно прибавляет delta (может быть отрицательным) к count группы
-    async get_groups(...) — Все группы игрока (обычно десятки строк, не миллионы) — по строке на
-    async get_total_count(...) — запрос к PostgreSQL
-    async get_rank_counts(...) — {ранг: суммарное количество} — для меню обмена/продажи.
-    async update_user_combat_power(...) — Единственное место расчёта боевой мощи.
-    async get_squad_count(...) — запрос к PostgreSQL
-
-=== app/repositories/title_repo.py ===
-  class TitleRepo — repository (SQL)
-    async has_title(...) — запрос к PostgreSQL
-    async get_combat_power_mult(...) — Перемножает все combat_power_mult от активных донат-титулов.
-    async get_user_titles(...) — запрос к PostgreSQL
-    async has_set(...) — запрос к PostgreSQL
-    async has_all_sets(...) — Проверяет наличие всех донатных сетов (VVIP) — 1 запрос вместо N.
-    async get_titles_display(...) — Строка с титулами для профиля.
-
-=== app/repositories/user_repo.py ===
-  class UserRepo — repository (SQL)
-    async get_by_tg_id(...) — запрос к PostgreSQL
-    async get_by_id(...) — запрос к PostgreSQL
-    async create(...) — запрос к PostgreSQL
-    async get_or_create(...) — запрос к PostgreSQL
-    async get_top_by_power(...) — запрос к PostgreSQL
-    async get_top_by_all_time_power(...) — Топ по суммарной мощи за все сезоны (all_time + текущий).
-    async get_all_time_rank(...) — Место игрока в рейтинге всех времён.
-    async get_top_by_fame_alltime(...) — Топ по личной активности за всё время (Алея славы).
-    async get_fame_alltime_rank(...) — запрос к PostgreSQL
-    async get_top_by_fame_patch(...) — Топ по личной активности за текущий патч (Зал славы).
-    async get_fame_patch_rank(...) — запрос к PostgreSQL
-    async get_rank_by_power(...) — запрос к PostgreSQL
-    async get_all_with_income(...) — Все игроки у которых есть доход (для income_tick).
-    async get_all_ui_users(...) — Игроки с УИ (для ultra_instinct_tick).
-    async get_players_in_city(...) — Игроки в том же городе (для PvP в фазе банды).
-    async get_fist_players(...) — DEPRECATED — фаза Кулака убрана из прогрессии (патч 1.3.1).
-    async get_emperor_players(...) — Все Императоры для PvP (патч 1.3.1).
-
-=== app/scheduler/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/scheduler/setup.py ===
-  setup_scheduler(...) — регистрирует все interval/cron jobs
-
-=== app/scheduler/tasks/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/scheduler/tasks/achievements.py ===
-  Модуль: Планировщик: проверка новых достижений для недавно активных игроков.
-  async achievement_tick(...) — задача планировщика APScheduler
-
-=== app/scheduler/tasks/auction.py ===
-  async auction_round_tick(...) — Каждые 30 сек — обрабатываем текущий раунд аукциона.
-  async auction_start_tick(...) — Каждые 15 мин — запускаем новый аукцион если пауза прошла.
-  async _notify_auction_started(...) — Уведомляем всех игроков о начале нового аукциона.
-  async _fmt_reward(...) — фоновая обработка без UI
-  async _notify_round_end(...) — фоновая обработка без UI
-  async _notify_auction_end(...) — фоновая обработка без UI
-
-=== app/scheduler/tasks/bank.py ===
-  Модуль: Фоновые задачи банка:
-  async bank_credit_tick(...) — Проверяет все активные кредиты:
-  async storage_fee_tick(...) — Снять ежеминутную плату за непустые ячейки хранилища.
-  async investment_tick(...) — Пометить созревшие вклады и уведомить игроков.
-
-=== app/scheduler/tasks/boss.py ===
-  Модуль: Планировщик: спавн боссов и завершение истёкших.
-  async boss_tick(...) — 1. Если есть активный истёкший босс — завершаем и раздаём награды.
-  async _notify_boss_spawn(...) — Уведомляет всех игроков с включёнными нотификациями о появлении босса.
-  async _notify_boss_result(...) — Уведомляет всех участников + всех игроков о финале босса.
-
-=== app/scheduler/tasks/campaign.py ===
-  Модуль: Планировщик: завершение истёкших походов.
-  async campaign_tick(...) — Завершает все истёкшие активные походы и уведомляет игроков.
-  async _notify_player(...) — Отправляет уведомление игроку о завершении похода.
-
-=== app/scheduler/tasks/casino_rating.py ===
-  Модуль: Еженедельный сброс и награждение рейтинга казино (каждый понедельник 00:00 UTC).
-  async casino_rating_tick(...) — задача планировщика APScheduler
-
-=== app/scheduler/tasks/clan.py ===
-  async clan_power_reconcile_tick(...) — Периодически пересчитывает Clan.combat_power = SUM(members.combat_power).
-  async clan_war_tick(...) — Завершает просроченные войны кланов и выдаёт награды.
-  async clan_auction_tick(...) — Каждую минуту — завершает истёкшие клановые аукционы и выдаёт награды.
-
-=== app/scheduler/tasks/daily.py ===
-  Модуль: Ежедневные бонусы от круговых донатов.
-  async daily_tick(...) — Ежедневный тик — начисляет бонус circ_daily_districts (Архангел круг 10).
-
-=== app/scheduler/tasks/horse_shop.py ===
-  Модуль: horse_shop_tick — спавн/закрытие ивент-магазина «Лавка коня».
-  async horse_shop_tick(...) — задача планировщика APScheduler
-  async _notify_horse_shop_spawn(...) — фоновая обработка без UI
-
-=== app/scheduler/tasks/income.py ===
-  Модуль: income_tick — оптимизированная версия для 5000+ игроков.
-  _bulk_update_sql(...) — Генерирует SQL с VALUES для bulk UPDATE.
-  async income_tick(...) — задача планировщика APScheduler
-  async _track_income_quests(...) — Обновляет прогресс ежедневных квестов с progress_key='income'.
-
-=== app/scheduler/tasks/market_auction.py ===
-  Модуль: Завершение истёкших аукционов биржи: выдача лота победителю, оплата продавцу минус комиссия.
-  async _notify_no_bids(...) — фоновая обработка без UI
-  async market_auction_tick(...) — Каждую минуту — завершает истёкшие аукционы биржи.
-
-=== app/scheduler/tasks/notifications.py ===
-  async _send_notifications(...) — Send `text` to all `tg_ids` concurrently (rate-limited by semaphore).
-  async _get_bot(...) — фоновая обработка без UI
-
-=== app/scheduler/tasks/poker.py ===
-  Модуль: Тик покерных столов: старт раздач по таймеру ожидания, авто-действия по таймауту хода.
-  async poker_tick(...) — задача планировщика APScheduler
-
-=== app/scheduler/tasks/referral.py ===
-  async referral_power_tick(...) — Каждые 30 мин — обновляет бонус мощи от учителя для всех учеников.
-
-=== app/scheduler/tasks/ultra_instinct.py ===
-  async ultra_instinct_tick(...) — задача планировщика APScheduler
-  async _ui_recruit(...) — фоновая обработка без UI
-  async _med_genius_auto_potion(...) — Гений медицины: авто-покупка зелий всех типов.
-
-=== app/scheduler/tasks/war_genius.py ===
-  Модуль: war_genius_tick — авто-атака рейдов для пользователей с навыком «Гений войны».
-  async war_genius_tick(...) — задача планировщика APScheduler
-  async _auto_attack_for_user(...) — фоновая обработка без UI
-
-=== app/services/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/services/activity_service.py ===
-  Модуль: Личная активность игрока: Алея славы (всё время) и Зал славы (текущий патч).
-  async record(...) — Начисляет очки Алеи/Зала славы за размеченное игровое действие.
-
-=== app/services/admin/__init__.py ===
-  class AdminService — сервис / mixin
-
-=== app/services/admin/backup.py ===
-  class AdminBackupMixin — сервис / mixin
-    async create_backup(...) — игровая логика / изменение состояния
-    _prune_backups(...) — Оставляет последние `keep` бэкапов — без этого /app/backups
-    async list_backups(...) — игровая логика / изменение состояния
-    async restore_backup(...) — игровая логика / изменение состояния
-    async patch_reset_progress(...) — игровая логика / изменение состояния
-
-=== app/services/admin/base.py ===
-  class AdminBaseService — сервис / mixin
-    async find_user(...) — игровая логика / изменение состояния
-    async give_coins(...) — игровая логика / изменение состояния
-    async give_tickets(...) — игровая логика / изменение состояния
-    async give_tui(...) — игровая логика / изменение состояния
-    async remove_tui(...) — игровая логика / изменение состояния
-    async give_all_titles(...) — игровая логика / изменение состояния
-    async remove_all_titles(...) — игровая логика / изменение состояния
-    async get_stats(...) — Статистика с кешированием на 60 секунд.
-    _zero_account_filter(...) — WHERE-условие для аккаунтов с 0 мощью, без доната и без престижа.
-    async count_zero_accounts(...) — игровая логика / изменение состояния
-    async delete_zero_accounts(...) — игровая логика / изменение состояния
-    async delete_user(...) — игровая логика / изменение состояния
-
-=== app/services/admin/characters.py ===
-  class AdminCharactersMixin — сервис / mixin
-    async give_character(...) — игровая логика / изменение состояния
-    async give_absolute_character(...) — игровая логика / изменение состояния
-    async take_absolute_characters(...) — игровая логика / изменение состояния
-
-=== app/services/admin/cities.py ===
-  class AdminCitiesMixin — сервис / mixin
-    async give_king_city(...) — игровая логика / изменение состояния
-    async take_all_cities(...) — игровая логика / изменение состояния
-
-=== app/services/admin/prestige.py ===
-  class AdminPrestigeMixin — сервис / mixin
-    async give_prestige(...) — Добавляет пробуждения игроку с бонусами как при обычном пробуждении.
-    async remove_prestige(...) — Убирает пробуждения с откатом бонусов.
-
-=== app/services/admin/resources.py ===
-  class AdminResourcesMixin — сервис / mixin
-    async give_mastery_points(...) — игровая логика / изменение состояния
-    async give_path_points(...) — игровая логика / изменение состояния
-    async give_ui_fragments(...) — игровая логика / изменение состояния
-    async give_alchemy_fragments(...) — игровая логика / изменение состояния
-    async give_path_fragments(...) — игровая логика / изменение состояния
-    async give_business_fragments(...) — игровая логика / изменение состояния
-    async give_war_points(...) — игровая логика / изменение состояния
-    async give_donate(...) — игровая логика / изменение состояния
-    async give_squad_member(...) — игровая логика / изменение состояния
-
-=== app/services/admin_service.py ===
-  (только импорты и router, без своих функций)
-
-=== app/services/auction/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/services/auction/base.py ===
-  _get_random_tier(...) — служебная функция модуля
-  class AuctionService — сервис / mixin
-    async get_active_auction(...) — игровая логика / изменение состояния
-    async get_next_auction_time(...) — Берём TTL из Redis — время устанавливается один раз при завершении
-    async _set_next_auction_pause(...) — Устанавливает случайную паузу до следующего аукциона в Redis.
-    async start_new_auction(...) — Запускает новый аукцион если пауза прошла.
-    async _generate_reward(...) — игровая логика / изменение состояния
-    async place_bid(...) — игровая логика / изменение состояния
-    async tick(...) — игровая логика / изменение состояния
-    async _deliver_reward(...) — игровая логика / изменение состояния
-    async get_display_data(...) — игровая логика / изменение состояния
-
-=== app/services/auction/rewards.py ===
-  async _generate_reward(...) — служебная функция модуля
-  async _deliver_reward(...) — служебная функция модуля
-
-=== app/services/auction_service.py ===
-  (только импорты и router, без своих функций)
-
-=== app/services/bank/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/services/bank/casino/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/services/bank/casino/blackjack_service.py ===
-  Модуль: Блэкджек против дилера-бота. Состояние раздачи хранится в FSM (Redis).
-  _draw_card(...) — Тянет карту из «бесконечной колоды» (равные шансы каждого ранга).
-  format_card(...) — служебная функция модуля
-  format_hand(...) — служебная функция модуля
-  hand_value(...) — служебная функция модуля
-  is_natural(...) — служебная функция модуля
-  class BlackjackService — сервис / mixin
-    async start(...) — игровая логика / изменение состояния
-    async hit(...) — игровая логика / изменение состояния
-    async double(...) — игровая логика / изменение состояния
-    async stand(...) — игровая логика / изменение состояния
-    async _dealer_play_and_settle(...) — игровая логика / изменение состояния
-    async _settle(...) — игровая логика / изменение состояния
-
-=== app/services/bank/casino/common.py ===
-  Модуль: Общее для всех игр казино: ресурсы ставок, баланс, детектор стратегии x3.
-  get_balance(...) — служебная функция модуля
-  set_balance(...) — служебная функция модуля
-  _redis(...) — служебная функция модуля
-  async detect_x3(...) — Возвращает True если ставка является частью паттерна x3 (3 подряд).
-  async record_bet(...) — Записать ставку в историю (Redis список, 3 последних).
-  add_weekly_casino_profit(...) — Учитывает чистую прибыль/убыток в недельном рейтинге казино (только NHCoin).
-
-=== app/services/bank/casino/poker_engine.py ===
-  Модуль: Чистая логика покера: колода, оценка руки, сайд-поты. Без обращений к БД.
-  format_rank(...) — служебная функция модуля
-  format_card(...) — служебная функция модуля
-  format_cards(...) — служебная функция модуля
-  new_shuffled_deck(...) — служебная функция модуля
-  _evaluate_5(...) — служебная функция модуля
-  evaluate_hand(...) — Лучшая комбинация из 5 карт среди всех сочетаний (карт может быть 5..7).
-  hand_name(...) — служебная функция модуля
-  compute_side_pots(...) — players: [{'user_id': int, 'total_bet': int, 'folded': bool}, ...]
-  resolve_showdown(...) — players: [{'user_id': int, 'hole_cards': [[r,s],[r,s]], 'total_bet': int, 'folded': bool}]
-
-=== app/services/bank/casino/poker_notify.py ===
-  Модуль: Рассылка обновлений покерного стола игрокам (общее для хендлера и планировщика).
-  _display_name(...) — служебная функция модуля
-  _utility_row(...) — служебная функция модуля
-  _action_kb(...) — служебная функция модуля
-  _waiting_kb(...) — Клавиатура для игроков, чей ход сейчас не наступил — раньше у них не
-  async users_by_id(...) — служебная функция модуля
-  build_player_view(...) — Собирает текст+клавиатуру текущего состояния стола для конкретного
-  async notify_event(...) — служебная функция модуля
-
-=== app/services/bank/casino/poker_render.py ===
-  Модуль: Текстовое представление стола/раздачи покера (общее для хендлера и планировщика).
-  _display_name(...) — служебная функция модуля
-  visible_community(...) — служебная функция модуля
-  render_table_header(...) — служебная функция модуля
-  render_seats(...) — служебная функция модуля
-  render_action_prompt(...) — служебная функция модуля
-  render_hole_cards(...) — служебная функция модуля
-  render_your_combo_line(...) — Живая подсказка собранной комбинации по открытым на столе картам —
-  render_hand_result(...) — snapshot: {user_id: {"status": str, "hole_cards": json str}} — состояние
-
-=== app/services/bank/casino/poker_service.py ===
-  Модуль: PvP-покер: жизненный цикл стола Texas Hold'em — много раздач подряд, пока
-  _now(...) — служебная функция модуля
-  class PokerService — сервис / mixin
-    async create_table(...) — игровая логика / изменение состояния
-    async join_table(...) — игровая логика / изменение состояния
-    async creator_cancel(...) — игровая логика / изменение состояния
-    async list_open_tables(...) — игровая логика / изменение состояния
-    async get_table(...) — игровая логика / изменение состояния
-    async get_players(...) — игровая логика / изменение состояния
-    async _get_players(...) — игровая логика / изменение состояния
-    _post_bet(...) — игровая логика / изменение состояния
-    async start_hand(...) — игровая логика / изменение состояния
-    _do_action(...) — игровая логика / изменение состояния
-    async apply_action(...) — игровая логика / изменение состояния
-    _next_seat(...) — игровая логика / изменение состояния
-    async _advance(...) — игровая логика / изменение состояния
-    async _next_street(...) — игровая логика / изменение состояния
-    _first_seat_postflop(...) — игровая логика / изменение состояния
-    async _run_out_and_showdown(...) — игровая логика / изменение состояния
-    async _showdown(...) — игровая логика / изменение состояния
-    async _finish_hand(...) — игровая логика / изменение состояния
-    async _start_new_hand_or_finish(...) — После раздачи: выводит проигравшихся в ноль и тех, кто нажал "уйти",
-    async _cash_out(...) — Выводит стек игроков на баланс и убирает их со стола.
-    async request_leave(...) — Игрок нажал "Уйти со стола". Если раздача ещё не идёт (стол
-    async _cancel_table(...) — игровая логика / изменение состояния
-    async _auto_act(...) — игровая логика / изменение состояния
-    async tick(...) — игровая логика / изменение состояния
-
-=== app/services/bank/casino/rating_service.py ===
-  Модуль: Еженедельный рейтинг казино (по чистой прибыли в NHCoin).
-  class CasinoRatingService — сервис / mixin
-    async get_top(...) — игровая логика / изменение состояния
-    async get_user_rank(...) — Место пользователя в общем недельном рейтинге (независимо от знака
-    async reset_and_reward(...) — Награждает топ-3, обнуляет счётчик у всех. Возвращает данные для уведомлений.
-
-=== app/services/bank/casino/slots_service.py ===
-  Модуль: Слоты: 3 символа на барабане, выплаты по таблице.
-  class SlotsService — сервис / mixin
-    spin(...) — игровая логика / изменение состояния
-    render_reel(...) — игровая логика / изменение состояния
-    async play(...) — игровая логика / изменение состояния
-
-=== app/services/bank/credits_service.py ===
-  Модуль: Сервис кредитов: выдача, проверка блокировки, частичное погашение, снос банды.
-  class CreditsService — сервис / mixin
-    async get_active_credits(...) — игровая логика / изменение состояния
-    async get_all_credits(...) — игровая логика / изменение состояния
-    async take_credit(...) — Выдать кредит.
-    async repay_credit(...) — Погасить кредит частично или полностью.
-    async is_blocked(...) — Возвращает True, если есть просроченный (>3ч) неоплаченный кредит.
-    async block_message(...) — Возвращает текст ошибки если действие заблокировано, иначе None.
-    async wipe_all_credits(...) — Удалить все кредиты всех игроков (вызывается при патче).
-
-=== app/services/bank/investments_service.py ===
-  Модуль: Инвестиции: до 3 вкладов одновременно, срок 1/3/6/12/24ч, доход 3/5/10/15/20%.
-  class InvestmentsService — сервис / mixin
-    async get_active(...) — игровая логика / изменение состояния
-    async create(...) — Создать вклад.
-    async withdraw(...) — Возвращает (ok, error_msg, payout).
-    async maturity_tick(...) — Пометить созревшие вклады (is_matured=True) и вернуть список для уведомлений.
-
-=== app/services/bank/storage_service.py ===
-  Модуль: Ячейки хранилища: 5 слотов, плата в минуту, сохраняются через снос банды.
-  class StorageService — сервис / mixin
-    async get_cells(...) — игровая логика / изменение состояния
-    async get_cell(...) — игровая логика / изменение состояния
-    async ensure_cells(...) — Создать строки для всех 5 слотов если их нет.
-    async open_cell(...) — игровая логика / изменение состояния
-    async store_resource(...) — игровая логика / изменение состояния
-    async retrieve_resource(...) — Достать содержимое ячейки. Если amount не задан — достаёт всё.
-    async fee_tick(...) — Снять плату за все непустые открытые ячейки.
-
-=== app/services/boss_service.py ===
-  Модуль: Бизнес-логика системы Боссов.
-  _next_boss_id(...) — служебная функция модуля
-  get_boss_attack_cd(...) — Вычисляет КД атаки по боссу с учётом all_cd_reduction + бонуса земель клана.
-  _compute_boss_reward(...) — Награда за победу для конкретного участника (поле User + количество).
-  class BossService — сервис / mixin
-    async get_current_boss(...) — игровая логика / изменение состояния
-    async get_next_spawn_at(...) — Возвращает время следующего спавна, если нет активного босса.
-    async spawn_boss(...) — Спавнит следующего босса по ротации.
-    async attack(...) — Выполняет атаку игрока по боссу.
-    async finalize_boss(...) — Завершает истёкшего босса (вызывается планировщиком).
-  _fmt_hp(...) — служебная функция модуля
-  _fmt_coins(...) — служебная функция модуля
-  hp_bar(...) — Эмодзи вместо Unicode block elements (█░) — те не везде рендерятся
-
-=== app/services/business_service.py ===
-  class BusinessService — сервис / mixin
-    async choose_business(...) — Разовый выбор здания — навсегда. Доход дальше растёт от количества
-    async apply_capture_influence(...) — Влияние за захват/потерю районов: illegal теряет, political получает.
-    async _recalc_income(...) — recalc_tax=True только там, где реально меняются захваченные
-    _total_bonus_percent(...) — игровая логика / изменение состояния
-    _charles_bonus_percent(...) — Сет Славы «Чарльз Чой» — применяется ПОСЛЕДНИМ, мультипликативно
-    async tick_income(...) — игровая логика / изменение состояния
-    async _pay_teacher(...) — игровая логика / изменение состояния
-    async get_or_create_bonus_city(...) — игровая логика / изменение состояния
-    async add_bonus_districts(...) — игровая логика / изменение состояния
-    async get_income_breakdown(...) — игровая логика / изменение состояния
-
-=== app/services/campaign_service.py ===
-  Модуль: Бизнес-логика системы Походов.
-  _breakdown_to_list(...) — служебная функция модуля
-  _breakdown_from_json(...) — служебная функция модуля
-  _clamp(...) — служебная функция модуля
-  _calc_success_chance(...) — Шанс успешного сбора ресурса в %.
-  _calc_survival_pct(...) — Процент выживших статистов.
-  _calc_resource(...) — Количество ресурса при успешном походе.
-  class CampaignService — сервис / mixin
-    async get_active_campaigns(...) — игровая логика / изменение состояния
-    async get_finished_campaigns(...) — игровая логика / изменение состояния
-    async can_start(...) — Проверяет, можно ли начать новый поход.
-    async _get_busy_breakdown(...) — {(rank, stars, base_power): зарезервировано} по активным походам
-    async get_busy_breakdown(...) — Публичная обёртка _get_busy_breakdown — для переиспользования вне похода
-    async count_available_statists(...) — Количество доступных статистов — по группам (rank,stars,base_power),
-    async get_available_stats(...) — (количество, средняя base_power) среди доступных.
-    async get_available_stats_by_rank(...) — {ранг: (количество, средняя base_power)} среди доступных.
-    async _reserve_statists(...) — Резервирует `amount` статистов под поход, слабейших первыми (как раньше
-    async preview_avg_power(...) — Средняя мощь `amount` слабейших доступных статистов — только для
-    async start_campaign(...) — Запускает поход.
-    async collect_campaign(...) — Забирает результат завершённого похода.
-    async collect_all_finished(...) — Собирает разом все завершённые походы игрока (кнопка «Собрать всё»).
-    async process_expired(...) — Рассчитывает итог похода и помечает его как finished.
-    calc_preview(...) — Предварительный расчёт для отображения в интерфейсе.
-
-=== app/services/cards/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/services/cards/craft.py ===
-  Модуль: Крафт тикетов за пыль.
-  class CraftService — Крафт тикетов из пыли.
-    async craft_ticket(...) — Скрафтить 1 тикет за TICKET_CRAFT_COST пыли.
-    async craft_ticket_bulk(...) — Скрафтить несколько тикетов сразу.
-
-=== app/services/cards/deck_slots.py ===
-  Модуль: Управление активными слотами колоды (UserDeck).
-  class DeckSlotService — CRUD для слотов активной колоды игрока.
-    async get_deck(...) — игровая логика / изменение состояния
-    async get_deck_char_ids(...) — игровая логика / изменение состояния
-    async set_deck_slot(...) — Поставить карточку uc_id в слот 1-5.
-    async clear_deck_slot(...) — игровая логика / изменение состояния
-    async clear_all_slots(...) — игровая логика / изменение состояния
-
-=== app/services/cards/duel.py ===
-  Модуль: Логика дуэлей карточек:
-  effective_power(...) — служебная функция модуля
-  team_power(...) — служебная функция модуля
-  async build_user_team(...) — 5 карточек из активной колоды + до 5 случайных из остатка (без N+1).
-  _gen_bot_team(...) — Возвращает [(name, base_power, level), ...] для команды бота.
-  bot_team_power_val(...) — служебная функция модуля
-  class DuelService — сервис / mixin
-    async duel_vs_bot(...) — игровая логика / изменение состояния
-    async send_challenge(...) — игровая логика / изменение состояния
-    async accept_challenge(...) — игровая логика / изменение состояния
-    async decline_challenge(...) — игровая логика / изменение состояния
-
-=== app/services/cards/fusion.py ===
-  Модуль: Распыление карточек в пыль и слияние дубликатов.
-  effective_power(...) — служебная функция модуля
-  class FusionService — Распыление и слияние карточек.
-    async discard_card(...) — Распылить одну карточку → пыль.
-    async count_chars(...) — Количество карточек (character_id, level) у игрока.
-    async fuse_cards(...) — Слияние карточек:
-    async batch_fuse_all(...) — Выполняет все возможные слияния за один проход.
-
-=== app/services/cards/gacha.py ===
-  Модуль: Тикеты и прокрутка гачи.
-  _effective_power(...) — служебная функция модуля
-  async _get_mastery(...) — служебная функция модуля
-  class GachaService — Тикеты, прокрутка, формирование записей UserCharacter.
-    __init__(...) — игровая логика / изменение состояния
-    async try_get_ticket(...) — Попытка получить тикет раз в 5 минут.
-    _pick_char(...) — игровая логика / изменение состояния
-    _make_uc(...) — игровая логика / изменение состояния
-    async _refresh_power(...) — игровая логика / изменение состояния
-    async pull(...) — игровая логика / изменение состояния
-    async pull_n(...) — игровая логика / изменение состояния
-    async pull_all(...) — игровая логика / изменение состояния
-
-=== app/services/circular_donat_service.py ===
-  Модуль: Сервис круговых донатов.
-  _apply_one_donat(...) — Применяет бонус одного кругового доната (circles кругов) к пользователю.
-  async rebuild_circular_bonuses(...) — Полный пересчёт всех кругов.
-  async add_circle(...) — Добавить 1 круг игроку. Возвращает {'ok': True/False, 'circles': n}.
-  async remove_circle(...) — Убрать 1 круг. Возвращает {'ok': True/False, 'circles': n}.
-  async get_user_circles(...) — Возвращает {donat_id: circles} для пользователя.
-  async _broadcast_clan_head(...) — Клан-вайд часть доната "Глава клана" — вызывается при add/remove_circle
-  async recalc_clan_head_bonus(...) — Клан-вайд часть доната "Глава клана": суммирует круги этого доната
-  async _full_rebuild(...) — Пересчитывает и титулы, и круговые бонусы.
-
-=== app/services/clan/__init__.py ===
-  class ClanService — Единый сервис кланов.
-
-=== app/services/clan/auction.py ===
-  class ClanAuctionService — сервис / mixin
-    async get_active_auction(...) — игровая логика / изменение состояния
-    async bid_auction(...) — игровая логика / изменение состояния
-    async get_expired_auction_ids(...) — Возвращает IDs истёкших незавершённых аукционов.
-    async finish_auction_by_id(...) — Завершает один аукцион в уже открытой транзакции.
-    async finish_expired_auctions(...) — игровая логика / изменение состояния
-    async give_auction_reward(...) — игровая логика / изменение состояния
-
-=== app/services/clan/base.py ===
-  class ClanBaseService — сервис / mixin
-    async get_member_rank(...) — Возвращает ранг участника или None если не в клане.
-    async set_member_rank(...) — игровая логика / изменение состояния
-    async get_user_clan(...) — игровая логика / изменение состояния
-    async get_clan_members(...) — игровая логика / изменение состояния
-    async get_clan_member_count(...) — COUNT(*) без загрузки ORM-объектов.
-    async get_clan_member_ids(...) — Только user_id участников — без загрузки полных ORM-объектов.
-    async recalc_power(...) — игровая логика / изменение состояния
-    async create_clan(...) — игровая логика / изменение состояния
-    async get_top_clans(...) — игровая логика / изменение состояния
-    async transfer_ownership(...) — игровая логика / изменение состояния
-    async admin_transfer_ownership(...) — Смена владельца клана администратором без проверки прав.
-    async rename_clan(...) — игровая логика / изменение состояния
-    async delete_clan(...) — игровая логика / изменение состояния
-    async kick_member(...) — игровая логика / изменение состояния
-    async leave_clan(...) — игровая логика / изменение состояния
-    async _apply_clan_bonuses(...) — Применяет клановые бонусы ко всем участникам.
-    async _remove_clan_bonuses_from_user(...) — игровая логика / изменение состояния
-    async _add_clan_bonuses_to_user(...) — игровая логика / изменение состояния
-
-=== app/services/clan/donat.py ===
-  class ClanDonatService — сервис / mixin
-    async apply_clan_donat(...) — игровая логика / изменение состояния
-    async _sync_vvip_to_members(...) — Синхронизировать уровень VVIP клана на всех участников.
-    async apply_full_level(...) — игровая логика / изменение состояния
-    async reset_clan_donat(...) — игровая логика / изменение состояния
-
-=== app/services/clan/exchange.py ===
-  class ClanExchangeService — сервис / mixin
-    async exchange_resource(...) — игровая логика / изменение состояния
-    async _exchange_squad(...) — игровая логика / изменение состояния
-    async _exchange_squad_all(...) — игровая логика / изменение состояния
-    async _remove_from_deck(...) — Удаляет карточки из активной колоды перед передачей.
-    async _exchange_character(...) — игровая логика / изменение состояния
-    async _exchange_characters_by_name(...) — игровая логика / изменение состояния
-    async _exchange_characters_by_rank(...) — игровая логика / изменение состояния
-    async _recalc_power(...) — игровая логика / изменение состояния
-
-=== app/services/clan/invite.py ===
-  class ClanInviteService — сервис / mixin
-    async invite_user(...) — игровая логика / изменение состояния
-    async request_join(...) — игровая логика / изменение состояния
-    async cancel_request(...) — Отмена своей заявки.
-    async accept_invite(...) — игровая логика / изменение состояния
-    async decline_invite(...) — игровая логика / изменение состояния
-
-=== app/services/clan/land.py ===
-  class ClanLandService — сервис / mixin
-    async get_clan_land_buildings(...) — игровая логика / изменение состояния
-    async get_building_counts(...) — игровая логика / изменение состояния
-    async get_slots_used(...) — игровая логика / изменение состояния
-    calc_bonuses(...) — count → (тип бонуса, значение), лимит max_count применяется здесь.
-    async get_shop_discount_pct(...) — игровая логика / изменение состояния
-    _user_values(...) — игровая логика / изменение состояния
-    async recalc_land_bonuses(...) — Bulk-пересчитывает clan_land_* поля всем участникам клана.
-    async apply_land_bonuses_to_user(...) — Версия для одного пользователя — используется при вступлении в клан.
-    async buy_land_upgrade(...) — игровая логика / изменение состояния
-    async buy_land_building(...) — игровая логика / изменение состояния
-    async demolish_land_building(...) — Сносит одно здание указанного типа, возвращая 50% его стоимости в казну.
-
-=== app/services/clan/shop.py ===
-  class ClanShopService — сервис / mixin
-    async buy_clan_shop(...) — игровая логика / изменение состояния
-    async _notify_shop_purchase(...) — игровая логика / изменение состояния
-    async buy_upgrade(...) — игровая логика / изменение состояния
-
-=== app/services/clan/treasury.py ===
-  class ClanTreasuryService — сервис / mixin
-    async deposit_treasury(...) — игровая логика / изменение состояния
-
-=== app/services/clan/upgrades.py ===
-  class ClanUpgradesService — сервис / mixin
-    async buy_upgrade(...) — игровая логика / изменение состояния
-    async _notify_upgrade(...) — игровая логика / изменение состояния
-
-=== app/services/clan/war.py ===
-  class ClanWarService — сервис / mixin
-    async start_war(...) — игровая логика / изменение состояния
-    async finish_expired_wars(...) — Завершает просроченные войны и выдаёт награды.
-    async _finish_war(...) — игровая логика / изменение состояния
-
-=== app/services/combat_service.py ===
-  async get_effective_power(...) — Боевая мощь с учётом зелья силы и крит-шанса легенды.
-  async roll_crit(...) — Возвращает (effective_power, is_crit).
-  _apply_shadow_first_attack(...) — Тень: «Первый удар» (path_unique_1=True).
-  async fight_district(...) — Бой с районом (бот).
-  async fight_player(...) — PvP бой между двумя игроками.
-
-=== app/services/cooldown_service.py ===
-  class CooldownService — сервис / mixin
-    __init__(...) — игровая логика / изменение состояния
-    async set_cooldown(...) — игровая логика / изменение состояния
-    async get_ttl(...) — Возвращает секунды до конца КД. 0 = КД нет.
-    async is_on_cooldown(...) — игровая логика / изменение состояния
-    async clear_cooldown(...) — игровая логика / изменение состояния
-    async get_speed_reduction(...) — Возвращает % сокращения КД от мастерства скорости.
-    apply_speed_reduction(...) — Применяет сокращение КД от скорости + доп. бонусов.
-    attack_key(...) — ключ Redis (cooldown или lock)
-    recruit_key(...) — ключ Redis (cooldown или lock)
-    train_key(...) — ключ Redis (cooldown или lock)
-    ticket_key(...) — ключ Redis (cooldown или lock)
-    double_train_key(...) — ключ Redis (cooldown или lock)
-    pull_lock_key(...) — ключ Redis (cooldown или lock)
-    recruit_lock_key(...) — ключ Redis (cooldown или lock)
-    buy_recruit_lock_key(...) — ключ Redis (cooldown или lock)
-    train_lock_key(...) — ключ Redis (cooldown или lock)
-    biz_build_lock_key(...) — ключ Redis (cooldown или lock)
-    promo_lock_key(...) — ключ Redis (cooldown или lock)
-    treasury_lock_key(...) — ключ Redis (cooldown или lock)
-    duel_bot_key(...) — ключ Redis (cooldown или lock)
-    duel_lock_key(...) — ключ Redis (cooldown или lock)
-    duel_challenge_key(...) — ключ Redis (cooldown или lock)
-    duel_pvp_key(...) — ключ Redis (cooldown или lock)
-    king_challenge_key(...) — ключ Redis (cooldown или lock)
-    king_challenge_lock_key(...) — ключ Redis (cooldown или lock)
-    emperor_pvp_key(...) — ключ Redis (cooldown или lock)
-    emperor_challenge_key(...) — ключ Redis (cooldown или lock)
-    emperor_challenge_lock_key(...) — ключ Redis (cooldown или lock)
-    emperor_challenge_progress_key(...) — Счёт побед подряд: Король атакует Императора за трон Империи.
-    emperor_defend_key(...) — КД Императора на атаку конкретного готового-к-вызову Короля (симметрично challenge_key).
-    emperor_defend_lock_key(...) — ключ Redis (cooldown или lock)
-    emperor_defend_progress_key(...) — Счёт побед подряд: Император атакует Короля, чтобы сбить угрозу трону.
-    raid_lock_key(...) — ключ Redis (cooldown или lock)
-    auction_bid_lock_key(...) — ключ Redis (cooldown или lock)
-    credit_lock_key(...) — ключ Redis (cooldown или lock)
-    invest_lock_key(...) — ключ Redis (cooldown или lock)
-    invest_withdraw_lock_key(...) — ключ Redis (cooldown или lock)
-    campaign_launch_lock_key(...) — ключ Redis (cooldown или lock)
-    campaign_collect_lock_key(...) — ключ Redis (cooldown или lock)
-    campaign_collect_all_lock_key(...) — ключ Redis (cooldown или lock)
-    attack_lock_key(...) — Shared lock for gang/king/fist attacks (they share the same cd key).
-    boss_attack_lock_key(...) — ключ Redis (cooldown или lock)
-    emperor_attack_lock_key(...) — ключ Redis (cooldown или lock)
-    casino_lock_key(...) — ключ Redis (cooldown или lock)
-    card_action_lock_key(...) — Для discard, fusion, craft — одна операция с картой за раз.
-    potion_buy_lock_key(...) — ключ Redis (cooldown или lock)
-    credit_repay_lock_key(...) — ключ Redis (cooldown или lock)
-    clan_shop_lock_key(...) — ключ Redis (cooldown или lock)
-    market_buy_lock_key(...) — ключ Redis (cooldown или lock)
-    slots_lock_key(...) — ключ Redis (cooldown или lock)
-    blackjack_lock_key(...) — ключ Redis (cooldown или lock)
-    poker_create_lock_key(...) — ключ Redis (cooldown или lock)
-    poker_join_lock_key(...) — ключ Redis (cooldown или lock)
-    poker_action_lock_key(...) — ключ Redis (cooldown или lock)
-    market_auction_bid_lock_key(...) — ключ Redis (cooldown или lock)
-    async acquire_lock(...) — Returns True if lock acquired, False if already locked.
-    async release_lock(...) — игровая логика / изменение состояния
-    format_ttl(...) — игровая логика / изменение состояния
-
-=== app/services/deck_service.py ===
-  Модуль: Backward-compat shim — весь код перенесён в services/cards/*.py
-  class DeckService — Объединяет все сервисы карточек в один класс для обратной совместимости.
-
-=== app/services/duel_service.py ===
-  Модуль: Сервис дуэлей карточек — перенесён в services/cards/duel.py.
-
-=== app/services/fame_service.py ===
-  class FameService — сервис / mixin
-    async seed_fragments(...) — Идемпотентно создаёт недостающие строки фрагментов для реальных сетов.
-    async has_available_fragment(...) — игровая логика / изменение состояния
-    async get_owned_fragments(...) — игровая логика / изменение состояния
-    async get_set_fragments(...) — игровая логика / изменение состояния
-    async forge_fragment(...) — игровая логика / изменение состояния
-    async transfer_fragment(...) — игровая логика / изменение состояния
-    async transfer_full_set(...) — игровая логика / изменение состояния
-    async admin_grant_fragment(...) — Выдаёт фрагмент напрямую (админ-панель). Если фрагмент уже у кого-то — забирает у него.
-    async admin_grant_full_set(...) — игровая логика / изменение состояния
-    async recalc_fame_bonuses(...) — Пересчитывает кэшированные fame_* поля user из владения фрагментами.
-    async _refresh_elite_cache(...) — Redis-кэш владельца сета Элиты — читается при расчёте цен по всей игре.
-    async get_price_multiplier(...) — +20% ко всем ценам для всех, КРОМЕ владельца полного сета Чарльз Чоя (бафф «Элита»).
-    async get_craft_cost_multiplier(...) — Множитель на стоимость крафтов в рейдах: титул «Игрок» -15%, + бафф «Элита» +20% (кроме владельца).
-    async gain_overcome_stack(...) — игровая логика / изменение состояния
-    async get_overcome_bonus_pct(...) — игровая логика / изменение состояния
-
-=== app/services/game/__init__.py ===
-  class GameService — Главный сервис — объединяет все фазы. GameFistService убран (патч 1.3.1) —
-    async gang_attack(...) — игровая логика / изменение состояния
-    async gang_pvp_attack(...) — игровая логика / изменение состояния
-
-=== app/services/game/_districts_mixin.py ===
-  Модуль: DistrictsMixin — выдача / изъятие районов (fist-города и king-города).
-  class DistrictsMixin — сервис / mixin
-    async _give_fist_city_one(...) — Выдаёт игроку один fist-город с total_districts районами (все районы его).
-    async _create_fist_city(...) — Создаёт новый fist-город в стране.
-    async _give_fist_cities(...) — Выдаёт реальные районы в fist городах при победе кулака.
-    async _take_king_cities_from(...) — Забирает king-районы у игрока при падении с фазы Кулака.
-    async _take_fist_cities_from(...) — Забирает fist-районы у игрока (при проигрыше или потере в PvP).
-
-=== app/services/game/_promotions_mixin.py ===
-  Модуль: PromotionsMixin — переходы между фазами игры (повышение / понижение / уничтожение).
-  class PromotionsMixin — сервис / mixin
-    async _demote_fist_to_king(...) — игровая логика / изменение состояния
-    async _promote_to_king(...) — игровая логика / изменение состояния
-    async _release_king_districts(...) — Release all king/gang-phase districts on fist promotion.
-    async _promote_to_fist(...) — игровая логика / изменение состояния
-    async _promote_to_emperor(...) — игровая логика / изменение состояния
-    async _destroy_gang(...) — игровая логика / изменение состояния
-    async _destroy_king(...) — игровая логика / изменение состояния
-
-=== app/services/game/_queries_mixin.py ===
-  Модуль: CityQueriesMixin — read-only запросы к городам, районам, КД атак.
-  class CityQueriesMixin — сервис / mixin
-    _get_district_power(...) — игровая логика / изменение состояния
-    async _get_my_districts_in_city(...) — игровая логика / изменение состояния
-    async _count_my_king_cities(...) — игровая логика / изменение состояния
-    async _get_city_dominant_player(...) — игровая логика / изменение состояния
-    async _get_max_extra_attacks_async(...) — игровая логика / изменение состояния
-    async _handle_attack_cd(...) — игровая логика / изменение состояния
-
-=== app/services/game/_vassal_mixin.py ===
-  Модуль: VassalMixin — битва за трон города, вассалитет, городской налог, завоевание страны (патч 1.3.1).
-  class VassalMixin — сервис / mixin
-    async _resolve_city_title_battle(...) — challenger только что захватил 100% районов города, которым уже
-    async _check_and_resolve_city_ownership(...) — Вызывается после того, как user получил район(ы) в городе. Если user
-    async _release_vassals_of(...) — Снимает вассалитет со всех вассалов уничтоженного/сброшенного короля.
-    async _recalc_city_tax(...) — Считает долю районов пользователя в чужих городах-с-королём,
-    async _recalc_city_tax_for_city_residents(...) — При смене владельца города пересчитывает налог для всех текущих
-    async _count_ruled_cities(...) — игровая логика / изменение состояния
-    async _is_emperor_eligible(...) — Король + его вассалы владеют ВСЕМИ gang-городами своей страны.
-    async _check_emperor_eligibility(...) — Если Король выполнил условие захвата всей страны (сам + вассалы
-    async get_kings_conquest_progress(...) — Для экрана Императора: список Королей его страны с прогрессом
-    async _demote_to_gang(...) — Полное поражение в серии вызовов за трон Империи (в любую сторону,
-    async _resolve_throne_challenge(...) — Общая логика для challenge_emperor/challenge_king — один раунд боя
-    async challenge_emperor(...) — Король, захвативший все города своей страны (сам + вассалы),
-    async challenge_king(...) — Симметричное действие: Император атаковает Короля своей страны,
-
-=== app/services/game/base.py ===
-  Модуль: GameBase — базовый класс игровых сервисов.
-  class GameBase — Агрегирует все миксины в единый базовый класс для GameGangService, GameKingService, GameKingChallengeService, GameEmperorService.
-
-=== app/services/game/emperor.py ===
-  Модуль: GameEmperorService — PvP между Императорами: атакующий всегда теряет 100%
-  class GameEmperorService — сервис / mixin
-    async emperor_pvp_attack(...) — игровая логика / изменение состояния
-
-=== app/services/game/gang.py ===
-  class GameGangService — сервис / mixin
-    async choose_country(...) — игровая логика / изменение состояния
-    async choose_gang_city(...) — игровая логика / изменение состояния
-    async gang_get_situation(...) — игровая логика / изменение состояния
-    async gang_attack_district(...) — игровая логика / изменение состояния
-    async gang_attack_pvp(...) — игровая логика / изменение состояния
-
-=== app/services/game/gapren.py ===
-  gapren_power(...) — Сила Гапрёна на следующий бой по текущей серии побед подряд.
-  async get_or_create_challenge(...) — служебная функция модуля
-  async attack_gapren(...) — служебная функция модуля
-
-=== app/services/game/king.py ===
-  class GameKingService — сервис / mixin
-    async king_attack(...) — игровая логика / изменение состояния
-    async _king_pvp(...) — игровая логика / изменение состояния
-
-=== app/services/game/king_challenge.py ===
-  Модуль: GameKingChallengeService — вызов трона: король против короля своей страны (патч 1.3.1).
-  class GameKingChallengeService — сервис / mixin
-    async king_challenge_throne(...) — игровая логика / изменение состояния
-
-=== app/services/game/utils.py ===
-  _star_mult(...) — служебная функция модуля
-  async apply_battle_casualties(...) — Потери статистов и карточек в PvP-бою (патч 1.3.1: король/трон/император
-  async notify_pvp_attack(...) — attacker_power/defender_power — сила НА МОМЕНТ БОЯ (result["attacker_power"]/
-  async notify_country_city_loss(...) — Рассылка всем игрокам проигравшей страны — их император уступил
-
-=== app/services/game_service.py ===
-  (только импорты и router, без своих функций)
-
-=== app/services/horse_shop_service.py ===
-  class HorseShopService — сервис / mixin
-    async get_current_event(...) — игровая логика / изменение состояния
-    async buy(...) — игровая логика / изменение состояния
-
-=== app/services/market_auction_service.py ===
-  Модуль: Аукционы на бирже: продавец задаёт мин. ставку и время, комиссия системы 10%.
-  _now(...) — служебная функция модуля
-  _seconds_until(...) — Разница в секундах до ends_at. Устойчиво к naive datetime (SQLite не всегда
-  class MarketAuctionService — сервис / mixin
-    async get_active_auctions(...) — игровая логика / изменение состояния
-    async get_my_auctions(...) — игровая логика / изменение состояния
-    async create_auction(...) — игровая логика / изменение состояния
-    async cancel_auction(...) — игровая логика / изменение состояния
-    min_next_bid(...) — игровая логика / изменение состояния
-    async place_bid(...) — игровая логика / изменение состояния
-    async get_expired_auction_ids(...) — игровая логика / изменение состояния
-    async resolve_expired_by_id(...) — Перечитывает лот под блокировкой и разрешает его, если он всё ещё истёк.
-    async resolve_expired(...) — Разрешает один истёкший аукцион — вызывается тиком в отдельной транзакции на лот.
-
-=== app/services/market_notify.py ===
-  Модуль: Уведомления о покупке/продаже на бирже (по образцу notify_pvp_attack).
-  async notify_market_sale(...) — Уведомляет продавца, что его товар куплен.
-  async notify_market_purchase(...) — Подтверждение покупателю (в дополнение к мгновенному cb.answer).
-
-=== app/services/market_service.py ===
-  class MarketService — сервис / mixin
-    get_item_label(...) — игровая логика / изменение состояния
-    async get_active_listings(...) — игровая логика / изменение состояния
-    async get_my_listings(...) — игровая логика / изменение состояния
-    async create_listing(...) — игровая логика / изменение состояния
-    async cancel_all_user_listings(...) — Отменяет все активные лоты пользователя без возврата ресурсов.
-    async cancel_listing(...) — игровая логика / изменение состояния
-    async buy_listing(...) — игровая логика / изменение состояния
-    async take_resource(...) — Публичная обёртка _take_resource — для переиспользования другими сервисами (аукционы).
-    async give_resource(...) — Публичная обёртка _give_resource — для переиспользования другими сервисами (аукционы).
-    async _take_resource(...) — игровая логика / изменение состояния
-    async _give_resource(...) — игровая логика / изменение состояния
-
-=== app/services/potion_service.py ===
-  class PotionService — сервис / mixin
-    async get_active(...) — игровая логика / изменение состояния
-    async apply_potion(...) — Применяет зелье. Если уже есть — перезаписывает (продлевает).
-    async cleanup_expired(...) — игровая логика / изменение состояния
-    async activate(...) — Активирует зелье по ID.
-    async get_power_bonus(...) — Бонус к боевой мощи от активных зелий (%) — прямой SUM без загрузки всех зелий.
-    async get_effective_power(...) — игровая логика / изменение состояния
-    async get_effective_influence(...) — игровая логика / изменение состояния
-    async get_effective_ticket_chance(...) — игровая логика / изменение состояния
-    async get_effective_train_bonus(...) — игровая логика / изменение состояния
-    async get_income_bonus(...) — игровая логика / изменение состояния
-    async get_raid_drop_bonus(...) — игровая логика / изменение состояния
-    async buy_missing(...) — Авто-покупает зелья тира 1 (MG_TIERS), если они не активны и хватает монет.
-    async get_active_summary(...) — Текстовое описание активных зелий для UI.
-
-=== app/services/prestige_service.py ===
-  class PrestigeService — сервис / mixin
-    can_prestige(...) — игровая логика / изменение состояния
-    async _reset_progress(...) — Сброс прогресса кроме донатов, пробуждений и достижений.
-    async do_prestige(...) — игровая логика / изменение состояния
-
-=== app/services/promo_service.py ===
-  _parse_rewards(...) — Возвращает список наград промокода в едином формате.
-  _rewards_summary(...) — Красивая строка со всеми наградами.
-  class PromoService — сервис / mixin
-    async create_promo(...) — Создаёт промокод.
-    async use_promo(...) — игровая логика / изменение состояния
-    _apply_reward(...) — игровая логика / изменение состояния
-    async get_all_promos(...) — игровая логика / изменение состояния
-    async deactivate_promo(...) — игровая логика / изменение состояния
-    async delete_promo(...) — игровая логика / изменение состояния
-
-=== app/services/quest_service.py ===
-  class QuestService — сервис / mixin
-    _today(...) — игровая логика / изменение состояния
-    async get_or_create_quests(...) — игровая логика / изменение состояния
-    async _pick_daily_quests(...) — Выбирает DAILY_QUESTS_COUNT заданий с учётом окна КД.
-    async add_progress(...) — Обновляет прогресс всех активных заданий дня, у которых
-    async _update_all_done(...) — игровая логика / изменение состояния
-    async claim_reward(...) — игровая логика / изменение состояния
-    async _seconds_until_midnight(...) — игровая логика / изменение состояния
-    async get_swap_count(...) — игровая логика / изменение состояния
-    async _incr_swap_count(...) — игровая логика / изменение состояния
-    async is_reroll_used(...) — игровая логика / изменение состояния
-    async _set_reroll_used(...) — игровая логика / изменение состояния
-    async swap_quest(...) — игровая логика / изменение состояния
-    async full_reroll(...) — игровая логика / изменение состояния
-
-=== app/services/raid/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/services/raid/base.py ===
-  class RaidService — сервис / mixin
-    boss_cd_key(...) — ключ Redis (cooldown или lock)
-    attack_cd_key(...) — ключ Redis (cooldown или lock)
-    get_unlocked_tiers(...) — игровая логика / изменение состояния
-    is_tier_unlocked(...) — игровая логика / изменение состояния
-    async unlock_tier(...) — игровая логика / изменение состояния
-    get_effective_boss_hp(...) — игровая логика / изменение состояния
-    get_clan(...) — игровая логика / изменение состояния
-    get_boss(...) — игровая логика / изменение состояния
-    async get_boss_cd_info(...) — игровая логика / изменение состояния
-    async get_attack_cd_info(...) — игровая логика / изменение состояния
-    async get_bosses_cd_info_batch(...) — Batch-fetch CD info for multiple bosses in one Redis pipeline.
-    async get_user_power_for_boss(...) — игровая логика / изменение состояния
-    async start_raid(...) — игровая логика / изменение состояния
-    async attack_boss(...) — игровая логика / изменение состояния
-    async finish_raid(...) — игровая логика / изменение состояния
-    async get_active_raid(...) — игровая логика / изменение состояния
-    async _get_max_extra_attacks(...) — игровая логика / изменение состояния
-    _calc_fragments(...) — игровая логика / изменение состояния
-    async craft_path_spin(...) — игровая логика / изменение состояния
-    async craft_ui(...) — игровая логика / изменение состояния
-    async craft_mg_level(...) — Открыть уровень зелья (Гений медицины) за фрагменты алхимии.
-    async _get_speed_pct(...) — игровая логика / изменение состояния
-    _apply_ui_level(...) — игровая логика / изменение состояния
-    apply_donat_ui(...) — игровая логика / изменение состояния
-    reset_game_ui(...) — игровая логика / изменение состояния
-
-=== app/services/raid/rewards.py ===
-  calc_fragments(...) — служебная функция модуля
-  distribute_reward(...) — Apply fragment reward to the user and return the new total.
-
-=== app/services/raid_service.py ===
-  (только импорты и router, без своих функций)
-
-=== app/services/referral_service.py ===
-  class ReferralService — сервис / mixin
-    async register_with_referral(...) — игровая логика / изменение состояния
-    async get_students(...) — игровая логика / изменение состояния
-    async get_teacher(...) — игровая логика / изменение состояния
-    async get_referral_stats(...) — Статистика реферальной системы для пользователя.
-
-=== app/services/skill/__init__.py ===
-  Модуль: Пакет skill — сервис навыков (мастерство, путь, пробуждение).
-
-=== app/services/skill/base.py ===
-  Модуль: SkillService — основной класс, делегирует к mastery.py и path.py.
-  _all_path_skills_map(...) — служебная функция модуля
-  class SkillService — сервис / mixin
-    async get_or_create_mastery(...) — игровая логика / изменение состояния
-    async upgrade_mastery(...) — игровая логика / изменение состояния
-    async _apply_mastery_bonus(...) — игровая логика / изменение состояния
-    async choose_path(...) — игровая логика / изменение состояния
-    async upgrade_path_level(...) — игровая логика / изменение состояния
-    async _apply_synergy(...) — игровая логика / изменение состояния
-    async _check_and_awaken(...) — игровая логика / изменение состояния
-    async buy_path_skill(...) — игровая логика / изменение состояния
-    async _apply_path_skill(...) — игровая логика / изменение состояния
-    _update_extra_attack(...) — игровая логика / изменение состояния
-    async get_path_skills_bought(...) — игровая логика / изменение состояния
-    async get_extra_path_skills_count(...) — игровая логика / изменение состояния
-    async spin_for_random_extra_skill(...) — игровая логика / изменение состояния
-    async buy_extra_path_skill(...) — игровая логика / изменение состояния
-
-=== app/services/skill/mastery.py ===
-  async get_or_create_mastery(...) — служебная функция модуля
-  async upgrade_mastery(...) — служебная функция модуля
-  async _apply_mastery_bonus(...) — служебная функция модуля
-
-=== app/services/skill/path.py ===
-  _all_path_skills_map(...) — служебная функция модуля
-  async choose_path(...) — служебная функция модуля
-  async upgrade_path_level(...) — служебная функция модуля
-  async _apply_synergy(...) — Apply synergy bonus if this is the first skill from foreign_path. Returns synergy info or None.
-  async _check_and_awaken(...) — Awaken the path if all main skills are bought. Returns True if just awakened.
-  async get_path_skills_bought(...) — служебная функция модуля
-  async get_extra_path_skills_count(...) — Count skills owned from other paths (extra skills).
-  _update_extra_attack(...) — extra_attack_count: 1 = 2 атаки, 2 = 3 атаки.
-  async _apply_path_skill(...) — служебная функция модуля
-  async buy_path_skill(...) — служебная функция модуля
-  async spin_for_random_extra_skill(...) — служебная функция модуля
-  async apply_synergy(...) — Публичная обёртка: синергия без передачи fn-аргумента.
-  async check_and_awaken(...) — Публичная обёртка: пробуждение без передачи fn-аргумента.
-  async buy_extra_path_skill(...) — служебная функция модуля
-
-=== app/services/skill_service.py ===
-  (только импорты и router, без своих функций)
-
-=== app/services/squad_service.py ===
-  _calc_recruit_count(...) — Базовое количество по тирам влияния; bonus_pct увеличивает итог на %.
-  async _get_mastery(...) — служебная функция модуля
-  _get_speed_reduction(...) — служебная функция модуля
-  class SquadService — сервис / mixin
-    async recruit(...) — Вербовка статистов.
-    async buy_recruit(...) — Покупка конкретного ранга статистов за NHCoin (из магазина).
-    async train(...) — Тренировка отряда.
-    async get_squad_summary(...) — игровая логика / изменение состояния
-
-=== app/services/title/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/services/title/base.py ===
-  class TitleService — сервис / mixin
-    async grant_title(...) — игровая логика / изменение состояния
-    async revoke_title(...) — игровая логика / изменение состояния
-    async grant_all_titles(...) — игровая логика / изменение состояния
-    async revoke_set(...) — игровая логика / изменение состояния
-    async revoke_all_titles(...) — игровая логика / изменение состояния
-    async get_user_titles(...) — игровая логика / изменение состояния
-    async reapply_all_titles(...) — игровая логика / изменение состояния
-    async has_set(...) — игровая логика / изменение состояния
-    _reset_donat_bonuses(...) — игровая логика / изменение состояния
-    async _apply_title_bonus(...) — игровая логика / изменение состояния
-    _apply_set_bonus(...) — игровая логика / изменение состояния
-    async _rebuild_base_bonuses(...) — игровая логика / изменение состояния
-    async _check_set_completion(...) — игровая логика / изменение состояния
-    async check_achievements(...) — игровая логика / изменение состояния
-    async _check_condition_new(...) — игровая логика / изменение состояния
-    async _grant_achievement_new(...) — игровая логика / изменение состояния
-
-=== app/services/title/bonuses.py ===
-  reset_donat_bonuses(...) — служебная функция модуля
-  async apply_title_bonus(...) — служебная функция модуля
-  apply_set_bonus(...) — служебная функция модуля
-  async rebuild_base_bonuses(...) — Восстанавливает не-донат бонусы после _reset_donat_bonuses.
-
-=== app/services/title/sets.py ===
-  async grant_all_titles(...) — Grant every donat title. grant_fn is TitleService.grant_title.
-  async revoke_set(...) — Remove all titles in a set and reapply the rest.
-  async revoke_all_titles(...) — служебная функция модуля
-  async has_set(...) — служебная функция модуля
-
-=== app/services/title_service.py ===
-  (только импорты и router, без своих функций)
-
-=== app/services/training_service.py ===
-  class TrainingService — сервис / mixin
-    trainer_cd_key(...) — ключ Redis (cooldown или lock)
-    async get_trainers_info(...) — игровая логика / изменение состояния
-    async train_with_tom(...) — игровая логика / изменение состояния
-    async train_with_jeon_gon(...) — игровая логика / изменение состояния
-    async train_with_manager_kim(...) — игровая логика / изменение состояния
-
-=== app/utils/card_sender.py ===
-  Модуль: Утилита для отправки карточки как Telegram-фото.
-  async send_card_photo(...) — Отправляет изображение карточки в чат.
-
-=== app/utils/formatters.py ===
-  fmt_num(...) — форматирование для сообщения игроку
-  fmt_power(...) — форматирование для сообщения игроку
-  clamp_enemy_power(...) — Ограничивает отображаемую/используемую в оценке силу противника,
-  progress_bar(...) — Звёздный рейтинг (как «Уровень пути: ⭐⭐⭐⭐⭐» — уже был в боте и
-  fmt_ttl(...) — форматирование для сообщения игроку
-  phase_label(...) — служебная функция модуля
-  phase_emoji(...) — служебная функция модуля
-  path_label(...) — служебная функция модуля
-  skill_path_label(...) — служебная функция модуля
-  influence_discount_pct(...) — Скидка в магазине от Влияния — разная формула по фазам, кусочно-линейная,
-  biz_discount_pct(...) — Скидка трека "Скидка" Гения бизнеса — действует везде, где тратятся
-  total_recruit_discount_pct(...) — Суммарная скидка на вербовку статистов в магазине: скилл-путь +
-  apply_biz_discount(...) — служебная функция модуля
-  pair_lines(...) — Группирует пункты по 2 в строку через пробелы, но только если пара
-
-=== app/utils/keyboards/__init__.py ===
-  (только импорты и router, без своих функций)
-
-=== app/utils/keyboards/admin.py ===
-  admin_main_kb(...) — служебная функция модуля
-  admin_user_kb(...) — служебная функция модуля
-  titles_grant_kb(...) — служебная функция модуля
-
-=== app/utils/keyboards/attack.py ===
-  sector_kb(...) — служебная функция модуля
-  cities_kb(...) — служебная функция модуля
-  attack_action_kb(...) — служебная функция модуля
-
-=== app/utils/keyboards/common.py ===
-  main_menu_kb(...) — Главный хаб — все кнопки Боя/Экономики/Прогресса сразу на виду, без подменю.
-  menu_combat_kb(...) — служебная функция модуля
-  menu_economy_kb(...) — служебная функция модуля
-  menu_progress_kb(...) — служебная функция модуля
-  menu_social_kb(...) — служебная функция модуля
-  menu_other_kb(...) — служебная функция модуля
-  back_kb(...) — служебная функция модуля
-  confirm_kb(...) — служебная функция модуля
-
-=== app/utils/keyboards/deck.py ===
-  deck_kb(...) — служебная функция модуля
-
-=== app/utils/keyboards/shop.py ===
-  shop_kb(...) — служебная функция модуля
-
-=== app/utils/keyboards/squad.py ===
-  squad_kb(...) — служебная функция модуля
-  ranks_kb(...) — служебная функция модуля
-
-=== app/utils/menu_media.py ===
-  Модуль: Отправка меню атаки с опциональным фото карты страны вместо текста.
-  async send_menu(...) — служебная функция модуля
-  async safe_edit(...) — Text-only вариант send_menu — безопасная замена голому
-  async safe_edit_message(...) — Как safe_edit, но принимает Message напрямую вместо CallbackQuery —
-  async safe_edit_get_message(...) — Как safe_edit, но возвращает итоговое Message — нужно там, где код ПОСЛЕ
-
-=== app/utils/region_activity.py ===
-  Модуль: Хелпер для записи личной активности игрока (Алея/Зал славы).
-  async record(...) — Безопасно вызывать из любого хендлера — молча игнорирует ошибки.
-
-=== app/utils/safe_edit.py ===
-  async safe_edit(...) — edit_text без ошибки если контент не изменился.
-
-=== app/utils/squad_math.py ===
-  Модуль: Чистые функции для вероятностных операций над агрегированными группами статистов.
-  sample_binomial(...) — Число успехов из n испытаний с вероятностью p, без построчной симуляции
-  split_three_way(...) — Делит n на три случайные части с равной вероятностью каждого исхода —
-  largest_remainder_alloc(...) — Пропорционально распределяет total_take между items=[(key, weight), ...],
-
-=== app/utils/truce.py ===
-  _aware(...) — служебная функция модуля
-  is_truce_active(...) — служебная функция модуля
-  truce_remaining_secs(...) — служебная функция модуля
-  is_truce_on_cooldown(...) — служебная функция модуля
-  truce_cd_remaining_secs(...) — служебная функция модуля
-  truce_button_label(...) — служебная функция модуля
-
-=== manager.py ===
-  Модуль: Утилита управления ботом.
-  prune_backups(...) — Удаляет старые бэкапы, оставляя последние `keep` файлов.
-  async backup(...) — Создаёт бэкап PostgreSQL.
-  async restore(...) — Восстанавливает из бэкапа.
-  async list_backups(...) — Показывает список бэкапов.
-  async migrate(...) — Создаёт таблицы в БД.
-  async stats(...) — Выводит статистику игроков.
-  async set_clan_leader(...) — Принудительно меняет лидера клана.
-  async add_king_cities(...) — Добавляет 10 пустых king-городов каждого типа в каждый сектор.
-  async spawn_boss(...) — Вызывает глобального босса немедленно.
-  async reset_emperor(...) — Сбрасывает записи группировок Императора. Без аргументов — для всех игроков.
-  async rebuild_circ_bonuses(...) — Backfill: пересчитывает бонусы круговых донатов для всех игроков с
-  async auto_backup_loop(...) — Авто-бэкап каждые 6 часов.
-  print_help(...) — служебная функция модуля
-
-
---------------------------------------------------------------------------------
-11. КАК ЧИТАТЬ ПОДПИСИ
---------------------------------------------------------------------------------
-  имя(...) — кратко что делает
-  [TG callback data="..."] — какая кнопка в Telegram вызывает handler
-  [TG команда /...] — текстовая команда
-
-================================================================================
+squad.py — ранги отряда
+
+titles.py — титулы, донат-сеты, circular donat
+
+10. КАТАЛОГ ФАЙЛОВ И ФУНКЦИЙ
+app/bot_instance.py
+set_bot() — регистрирует экземпляр Bot для фоновых задач
+
+get_bot() — возвращает Bot из глобального singleton
+
+app/config/
+settings.py — класс Settings: database_url, redis_url, admin_ids_list
+
+game_balance.py — все числовые параметры баланса
+
+rate_limit.py — настройки rate-limiter
+
+scheduler_config.py — интервалы фоновых задач
+
+app/constants/
+bank.py — все числа патча 1.2.0 в одном месте
+
+bosses.py — BossConfig
+
+campaigns.py — CampaignRankConfig, CampaignResourceConfig
+
+cards.py — calc_dust() — пыль за распыление карточки
+
+clan.py — ClanDonatPackage, ClanShopItem, ClanUpgrade
+
+emperor.py — EmperorGangConfig
+
+poker.py — PvP-покер константы
+
+quests.py — QuestConfig
+
+app/data/
+achievements.py — Achievement
+
+buildings.py — BuildingConfig
+
+card_images.py — кэш file_id
+
+characters.py — get_random_character(), get_random_character_by_rank()
+
+cities.py — CountryConfig, CityTypeConfig
+
+fame.py — FameFragmentDef, FameSetDef
+
+shop.py — ShopItem, PotionConfig
+
+skills.py — MasteryLevelConfig, MasteryConfig, PathSkill
+
+squad.py — RankConfig
+
+titles.py — Achievement, DonatTitle, DonatSet, CircularDonat, ClanDonatItem
+
+app/database.py
+Base — декларативная база
+
+init_db() — создание таблиц
+
+app/middlewares/
+DbSessionMiddleware — создаёт AsyncSession на каждый апдейт
+
+UserLoaderMiddleware — загрузка/создание User, проверка бана
+
+NetworkErrorMiddleware — повтор при сетевых ошибках
+
+RateLimitMiddleware — Redis-based rate limiter
+
+app/models/
+User — основная модель игрока
+
+BankCredit, StorageCell, Investment — банк
+
+UserCharacter, UserDeck — карточки
+
+Clan, ClanMember, ClanWar, ClanAuction, ClanLandBuilding — кланы
+
+RaidSession, BossAttack, ActiveBoss — рейды/боссы
+
+MarketListing, MarketAuction, MarketAuctionBid — биржа
+
+PokerTable, PokerPlayer — покер
+
+Campaign, DailyQuest, FameFragment — прогресс
+
+UserCircularDonat — круговые донаты
+
+app/repositories/
+BossRepo — боссы
+
+BuildingRepo — здания
+
+CampaignRepo — походы
+
+CharacterRepo — карточки
+
+CityRepo — города и районы
+
+HorseShopRepo — ивент-магазин
+
+SquadRepo — отряд
+
+TitleRepo — титулы
+
+UserRepo — пользователи
+
+app/services/ — ОСНОВНЫЕ
+game/
+
+GameGangService — захват районов
+
+GameKingService — бои с King Bot
+
+GameEmperorService — PvP между Императорами
+
+GameKingChallengeService — вызов трона
+
+PromotionsMixin — переходы между фазами
+
+VassalMixin — битва за трон, вассалитет
+
+clan/
+
+ClanBaseService — создание, удаление, участники
+
+ClanInviteService — приглашения
+
+ClanWarService — войны
+
+ClanTreasuryService — казна
+
+ClanShopService — магазин
+
+ClanLandService — земля и здания
+
+ClanExchangeService — обмен ресурсами
+
+ClanDonatService — донат клана
+
+ClanAuctionService — клановый аукцион
+
+bank/
+
+CreditsService — кредиты
+
+InvestmentsService — вклады (инвестиции)
+
+StorageService — ячейки хранилища
+
+SlotsService — слоты
+
+BlackjackService — блэкджек
+
+PokerService — PvP-покер
+
+CasinoRatingService — рейтинг казино
+
+cards/
+
+GachaService — тикеты и прокрутка
+
+FusionService — распыление и слияние
+
+DuelService — дуэли
+
+CraftService — крафт тикетов
+
+DeckSlotService — активная колода
+
+raid/
+
+RaidService — рейды и боссы
+
+calc_fragments() — расчет наград
+
+skill/
+
+SkillService — мастерство и путь
+
+MasteryMixin, PathMixin — миксины
+
+title/
+
+TitleService — титулы и достижения
+
+Отдельные сервисы:
+
+AdminService — админские операции
+
+CombatService — боевая механика
+
+CooldownService — Redis cooldown/lock
+
+MarketService — биржа
+
+MarketAuctionService — аукционы биржи
+
+QuestService — квесты
+
+PotionService — зелья
+
+PromoService — промокоды
+
+ReferralService — рефералы
+
+BusinessService — бизнес
+
+CampaignService — походы
+
+BossService — мировые боссы
+
+HorseShopService — лавка коня
+
+CircularDonatService — круговые донаты
+
+FameService — кузница славы
+
+app/handlers/ — ОСНОВНЫЕ РОУТЕРЫ
+Хэндлер	Функции
+common/menu.py	/start, главное меню, профиль
+common/top.py	/top, /players, /slava
+game/gang.py	Захват районов
+game/king.py	Бои с King Bot
+game/emperor.py	Emperor PvP, группировки
+game/gapren.py	Гапрён (гейт пробуждения)
+attack.py	Меню атаки, престиж, перемирие
+cards/	Гача, колода, дуэли, слияние
+clan/	Все клановые функции
+bank/	Кредиты, вклады, казино
+raid/	Рейды, крафт
+market/	Биржа
+admin/	Админ-панель
+app/scheduler/tasks/
+income.py — доход
+
+ultra_instinct.py — УИ
+
+auction.py — глобальный аукцион
+
+bank.py — кредиты, хранилище, инвестиции
+
+boss.py — боссы
+
+campaign.py — походы
+
+clan.py — кланы
+
+daily.py — ежедневные бонусы
+
+market_auction.py — биржевые аукционы
+
+poker.py — покер
+
+war_genius.py — гений войны
+
+casino_rating.py — рейтинг казино
+
+horse_shop.py — лавка коня
+
+achievements.py — достижения
+
+referral.py — рефералы
+
+app/utils/
+formatters.py — форматирование чисел, времени, прогресс-бары
+
+keyboards/ — клавиатуры (admin, common, attack, deck, shop, squad)
+
+menu_media.py — safe_edit() — безопасное редактирование сообщений
+
+region_activity.py — запись активности (Алея/Зал славы)
+
+card_sender.py — отправка карточек как фото
+
+squad_math.py — вероятностные операции над статистами
+
+truce.py — перемирие
+
+11. СПИСОК ИЗМЕНЕНИЙ (ПАТЧ 2.0)
+11.1 Блэкджек (Blackjack)
+Файлы: app/handlers/bank/casino/blackjack.py, app/services/bank/casino/blackjack_service.py
+
+Изменения:
+
+✅ Добавлена возможность ставить статистами (выбор ранга, множитель x1.2)
+
+✅ Исправлена ошибка при переборе (bust) — игра больше не зависает
+
+✅ Добавлено логирование ошибок во все обработчики с exc_info=True
+
+✅ Исправлена очистка FSM состояния после завершения игры
+
+✅ Заменён edit_text на answer если редактирование не работает
+
+✅ Добавлены try/except блоки во все callback-обработчики
+
+Код:
+
+python
+# Пример исправления в обработчике hit
+if result.get("finished"):
+    await state.clear()  # Очищаем состояние
+    text = _render_finished(result["hand"], result.get("outcome", "loss"))
+    kb = _finish_kb()
+    try:
+        await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    except Exception:
+        await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
+11.2 Инвестиции (Investments)
+Файлы: app/services/bank/investments_service.py, app/handlers/bank/investments.py, app/models/bank.py
+
+Изменения:
+
+✅ Исправлен расчёт процентов — теперь interest_pct / 10 вместо interest_pct / 100
+
+✅ Добавлен метод get_all_investments() — получение всех вкладов (включая завершённые)
+
+✅ Исправлена функция withdraw() — теперь правильно начисляет выплату
+
+✅ Кнопка "Получить" появляется сразу после созревания вклада
+
+✅ Исправлено отображение в меню — показывает правильную сумму выплаты
+
+Код:
+
+python
+# Было (неправильно):
+pct = inv.interest_pct / 100
+payout = int(inv.amount * (1 + pct))
+
+# Стало (правильно):
+real_pct = inv.interest_pct / 10  # 30 → 3%, 200 → 20%
+payout = int(inv.amount * (1 + real_pct / 100))
+11.3 Круговые донаты (Circular Donats)
+Файлы: app/handlers/admin/circular_donat.py, app/handlers/admin/_common.py, app/utils/keyboards/admin.py, app/services/circular_donat_service.py
+
+Изменения:
+
+✅ Добавлены кнопки массовой выдачи: +1, +5, +10
+
+✅ Добавлена кнопка ✏️ Свой — ввод произвольного количества
+
+✅ Можно убирать круги через отрицательные числа (например -5)
+
+✅ Добавлен параметр force в add_circle() — игнорирует все лимиты
+
+✅ Добавлено состояние waiting_circ_count в FSM
+
+✅ Добавлена кнопка "🔄 Круговые донаты" в админ-панель пользователя
+
+Код:
+
+python
+# В _render_circ_detail добавлены кнопки:
+builder.row(
+    InlineKeyboardButton(text="➕+1", callback_data=f"adm_circ_add_bulk:{tg_id}:{donat_id}:1"),
+    InlineKeyboardButton(text="➕+5", callback_data=f"adm_circ_add_bulk:{tg_id}:{donat_id}:5"),
+    InlineKeyboardButton(text="➕+10", callback_data=f"adm_circ_add_bulk:{tg_id}:{donat_id}:10"),
+    InlineKeyboardButton(text="✏️ Свой", callback_data=f"adm_circ_add_custom:{tg_id}:{donat_id}"),
+)
+
+# Обработка отрицательных чисел:
+if count > 0:
+    # Добавляем круги
+    for _ in range(count):
+        result = await add_circle(session, found, donat_id, force=True)
+else:
+    # Убираем круги (count отрицательный)
+    count_abs = abs(count)
+    for _ in range(count_abs):
+        result = await remove_circle(session, found, donat_id)
+11.4 Массовая выдача NHCoins и тикетов
+Файлы: app/handlers/admin/users.py, app/handlers/admin/_common.py
+
+Изменения:
+
+✅ Добавлено меню "Все игроки" с кнопками:
+
+📊 Список всех игроков (с пагинацией)
+
+💰 Выдать NHCoins всем
+
+🎟 Выдать тикеты всем
+
+✅ Добавлены состояния waiting_bulk_coins и waiting_bulk_tickets в FSM
+
+✅ Добавлены обработчики массовой выдачи с защитой от переполнения
+
+Код:
+
+python
+@router.message(AdminFSM.waiting_bulk_coins)
+async def handle_bulk_coins_input(...):
+    users = await session.scalars(select(User))
+    for target_user in users_list:
+        target_user.nh_coins += amount
+    await session.commit()
+    await message.answer(f"✅ Выдано {amount} NHCoins {count} игрокам!")
+11.5 Технические улучшения
+Компонент	Изменение
+Логирование	Добавлен import logging во все критические места
+Обработка ошибок	try/except блоки с logger.error(exc_info=True)
+FSM	Принудительная очистка await state.clear() во всех обработчиках ошибок
+safe_edit	Улучшен: если edit_text не работает — используется answer
+admin_utils.py	Создан файл с функцией is_admin()
+Код:
+
+python
+try:
+    # код
+except Exception as e:
+    logger.error(f"Error: {e}", exc_info=True)
+    await state.clear()
+    await message.answer(f"❌ Ошибка: {str(e)}")
+12. КАК ЧИТАТЬ ПОДПИСИ
+Синтаксис	Значение
+имя()	Кратко что делает функция
+[TG callback data="..."]	Какая кнопка в Telegram вызывает handler
+[TG команда /...]	Текстовая команда
+— сервис / mixin	Класс является миксином или частью сервиса
+✅	Исправлено / Добавлено
+❌	Удалено / Не работает

@@ -114,10 +114,24 @@ class BlackjackService:
                     result.update(finished=True, outcome="push_natural")
                 else:
                     # Блэкджек — x1.2
-                    win_result = await squad_casino_service.win(session, user, rank, amount)
-                    hand["payout"] = win_result.get("returned", 0)
-                    hand["bonus"] = win_result.get("bonus", 0)
-                    result.update(finished=True, outcome="blackjack", bonus=win_result.get("bonus", 0))
+                    from app.data.squad import RANKS_BY_ID
+                    rank_cfg = RANKS_BY_ID.get(rank)
+                    payout = int(amount * 1.2)
+                    
+                    if rank_cfg:
+                        await squad_repo.add_count(
+                            session, 
+                            user.id, 
+                            rank, 
+                            0, 
+                            payout, 
+                            base_power=rank_cfg.base_power
+                        )
+                        await squad_repo.update_user_combat_power(session, user)
+                    
+                    hand["payout"] = payout
+                    hand["bonus"] = 0
+                    result.update(finished=True, outcome="blackjack", bonus=0)
                 result["hand"] = hand
             return result
 
@@ -241,17 +255,31 @@ class BlackjackService:
                 return {"ok": False, "msg": "❌ Ранг не выбран."}
             
             if dealer_value > 21 or player_value > dealer_value:
-                # ВЫИГРЫШ
-                win_result = await squad_casino_service.win(session, user, rank, hand["total_stake"])
-                hand["payout"] = win_result.get("returned", 0)
-                hand["bonus"] = win_result.get("bonus", 0)
+                # ВЫИГРЫШ — выдаем 1.2x от ставки одной суммой
+                from app.data.squad import RANKS_BY_ID
+                rank_cfg = RANKS_BY_ID.get(rank)
+                payout = int(hand["total_stake"] * 1.2)
+                
+                if rank_cfg:
+                    await squad_repo.add_count(
+                        session, 
+                        user.id, 
+                        rank, 
+                        0, 
+                        payout, 
+                        base_power=rank_cfg.base_power
+                    )
+                    await squad_repo.update_user_combat_power(session, user)
+                
+                hand["payout"] = payout
+                hand["bonus"] = 0
                 return {
                     "ok": True,
                     "finished": True,
                     "outcome": "win",
                     "hand": hand,
-                    "bonus": win_result.get("bonus", 0),
-                    "returned": win_result.get("returned", 0),
+                    "bonus": 0,
+                    "returned": payout,
                 }
             elif player_value == dealer_value:
                 # НИЧЬЯ — возвращаем депозит
@@ -261,11 +289,13 @@ class BlackjackService:
                     await squad_repo.add_count(session, user.id, rank, 0, hand["total_stake"], base_power=rank_cfg.base_power)
                     await squad_repo.update_user_combat_power(session, user)
                 hand["payout"] = hand["total_stake"]
+                hand["bonus"] = 0
                 return {"ok": True, "finished": True, "outcome": "push", "hand": hand}
             else:
                 # ПРОИГРЫШ — статисты уже списаны
                 await squad_casino_service.lose(session, user, rank, hand["total_stake"])
                 hand["payout"] = 0
+                hand["bonus"] = 0
                 return {"ok": True, "finished": True, "outcome": "loss", "hand": hand}
 
         # Обычные ресурсы

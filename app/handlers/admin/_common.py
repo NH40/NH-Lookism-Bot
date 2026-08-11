@@ -11,6 +11,7 @@ from app.services.admin_service import admin_service
 from app.services.title_service import title_service
 from app.utils.keyboards.admin import admin_user_kb
 from app.utils.formatters import fmt_num, fmt_power, phase_label
+from app.data.titles import CIRCULAR_DONAT_MAP
 
 logger = logging.getLogger(__name__)
 
@@ -46,17 +47,14 @@ class AdminFSM(StatesGroup):
     waiting_path_fragments = State()
     waiting_business_fragments = State()
     waiting_war_points = State()
-    # Карточки (старый поток — оставлен для совместимости)
     waiting_card_char = State()
     waiting_card_level = State()
     waiting_dust_amount = State()
-    # Карточки (новый поток)
-    waiting_card_qty = State()       # ввод количества при выдаче
-    waiting_card_take_qty = State()  # ввод количества при удалении
-    # Бан
-    waiting_ban_reason = State()     # ввод причины бана
-    # NHDonate
+    waiting_card_qty = State()
+    waiting_card_take_qty = State()
+    waiting_ban_reason = State()
     waiting_donate_amount = State()
+    waiting_circ_count = State()  # ввод количества кругов
 
 
 async def _build_user_card_text(session: AsyncSession, found) -> tuple[str, bool, bool]:
@@ -124,7 +122,6 @@ async def invalidate_admin_card_cache(tg_id: int) -> None:
 
 async def _show_user_card(message, session, found):
     text, duel_cd, is_banned = await _build_user_card_text(session, found)
-    # Сбрасываем кэш сразу после отображения чтобы следующий запрос был свежим
     await invalidate_admin_card_cache(found.tg_id)
     try:
         await message.edit_text(
@@ -252,6 +249,65 @@ async def _render_untset(message, session: AsyncSession, tg_id: int, set_id: str
         pass
 
 
+async def _show_circular_donat_panel(message, session, found_user, tg_id):
+    """Панель управления круговыми донатами с кнопками массовой выдачи"""
+    from app.services.circular_donat_service import get_user_circles
+    
+    circles = await get_user_circles(session, found_user.id)
+    
+    text = f"🔄 <b>Круговые донаты</b>\n"
+    text += f"👤 {html.escape(found_user.full_name)}\n\n"
+    
+    builder = InlineKeyboardBuilder()
+    
+    for donat_id, cfg in CIRCULAR_DONAT_MAP.items():
+        current = circles.get(donat_id, 0)
+        max_circles = cfg.max_circles
+        emoji = cfg.emoji
+        name = cfg.name
+        
+        text += f"{emoji} {name}: {current}/{max_circles}\n"
+        
+        # Кнопки для админа
+        if is_admin(tg_id):
+            builder.row(
+                InlineKeyboardButton(
+                    text=f"➕+1 {emoji}",
+                    callback_data=f"adm_circ_add:{donat_id}:{found_user.id}:1"
+                ),
+                InlineKeyboardButton(
+                    text=f"➕+5 {emoji}",
+                    callback_data=f"adm_circ_add:{donat_id}:{found_user.id}:5"
+                ),
+                InlineKeyboardButton(
+                    text=f"➕+10 {emoji}",
+                    callback_data=f"adm_circ_add:{donat_id}:{found_user.id}:10"
+                ),
+                InlineKeyboardButton(
+                    text=f"✏️ {emoji}",
+                    callback_data=f"adm_circ_add_custom:{donat_id}:{found_user.id}"
+                )
+            )
+    
+    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"adm_user:{tg_id}"))
+    
+    try:
+        await message.edit_text(
+            text,
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        try:
+            await message.answer(
+                text,
+                reply_markup=builder.as_markup(),
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            logger.warning(f"_show_circular_donat_panel failed: {e}")
+
+
 async def _show_clan_donat_panel(message, clan):
     from app.constants.clan import CLAN_DONAT_PACKAGES, MAX_DONAT_CIRCLES
     active = []
@@ -264,7 +320,6 @@ async def _show_clan_donat_panel(message, clan):
     for pkg in CLAN_DONAT_PACKAGES:
         circles = getattr(clan, pkg.circles_field, 0)
         if circles >= MAX_DONAT_CIRCLES:
-            # Максимум — показываем как заблокированную кнопку
             builder.row(InlineKeyboardButton(
                 text=f"✅ {pkg.name} [{circles}/{MAX_DONAT_CIRCLES}] — MAX",
                 callback_data="noop"
@@ -284,7 +339,6 @@ async def _show_clan_donat_panel(message, clan):
     ))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="admin_main"))
 
-    # Строка кругов
     circles_lines = []
     for pkg in CLAN_DONAT_PACKAGES:
         n = getattr(clan, pkg.circles_field, 0)

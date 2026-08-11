@@ -42,6 +42,16 @@ class InvestmentsService:
         )
         return result.scalars().all()
 
+    async def get_all_investments(self, session: AsyncSession, user_id: int) -> list[Investment]:
+        """Получить все инвестиции пользователя (включая завершенные)."""
+        result = await session.execute(
+            select(Investment).where(
+                Investment.user_id == user_id,
+                Investment.is_withdrawn == False
+            )
+        )
+        return result.scalars().all()
+
     async def create(
         self, session: AsyncSession, user: User, resource: str, amount: int, hours: int
     ) -> tuple[bool, str]:
@@ -72,7 +82,7 @@ class InvestmentsService:
             resource=resource,
             amount=amount,
             duration_hours=hours,
-            interest_pct=int(pct * 10) // 1,
+            interest_pct=int(pct * 10),  # Храним как 30 для 3%, 200 для 20%
             matures_at=matures_at,
         )
         session.add(investment)
@@ -82,24 +92,47 @@ class InvestmentsService:
     async def withdraw(
         self, session: AsyncSession, user: User, investment_id: int
     ) -> tuple[bool, str, int]:
+        """Вывод вклада."""
         inv = await session.get(Investment, investment_id)
-        if not inv or inv.user_id != user.id:
+        if not inv:
             return False, "❌ Вклад не найден.", 0
+        if inv.user_id != user.id:
+            return False, "❌ Это не ваш вклад.", 0
         if inv.is_withdrawn:
             return False, "❌ Вклад уже получен.", 0
-        if datetime.now(timezone.utc) < inv.matures_at:
-            return False, "❌ Срок ещё не истёк.", 0
+        
+        now = datetime.now(timezone.utc)
+        if now < inv.matures_at:
+            remaining = int((inv.matures_at - now).total_seconds())
+            from app.utils.formatters import fmt_ttl
+            return False, f"❌ Срок ещё не истёк (осталось {fmt_ttl(remaining)}).", 0
 
-        pct = inv.interest_pct / 10.0
-        payout = int(inv.amount * (1 + pct / 100))
+        # Расчет выплаты
+        real_pct = inv.interest_pct / 10  # 30 → 3%, 200 → 20%
+        payout = int(inv.amount * (1 + real_pct / 100))
 
+        # Начисляем
         resource = inv.resource
         balance = getattr(user, resource, 0)
         setattr(user, resource, balance + payout)
 
         inv.is_withdrawn = True
+        inv.is_matured = True
         await session.flush()
         return True, "", payout
+
+    async def get_matured_investments(self, session: AsyncSession, user_id: int) -> list[Investment]:
+        """Получить созревшие, но еще не выведенные инвестиции."""
+        now = datetime.now(timezone.utc)
+        result = await session.execute(
+            select(Investment).where(
+                Investment.user_id == user_id,
+                Investment.is_withdrawn == False,
+                Investment.is_matured == False,
+                Investment.matures_at <= now
+            )
+        )
+        return result.scalars().all()
 
     # ── Для планировщика ──────────────────────────────────────────────────────
 
@@ -121,8 +154,8 @@ class InvestmentsService:
         notifications = []
         for inv in matured:
             inv.is_matured = True
-            pct = inv.interest_pct / 10.0
-            payout = int(inv.amount * (1 + pct / 100))
+            real_pct = inv.interest_pct / 10
+            payout = int(inv.amount * (1 + real_pct / 100))
             notifications.append({
                 "user_id": inv.user_id,
                 "investment_id": inv.id,

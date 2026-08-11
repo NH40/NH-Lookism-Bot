@@ -6,10 +6,12 @@
   → список донатов с текущим количеством кругов
   → нажать донат → показать детали + кнопки [+Круг] [−Круг]
   → для Архангела: кнопка "♟ Выдать сверх круг" (игнорирует лимит)
+  → для админа: кнопки массовой выдачи +1, +5, +10, ✏️ Свой
+  → ✏️ Свой: положительное число → добавить, отрицательное → убрать
 """
 import html
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, InlineKeyboardButton
+from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -177,6 +179,177 @@ async def cb_adm_circ_archangel_infinite(cb: CallbackQuery, session: AsyncSessio
     await _render_circ_detail(cb.message, session, tg_id, "archangel", found2)
 
 
+# ── МАССОВАЯ ВЫДАЧА КРУГОВ (АДМИН) ──────────────────────────────────────────
+
+@router.callback_query(F.data.startswith("adm_circ_add_bulk:"))
+async def cb_adm_circ_add_bulk(cb: CallbackQuery, session: AsyncSession, user: User):
+    """Админ: выдать 1, 5 или 10 кругов сразу."""
+    if not is_admin(user.tg_id):
+        return
+    
+    parts = cb.data.split(":")
+    tg_id = int(parts[1])
+    donat_id = parts[2]
+    count = int(parts[3])
+
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await cb.answer("Игрок не найден", show_alert=True)
+        return
+
+    d = CIRCULAR_DONAT_MAP.get(donat_id)
+    if not d:
+        await cb.answer("Донат не найден", show_alert=True)
+        return
+
+    added = 0
+    for _ in range(count):
+        result = await add_circle(session, found, donat_id, force=True)
+        if result.get("ok"):
+            added += 1
+        else:
+            break
+    
+    await session.commit()
+    
+    if added > 0:
+        await cb.answer(
+            f"✅ Добавлено {added} кругов {d.emoji} {d.name}!",
+            show_alert=True,
+        )
+    else:
+        await cb.answer("❌ Не удалось добавить круги", show_alert=True)
+    
+    found2 = await admin_service.find_user(session, str(tg_id))
+    await _render_circ_detail(cb.message, session, tg_id, donat_id, found2)
+
+
+@router.callback_query(F.data.startswith("adm_circ_add_custom:"))
+async def cb_adm_circ_add_custom(cb: CallbackQuery, session: AsyncSession, user: User):
+    """Админ: запросить количество кругов для выдачи."""
+    if not is_admin(user.tg_id):
+        return
+    
+    parts = cb.data.split(":")
+    tg_id = int(parts[1])
+    donat_id = parts[2]
+
+    d = CIRCULAR_DONAT_MAP.get(donat_id)
+    if not d:
+        await cb.answer("Донат не найден", show_alert=True)
+        return
+
+    # Сохраняем контекст в Redis на 60 секунд
+    from app.services.cooldown_service import cooldown_service
+    key = f"adm_circ_custom:{cb.from_user.id}"
+    await cooldown_service.redis.setex(
+        key,
+        60,
+        f"{tg_id}:{donat_id}"
+    )
+    
+    await cb.message.answer(
+        f"✏️ Введите количество кругов {d.emoji} {d.name}\n"
+        f"• Положительное число → добавить круги\n"
+        f"• Отрицательное число → убрать круги (по модулю)\n"
+        f"• Максимум: 100\n"
+        f"• 'отмена' для отмены"
+    )
+    await cb.answer()
+
+
+@router.message(F.text)
+async def handle_circ_custom_input(message: Message, session: AsyncSession, user: User):
+    """Обработка ввода количества кругов (положительные - добавляем, отрицательные - убираем)."""
+    if not is_admin(user.tg_id):
+        return
+    
+    # Проверяем, есть ли контекст
+    from app.services.cooldown_service import cooldown_service
+    key = f"adm_circ_custom:{user.tg_id}"
+    data = await cooldown_service.redis.get(key)
+    if not data:
+        return
+    
+    if message.text.lower() in ["отмена", "cancel"]:
+        await cooldown_service.redis.delete(key)
+        await message.answer("✅ Отменено")
+        return
+    
+    try:
+        count = int(message.text.strip())
+        if count == 0:
+            await message.answer("❌ Введите число не равное 0")
+            return
+        if abs(count) > 100:
+            await message.answer("❌ Максимум 100 кругов за раз (по модулю)")
+            return
+    except ValueError:
+        await message.answer("❌ Введите число")
+        return
+    
+    # Получаем контекст
+    tg_id_str, donat_id = data.decode().split(":")
+    tg_id = int(tg_id_str)
+    
+    found = await admin_service.find_user(session, str(tg_id))
+    if not found:
+        await message.answer("❌ Пользователь не найден")
+        await cooldown_service.redis.delete(key)
+        return
+    
+    d = CIRCULAR_DONAT_MAP.get(donat_id)
+    if not d:
+        await message.answer("❌ Донат не найден")
+        await cooldown_service.redis.delete(key)
+        return
+    
+    # ── ЛОГИКА: положительные → добавляем, отрицательные → убираем ──
+    if count > 0:
+        # Добавляем круги
+        added = 0
+        last_result = None
+        for _ in range(count):
+            result = await add_circle(session, found, donat_id, force=True)
+            last_result = result
+            if result.get("ok"):
+                added += 1
+            else:
+                break
+        
+        await session.commit()
+        await cooldown_service.redis.delete(key)
+        
+        if added > 0:
+            await message.answer(f"✅ Добавлено {added} кругов {d.emoji} {d.name} для {found.full_name}!")
+        else:
+            reason = last_result.get('reason', 'неизвестная ошибка') if last_result else 'неизвестная ошибка'
+            await message.answer(f"❌ Не удалось добавить круги: {reason}")
+    
+    else:
+        # Убираем круги (count отрицательный)
+        count_abs = abs(count)
+        removed = 0
+        last_result = None
+        
+        for _ in range(count_abs):
+            result = await remove_circle(session, found, donat_id)
+            last_result = result
+            if result.get("ok"):
+                removed += 1
+            else:
+                break
+        
+        await session.commit()
+        await cooldown_service.redis.delete(key)
+        
+        if removed > 0:
+            await message.answer(f"✅ Убрано {removed} кругов {d.emoji} {d.name} для {found.full_name}!")
+        else:
+            reason = last_result.get('reason', 'неизвестная ошибка') if last_result else 'неизвестная ошибка'
+            await message.answer(f"❌ Не удалось убрать круги: {reason}")
+
+
 # ── Рендер детального экрана ─────────────────────────────────────────────────
 
 async def _render_circ_detail(message, session: AsyncSession, tg_id: int, donat_id: str, found) -> None:
@@ -190,7 +363,15 @@ async def _render_circ_detail(message, session: AsyncSession, tg_id: int, donat_
 
     builder = InlineKeyboardBuilder()
     
-    # Обычная кнопка добавления круга (с учётом лимита)
+    # ── Быстрая выдача (админ) ──────────────────────────────────────────────────
+    builder.row(
+        InlineKeyboardButton(text=f"➕+1", callback_data=f"adm_circ_add_bulk:{tg_id}:{donat_id}:1"),
+        InlineKeyboardButton(text=f"➕+5", callback_data=f"adm_circ_add_bulk:{tg_id}:{donat_id}:5"),
+        InlineKeyboardButton(text=f"➕+10", callback_data=f"adm_circ_add_bulk:{tg_id}:{donat_id}:10"),
+        InlineKeyboardButton(text=f"✏️ Свой", callback_data=f"adm_circ_add_custom:{tg_id}:{donat_id}"),
+    )
+
+    # ── Обычная кнопка добавления круга (с учётом лимита) ──────────────────────
     if n < d.max_circles:
         builder.row(InlineKeyboardButton(
             text=f"➕ Добавить круг ({n} → {n + 1})",
@@ -199,7 +380,7 @@ async def _render_circ_detail(message, session: AsyncSession, tg_id: int, donat_
     else:
         builder.row(InlineKeyboardButton(text=f"✅ Максимум ({d.max_circles})", callback_data="noop"))
 
-    # Кнопка "Сверх круг" — только для Архангела (игнорирует лимит)
+    # ── Кнопка "Сверх круг" — только для Архангела ─────────────────────────────
     if donat_id == "archangel":
         builder.row(InlineKeyboardButton(
             text=f"♟ Выдать сверх круг (бесконечно) — {n + 1}",

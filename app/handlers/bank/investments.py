@@ -58,8 +58,6 @@ def _investments_text(active: list[Investment], user: User) -> str:
         lines.append("📋 <b>Ваши вклады:</b>")
         for i, inv in enumerate(active, 1):
             label = CASINO_RESOURCES.get(inv.resource, inv.resource)
-            # Хранится как 3% → 30, 20% → 200
-            # ДЕЛИМ НА 10, чтобы получить реальный процент
             real_pct = inv.interest_pct / 10
             payout = int(inv.amount * (1 + real_pct / 100))
             lines.append(
@@ -70,22 +68,23 @@ def _investments_text(active: list[Investment], user: User) -> str:
         lines.append("Вкладов нет.")
     return "\n".join(lines)
 
-def _investments_kb(active: list[Investment], can_create: bool) -> "InlineKeyboardMarkup":
+def _investments_kb(active: list[Investment], can_create: bool):
     builder = InlineKeyboardBuilder()
     if can_create:
         builder.row(InlineKeyboardButton(text="➕ Открыть вклад", callback_data="invest_choose_resource"))
+    
+    # Показываем только созревшие вклады для вывода
+    now = datetime.now(timezone.utc)
     for inv in active:
-        now = datetime.now(timezone.utc)
         if now >= inv.matures_at and not inv.is_withdrawn:
             label = CASINO_RESOURCES.get(inv.resource, inv.resource)
-            # Хранится как 3% → 30, 20% → 200
-            # ДЕЛИМ НА 10, чтобы получить реальный процент
             real_pct = inv.interest_pct / 10
             payout = int(inv.amount * (1 + real_pct / 100))
             builder.row(InlineKeyboardButton(
                 text=f"💰 Получить {fmt_num(payout)} {label} (вклад #{inv.id})",
                 callback_data=f"invest_withdraw:{inv.id}"
             ))
+    
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="bank_menu"))
     return builder.as_markup()
 
@@ -93,8 +92,8 @@ def _investments_kb(active: list[Investment], can_create: bool) -> "InlineKeyboa
 
 @router.callback_query(F.data == "bank_investments")
 async def cb_bank_investments(cb: CallbackQuery, session: AsyncSession, user: User):
-    active = await investments_service.get_active(session, user.id)
-    can_create = len(active) < MAX_INVESTMENTS
+    active = await investments_service.get_all_investments(session, user.id)
+    can_create = len([i for i in active if not i.is_withdrawn and datetime.now(timezone.utc) < i.matures_at]) < MAX_INVESTMENTS
     await safe_edit(cb, _investments_text(active, user), _investments_kb(active, can_create))
     await cb.answer()
 
@@ -134,16 +133,16 @@ async def cb_invest_pick_res(cb: CallbackQuery, session: AsyncSession, user: Use
     await state.set_state(InvestFSM.waiting_duration)
 
     builder = InlineKeyboardBuilder()
-    # Используем INVEST_DURATION_OPTIONS для всех ресурсов
-    for hours in INVEST_DURATION_OPTIONS.keys():
-        if resource == "nh_coins":
-            pct = INVEST_DURATION_OPTIONS.get(hours)
-        else:
-            pct = INVEST_DURATION_OPTIONS_OLD.get(hours)
+    if resource == "nh_coins":
+        options = INVEST_DURATION_OPTIONS
+    else:
+        options = INVEST_DURATION_OPTIONS_OLD
+    
+    for hours, pct in options.items():
         builder.row(InlineKeyboardButton(
             text=f"⏱ {hours}ч → +{pct:.1f}%",
             callback_data=f"invest_pick_dur:{hours}"
-    ))
+        ))
     builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="bank_investments"))
     
     label = INVEST_RESOURCES[resource]
@@ -151,7 +150,7 @@ async def cb_invest_pick_res(cb: CallbackQuery, session: AsyncSession, user: Use
         cb,
         f"📈 <b>Вклад в {label}</b>\n\n"
         f"{'NHCoin' if resource == 'nh_coins' else 'Остальные ресурсы'}: "
-        f"{'полные' if resource == 'nh_coins' else 'уменьшенные в 2 раза'} проценты\n\n"
+        f"{'полные' if resource == 'nh_coins' else 'уменьшенные'} проценты\n\n"
         f"Выберите срок:",
         builder.as_markup()
     )
@@ -168,9 +167,14 @@ async def cb_invest_pick_dur(cb: CallbackQuery, session: AsyncSession, user: Use
         return
 
     # Проверяем, что часы есть в словаре
-    if hours not in INVEST_DURATION_OPTIONS:
-        await cb.answer("❌ Неверный срок.", show_alert=True)
-        return
+    if resource == "nh_coins":
+        if hours not in INVEST_DURATION_OPTIONS:
+            await cb.answer("❌ Неверный срок.", show_alert=True)
+            return
+    else:
+        if hours not in INVEST_DURATION_OPTIONS_OLD:
+            await cb.answer("❌ Неверный срок.", show_alert=True)
+            return
 
     await state.update_data(duration_hours=hours)
     await state.set_state(InvestFSM.waiting_amount)
@@ -233,33 +237,32 @@ async def msg_invest_amount(message: Message, session: AsyncSession, user: User,
         parse_mode="HTML",
     )
 
-# ── Вывод вклада ─────────────────────────────────────────────────────────────
+# ── ВЫВОД ВКЛАДА (ИСПРАВЛЕННЫЙ) ─────────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("invest_withdraw:"))
 async def cb_invest_withdraw(cb: CallbackQuery, session: AsyncSession, user: User):
+    """Забрать награду с инвестиций."""
     inv_id = int(cb.data.split(":")[1])
 
-    from app.services.cooldown_service import cooldown_service
-    lock_key = cooldown_service.invest_withdraw_lock_key(inv_id)
-    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
-        await cb.answer("⏳ Подождите...", show_alert=False)
-        return
-
     ok, err, payout = await investments_service.withdraw(session, user, inv_id)
+    await session.commit()
+    
     if not ok:
-        try:
-            await cb.message.edit_text(err, reply_markup=back_kb("bank_investments"), parse_mode="HTML")
-        except Exception:
-            await cb.answer(err, show_alert=True)
+        await cb.answer(err, show_alert=True)
         return
 
     inv = await session.get(Investment, inv_id)
     label = CASINO_RESOURCES.get(inv.resource, inv.resource) if inv else "ресурс"
+    
+    # Обновляем меню
+    active = await investments_service.get_all_investments(session, user.id)
+    can_create = len([i for i in active if not i.is_withdrawn and datetime.now(timezone.utc) < i.matures_at]) < MAX_INVESTMENTS
+    
     await safe_edit(
         cb,
-        f"✅ <b>Вклад получен!</b>\n\n"
-        f"Зачислено: <b>{fmt_num(payout)} {label}</b>\n"
-        f"Баланс: {fmt_num(getattr(user, inv.resource, 0))} {label}",
-        back_kb("bank_investments"),
+        _investments_text(active, user),
+        _investments_kb(active, can_create)
     )
-    await cb.answer()
+    
+    # Отдельное уведомление о получении
+    await cb.answer(f"✅ Получено {fmt_num(payout)} {label}!", show_alert=True)

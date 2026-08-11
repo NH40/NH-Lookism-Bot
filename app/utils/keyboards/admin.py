@@ -93,7 +93,6 @@ def admin_user_kb(tg_id: int, donat_duel_cd: bool = False, is_banned: bool = Fal
     )
 
     # ── Бан ──────────────────────────────────────────────────────────────────
-    ban_label = "✅ Разбанить" if is_banned else "🔨 Забанить"
     if is_banned:
         builder.row(
             InlineKeyboardButton(text="🔨 Изм. бан", callback_data=f"adm_ban:{tg_id}"),

@@ -1,5 +1,6 @@
 """Блэкджек против дилера-бота."""
 import json
+import logging
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
@@ -17,17 +18,18 @@ from app.utils.formatters import fmt_num
 from app.utils.keyboards.common import back_kb
 from app.utils.menu_media import safe_edit
 
+logger = logging.getLogger(__name__)
 router = Router()
 
 
 class BlackjackFSM(StatesGroup):
     waiting_bet = State()
-    playing = State()  # <-- Новое состояние для игры
+    playing = State()
 
 
 # ── Клавиатуры ──────────────────────────────────────────────────────────────
 
-def _bj_main_kb() -> "InlineKeyboardMarkup":
+def _bj_main_kb():
     builder = InlineKeyboardBuilder()
     for res, label in CASINO_RESOURCES.items():
         builder.row(InlineKeyboardButton(
@@ -38,7 +40,7 @@ def _bj_main_kb() -> "InlineKeyboardMarkup":
     return builder.as_markup()
 
 
-def _play_kb() -> "InlineKeyboardMarkup":
+def _play_kb():
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(text="🃏 Взять", callback_data="bj_hit"),
@@ -48,7 +50,7 @@ def _play_kb() -> "InlineKeyboardMarkup":
     return builder.as_markup()
 
 
-def _finish_kb() -> "InlineKeyboardMarkup":
+def _finish_kb():
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="🔄 Играть снова", callback_data="bank_casino_blackjack"))
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="bank_casino"))
@@ -61,7 +63,6 @@ def _render_playing(hand: dict) -> str:
     player_cards = hand["player_cards"]
     dealer_cards = hand["dealer_cards"]
     player_value = hand_value(player_cards)
-    dealer_value = hand_value([dealer_cards[0]])
 
     lines = [
         "🃏 <b>Блэкджек</b>\n",
@@ -97,14 +98,12 @@ def _render_finished(hand: dict, outcome: str) -> str:
         outcome_map.get(outcome, outcome),
     ]
 
-    # Показываем выигрыш для статистов
     if hand.get("resource") == "squad":
         total_stake = hand.get("total_stake", 0)
         payout = hand.get("payout", 0)
         bonus = hand.get("bonus", 0)
         
         if outcome in ("win", "blackjack"):
-            # payout уже включает бонус (total_stake + bonus)
             lines.append(f"✅ Выигрыш: +{fmt_num(payout)} статистов")
             if bonus:
                 lines.append(f"🎁 Бонус: +{fmt_num(bonus)} статистов")
@@ -149,7 +148,6 @@ async def cb_bj_pick(cb: CallbackQuery, session: AsyncSession, user: User, state
         await cb.answer("❌ Неизвестный ресурс.", show_alert=True)
         return
 
-    # Для статистов — показываем выбор ранга
     if resource == "squad":
         rank_counts = await squad_casino_service.get_rank_counts(session, user.id)
         available_ranks = await squad_casino_service.get_available_ranks(session, user.id)
@@ -178,7 +176,6 @@ async def cb_bj_pick(cb: CallbackQuery, session: AsyncSession, user: User, state
         await cb.answer()
         return
 
-    # Для обычных ресурсов — сразу запрашиваем сумму
     balance = getattr(user, resource, 0)
     await state.set_state(BlackjackFSM.waiting_bet)
     await state.update_data(resource=resource)
@@ -200,7 +197,6 @@ async def cb_bj_pick(cb: CallbackQuery, session: AsyncSession, user: User, state
 
 @router.callback_query(F.data.startswith("bj_squad_rank:"))
 async def cb_bj_squad_rank(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
-    """Выбран ранг статистов — переходим к вводу суммы."""
     rank = cb.data.split(":")[1]
     await state.set_state(BlackjackFSM.waiting_bet)
     await state.update_data(resource="squad", rank=rank)
@@ -227,124 +223,163 @@ async def cb_bj_squad_rank(cb: CallbackQuery, session: AsyncSession, user: User,
 
 @router.message(BlackjackFSM.waiting_bet)
 async def msg_bj_bet(message: Message, session: AsyncSession, user: User, state: FSMContext):
-    data = await state.get_data()
-    resource = data.get("resource")
-    rank = data.get("rank")
-    await state.clear()
-
-    if not resource:
-        await message.answer("❌ Ресурс не выбран.", reply_markup=back_kb("bj_menu"), parse_mode="HTML")
-        return
-
     try:
-        amount = int(message.text.strip().replace(" ", "").replace(",", ""))
-    except ValueError:
-        await message.answer("❌ Введите целое число.", reply_markup=back_kb("bj_menu"), parse_mode="HTML")
-        return
+        data = await state.get_data()
+        resource = data.get("resource")
+        rank = data.get("rank")
+        await state.clear()
 
-    if amount <= 0:
-        await message.answer("❌ Ставка должна быть больше нуля.", reply_markup=back_kb("bj_menu"), parse_mode="HTML")
-        return
+        if not resource:
+            await message.answer("❌ Ресурс не выбран.", reply_markup=back_kb("bj_menu"), parse_mode="HTML")
+            return
 
-    if resource == "squad" and amount < squad_casino_service.MIN_DEPOSIT:
-        await message.answer(
-            f"❌ Минимальный депозит: {squad_casino_service.MIN_DEPOSIT} статистов.",
-            reply_markup=back_kb("bj_menu"),
-            parse_mode="HTML"
-        )
-        return
+        try:
+            amount = int(message.text.strip().replace(" ", "").replace(",", ""))
+        except ValueError:
+            await message.answer("❌ Введите целое число.", reply_markup=back_kb("bj_menu"), parse_mode="HTML")
+            return
 
-    # Начинаем игру
-    result = await blackjack_service.start(session, user, resource, amount, rank)
+        if amount <= 0:
+            await message.answer("❌ Ставка должна быть больше нуля.", reply_markup=back_kb("bj_menu"), parse_mode="HTML")
+            return
 
-    if not result.get("ok", False):
-        if result.get("x3_warn"):
-            await message.answer(result["msg"], reply_markup=back_kb("bj_menu"), parse_mode="HTML")
-        else:
-            await message.answer(result.get("msg", "❌ Ошибка."), reply_markup=back_kb("bj_menu"), parse_mode="HTML")
-        return
+        if resource == "squad" and amount < squad_casino_service.MIN_DEPOSIT:
+            await message.answer(
+                f"❌ Минимальный депозит: {squad_casino_service.MIN_DEPOSIT} статистов.",
+                reply_markup=back_kb("bj_menu"),
+                parse_mode="HTML"
+            )
+            return
 
-    hand = result["hand"]
+        result = await blackjack_service.start(session, user, resource, amount, rank)
+        logger.info(f"Blackjack start result: {result}")
 
-    if result.get("finished"):
-        text = _render_finished(hand, result.get("outcome", "loss"))
-        kb = _finish_kb()
+        if not result.get("ok", False):
+            if result.get("x3_warn"):
+                await message.answer(result["msg"], reply_markup=back_kb("bj_menu"), parse_mode="HTML")
+            else:
+                await message.answer(result.get("msg", "❌ Ошибка."), reply_markup=back_kb("bj_menu"), parse_mode="HTML")
+            return
+
+        hand = result["hand"]
+
+        if result.get("finished"):
+            await state.clear()
+            text = _render_finished(hand, result.get("outcome", "loss"))
+            kb = _finish_kb()
+            await message.answer(text, reply_markup=kb, parse_mode="HTML")
+            return
+
+        await state.set_state(BlackjackFSM.playing)
+        await state.update_data(hand=hand)
+
+        text = _render_playing(hand)
+        kb = _play_kb()
         await message.answer(text, reply_markup=kb, parse_mode="HTML")
-        return
-
-    # Сохраняем hand в FSM для последующих ходов
-    await state.set_state(BlackjackFSM.playing)
-    await state.update_data(hand=hand)
-
-    text = _render_playing(hand)
-    kb = _play_kb()
-    await message.answer(text, reply_markup=kb, parse_mode="HTML")
+        
+    except Exception as e:
+        logger.error(f"Blackjack bet error: {e}", exc_info=True)
+        await state.clear()
+        await message.answer(f"❌ Ошибка: {str(e)}", reply_markup=back_kb("bj_menu"), parse_mode="HTML")
 
 
 # ── Игровые действия ─────────────────────────────────────────────────────────
 
-async def _finish_and_render(message: Message, user: User, result: dict, state: FSMContext) -> None:
-    if not result.get("ok", False):
-        await message.answer(result.get("msg", "❌ Ошибка."), reply_markup=_finish_kb(), parse_mode="HTML")
-        await state.clear()
-        return
-
-    hand = result["hand"]
-    text = _render_finished(hand, result.get("outcome", "loss"))
-    kb = _finish_kb()
-    await message.answer(text, reply_markup=kb, parse_mode="HTML")
-    await state.clear()
-
-
 @router.callback_query(F.data == "bj_hit", BlackjackFSM.playing)
 async def cb_bj_hit(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
-    data = await state.get_data()
-    hand = data.get("hand")
-    if not hand:
-        await cb.answer("❌ Игра не найдена. Начните заново.", show_alert=True)
-        await state.clear()
-        return
+    try:
+        data = await state.get_data()
+        hand = data.get("hand")
+        if not hand:
+            await cb.answer("❌ Игра не найдена. Начните заново.", show_alert=True)
+            await state.clear()
+            return
 
-    result = await blackjack_service.hit(session, user, hand)
-    if result.get("finished"):
-        await _finish_and_render(cb.message, user, result, state)
-    else:
-        await state.update_data(hand=result["hand"])
-        text = _render_playing(result["hand"])
-        kb = _play_kb()
-        await safe_edit(cb, text, kb)
-    await cb.answer()
+        result = await blackjack_service.hit(session, user, hand)
+        logger.info(f"Blackjack hit result: {result}")
+        
+        if result.get("finished"):
+            await state.clear()
+            text = _render_finished(result["hand"], result.get("outcome", "loss"))
+            kb = _finish_kb()
+            # Используем safe_edit для обновления текущего сообщения
+            try:
+                await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+            except Exception:
+                await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
+        else:
+            await state.update_data(hand=result["hand"])
+            text = _render_playing(result["hand"])
+            kb = _play_kb()
+            try:
+                await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+            except Exception:
+                await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
+        await cb.answer()
+    except Exception as e:
+        logger.error(f"Blackjack hit error: {e}", exc_info=True)
+        await state.clear()
+        await cb.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
 
 
 @router.callback_query(F.data == "bj_stand", BlackjackFSM.playing)
 async def cb_bj_stand(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
-    data = await state.get_data()
-    hand = data.get("hand")
-    if not hand:
-        await cb.answer("❌ Игра не найдена. Начните заново.", show_alert=True)
-        await state.clear()
-        return
+    try:
+        data = await state.get_data()
+        hand = data.get("hand")
+        if not hand:
+            await cb.answer("❌ Игра не найдена. Начните заново.", show_alert=True)
+            await state.clear()
+            return
 
-    result = await blackjack_service.stand(session, user, hand)
-    await _finish_and_render(cb.message, user, result, state)
-    await cb.answer()
+        result = await blackjack_service.stand(session, user, hand)
+        logger.info(f"Blackjack stand result: {result}")
+        
+        await state.clear()
+        text = _render_finished(result["hand"], result.get("outcome", "loss"))
+        kb = _finish_kb()
+        try:
+            await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+        except Exception:
+            await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
+        await cb.answer()
+    except Exception as e:
+        logger.error(f"Blackjack stand error: {e}", exc_info=True)
+        await state.clear()
+        await cb.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
 
 
 @router.callback_query(F.data == "bj_double", BlackjackFSM.playing)
 async def cb_bj_double(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
-    data = await state.get_data()
-    hand = data.get("hand")
-    if not hand:
-        await cb.answer("❌ Игра не найдена. Начните заново.", show_alert=True)
-        await state.clear()
-        return
+    try:
+        data = await state.get_data()
+        hand = data.get("hand")
+        if not hand:
+            await cb.answer("❌ Игра не найдена. Начните заново.", show_alert=True)
+            await state.clear()
+            return
 
-    result = await blackjack_service.double(session, user, hand)
-    if result.get("finished"):
-        await _finish_and_render(cb.message, user, result, state)
-    else:
-        await state.update_data(hand=result["hand"])
-        text = _render_playing(result["hand"])
-        kb = _play_kb()
-        await safe_edit(cb, text, kb)
-    await cb.answer()
+        result = await blackjack_service.double(session, user, hand)
+        logger.info(f"Blackjack double result: {result}")
+        
+        if result.get("finished"):
+            await state.clear()
+            text = _render_finished(result["hand"], result.get("outcome", "loss"))
+            kb = _finish_kb()
+            try:
+                await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+            except Exception:
+                await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
+        else:
+            await state.update_data(hand=result["hand"])
+            text = _render_playing(result["hand"])
+            kb = _play_kb()
+            try:
+                await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+            except Exception:
+                await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
+        await cb.answer()
+    except Exception as e:
+        logger.error(f"Blackjack double error: {e}", exc_info=True)
+        await state.clear()
+        await cb.answer(f"❌ Ошибка: {str(e)}", show_alert=True)

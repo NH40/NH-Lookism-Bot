@@ -5,6 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.models.user import User
 from app.services.admin_service import admin_service
 from app.utils.keyboards.admin import admin_user_kb
@@ -71,6 +72,185 @@ async def cb_adm_user(cb: CallbackQuery, session: AsyncSession, user: User):
         return
     await _show_user_card(cb.message, session, found)
 
+
+# ── МЕНЮ "ВСЕ ИГРОКИ" ─────────────────────────────────────────────────────────
+
+@router.callback_query(F.data == "admin_bulk")
+async def cb_admin_bulk(cb: CallbackQuery, user: User):
+    """Меню управления всеми игроками."""
+    if not is_admin(user.tg_id):
+        return
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="📊 Список всех игроков", callback_data="admin_all_users_list"),
+    )
+    builder.row(
+        InlineKeyboardButton(text="💰 Выдать NHCoins всем", callback_data="admin_bulk_coins"),
+    )
+    builder.row(
+        InlineKeyboardButton(text="🎟 Выдать тикеты всем", callback_data="admin_bulk_tickets"),
+    )
+    builder.row(
+        InlineKeyboardButton(text="◀️ Назад", callback_data="admin_main"),
+    )
+    
+    try:
+        await cb.message.edit_text(
+            "👥 <b>Управление всеми игроками</b>\n\n"
+            "Выберите действие:",
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    await cb.answer()
+
+
+# ── МАССОВАЯ ВЫДАЧА NHCOINS ──────────────────────────────────────────────────
+
+@router.callback_query(F.data == "admin_bulk_coins")
+async def cb_admin_bulk_coins(cb: CallbackQuery, state: FSMContext, user: User):
+    """Запросить количество NHCoins для выдачи всем."""
+    if not is_admin(user.tg_id):
+        await cb.answer("⛔ Нет прав", show_alert=True)
+        return
+    
+    await state.set_state(AdminFSM.waiting_bulk_coins)
+    await cb.message.answer(
+        "💰 Введите количество NHCoins для выдачи ВСЕМ игрокам\n"
+        "(или 'отмена' для отмены)"
+    )
+    await cb.answer()
+
+
+@router.message(AdminFSM.waiting_bulk_coins)
+async def handle_bulk_coins_input(
+    message: Message, 
+    state: FSMContext, 
+    session: AsyncSession, 
+    user: User
+):
+    """Обработка ввода количества NHCoins для выдачи всем."""
+    if not is_admin(user.tg_id):
+        await message.answer("⛔ Нет прав")
+        await state.clear()
+        return
+    
+    if message.text.lower() in ["отмена", "cancel"]:
+        await state.clear()
+        await message.answer("✅ Отменено")
+        return
+    
+    try:
+        amount = int(message.text.strip())
+        if amount <= 0:
+            await message.answer("❌ Введите число больше 0")
+            return
+        if amount > 1000000000:
+            await message.answer("❌ Слишком много (макс 1,000,000,000)")
+            return
+    except ValueError:
+        await message.answer("❌ Введите число")
+        return
+    
+    # Получаем всех пользователей
+    users = await session.scalars(select(User))
+    users_list = users.all()
+    
+    if not users_list:
+        await message.answer("❌ Нет игроков для выдачи")
+        await state.clear()
+        return
+    
+    # Выдаем каждому
+    count = 0
+    for target_user in users_list:
+        target_user.nh_coins += amount
+        count += 1
+    
+    await session.commit()
+    await state.clear()
+    
+    # Форматируем число с пробелами
+    formatted = f"{amount:,}".replace(",", " ")
+    await message.answer(
+        f"✅ Выдано {formatted} NHCoins {count} игрокам!"
+    )
+
+
+# ── МАССОВАЯ ВЫДАЧА ТИКЕТОВ ──────────────────────────────────────────────────
+
+@router.callback_query(F.data == "admin_bulk_tickets")
+async def cb_admin_bulk_tickets(cb: CallbackQuery, state: FSMContext, user: User):
+    """Запросить количество тикетов для выдачи всем."""
+    if not is_admin(user.tg_id):
+        await cb.answer("⛔ Нет прав", show_alert=True)
+        return
+    
+    await state.set_state(AdminFSM.waiting_bulk_tickets)
+    await cb.message.answer(
+        "🎟 Введите количество тикетов для выдачи ВСЕМ игрокам\n"
+        "(или 'отмена' для отмены)"
+    )
+    await cb.answer()
+
+
+@router.message(AdminFSM.waiting_bulk_tickets)
+async def handle_bulk_tickets_input(
+    message: Message, 
+    state: FSMContext, 
+    session: AsyncSession, 
+    user: User
+):
+    """Обработка ввода количества тикетов для выдачи всем."""
+    if not is_admin(user.tg_id):
+        await message.answer("⛔ Нет прав")
+        await state.clear()
+        return
+    
+    if message.text.lower() in ["отмена", "cancel"]:
+        await state.clear()
+        await message.answer("✅ Отменено")
+        return
+    
+    try:
+        amount = int(message.text.strip())
+        if amount <= 0:
+            await message.answer("❌ Введите число больше 0")
+            return
+        if amount > 1000000:
+            await message.answer("❌ Слишком много (макс 1,000,000)")
+            return
+    except ValueError:
+        await message.answer("❌ Введите число")
+        return
+    
+    # Получаем всех пользователей
+    users = await session.scalars(select(User))
+    users_list = users.all()
+    
+    if not users_list:
+        await message.answer("❌ Нет игроков для выдачи")
+        await state.clear()
+        return
+    
+    # Выдаем каждому
+    count = 0
+    for target_user in users_list:
+        target_user.tickets += amount
+        count += 1
+    
+    await session.commit()
+    await state.clear()
+    
+    formatted = f"{amount:,}".replace(",", " ")
+    await message.answer(
+        f"✅ Выдано {formatted} тикетов {count} игрокам!"
+    )
+
+
+# ── ОСТАЛЬНЫЕ ОБРАБОТЧИКИ ────────────────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("adm_coins:"))
 async def cb_adm_coins(cb: CallbackQuery, user: User, state: FSMContext):
@@ -304,4 +484,3 @@ async def cb_adm_clear_buildings(cb: CallbackQuery, session: AsyncSession, user:
     await business_service._recalc_income(session, found)
     deleted = result.rowcount
     await cb.answer(f"🏗 Удалено {deleted} зданий, доход пересчитан", show_alert=True)
-

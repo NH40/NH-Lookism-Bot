@@ -59,7 +59,16 @@ def reset_donat_bonuses(user: User) -> None:
 async def apply_title_bonus(
     session: AsyncSession, user: User, title_id: str
 ) -> None:
-    if title_id == "fist_power":
+    # ── ТИТУЛЫ КАЗИНО (еженедельные) ──────────────────────────────────────
+    if title_id == "title_casino_jackpot":
+        user.income_bonus_percent += 100  # доход ×2
+    elif title_id == "title_casino_blackjack":
+        user.income_bonus_percent += 33   # доход +33%
+    elif title_id == "title_casino_player":
+        # Обрабатывается в fame_service.get_craft_cost_multiplier()
+        pass
+    # ── ОСТАЛЬНЫЕ ТИТУЛЫ ──────────────────────────────────────────────────
+    elif title_id == "fist_power":
         user.squad_power_bonus += 20
     elif title_id == "romantic_recruit":
         user.recruit_count_bonus += 40
@@ -106,7 +115,6 @@ async def apply_title_bonus(
         rs.apply_donat_ui(user)
     elif title_id == "ui_potion":
         user.med_genius_donat = True
-        # Донат = максимальный тир всех зелий
         user.mg_level_power     = 6
         user.mg_level_training  = 6
         user.mg_level_income    = 6

@@ -2,8 +2,10 @@ import html
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
 from sqlalchemy.ext.asyncio import AsyncSession
+
+
 from app.models.user import User
 from app.utils.keyboards.common import (
     main_menu_kb, back_kb,
@@ -17,6 +19,7 @@ router = Router()
 
 
 # ── /start ──────────────────────────────────────────────────────────────────
+
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, session: AsyncSession, user: User, is_new_user: bool):
@@ -52,6 +55,8 @@ async def cmd_start(message: Message, session: AsyncSession, user: User, is_new_
         event = await horse_shop_service.get_current_event(session)
         text = await _main_menu_text(session, user)
         await message.answer(text, reply_markup=main_menu_kb(horse_shop_active=bool(event)), parse_mode="HTML")
+
+
 
 
 # ── Главное меню ────────────────────────────────────────────────────────────

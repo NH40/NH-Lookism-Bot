@@ -56,6 +56,7 @@ from app.constants.bosses import (
     ORG_POWER_DEBUFF_MINUTES,
     ORG_POWER_DEBUFF_PCT,
     ORG_SHADOW_PER_HIT,
+    NIKITA_DESPAIR_PER_HIT,
 )
 from app.models.boss import ActiveBoss
 from app.models.user import User

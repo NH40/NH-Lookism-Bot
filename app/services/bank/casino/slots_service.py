@@ -26,6 +26,9 @@ class SlotsService:
         if resource not in CASINO_RESOURCES:
             return {"ok": False, "msg": "❌ Нельзя ставить этот ресурс."}
 
+        if resource == "squad":
+            return {"ok": False, "msg": "❌ Статисты доступны только в блэкджеке."}
+
         balance = get_balance(user, resource)
         if amount <= 0:
             return {"ok": False, "msg": "❌ Ставка должна быть больше нуля."}

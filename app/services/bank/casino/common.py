@@ -16,6 +16,8 @@ CASINO_RESOURCES: dict[str, str] = {
     "business_fragments": "🏢 Фрагменты бизнеса",
     "war_points":         "⚔️ Очки войны",
     "mastery_points":     "🎯 Очки мастерства",
+    "path_points":        "💎 Очки пути",
+    "squad":              "👥 Статисты",
 }
 CASINO_RESOURCE_LABELS = CASINO_RESOURCES  # алиас
 

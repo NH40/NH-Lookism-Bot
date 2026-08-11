@@ -87,27 +87,44 @@ def skill_path_label(path: str | None) -> str:
 
 
 def influence_discount_pct(user) -> int:
-    """Скидка в магазине от Влияния — разная формула по фазам, кусочно-линейная,
-    без скачков (плавный переход от отрицательной скидки к положительной):
-
-    Банда: 0 влияния = 0%, линейно до +25% на 500 влияния (5%/100), дальше плато.
-    Король: <1000 влияния = -50% (наценка), плавно растёт до 0% на 4000,
-    затем плавно растёт до +25% на 8000, дальше плато."""
+    """Скидка/наценка в магазине от Влияния — зависит от фазы игры.
+    
+    Механика: чем выше влияние, тем больше скидка (до +50%).
+    Низкое влияние даёт наценку (до -50%).
+    
+    Пороги по фазам:
+      - Банда:   -50% при 0 → 0% при 250 → +50% при 500 влияния
+      - Король:  -50% при 0 → 0% при 4000 → +50% при 8000 влияния
+      - Император: -50% при 0 → 0% при 10000 → +50% при 20000 влияния
+    
+    Линейная интерполяция между точками, без скачков.
+    """
     influence = getattr(user, "influence", 0) or 0
     phase = getattr(user, "phase", None)
-
+    
     if phase == "gang":
-        return min(25, round(influence * 25 / 500))
-
-    if phase == "king":
-        if influence < 1000:
+        if influence <= 0:
             return -50
-        if influence <= 4000:
-            return round(-50 + (influence - 1000) * 50 / 3000)
-        if influence <= 8000:
-            return round((influence - 4000) * 25 / 4000)
-        return 25
-
+        if influence < 250:
+            return round(-50 + (influence / 250) * 50)
+        return min(50, round(((influence - 250) / 250) * 50))
+    
+    if phase == "king":
+        if influence <= 0:
+            return -50
+        if influence < 4000:
+            # -50% → 0% на диапазоне 0-4000
+            return round(-50 + (influence / 4000) * 50)
+        # 0% → +50% на диапазоне 4000-8000
+        return min(50, round(((influence - 4000) / 4000) * 50))
+    
+    if phase == "emperor":
+        if influence <= 0:
+            return -50
+        if influence < 10000:
+            return round(-50 + (influence / 10000) * 50)
+        return min(50, round(((influence - 10000) / 10000) * 50))
+    
     return 0
 
 
@@ -123,23 +140,41 @@ def biz_discount_pct(user) -> int:
 
 
 def total_recruit_discount_pct(user) -> int:
-    """Суммарная скидка на вербовку статистов в магазине: скилл-путь +
-    Гений бизнеса + Влияние, зажатая сверху MAX_RECRUIT_DISCOUNT_PCT —
-    иначе сумма скидок уходит за 100% и товар становится бесплатным."""
+    """Суммарная скидка на вербовку статистов в магазине.
+    
+    Собирает скидки из всех источников:
+      - Навыки пути (recruit_discount_percent)
+      - Гений бизнеса (biz_discount_pct)
+      - Влияние (influence_discount_pct)
+    
+    Ограничивает диапазон [-50%, MAX_RECRUIT_DISCOUNT_PCT],
+    чтобы наценка не уходила в бесконечность, а скидка не превышала лимит.
+    """
     from app.config.game_balance import MAX_RECRUIT_DISCOUNT_PCT
+    
     total = (
         getattr(user, "recruit_discount_percent", 0)
         + biz_discount_pct(user)
         + influence_discount_pct(user)
     )
-    return min(total, MAX_RECRUIT_DISCOUNT_PCT)
+    
+    # Скидка не может быть меньше -50% (наценка) и больше MAX_RECRUIT_DISCOUNT_PCT
+    return max(-50, min(total, MAX_RECRUIT_DISCOUNT_PCT))
 
 
 def apply_biz_discount(user, base_cost: int) -> int:
+    """Применяет скидку Гения бизнеса к цене.
+    
+    Дополнительно: если у игрока есть фрагмент "10 гениев" из сета Чарльз Чоя,
+    цена дополнительно делится на 2 (50% скидка поверх основной).
+    """
     discount_pct = biz_discount_pct(user)
     cost = int(base_cost * (1 - discount_pct / 100))
+    
+    # Сет Славы «Чарльз Чой» — 10 гениев: дополнительная скидка 50%
     if getattr(user, "fame_charles_geniuses", False):
         cost = cost // 2
+    
     return max(1, cost)
 
 

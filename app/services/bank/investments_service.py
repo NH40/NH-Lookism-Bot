@@ -1,148 +1,138 @@
-"""
-Инвестиции: до 3 вкладов одновременно, срок 1/3/6/12/24ч, доход 3/5/10/15/20%.
-Максимальный вклад: 200 000 000 NHCoin.
-"""
-import logging
-from datetime import datetime, timezone, timedelta
+"""Сервис инвестиций."""
+from datetime import datetime, timedelta, timezone
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
 
-from app.models.bank import Investment
 from app.models.user import User
-from app.constants.bank import INVEST_MAX_SLOTS, INVEST_MAX_DEPOSIT, INVEST_DURATION_OPTIONS
+from app.models.bank import Investment
+from app.services.bank.casino.common import CASINO_RESOURCES
+from app.constants.bank import (
+    INVEST_MAX_SLOTS,
+    INVEST_MAX_DEPOSIT,
+    INVEST_DURATION_OPTIONS,
+    INVEST_DURATION_OPTIONS_OLD,
+)
+from app.utils.formatters import fmt_num
 
-logger = logging.getLogger(__name__)
+INVEST_RESOURCES = {k: v for k, v in CASINO_RESOURCES.items() if k != "squad"}
 
-MAX_INVESTMENTS  = INVEST_MAX_SLOTS
-MAX_DEPOSIT      = INVEST_MAX_DEPOSIT
-DURATION_OPTIONS = INVEST_DURATION_OPTIONS
+MAX_INVESTMENTS = INVEST_MAX_SLOTS
+MAX_DEPOSIT = INVEST_MAX_DEPOSIT
+
+
+def get_interest_pct(resource: str, hours: int) -> float | None:
+    """Возвращает процент для ресурса.
+    Для NHCoin — увеличенные в 4 раза.
+    Для остальных — старые проценты (3, 5, 10, 15, 20).
+    """
+    if resource == "nh_coins":
+        return INVEST_DURATION_OPTIONS.get(hours)
+    return INVEST_DURATION_OPTIONS_OLD.get(hours)
 
 
 class InvestmentsService:
-
-    # ── Активные вклады ───────────────────────────────────────────────────────
-
-    async def get_active(
-        self, session: AsyncSession, user_id: int
-    ) -> list[Investment]:
-        r = await session.execute(
+    async def get_active(self, session: AsyncSession, user_id: int) -> list[Investment]:
+        now = datetime.now(timezone.utc)
+        result = await session.execute(
             select(Investment).where(
-                and_(Investment.user_id == user_id, Investment.is_withdrawn == False)
-            ).order_by(Investment.started_at)
+                Investment.user_id == user_id,
+                Investment.is_withdrawn == False,
+                Investment.matures_at > now
+            )
         )
-        return r.scalars().all()
-
-    # ── Открыть вклад ─────────────────────────────────────────────────────────
+        return result.scalars().all()
 
     async def create(
-        self, session: AsyncSession, user: User, amount: int, duration_hours: int
+        self, session: AsyncSession, user: User, resource: str, amount: int, hours: int
     ) -> tuple[bool, str]:
-        """
-        Создать вклад.
+        if resource not in INVEST_RESOURCES:
+            return False, "❌ Этот ресурс нельзя вложить."
 
-        !! SELECT FOR UPDATE блокирует строку пользователя — параллельный
-        запрос будет ждать и после разблокировки увидит актуальный счёт/лимит.
-        """
-        if duration_hours not in DURATION_OPTIONS:
-            return False, "❌ Неверный срок вклада."
-        if amount < 1000:
-            return False, "❌ Минимальный вклад: 1 000 NHCoin."
-        if amount > MAX_DEPOSIT:
-            return False, f"❌ Максимальный вклад: {MAX_DEPOSIT:,} NHCoin."
+        balance = getattr(user, resource, 0)
+        if amount > balance:
+            return False, f"❌ Недостаточно {INVEST_RESOURCES[resource]}."
 
-        # Блокируем строку пользователя — никакой второй запрос не войдёт
-        # в критическую секцию пока мы не закоммитим транзакцию.
-        locked_user = await session.scalar(
-            select(User).where(User.id == user.id).with_for_update()
-        )
-        if not locked_user:
-            return False, "❌ Пользователь не найден."
-
-        if locked_user.nh_coins < amount:
-            return False, "❌ Недостаточно NHCoin."
-
-        # Перечитываем вклады под блокировкой
-        active = await self.get_active(session, locked_user.id)
+        active = await self.get_active(session, user.id)
         if len(active) >= MAX_INVESTMENTS:
-            return False, f"❌ Максимум {MAX_INVESTMENTS} вклада одновременно."
+            return False, f"❌ Максимум {MAX_INVESTMENTS} вкладов."
+        if amount > MAX_DEPOSIT:
+            return False, f"❌ Максимальная сумма: {fmt_num(MAX_DEPOSIT)}."
 
-        interest_pct = DURATION_OPTIONS[duration_hours]
+        pct = get_interest_pct(resource, hours)
+        if pct is None:
+            return False, "❌ Неверный срок."
+
+        setattr(user, resource, balance - amount)
+
         now = datetime.now(timezone.utc)
+        matures_at = now + timedelta(hours=hours)
 
-        locked_user.nh_coins -= amount
-        user.nh_coins = locked_user.nh_coins  # синхронизируем внешний объект
-        inv = Investment(
-            user_id=locked_user.id,
+        investment = Investment(
+            user_id=user.id,
+            resource=resource,
             amount=amount,
-            duration_hours=duration_hours,
-            interest_pct=interest_pct,
-            started_at=now,
-            matures_at=now + timedelta(hours=duration_hours),
+            duration_hours=hours,
+            interest_pct=int(pct * 10) // 1,
+            matures_at=matures_at,
         )
-        session.add(inv)
+        session.add(investment)
         await session.flush()
         return True, ""
-
-    # ── Забрать созревший вклад ───────────────────────────────────────────────
 
     async def withdraw(
         self, session: AsyncSession, user: User, investment_id: int
     ) -> tuple[bool, str, int]:
-        """
-        Возвращает (ok, error_msg, payout).
-        payout = amount + проценты.
-
-        !! SELECT FOR UPDATE блокирует строку вклада — двойная выплата невозможна.
-        """
-        # Блокируем конкретную строку вклада — параллельный запрос будет ждать.
-        # После разблокировки второй запрос увидит is_withdrawn=True и откажет.
-        inv = await session.scalar(
-            select(Investment)
-            .where(Investment.id == investment_id, Investment.user_id == user.id)
-            .with_for_update()
-        )
-        if not inv:
+        inv = await session.get(Investment, investment_id)
+        if not inv or inv.user_id != user.id:
             return False, "❌ Вклад не найден.", 0
         if inv.is_withdrawn:
-            return False, "❌ Вклад уже закрыт.", 0
+            return False, "❌ Вклад уже получен.", 0
+        if datetime.now(timezone.utc) < inv.matures_at:
+            return False, "❌ Срок ещё не истёк.", 0
 
-        now = datetime.now(timezone.utc)
-        if now < inv.matures_at:
-            remaining = int((inv.matures_at - now).total_seconds())
-            from app.utils.formatters import fmt_ttl
-            return False, f"❌ Вклад ещё не созрел. Осталось: {fmt_ttl(remaining)}.", 0
+        pct = inv.interest_pct / 10.0
+        payout = int(inv.amount * (1 + pct / 100))
 
-        payout = inv.amount + int(inv.amount * inv.interest_pct / 100)
-        user.nh_coins += payout
-        inv.is_matured = True
+        resource = inv.resource
+        balance = getattr(user, resource, 0)
+        setattr(user, resource, balance + payout)
+
         inv.is_withdrawn = True
         await session.flush()
         return True, "", payout
 
-    # ── Тик: уведомить о созревших вкладах ───────────────────────────────────
+    # ── Для планировщика ──────────────────────────────────────────────────────
 
-    async def maturity_tick(self, session: AsyncSession) -> list[Investment]:
+    async def maturity_tick(self, session: AsyncSession) -> list[dict]:
         """
-        Пометить созревшие вклады (is_matured=True) и вернуть список для уведомлений.
-        Вклад НЕ выплачивается автоматически — игрок должен нажать «Забрать».
+        Проверяет созревшие вклады и помечает их как готовые к выводу.
+        Возвращает список уведомлений для игроков.
         """
         now = datetime.now(timezone.utc)
-        r = await session.execute(
+        result = await session.execute(
             select(Investment).where(
-                and_(
-                    Investment.is_matured == False,
-                    Investment.is_withdrawn == False,
-                    Investment.matures_at <= now,
-                    Investment.notif_sent == False,
-                )
+                Investment.is_withdrawn == False,
+                Investment.is_matured == False,
+                Investment.matures_at <= now
             )
         )
-        matured = r.scalars().all()
+        matured = result.scalars().all()
+
+        notifications = []
         for inv in matured:
             inv.is_matured = True
-            inv.notif_sent = True
+            pct = inv.interest_pct / 10.0
+            payout = int(inv.amount * (1 + pct / 100))
+            notifications.append({
+                "user_id": inv.user_id,
+                "investment_id": inv.id,
+                "amount": inv.amount,
+                "payout": payout,
+                "resource": inv.resource,
+            })
+
         await session.flush()
-        return matured
+        return notifications
 
 
 investments_service = InvestmentsService()

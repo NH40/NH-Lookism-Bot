@@ -63,7 +63,6 @@ def setup_scheduler() -> AsyncIOScheduler:
         id="ultra_instinct_tick",
         name="ultra_instinct_tick",
     )
-    # Аукцион тикает быстро — выдача наград без задержки
     scheduler.add_job(
         auction_round_tick,
         trigger=IntervalTrigger(seconds=AUCTION_ROUND_TICK_SECONDS),
@@ -72,7 +71,6 @@ def setup_scheduler() -> AsyncIOScheduler:
         max_instances=1,
         misfire_grace_time=5,
     )
-    # Новый аукцион: проверяем по расписанию
     scheduler.add_job(
         auction_start_tick,
         trigger=IntervalTrigger(minutes=AUCTION_START_TICK_MINUTES),
@@ -105,7 +103,7 @@ def setup_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=30,
     )
 
-    # Ежедневные бонусы: circ_daily_districts (Архангел круг 10)
+    # ── Ежедневные бонусы: circ_daily_districts (Архангел круг 10) ────────────
     scheduler.add_job(
         daily_tick,
         trigger=CronTrigger(hour=0, minute=0, timezone="UTC"),

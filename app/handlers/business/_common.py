@@ -71,7 +71,6 @@ async def _build_business_main(
         bonus_section = "\n\n━━━ 📊 Прочие бонусы ━━━\n" + "\n".join(bonuses)
 
     # Сет Славы «Чарльз Чой» — не в общей сумме %, а последним множителем
-    # поверх уже готового итога (см. business_service._charles_bonus_percent).
     charles_lines = []
     if info.get('nhn_bonus'):
         charles_lines.append(f"  🏢 Слава NHN +{info['nhn_bonus']}%")
@@ -92,6 +91,7 @@ async def _build_business_main(
     elif info["building_path"] == "political":
         influence_note = "  <i>✅ +влияние за каждый захваченный район</i>\n"
 
+    # ── Дополнительный доход ──────────────────────────────────────────────────
     circ_line = ""
     circ_passive = info.get("circ_passive_income", 0)
     if circ_passive:
@@ -108,33 +108,55 @@ async def _build_business_main(
     if clan_skim_income:
         clan_skim_line = f"\n👑 От членов клана: +{fmt_num(clan_skim_income)}/мин"
 
+    # ── Бонусные районы от Архангела ──────────────────────────────────────────
+    archangel_districts_line = ""
+    bonus_districts = getattr(user, "bonus_business_districts", 0)
+    if bonus_districts > 0:
+        # Показываем уже полученные бонусные районы
+        per_district = info.get('per_district_rate', 300)
+        bonus_income = bonus_districts * per_district
+        archangel_districts_line = f"\n👼 Город Архангела ({fmt_num(bonus_districts)} р.): +{fmt_num(bonus_income)}/мин"
+
+    # ── Таймер до следующей выдачи ────────────────────────────────────────────
     archangel_timer_line = ""
-    if getattr(user, "circ_daily_districts", 0) > 0:
+    daily_districts = getattr(user, "circ_daily_districts", 0)
+    if daily_districts > 0:
         last_at = getattr(user, "circ_daily_districts_at", None)
         now = datetime.now(timezone.utc)
+        
         if last_at is None:
             next_midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
             remaining_first = (next_midnight - now).total_seconds()
             h0, rem0 = divmod(int(remaining_first), 3600)
             m0, s0 = divmod(rem0, 60)
-            archangel_timer_line = f"\n👼 Город Архангела (64р.): через <b>{h0}ч {m0}м {s0}с</b>"
+            archangel_timer_line = f"\n⏳ Завтра начислят: +{daily_districts} районов (через {h0}ч {m0}м {s0}с)"
         else:
             if last_at.tzinfo is None:
                 last_at = last_at.replace(tzinfo=timezone.utc)
             next_at = last_at + timedelta(hours=24)
             remaining = (next_at - now).total_seconds()
             if remaining <= 0:
-                archangel_timer_line = "\n👼 Город Архангела (64р.): <b>готово!</b>"
+                archangel_timer_line = f"\n✅ Сегодня уже начислено: +{daily_districts} районов"
             else:
                 h, rem = divmod(int(remaining), 3600)
                 m, s = divmod(rem, 60)
-                archangel_timer_line = f"\n👼 Город Архангела (64р.): через <b>{h}ч {m}м {s}с</b>"
+                archangel_timer_line = f"\n⏳ Следующая выдача: +{daily_districts} районов (через {h}ч {m}м {s}с)"
 
-    extra_income_lines = [l for l in (circ_line, vassal_line, clan_skim_line, archangel_timer_line) if l]
+    # ── Сборка секции доп. дохода ─────────────────────────────────────────────
+    extra_income_lines = [
+        l for l in (
+            circ_line, 
+            vassal_line, 
+            clan_skim_line, 
+            archangel_districts_line,
+            archangel_timer_line
+        ) if l
+    ]
     extra_income_section = ""
     if extra_income_lines:
         extra_income_section = "\n\n━━━ 🌐 Доп. доход ━━━" + "".join(extra_income_lines)
 
+    # ── Гений бизнеса ──────────────────────────────────────────────────────────
     genius_lines = [
         f"🎖 Уровень {progress_bar(info['genius_level'], 10)} {info['genius_level']}/10 (+{info['genius_level_bonus']}%)",
         f"📦 Вместимость {progress_bar(info['genius_capacity_level'], 5)} {info['genius_capacity_level']}/5 (+{info['genius_capacity_bonus']}%)",

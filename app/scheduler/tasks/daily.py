@@ -10,6 +10,8 @@ circ_daily_districts (Архангел круг 10):
 import logging
 from datetime import datetime, timezone
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.database import AsyncSessionFactory
 from app.models.user import User
 
@@ -40,12 +42,19 @@ async def daily_tick():
                     if districts <= 0:
                         continue
 
-                    from app.services.business_service import business_service
-
+                    # Добавляем бонусные районы
                     user.bonus_business_districts = getattr(user, "bonus_business_districts", 0) + districts
-                    await business_service.add_bonus_districts(session, user, districts)
+                    
+                    # Пересчитываем доход
+                    from app.services.business_service import business_service
+                    await business_service._recalc_income(session, user)
 
                     user.circ_daily_districts_at = datetime.now(timezone.utc)
+                    
+                    # Сбрасываем daily_districts (они уже начислены)
+                    # Но не сбрасываем полностью, т.к. они могут быть от нескольких десятков
+                    # Оставляем как есть, т.к. _apply_one_donat их пересчитает при rebuild
+                    
                     notifications.append((
                         user.tg_id,
                         f"🏙 <b>Архангел подарил вам районы!</b>\n\n"

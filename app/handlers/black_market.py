@@ -86,19 +86,28 @@ async def cb_bm_detail(cb: CallbackQuery, session: AsyncSession, user: User):
         await cb.answer("Донат не найден", show_alert=True)
         return
 
-    from app.services.circular_donat_service import get_user_circles
+    from app.services.circular_donat_service import get_user_circles, get_next_circle_price, is_infinite_circles_unlocked
     circles_map = await get_user_circles(session, user.id)
     my_circles = circles_map.get(donat_id, 0)
+    infinite = await is_infinite_circles_unlocked(session, user, donat_id)
+    max_display = "∞" if infinite else str(d.max_circles)
 
     nh_donate = user.nh_donate or 0
     lines = [
         f"{d.emoji} <b>{d.name}</b>\n",
-        f"🔄 Ваши круги: <b>{my_circles}/{d.max_circles}</b>",
-        f"💰 Цена круга: <b>{d.price_per_circle} NHDonate</b> | MAX: {d.price_per_circle * d.max_circles} NHD\n",
+        f"🔄 Ваши круги: <b>{my_circles}/{max_display}</b>",
+        f"💰 Базовая цена круга: <b>{d.price_per_circle} NHDonate</b> | MAX: {d.price_per_circle * d.max_circles} NHD\n",
         f"🪙 Ваш баланс NHDonate: <b>{nh_donate:,}</b>\n",
         f"🎁 <b>Бонус за каждый круг:</b>",
         f"  {d.circle_bonus}\n",
     ]
+
+    if infinite and my_circles >= d.max_circles:
+        lines.append(
+            "♾ <b>Лимит снят!</b> Все донат-сеты и остальные круговые донаты куплены — "
+            "можно покупать круги Архангела бесконечно. Каждый следующий круг дороже "
+            "предыдущего на 50%.\n"
+        )
 
     if d.special_bonuses:
         lines.append("⭐ <b>Особые бонусы за круги:</b>")
@@ -108,10 +117,11 @@ async def cb_bm_detail(cb: CallbackQuery, session: AsyncSession, user: User):
 
     builder = InlineKeyboardBuilder()
 
-    if my_circles < d.max_circles:
-        can_afford = "✅" if nh_donate >= d.price_per_circle else "❌"
+    next_price = await get_next_circle_price(session, user, donat_id)
+    if next_price is not None:
+        can_afford = "✅" if nh_donate >= next_price else "❌"
         builder.row(InlineKeyboardButton(
-            text=f"{can_afford} Купить круг {my_circles + 1} — {d.price_per_circle} NHDonate",
+            text=f"{can_afford} Купить круг {my_circles + 1} — {next_price:,} NHDonate",
             callback_data=f"bm_buy_circle:{donat_id}",
         ))
 
@@ -137,34 +147,39 @@ async def cb_bm_buy_circle(cb: CallbackQuery, session: AsyncSession, user: User)
         await cb.answer("Донат не найден", show_alert=True)
         return
 
-    nh_donate = user.nh_donate or 0
-    if nh_donate < d.price_per_circle:
-        await cb.answer(
-            f"❌ Недостаточно NHDonate!\n"
-            f"Нужно: {d.price_per_circle} · У вас: {nh_donate}\n\n"
-            f"Пополните баланс через /donate",
-            show_alert=True,
-        )
-        return
-
-    # Антидабл-лок
+    # Антидабл-лок (до расчёта цены — цена зависит от текущего числа кругов)
     from app.services.cooldown_service import cooldown_service
     lock_key = f"bm_buy_circle:{user.id}:{donat_id}"
     if not await cooldown_service.acquire_lock(lock_key, ttl=5):
         await cb.answer("⏳ Подождите...", show_alert=False)
         return
 
-    from app.services.circular_donat_service import add_circle
+    from app.services.circular_donat_service import add_circle, get_next_circle_price
+    price = await get_next_circle_price(session, user, donat_id)
+    if price is None:
+        await cb.answer(f"❌ Достигнут максимум {d.max_circles} кругов", show_alert=True)
+        return
+
+    nh_donate = user.nh_donate or 0
+    if nh_donate < price:
+        await cb.answer(
+            f"❌ Недостаточно NHDonate!\n"
+            f"Нужно: {price:,} · У вас: {nh_donate}\n\n"
+            f"Пополните баланс через /donate",
+            show_alert=True,
+        )
+        return
+
     result = await add_circle(session, user, donat_id)
     if not result["ok"]:
         await cb.answer(f"❌ {result['reason']}", show_alert=True)
         return
 
-    user.nh_donate = nh_donate - d.price_per_circle
+    user.nh_donate = nh_donate - price
     await session.commit()
 
     await cb.answer(
-        f"✅ {d.emoji} {d.name}: круг {result['circles']}/{d.max_circles} куплен!\n"
+        f"✅ {d.emoji} {d.name}: круг {result['circles']} куплен за {price:,} NHDonate!\n"
         f"Остаток NHDonate: {user.nh_donate}",
         show_alert=True,
     )

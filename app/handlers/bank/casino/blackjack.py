@@ -14,6 +14,7 @@ from app.services.bank.casino.blackjack_service import (
 )
 from app.services.bank.casino.common import CASINO_RESOURCES
 from app.services.bank.casino.squad_service import squad_casino_service
+from app.services.cooldown_service import cooldown_service
 from app.utils.formatters import fmt_num
 from app.utils.keyboards.common import back_kb
 from app.utils.menu_media import safe_edit
@@ -40,13 +41,15 @@ def _bj_main_kb():
     return builder.as_markup()
 
 
-def _play_kb():
+def _play_kb(hand: dict | None = None):
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(text="🃏 Взять", callback_data="bj_hit"),
         InlineKeyboardButton(text="✋ Стоп, мне не приятно", callback_data="bj_stand"),
     )
-    builder.row(InlineKeyboardButton(text="💎 Удвоить", callback_data="bj_double"))
+    can_double = hand is None or (len(hand.get("player_cards", [])) == 2 and not hand.get("doubled"))
+    if can_double:
+        builder.row(InlineKeyboardButton(text="💎 Удвоить", callback_data="bj_double"))
     return builder.as_markup()
 
 
@@ -251,7 +254,14 @@ async def msg_bj_bet(message: Message, session: AsyncSession, user: User, state:
             )
             return
 
-        result = await blackjack_service.start(session, user, resource, amount, rank)
+        lock_key = cooldown_service.blackjack_lock_key(user.id)
+        if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+            await message.answer("⏳ Подождите, предыдущее действие ещё обрабатывается.", reply_markup=back_kb("bj_menu"))
+            return
+        try:
+            result = await blackjack_service.start(session, user, resource, amount, rank)
+        finally:
+            await cooldown_service.release_lock(lock_key)
         logger.info(f"Blackjack start result: {result}")
 
         if not result.get("ok", False):
@@ -274,7 +284,7 @@ async def msg_bj_bet(message: Message, session: AsyncSession, user: User, state:
         await state.update_data(hand=hand)
 
         text = _render_playing(hand)
-        kb = _play_kb()
+        kb = _play_kb(hand)
         await message.answer(text, reply_markup=kb, parse_mode="HTML")
         
     except Exception as e:
@@ -285,8 +295,13 @@ async def msg_bj_bet(message: Message, session: AsyncSession, user: User, state:
 
 # ── Игровые действия ─────────────────────────────────────────────────────────
 
-@router.callback_query(F.data == "bj_hit", BlackjackFSM.playing)
-async def cb_bj_hit(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
+async def _run_bj_action(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext, action_name: str, action_fn):
+    """Общий обработчик hit/stand/double: лок, чтение раздачи из FSM, вызов
+    сервисного метода, отрисовка результата. Отличается только action_fn."""
+    lock_key = cooldown_service.blackjack_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await cb.answer("⏳ Подождите...", show_alert=True)
+        return
     try:
         data = await state.get_data()
         hand = data.get("hand")
@@ -295,91 +310,45 @@ async def cb_bj_hit(cb: CallbackQuery, session: AsyncSession, user: User, state:
             await state.clear()
             return
 
-        result = await blackjack_service.hit(session, user, hand)
-        logger.info(f"Blackjack hit result: {result}")
-        
+        result = await action_fn(session, user, hand)
+        logger.info(f"Blackjack {action_name} result: {result}")
+
+        if not result.get("ok", True):
+            await cb.answer(result.get("msg", "❌ Ошибка."), show_alert=True)
+            return
+
         if result.get("finished"):
             await state.clear()
             text = _render_finished(result["hand"], result.get("outcome", "loss"))
             kb = _finish_kb()
-            # Используем safe_edit для обновления текущего сообщения
-            try:
-                await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-            except Exception:
-                await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
         else:
             await state.update_data(hand=result["hand"])
             text = _render_playing(result["hand"])
-            kb = _play_kb()
-            try:
-                await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-            except Exception:
-                await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
-        await cb.answer()
-    except Exception as e:
-        logger.error(f"Blackjack hit error: {e}", exc_info=True)
-        await state.clear()
-        await cb.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
+            kb = _play_kb(result["hand"])
 
-
-@router.callback_query(F.data == "bj_stand", BlackjackFSM.playing)
-async def cb_bj_stand(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
-    try:
-        data = await state.get_data()
-        hand = data.get("hand")
-        if not hand:
-            await cb.answer("❌ Игра не найдена. Начните заново.", show_alert=True)
-            await state.clear()
-            return
-
-        result = await blackjack_service.stand(session, user, hand)
-        logger.info(f"Blackjack stand result: {result}")
-        
-        await state.clear()
-        text = _render_finished(result["hand"], result.get("outcome", "loss"))
-        kb = _finish_kb()
         try:
             await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
         except Exception:
             await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
         await cb.answer()
     except Exception as e:
-        logger.error(f"Blackjack stand error: {e}", exc_info=True)
+        logger.error(f"Blackjack {action_name} error: {e}", exc_info=True)
         await state.clear()
         await cb.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
+    finally:
+        await cooldown_service.release_lock(lock_key)
+
+
+@router.callback_query(F.data == "bj_hit", BlackjackFSM.playing)
+async def cb_bj_hit(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
+    await _run_bj_action(cb, session, user, state, "hit", blackjack_service.hit)
+
+
+@router.callback_query(F.data == "bj_stand", BlackjackFSM.playing)
+async def cb_bj_stand(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
+    await _run_bj_action(cb, session, user, state, "stand", blackjack_service.stand)
 
 
 @router.callback_query(F.data == "bj_double", BlackjackFSM.playing)
 async def cb_bj_double(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
-    try:
-        data = await state.get_data()
-        hand = data.get("hand")
-        if not hand:
-            await cb.answer("❌ Игра не найдена. Начните заново.", show_alert=True)
-            await state.clear()
-            return
-
-        result = await blackjack_service.double(session, user, hand)
-        logger.info(f"Blackjack double result: {result}")
-        
-        if result.get("finished"):
-            await state.clear()
-            text = _render_finished(result["hand"], result.get("outcome", "loss"))
-            kb = _finish_kb()
-            try:
-                await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-            except Exception:
-                await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
-        else:
-            await state.update_data(hand=result["hand"])
-            text = _render_playing(result["hand"])
-            kb = _play_kb()
-            try:
-                await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-            except Exception:
-                await cb.message.answer(text, reply_markup=kb, parse_mode="HTML")
-        await cb.answer()
-    except Exception as e:
-        logger.error(f"Blackjack double error: {e}", exc_info=True)
-        await state.clear()
-        await cb.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
+    await _run_bj_action(cb, session, user, state, "double", blackjack_service.double)

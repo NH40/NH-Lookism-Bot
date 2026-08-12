@@ -187,9 +187,9 @@ async def investment_tick():
                     
                     user_ids = [inv["user_id"] for inv in matured]
                     users_r = await session.execute(
-                        select(UserModel).where(UserModel.id.in_(user_ids))
+                        select(UserModel.id, UserModel.tg_id).where(UserModel.id.in_(user_ids))
                     )
-                    users_map = {u.id: u for u in users_r.scalars().all()}
+                    users_map = {row.id: row.tg_id for row in users_r.all()}
             except Exception as e:
                 logger.error(f"investment_tick DB error: {e}")
                 return
@@ -213,16 +213,16 @@ async def investment_tick():
     from app.services.bank.casino.common import CASINO_RESOURCES
 
     for inv_data in matured:
-        user = users_map.get(inv_data["user_id"])
-        if not user:
+        tg_id = users_map.get(inv_data["user_id"])
+        if not tg_id:
             continue
-        
+
         resource_label = CASINO_RESOURCES.get(inv_data["resource"], inv_data["resource"])
         payout = inv_data["payout"]
-        
+
         try:
             await bot_instance.send_message(
-                user.tg_id,
+                tg_id,
                 f"📈 <b>Вклад созрел!</b>\n\n"
                 f"Ресурс: {resource_label}\n"
                 f"Сумма: {fmt_num(inv_data['amount'])}\n"

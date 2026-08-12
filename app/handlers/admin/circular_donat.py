@@ -11,15 +11,18 @@
 """
 import html
 from aiogram import Router, F
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.services.admin_service import admin_service
-from app.services.circular_donat_service import add_circle, remove_circle, get_user_circles
+from app.services.circular_donat_service import (
+    add_circle, remove_circle, add_circles_bulk, remove_circles_bulk, get_user_circles,
+)
 from app.data.titles import CIRCULAR_DONATS, CIRCULAR_DONAT_MAP
-from app.handlers.admin._common import is_admin
+from app.handlers.admin._common import is_admin, AdminFSM
 
 router = Router()
 
@@ -202,34 +205,28 @@ async def cb_adm_circ_add_bulk(cb: CallbackQuery, session: AsyncSession, user: U
         await cb.answer("Донат не найден", show_alert=True)
         return
 
-    added = 0
-    for _ in range(count):
-        result = await add_circle(session, found, donat_id, force=True)
-        if result.get("ok"):
-            added += 1
-        else:
-            break
-    
+    result = await add_circles_bulk(session, found, donat_id, count, force=True)
     await session.commit()
-    
+
+    added = result.get("added", 0)
     if added > 0:
         await cb.answer(
             f"✅ Добавлено {added} кругов {d.emoji} {d.name}!",
             show_alert=True,
         )
     else:
-        await cb.answer("❌ Не удалось добавить круги", show_alert=True)
+        await cb.answer(f"❌ {result.get('reason', 'Не удалось добавить круги')}", show_alert=True)
     
     found2 = await admin_service.find_user(session, str(tg_id))
     await _render_circ_detail(cb.message, session, tg_id, donat_id, found2)
 
 
 @router.callback_query(F.data.startswith("adm_circ_add_custom:"))
-async def cb_adm_circ_add_custom(cb: CallbackQuery, session: AsyncSession, user: User):
+async def cb_adm_circ_add_custom(cb: CallbackQuery, session: AsyncSession, user: User, state: FSMContext):
     """Админ: запросить количество кругов для выдачи."""
     if not is_admin(user.tg_id):
         return
-    
+
     parts = cb.data.split(":")
     tg_id = int(parts[1])
     donat_id = parts[2]
@@ -239,15 +236,9 @@ async def cb_adm_circ_add_custom(cb: CallbackQuery, session: AsyncSession, user:
         await cb.answer("Донат не найден", show_alert=True)
         return
 
-    # Сохраняем контекст в Redis на 60 секунд
-    from app.services.cooldown_service import cooldown_service
-    key = f"adm_circ_custom:{cb.from_user.id}"
-    await cooldown_service.redis.setex(
-        key,
-        60,
-        f"{tg_id}:{donat_id}"
-    )
-    
+    await state.set_state(AdminFSM.waiting_circ_count)
+    await state.update_data(circ_tg_id=tg_id, circ_donat_id=donat_id)
+
     await cb.message.answer(
         f"✏️ Введите количество кругов {d.emoji} {d.name}\n"
         f"• Положительное число → добавить круги\n"
@@ -258,24 +249,18 @@ async def cb_adm_circ_add_custom(cb: CallbackQuery, session: AsyncSession, user:
     await cb.answer()
 
 
-@router.message(F.text)
-async def handle_circ_custom_input(message: Message, session: AsyncSession, user: User):
+@router.message(AdminFSM.waiting_circ_count)
+async def handle_circ_custom_input(message: Message, session: AsyncSession, user: User, state: FSMContext):
     """Обработка ввода количества кругов (положительные - добавляем, отрицательные - убираем)."""
     if not is_admin(user.tg_id):
+        await state.clear()
         return
-    
-    # Проверяем, есть ли контекст
-    from app.services.cooldown_service import cooldown_service
-    key = f"adm_circ_custom:{user.tg_id}"
-    data = await cooldown_service.redis.get(key)
-    if not data:
-        return
-    
+
     if message.text.lower() in ["отмена", "cancel"]:
-        await cooldown_service.redis.delete(key)
+        await state.clear()
         await message.answer("✅ Отменено")
         return
-    
+
     try:
         count = int(message.text.strip())
         if count == 0:
@@ -287,67 +272,46 @@ async def handle_circ_custom_input(message: Message, session: AsyncSession, user
     except ValueError:
         await message.answer("❌ Введите число")
         return
-    
+
     # Получаем контекст
-    tg_id_str, donat_id = data.decode().split(":")
-    tg_id = int(tg_id_str)
-    
+    data = await state.get_data()
+    tg_id = data.get("circ_tg_id")
+    donat_id = data.get("circ_donat_id")
+
     found = await admin_service.find_user(session, str(tg_id))
     if not found:
         await message.answer("❌ Пользователь не найден")
-        await cooldown_service.redis.delete(key)
+        await state.clear()
         return
-    
+
     d = CIRCULAR_DONAT_MAP.get(donat_id)
     if not d:
         await message.answer("❌ Донат не найден")
-        await cooldown_service.redis.delete(key)
+        await state.clear()
         return
     
     # ── ЛОГИКА: положительные → добавляем, отрицательные → убираем ──
     if count > 0:
-        # Добавляем круги
-        added = 0
-        last_result = None
-        for _ in range(count):
-            result = await add_circle(session, found, donat_id, force=True)
-            last_result = result
-            if result.get("ok"):
-                added += 1
-            else:
-                break
-        
+        result = await add_circles_bulk(session, found, donat_id, count, force=True)
         await session.commit()
-        await cooldown_service.redis.delete(key)
-        
+        await state.clear()
+
+        added = result.get("added", 0)
         if added > 0:
             await message.answer(f"✅ Добавлено {added} кругов {d.emoji} {d.name} для {found.full_name}!")
         else:
-            reason = last_result.get('reason', 'неизвестная ошибка') if last_result else 'неизвестная ошибка'
-            await message.answer(f"❌ Не удалось добавить круги: {reason}")
-    
+            await message.answer(f"❌ Не удалось добавить круги: {result.get('reason', 'неизвестная ошибка')}")
+
     else:
-        # Убираем круги (count отрицательный)
-        count_abs = abs(count)
-        removed = 0
-        last_result = None
-        
-        for _ in range(count_abs):
-            result = await remove_circle(session, found, donat_id)
-            last_result = result
-            if result.get("ok"):
-                removed += 1
-            else:
-                break
-        
+        result = await remove_circles_bulk(session, found, donat_id, abs(count))
         await session.commit()
-        await cooldown_service.redis.delete(key)
-        
+        await state.clear()
+
+        removed = result.get("removed", 0)
         if removed > 0:
             await message.answer(f"✅ Убрано {removed} кругов {d.emoji} {d.name} для {found.full_name}!")
         else:
-            reason = last_result.get('reason', 'неизвестная ошибка') if last_result else 'неизвестная ошибка'
-            await message.answer(f"❌ Не удалось убрать круги: {reason}")
+            await message.answer(f"❌ Не удалось убрать круги: {result.get('reason', 'неизвестная ошибка')}")
 
 
 # ── Рендер детального экрана ─────────────────────────────────────────────────
@@ -396,20 +360,8 @@ async def _render_circ_detail(message, session: AsyncSession, tg_id: int, donat_
     builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data=f"adm_circ_menu:{tg_id}"))
 
     # Показываем max как "∞" если у игрока уже открыты бесконечные круги
-    max_display = d.max_circles
-    if donat_id == "archangel" and getattr(d, "infinite_after_all", False):
-        from app.repositories.title_repo import title_repo
-        has_all_sets = await title_repo.has_all_sets(session, found.id)
-        user_circles = await get_user_circles(session, found.id)
-        all_circular_done = True
-        for d_id, d_cfg in CIRCULAR_DONAT_MAP.items():
-            if d_id == "archangel":
-                continue
-            if user_circles.get(d_id, 0) < d_cfg.max_circles:
-                all_circular_done = False
-                break
-        if has_all_sets and all_circular_done:
-            max_display = "∞"
+    from app.services.circular_donat_service import is_infinite_circles_unlocked
+    max_display = "∞" if await is_infinite_circles_unlocked(session, found, donat_id) else d.max_circles
 
     lines = [
         f"{d.emoji} <b>{d.name}</b>",

@@ -38,6 +38,11 @@ async def _get_member_rank(session: AsyncSession, clan_id: int, user_id: int) ->
     return m.rank if m else "member"
 
 
+async def _discounted_price(session: AsyncSession, clan: Clan, item, qty: int = 1) -> int:
+    discount_pct = await clan_service.get_shop_discount_pct(session, clan.id)
+    return int(item.price * (1 - discount_pct / 100)) * qty
+
+
 @router.callback_query(F.data == "clan_shop")
 async def cb_clan_shop(cb: CallbackQuery, session: AsyncSession, user: User):
     clan = await clan_service.get_user_clan(session, user.id)
@@ -150,7 +155,7 @@ _POTION_TYPE_GROUPS = [
 ]
 
 
-async def _show_category(cb: CallbackQuery, clan: Clan, cat_id: str, can_buy_upgrades: bool = False):
+async def _show_category(cb: CallbackQuery, session: AsyncSession, clan: Clan, cat_id: str, can_buy_upgrades: bool = False):
     if cat_id == "upgrades":
         await _show_upgrades(cb, clan, can_buy=can_buy_upgrades)
         return
@@ -164,13 +169,9 @@ async def _show_category(cb: CallbackQuery, clan: Clan, cat_id: str, can_buy_upg
     cat_name = CLAN_SHOP_CATEGORIES.get(cat_id, cat_id)
     items = [i for i in CLAN_SHOP_ITEMS if i.category == cat_id]
 
-    # Получаем скидку для отображения цен
-    discount_pct = await clan_service.get_shop_discount_pct(session, clan.id)
-
     builder = InlineKeyboardBuilder()
     for item in items:
-        # Применяем скидку к цене для отображения
-        price_display = int(item.price * (1 - discount_pct / 100))
+        price_display = await _discounted_price(session, clan, item)
         can = "✅" if clan.treasury >= price_display else "❌"
         cb_data = f"clan_buy_menu:{item.item_id}" if cat_id in _QTY_CATEGORIES else f"clan_buy:{item.item_id}"
         builder.row(InlineKeyboardButton(
@@ -215,7 +216,7 @@ async def cb_clan_shop_cat(cb: CallbackQuery, session: AsyncSession, user: User)
         await cb.answer("Вы не в клане", show_alert=True)
         return
     rank = await _get_member_rank(session, clan.id, user.id)
-    await _show_category(cb, clan, cat_id, can_buy_upgrades=rank in _UPGRADE_ALLOWED_RANKS)
+    await _show_category(cb, session, clan, cat_id, can_buy_upgrades=rank in _UPGRADE_ALLOWED_RANKS)
 
 
 @router.callback_query(F.data.startswith("clan_potion_type:"))
@@ -268,8 +269,7 @@ async def cb_clan_buy_menu(cb: CallbackQuery, session: AsyncSession, user: User)
         await cb.answer("Товар не найден", show_alert=True)
         return
 
-    discount_pct = await clan_service.get_shop_discount_pct(session, clan.id)
-    price = int(item.price * (1 - discount_pct / 100))
+    price = await _discounted_price(session, clan, item)
 
     builder = InlineKeyboardBuilder()
     for qty in [1, 5, 10, 50, 100]:
@@ -317,10 +317,8 @@ async def cb_clan_buy_qty(cb: CallbackQuery, session: AsyncSession, user: User):
         return
 
     # Передаём цену со скидкой в сервис
-    discount_pct = await clan_service.get_shop_discount_pct(session, clan.id)
-    price_per = int(item.price * (1 - discount_pct / 100))
-    total_price = price_per * qty
-    
+    total_price = await _discounted_price(session, clan, item, qty=qty)
+
     result = await clan_service.buy_clan_shop(session, clan, user, item_id, qty=qty, price=total_price)
     if not result["ok"]:
         await cb.answer(result["reason"], show_alert=True)
@@ -329,7 +327,7 @@ async def cb_clan_buy_qty(cb: CallbackQuery, session: AsyncSession, user: User):
     await cb.answer(f"✅ {item.name} x{qty} куплено для всего клана!", show_alert=True)
     await session.refresh(clan)
     rank = await _get_member_rank(session, clan.id, user.id)
-    await _show_category(cb, clan, item.category, can_buy_upgrades=rank in _UPGRADE_ALLOWED_RANKS)
+    await _show_category(cb, session, clan, item.category, can_buy_upgrades=rank in _UPGRADE_ALLOWED_RANKS)
 
 
 @router.callback_query(F.data.startswith("clan_buy_input:"))
@@ -389,10 +387,8 @@ async def msg_clan_buy_qty(message: Message, session: AsyncSession, user: User, 
         return
 
     # Передаём цену со скидкой в сервис
-    discount_pct = await clan_service.get_shop_discount_pct(session, clan.id)
-    price_per = int(item.price * (1 - discount_pct / 100))
-    total_price = price_per * qty
-    
+    total_price = await _discounted_price(session, clan, item, qty=qty)
+
     result = await clan_service.buy_clan_shop(session, clan, user, item_id, qty=qty, price=total_price)
     if not result["ok"]:
         await message.answer(f"❌ {result['reason']}", reply_markup=back_kb("clan_shop"), parse_mode="HTML")
@@ -430,9 +426,8 @@ async def cb_clan_buy(cb: CallbackQuery, session: AsyncSession, user: User):
         return
 
     # Передаём цену со скидкой в сервис
-    discount_pct = await clan_service.get_shop_discount_pct(session, clan.id)
-    price = int(item.price * (1 - discount_pct / 100))
-    
+    price = await _discounted_price(session, clan, item)
+
     result = await clan_service.buy_clan_shop(session, clan, user, item_id, price=price)
     if not result["ok"]:
         await cb.answer(result["reason"], show_alert=True)
@@ -454,7 +449,7 @@ async def cb_clan_buy(cb: CallbackQuery, session: AsyncSession, user: User):
 
     await session.refresh(clan)
     rank = await _get_member_rank(session, clan.id, user.id)
-    await _show_category(cb, clan, item.category, can_buy_upgrades=rank in _UPGRADE_ALLOWED_RANKS)
+    await _show_category(cb, session, clan, item.category, can_buy_upgrades=rank in _UPGRADE_ALLOWED_RANKS)
 
 
 @router.callback_query(F.data.startswith("clan_upgrade:"))

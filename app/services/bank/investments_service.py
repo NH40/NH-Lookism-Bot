@@ -32,12 +32,10 @@ def get_interest_pct(resource: str, hours: int) -> float | None:
 
 class InvestmentsService:
     async def get_active(self, session: AsyncSession, user_id: int) -> list[Investment]:
-        now = datetime.now(timezone.utc)
         result = await session.execute(
             select(Investment).where(
                 Investment.user_id == user_id,
                 Investment.is_withdrawn == False,
-                Investment.matures_at > now
             )
         )
         return result.scalars().all()
@@ -57,14 +55,6 @@ class InvestmentsService:
     ) -> tuple[bool, str]:
         if resource not in INVEST_RESOURCES:
             return False, "❌ Этот ресурс нельзя вложить."
-
-        balance = getattr(user, resource, 0)
-        if amount > balance:
-            return False, f"❌ Недостаточно {INVEST_RESOURCES[resource]}."
-
-        active = await self.get_active(session, user.id)
-        if len(active) >= MAX_INVESTMENTS:
-            return False, f"❌ Максимум {MAX_INVESTMENTS} вкладов."
         if amount > MAX_DEPOSIT:
             return False, f"❌ Максимальная сумма: {fmt_num(MAX_DEPOSIT)}."
 
@@ -72,6 +62,23 @@ class InvestmentsService:
         if pct is None:
             return False, "❌ Неверный срок."
 
+        # Блокируем строку пользователя — параллельный запрос будет ждать
+        # и после разблокировки увидит актуальный баланс/лимит вкладов.
+        locked_user = await session.scalar(
+            select(User).where(User.id == user.id).with_for_update()
+        )
+        if not locked_user:
+            return False, "❌ Пользователь не найден."
+
+        balance = getattr(locked_user, resource, 0)
+        if amount > balance:
+            return False, f"❌ Недостаточно {INVEST_RESOURCES[resource]}."
+
+        active = await self.get_active(session, locked_user.id)
+        if len(active) >= MAX_INVESTMENTS:
+            return False, f"❌ Максимум {MAX_INVESTMENTS} вкладов."
+
+        setattr(locked_user, resource, balance - amount)
         setattr(user, resource, balance - amount)
 
         now = datetime.now(timezone.utc)
@@ -92,15 +99,20 @@ class InvestmentsService:
     async def withdraw(
         self, session: AsyncSession, user: User, investment_id: int
     ) -> tuple[bool, str, int]:
-        """Вывод вклада."""
-        inv = await session.get(Investment, investment_id)
+        """Вывод вклада.
+
+        SELECT FOR UPDATE блокирует строку вклада — двойная выплата невозможна.
+        """
+        inv = await session.scalar(
+            select(Investment).where(Investment.id == investment_id).with_for_update()
+        )
         if not inv:
             return False, "❌ Вклад не найден.", 0
         if inv.user_id != user.id:
             return False, "❌ Это не ваш вклад.", 0
         if inv.is_withdrawn:
             return False, "❌ Вклад уже получен.", 0
-        
+
         now = datetime.now(timezone.utc)
         if now < inv.matures_at:
             remaining = int((inv.matures_at - now).total_seconds())

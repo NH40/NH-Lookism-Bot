@@ -14,6 +14,7 @@ from app.services.bank.investments_service import (
 )
 from app.constants.bank import INVEST_DURATION_OPTIONS, INVEST_DURATION_OPTIONS_OLD
 from app.services.bank.casino.common import CASINO_RESOURCES
+from app.services.cooldown_service import cooldown_service
 from app.utils.formatters import fmt_num, fmt_ttl
 from app.utils.keyboards.common import back_kb
 from app.utils.menu_media import safe_edit
@@ -216,7 +217,14 @@ async def msg_invest_amount(message: Message, session: AsyncSession, user: User,
         await message.answer("❌ Сумма должна быть больше нуля.", reply_markup=back_kb("bank_investments"), parse_mode="HTML")
         return
 
-    ok, err = await investments_service.create(session, user, resource, amount, hours)
+    lock_key = cooldown_service.invest_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
+        await message.answer("⏳ Подождите, предыдущее действие ещё обрабатывается.", reply_markup=back_kb("bank_investments"))
+        return
+    try:
+        ok, err = await investments_service.create(session, user, resource, amount, hours)
+    finally:
+        await cooldown_service.release_lock(lock_key)
     if not ok:
         await message.answer(err, reply_markup=back_kb("bank_investments"), parse_mode="HTML")
         return
@@ -244,8 +252,15 @@ async def cb_invest_withdraw(cb: CallbackQuery, session: AsyncSession, user: Use
     """Забрать награду с инвестиций."""
     inv_id = int(cb.data.split(":")[1])
 
-    ok, err, payout = await investments_service.withdraw(session, user, inv_id)
-    await session.commit()
+    lock_key = cooldown_service.invest_withdraw_lock_key(inv_id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=10):
+        await cb.answer("⏳ Подождите, предыдущее действие ещё обрабатывается.", show_alert=True)
+        return
+    try:
+        ok, err, payout = await investments_service.withdraw(session, user, inv_id)
+        await session.commit()
+    finally:
+        await cooldown_service.release_lock(lock_key)
     
     if not ok:
         await cb.answer(err, show_alert=True)

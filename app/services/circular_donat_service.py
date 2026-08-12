@@ -253,6 +253,47 @@ async def rebuild_circular_bonuses(session: AsyncSession, user: User) -> None:
     await session.flush()
 
 
+async def is_infinite_circles_unlocked(session: AsyncSession, user: User, donat_id: str) -> bool:
+    """Круговые лимиты этого доната сняты (сейчас — только Архангел),
+    когда у игрока куплены все 5 донатных сетов титулов И максимальные
+    круги ВСЕХ ОСТАЛЬНЫХ круговых донатов."""
+    cfg = CIRCULAR_DONAT_MAP.get(donat_id)
+    if not cfg or not getattr(cfg, "infinite_after_all", False):
+        return False
+
+    has_all_sets = await title_repo.has_all_sets(session, user.id)
+    if not has_all_sets:
+        return False
+
+    user_circles = await get_user_circles(session, user.id)
+    return all(
+        user_circles.get(d_id, 0) >= d_cfg.max_circles
+        for d_id, d_cfg in CIRCULAR_DONAT_MAP.items()
+        if d_id != donat_id
+    )
+
+
+async def get_next_circle_price(session: AsyncSession, user: User, donat_id: str) -> int | None:
+    """Цена следующего круга для игрока. None — покупка недоступна (лимит,
+    условия бесконечности не выполнены). Сверх max_circles цена растёт
+    геометрически ×1.5 за каждый следующий круг."""
+    cfg = CIRCULAR_DONAT_MAP.get(donat_id)
+    if not cfg:
+        return None
+
+    user_circles = await get_user_circles(session, user.id)
+    current = user_circles.get(donat_id, 0)
+
+    if current < cfg.max_circles:
+        return cfg.price_per_circle
+
+    if not await is_infinite_circles_unlocked(session, user, donat_id):
+        return None
+
+    k = current - cfg.max_circles + 1
+    return round(cfg.price_per_circle * (1.5 ** k))
+
+
 async def add_circle(session: AsyncSession, user: User, donat_id: str, force: bool = False) -> dict:
     """Добавить 1 круг игроку. force=True — игнорирует все лимиты (только для админов).
     Возвращает {'ok': True/False, 'circles': n}."""
@@ -273,23 +314,9 @@ async def add_circle(session: AsyncSession, user: User, donat_id: str, force: bo
 
     # Проверка максимальных кругов
     max_allowed = cfg.max_circles
-    
-    # Для Архангела — если выполнены условия, снимаем лимит (только если не force)
-    if not force and donat_id == "archangel" and getattr(cfg, "infinite_after_all", False):
-        has_all_sets = await title_repo.has_all_sets(session, user.id)
-        
-        from app.services.circular_donat_service import get_user_circles
-        user_circles = await get_user_circles(session, user.id)
-        all_circular_done = True
-        for d_id, d_cfg in CIRCULAR_DONAT_MAP.items():
-            if d_id == "archangel":
-                continue
-            if user_circles.get(d_id, 0) < d_cfg.max_circles:
-                all_circular_done = False
-                break
-        
-        if has_all_sets and all_circular_done:
-            max_allowed = 999999
+
+    if not force and await is_infinite_circles_unlocked(session, user, donat_id):
+        max_allowed = 999999
 
     if force:
         max_allowed = 999999
@@ -336,6 +363,79 @@ async def remove_circle(session: AsyncSession, user: User, donat_id: str) -> dic
     if donat_id == "clan_head":
         await _broadcast_clan_head(session, user)
     return {"ok": True, "circles": rec.circles}
+
+
+async def add_circles_bulk(session: AsyncSession, user: User, donat_id: str, count: int, force: bool = False) -> dict:
+    """Добавить сразу до `count` кругов одним пересчётом (для админской массовой
+    выдачи) — вместо `count` вызовов add_circle с полным rebuild титулов на каждый.
+    Останавливается на лимите. Возвращает {'ok', 'added', 'circles', 'bonuses'}."""
+    cfg = CIRCULAR_DONAT_MAP.get(donat_id)
+    if not cfg:
+        return {"ok": False, "reason": "Донат не найден", "added": 0}
+
+    rec = await session.scalar(
+        select(UserCircularDonat).where(
+            UserCircularDonat.user_id == user.id,
+            UserCircularDonat.donat_id == donat_id,
+        )
+    )
+    if rec is None:
+        rec = UserCircularDonat(user_id=user.id, donat_id=donat_id, circles=0)
+        session.add(rec)
+        await session.flush()
+
+    max_allowed = cfg.max_circles
+    if not force and await is_infinite_circles_unlocked(session, user, donat_id):
+        max_allowed = 999999
+    if force:
+        max_allowed = 999999
+
+    old_circles = rec.circles
+    added = min(count, max(0, max_allowed - old_circles))
+    if added <= 0:
+        reason = (
+            "Достигнут бесконечный лимит? Это баг, напишите администратору"
+            if max_allowed == 999999 else f"Достигнут максимум {max_allowed} кругов"
+        )
+        return {"ok": False, "reason": reason, "added": 0, "circles": old_circles}
+
+    rec.circles = old_circles + added
+    await session.flush()
+
+    await _full_rebuild(session, user)
+    if donat_id == "clan_head":
+        await _broadcast_clan_head(session, user)
+
+    bonuses = []
+    if donat_id == "archangel":
+        first_ten = (old_circles // 10 + 1) * 10
+        for circle_count in range(first_ten, rec.circles + 1, 10):
+            bonus_result = await _apply_archangel_circle_bonus(session, user, circle_count)
+            if bonus_result:
+                bonuses.append(bonus_result)
+
+    return {"ok": True, "added": added, "circles": rec.circles, "bonuses": bonuses}
+
+
+async def remove_circles_bulk(session: AsyncSession, user: User, donat_id: str, count: int) -> dict:
+    """Убрать сразу до `count` кругов одним пересчётом. Возвращает {'ok', 'removed', 'circles'}."""
+    rec = await session.scalar(
+        select(UserCircularDonat).where(
+            UserCircularDonat.user_id == user.id,
+            UserCircularDonat.donat_id == donat_id,
+        )
+    )
+    if rec is None or rec.circles <= 0:
+        return {"ok": False, "reason": "Кругов нет", "removed": 0, "circles": 0}
+
+    removed = min(count, rec.circles)
+    rec.circles -= removed
+    await session.flush()
+
+    await _full_rebuild(session, user)
+    if donat_id == "clan_head":
+        await _broadcast_clan_head(session, user)
+    return {"ok": True, "removed": removed, "circles": rec.circles}
 
 
 async def get_user_circles(session: AsyncSession, user_id: int) -> dict[str, int]:

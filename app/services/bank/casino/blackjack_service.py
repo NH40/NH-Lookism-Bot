@@ -186,8 +186,11 @@ class BlackjackService:
     async def double(
         self, session: AsyncSession, user: User, hand: dict
     ) -> dict:
+        if len(hand["player_cards"]) != 2 or hand.get("doubled"):
+            return {"ok": False, "msg": "❌ Удвоить можно только первым ходом."}
+
         resource = hand["resource"]
-        
+
         # Для статистов — отдельная логика
         if resource == "squad":
             rank = hand.get("rank")

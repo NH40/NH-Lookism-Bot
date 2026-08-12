@@ -10,6 +10,7 @@ from app.models.user import User
 from app.services.bank.casino.slots_service import slots_service
 from app.services.bank.casino.common import CASINO_RESOURCES
 from app.constants.bank import SLOTS_MULTIPLIERS, SLOTS_SYMBOL_EMOJI, SLOTS_SYMBOLS
+from app.services.cooldown_service import cooldown_service
 from app.utils.formatters import fmt_num
 from app.utils.keyboards.common import back_kb
 from app.utils.menu_media import safe_edit
@@ -129,7 +130,14 @@ async def msg_slots_bet(message: Message, session: AsyncSession, user: User, sta
         await message.answer("❌ Ставка должна быть больше нуля.", reply_markup=back_kb("slots_menu"), parse_mode="HTML")
         return
 
-    result = await slots_service.play(session, user, resource, amount)
+    lock_key = cooldown_service.slots_lock_key(user.id)
+    if not await cooldown_service.acquire_lock(lock_key, ttl=5):
+        await message.answer("⏳ Подождите, предыдущее действие ещё обрабатывается.", reply_markup=back_kb("slots_menu"))
+        return
+    try:
+        result = await slots_service.play(session, user, resource, amount)
+    finally:
+        await cooldown_service.release_lock(lock_key)
 
     if not result.get("ok", False):
         if result.get("x3_warn"):

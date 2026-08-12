@@ -42,12 +42,12 @@ async def daily_tick():
                     if districts <= 0:
                         continue
 
-                    # Добавляем бонусные районы
-                    user.bonus_business_districts = getattr(user, "bonus_business_districts", 0) + districts
-                    
-                    # Пересчитываем доход
+                    # Добавляем бонусные районы (создаёт District-строки в бонус-городе
+                    # и пересчитывает доход/налог — bonus_business_districts сам
+                    # по себе не создаёт районов и не влияет на income_per_minute)
                     from app.services.business_service import business_service
-                    await business_service._recalc_income(session, user)
+                    await business_service.add_bonus_districts(session, user, districts)
+                    user.bonus_business_districts = getattr(user, "bonus_business_districts", 0) + districts
 
                     user.circ_daily_districts_at = datetime.now(timezone.utc)
                     

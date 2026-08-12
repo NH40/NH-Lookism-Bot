@@ -86,46 +86,35 @@ def skill_path_label(path: str | None) -> str:
     }.get(path, path)
 
 
+def _scaled_discount(influence: int, zero_point: int) -> int:
+    """-50% при 0 → 0% при zero_point → +50% при 2*zero_point влияния,
+    линейная интерполяция между точками, без скачков."""
+    if influence <= 0:
+        return -50
+    if influence < zero_point:
+        return round(-50 + (influence / zero_point) * 50)
+    return min(50, round(((influence - zero_point) / zero_point) * 50))
+
+
 def influence_discount_pct(user) -> int:
     """Скидка/наценка в магазине от Влияния — зависит от фазы игры.
-    
+
     Механика: чем выше влияние, тем больше скидка (до +50%).
     Низкое влияние даёт наценку (до -50%).
-    
+
     Пороги по фазам:
       - Банда:   -50% при 0 → 0% при 250 → +50% при 500 влияния
       - Король:  -50% при 0 → 0% при 4000 → +50% при 8000 влияния
       - Император: -50% при 0 → 0% при 10000 → +50% при 20000 влияния
-    
-    Линейная интерполяция между точками, без скачков.
     """
     influence = getattr(user, "influence", 0) or 0
     phase = getattr(user, "phase", None)
-    
-    if phase == "gang":
-        if influence <= 0:
-            return -50
-        if influence < 250:
-            return round(-50 + (influence / 250) * 50)
-        return min(50, round(((influence - 250) / 250) * 50))
-    
-    if phase == "king":
-        if influence <= 0:
-            return -50
-        if influence < 4000:
-            # -50% → 0% на диапазоне 0-4000
-            return round(-50 + (influence / 4000) * 50)
-        # 0% → +50% на диапазоне 4000-8000
-        return min(50, round(((influence - 4000) / 4000) * 50))
-    
-    if phase == "emperor":
-        if influence <= 0:
-            return -50
-        if influence < 10000:
-            return round(-50 + (influence / 10000) * 50)
-        return min(50, round(((influence - 10000) / 10000) * 50))
-    
-    return 0
+
+    zero_points = {"gang": 250, "king": 4000, "emperor": 10000}
+    zero_point = zero_points.get(phase)
+    if zero_point is None:
+        return 0
+    return _scaled_discount(influence, zero_point)
 
 
 def biz_discount_pct(user) -> int:

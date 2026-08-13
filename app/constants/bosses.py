@@ -28,7 +28,7 @@ BOSS_PARTICIPANT_REWARD: int = 10
 
 # ── Дополнительные ресурсы за победу над боссом (каждому участнику) ───────────
 # Архангел → business_fragments (по урону), Братья → war_points (по урону),
-# Никита → ui_fragments (рандом), Орг → path_fragments (рандом),
+# Никита → ui_fragments (по урону), Орг → path_fragments (по урону),
 # Менеджер и Марис обрабатываются отдельно (не поле+число) — см. boss_service.py
 
 BOSS_ARCHANGEL_FRAG_MIN: int = 10
@@ -41,9 +41,11 @@ BOSS_BROTHERS_WAR_DIVISOR: int = 10_000_000_000    # 200 очков = 2 трлн
 
 BOSS_NIKITA_FRAG_MIN: int = 20
 BOSS_NIKITA_FRAG_MAX: int = 80
+BOSS_NIKITA_FRAG_DIVISOR: int = 1_500_000_000      # 80 фрагментов = 120 млрд урона (40% HP)
 
 BOSS_ORG_FRAG_MIN: int = 20
 BOSS_ORG_FRAG_MAX: int = 80
+BOSS_ORG_FRAG_DIVISOR: int = 1_000_000_000         # 80 фрагментов = 80 млрд урона (40% HP)
 
 BOSS_MANAGER_WIN_MULTIPLIER: int = 2
 

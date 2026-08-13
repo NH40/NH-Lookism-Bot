@@ -27,8 +27,10 @@ from app.constants.bosses import (
     BOSS_MAP,
     BOSS_MARIS_ABSOLUTE_CHANCE,
     BOSS_MARIS_ABSOLUTE_THRESHOLD_DAMAGE,
+    BOSS_NIKITA_FRAG_DIVISOR,
     BOSS_NIKITA_FRAG_MAX,
     BOSS_NIKITA_FRAG_MIN,
+    BOSS_ORG_FRAG_DIVISOR,
     BOSS_ORG_FRAG_MAX,
     BOSS_ORG_FRAG_MIN,
     BOSS_PARTICIPANT_REWARD,
@@ -96,17 +98,11 @@ def _compute_boss_reward(boss_id: str, damage: int) -> dict | None:
         amt = min(BOSS_BROTHERS_WAR_MAX, max(BOSS_BROTHERS_WAR_MIN, damage // BOSS_BROTHERS_WAR_DIVISOR))
         return {"field": "war_points", "amount": amt, "label": "⚔️ Очки войны"}
     if boss_id == "nikita":
-        return {
-            "field": "ui_fragments",
-            "amount": random.randint(BOSS_NIKITA_FRAG_MIN, BOSS_NIKITA_FRAG_MAX),
-            "label": "🔮 Фрагменты УИ",
-        }
+        amt = min(BOSS_NIKITA_FRAG_MAX, max(BOSS_NIKITA_FRAG_MIN, damage // BOSS_NIKITA_FRAG_DIVISOR))
+        return {"field": "ui_fragments", "amount": amt, "label": "🔮 Фрагменты УИ"}
     if boss_id == "org":
-        return {
-            "field": "path_fragments",
-            "amount": random.randint(BOSS_ORG_FRAG_MIN, BOSS_ORG_FRAG_MAX),
-            "label": "🔷 Фрагменты Пути",
-        }
+        amt = min(BOSS_ORG_FRAG_MAX, max(BOSS_ORG_FRAG_MIN, damage // BOSS_ORG_FRAG_DIVISOR))
+        return {"field": "path_fragments", "amount": amt, "label": "🔷 Фрагменты Пути"}
     return None
 
 

@@ -12,7 +12,7 @@ from app.models.user import User
 from app.services.bank.casino.blackjack_service import (
     blackjack_service, format_hand, hand_value, is_natural
 )
-from app.services.bank.casino.common import CASINO_RESOURCES
+from app.services.bank.casino.common import CASINO_RESOURCES, get_balance
 from app.services.bank.casino.squad_service import squad_casino_service
 from app.services.cooldown_service import cooldown_service
 from app.utils.formatters import fmt_num
@@ -179,7 +179,7 @@ async def cb_bj_pick(cb: CallbackQuery, session: AsyncSession, user: User, state
         await cb.answer()
         return
 
-    balance = getattr(user, resource, 0)
+    balance = get_balance(user, resource)
     await state.set_state(BlackjackFSM.waiting_bet)
     await state.update_data(resource=resource)
 

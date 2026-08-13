@@ -13,7 +13,7 @@ from app.services.bank.investments_service import (
     investments_service, MAX_INVESTMENTS, MAX_DEPOSIT, INVEST_RESOURCES, get_interest_pct
 )
 from app.constants.bank import INVEST_DURATION_OPTIONS, INVEST_DURATION_OPTIONS_OLD
-from app.services.bank.casino.common import CASINO_RESOURCES
+from app.services.bank.casino.common import CASINO_RESOURCES, get_balance
 from app.services.cooldown_service import cooldown_service
 from app.utils.formatters import fmt_num, fmt_ttl
 from app.utils.keyboards.common import back_kb
@@ -109,7 +109,7 @@ async def cb_invest_choose_resource(cb: CallbackQuery, session: AsyncSession, us
 
     builder = InlineKeyboardBuilder()
     for res, label in INVEST_RESOURCES.items():
-        balance = getattr(user, res, 0)
+        balance = get_balance(user, res)
         builder.row(InlineKeyboardButton(
             text=f"{label} (баланс: {fmt_num(balance)})",
             callback_data=f"invest_pick_res:{res}"
@@ -181,7 +181,7 @@ async def cb_invest_pick_dur(cb: CallbackQuery, session: AsyncSession, user: Use
     await state.set_state(InvestFSM.waiting_amount)
 
     pct = get_interest_pct(resource, hours)
-    balance = getattr(user, resource, 0)
+    balance = get_balance(user, resource)
     cancel_kb = InlineKeyboardBuilder()
     cancel_kb.row(InlineKeyboardButton(text="❌ Отмена", callback_data="bank_investments"))
 

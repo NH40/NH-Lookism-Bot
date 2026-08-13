@@ -25,12 +25,20 @@ _HISTORY_KEY = "casino:bets:{game}:{uid}:{res}"
 _HISTORY_TTL = CASINO_HISTORY_TTL
 
 
+# Ресурсы, где ключ казино не совпадает с именем колонки в User
+_RESOURCE_FIELD_ALIASES: dict[str, str] = {
+    "path_points": "skill_path_points",
+}
+
+
 def get_balance(user: User, resource: str) -> int:
-    return getattr(user, resource, 0)
+    field = _RESOURCE_FIELD_ALIASES.get(resource, resource)
+    return getattr(user, field, 0)
 
 
 def set_balance(user: User, resource: str, value: int) -> None:
-    setattr(user, resource, value)
+    field = _RESOURCE_FIELD_ALIASES.get(resource, resource)
+    setattr(user, field, value)
 
 
 def _redis():

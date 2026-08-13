@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.services.bank.casino.slots_service import slots_service
-from app.services.bank.casino.common import CASINO_RESOURCES
+from app.services.bank.casino.common import CASINO_RESOURCES, get_balance
 from app.constants.bank import SLOTS_MULTIPLIERS, SLOTS_SYMBOL_EMOJI, SLOTS_SYMBOLS
 from app.services.cooldown_service import cooldown_service
 from app.utils.formatters import fmt_num
@@ -91,7 +91,7 @@ async def cb_slots_pick(cb: CallbackQuery, session: AsyncSession, user: User, st
         await cb.answer("❌ Статисты доступны только в блэкджеке.", show_alert=True)
         return
 
-    balance = getattr(user, resource, 0)
+    balance = get_balance(user, resource)
     await state.set_state(SlotsFSM.waiting_bet)
     await state.update_data(resource=resource)
 

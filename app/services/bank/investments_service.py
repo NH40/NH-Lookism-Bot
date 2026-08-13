@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.models.bank import Investment
-from app.services.bank.casino.common import CASINO_RESOURCES
+from app.services.bank.casino.common import CASINO_RESOURCES, get_balance, set_balance
 from app.constants.bank import (
     INVEST_MAX_SLOTS,
     INVEST_MAX_DEPOSIT,
@@ -70,7 +70,7 @@ class InvestmentsService:
         if not locked_user:
             return False, "❌ Пользователь не найден."
 
-        balance = getattr(locked_user, resource, 0)
+        balance = get_balance(locked_user, resource)
         if amount > balance:
             return False, f"❌ Недостаточно {INVEST_RESOURCES[resource]}."
 
@@ -78,8 +78,8 @@ class InvestmentsService:
         if len(active) >= MAX_INVESTMENTS:
             return False, f"❌ Максимум {MAX_INVESTMENTS} вкладов."
 
-        setattr(locked_user, resource, balance - amount)
-        setattr(user, resource, balance - amount)
+        set_balance(locked_user, resource, balance - amount)
+        set_balance(user, resource, balance - amount)
 
         now = datetime.now(timezone.utc)
         matures_at = now + timedelta(hours=hours)
@@ -125,8 +125,8 @@ class InvestmentsService:
 
         # Начисляем
         resource = inv.resource
-        balance = getattr(user, resource, 0)
-        setattr(user, resource, balance + payout)
+        balance = get_balance(user, resource)
+        set_balance(user, resource, balance + payout)
 
         inv.is_withdrawn = True
         inv.is_matured = True

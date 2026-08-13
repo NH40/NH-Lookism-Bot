@@ -64,7 +64,8 @@ class GachaService:
         raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed_level, 0)
         speed_pct = int(raw_speed * getattr(user, "skill_path_bonus_multiplier", 1.0))
         cd_seconds = max(60, cooldown_service.apply_speed_reduction(
-            5 * 60, speed_pct, getattr(user, "ticket_cd_reduction", 0)
+            5 * 60, speed_pct,
+            getattr(user, "ticket_cd_reduction", 0) + getattr(user, "clan_land_cd_reduction_pct", 0)
         ))
         await cooldown_service.set_cooldown(cd_key, cd_seconds)
 

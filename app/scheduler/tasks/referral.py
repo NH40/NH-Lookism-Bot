@@ -55,7 +55,9 @@ async def referral_power_tick():
                             # и пересчитываем через единственный источник истины.
                             old_bonus = student.teacher_power_bonus
                             student.teacher_power_bonus = 0
-                            student_own = await squad_repo.update_user_combat_power(session, student)
+                            student_own = await squad_repo.update_user_combat_power(
+                                session, student, update_clan=False
+                            )
 
                             if student_own >= teacher.combat_power:
                                 student.teacher_power_bonus = 0

@@ -57,7 +57,11 @@ class TrainingService:
             4, (speed or 0) + getattr(user, 'clan_land_speed_mastery_bonus', 0)
         )
         raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed_level, 0)
-        extra = (getattr(user, 'trainer_cd_reduction', 0) + getattr(user, 'ticket_cd_reduction', 0))
+        extra = (
+            getattr(user, 'trainer_cd_reduction', 0)
+            + getattr(user, 'ticket_cd_reduction', 0)
+            + getattr(user, 'clan_land_cd_reduction_pct', 0)
+        )
         cd = cooldown_service.apply_speed_reduction(TOM_LEE_CD_SECONDS, raw_speed, extra_pct=extra)
         await cooldown_service.set_cooldown(cd_key, cd)
 
@@ -108,7 +112,11 @@ class TrainingService:
             4, (speed or 0) + getattr(user, 'clan_land_speed_mastery_bonus', 0)
         )
         raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed_level, 0)
-        extra = (getattr(user, 'trainer_cd_reduction', 0) + getattr(user, 'ticket_cd_reduction', 0))
+        extra = (
+            getattr(user, 'trainer_cd_reduction', 0)
+            + getattr(user, 'ticket_cd_reduction', 0)
+            + getattr(user, 'clan_land_cd_reduction_pct', 0)
+        )
         cd = cooldown_service.apply_speed_reduction(JEON_GON_CD_SECONDS, raw_speed, extra_pct=extra)
         await cooldown_service.set_cooldown(cd_key, cd)
 
@@ -151,7 +159,11 @@ class TrainingService:
             4, (speed or 0) + getattr(user, 'clan_land_speed_mastery_bonus', 0)
         )
         raw_speed = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed_level, 0)
-        extra = (getattr(user, 'trainer_cd_reduction', 0) + getattr(user, 'ticket_cd_reduction', 0))
+        extra = (
+            getattr(user, 'trainer_cd_reduction', 0)
+            + getattr(user, 'ticket_cd_reduction', 0)
+            + getattr(user, 'clan_land_cd_reduction_pct', 0)
+        )
         cd = cooldown_service.apply_speed_reduction(MANAGER_KIM_CD_SECONDS, raw_speed, extra_pct=extra)
         await cooldown_service.set_cooldown(cd_key, cd)
 

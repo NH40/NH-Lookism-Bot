@@ -120,6 +120,7 @@ class CityQueriesMixin:
             speed_pct = min(80, speed_pct + 30)
         if "concentration" in title_ids:
             speed_pct = min(80, speed_pct + 30)
+        speed_pct += getattr(user, "clan_land_cd_reduction_pct", 0)
         cd = max(10, int(base_cd * (1 - speed_pct / 100)))
         await cooldown_service.set_cooldown(cd_key, cd)
         user.extra_attack_count = await self._get_max_extra_attacks_async(session, user)

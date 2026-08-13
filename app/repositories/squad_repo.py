@@ -69,9 +69,18 @@ class SquadRepo:
     # ════════════════════════════════════════════════════════════════════════
 
     async def update_user_combat_power(
-        self, session: AsyncSession, user: User
+        self, session: AsyncSession, user: User, update_clan: bool = True
     ) -> int:
-        """Единственное место расчёта боевой мощи."""
+        """Единственное место расчёта боевой мощи.
+
+        update_clan=False пропускает запись в clans.combat_power — для
+        случаев, когда результат нужен только "подсмотреть" (например,
+        referral_power_tick сравнивает мощь ученика без бонуса учителя,
+        а окончательное значение пишет отдельным вызовом сразу следом).
+        Без этого флага такой "пристрелочный" вызов держит лишний UPDATE
+        clans в рамках той же транзакции, вдвое увеличивая окно блокировки
+        строки клана и с ней — риск deadlock с конкурентными действиями
+        игроков того же клана."""
 
         star_mult = case(
             (SquadMember.stars == 1, 1.10),
@@ -159,15 +168,17 @@ class SquadRepo:
         # Ограничиваем разумным максимумом (BIGINT safe)
         total = min(total, 9_000_000_000_000)
 
-        # Получаем clan_id ДО мутации user, чтобы SELECT не вызвал autoflush
-        # и не залочил строку раньше времени (причина deadlock при concurrent обменах)
-        from app.models.clan import ClanMember, Clan
-        clan_id = await session.scalar(
-            select(ClanMember.clan_id).where(ClanMember.user_id == user.id)
-        )
-
         old_power = user.combat_power or 0
         user.combat_power = total
+
+        clan_id = None
+        if update_clan:
+            # Получаем clan_id ДО мутации user, чтобы SELECT не вызвал autoflush
+            # и не залочил строку раньше времени (причина deadlock при concurrent обменах)
+            from app.models.clan import ClanMember, Clan
+            clan_id = await session.scalar(
+                select(ClanMember.clan_id).where(ClanMember.user_id == user.id)
+            )
 
         if clan_id:
             delta = total - old_power

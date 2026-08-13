@@ -82,6 +82,17 @@ async def ultra_instinct_tick():
                         )
                 except Exception as e:
                     logger.error(f"ui_tick error for user {user_id}: {e}")
+                    if not session.is_active:
+                        # Транзакция целиком в нерабочем состоянии (например,
+                        # deadlock повредил соединение) — savepoint её не
+                        # восстановит, а продолжение цикла даст ту же ошибку
+                        # для каждого оставшегося пользователя молча. Прерываем
+                        # тик здесь; следующий запуск получит свежую сессию.
+                        logger.error(
+                            f"ui_tick: session broken after user {user_id}, "
+                            f"aborting rest of batch ({len(user_ids)} users total)"
+                        )
+                        break
 
 
 async def _ui_recruit(session: AsyncSession, user, bypass_cd: bool = False):

@@ -127,7 +127,7 @@ class SquadService:
         )
         from app.repositories.title_repo import title_repo
         has_focus = await title_repo.has_title(session, user.id, "focus")
-        extra = 20 if has_focus else 0
+        extra = (20 if has_focus else 0) + getattr(user, 'clan_land_cd_reduction_pct', 0)
         recruit_cd = cooldown_service.apply_speed_reduction(5 * 60, speed_pct, extra)
         await cooldown_service.set_cooldown(cd_key, recruit_cd)
 
@@ -263,7 +263,7 @@ class SquadService:
         )
         from app.repositories.title_repo import title_repo
         has_focus = await title_repo.has_title(session, user.id, "focus")
-        extra = 20 if has_focus else 0
+        extra = (20 if has_focus else 0) + getattr(user, 'clan_land_cd_reduction_pct', 0)
         clan_speed = (getattr(user, 'clan_train_bonus', 0) + getattr(user, 'clan_donat_train_bonus', 0)) // 2
         train_cd_seconds = cooldown_service.apply_speed_reduction(5 * 60, speed_pct, extra + clan_speed)
 

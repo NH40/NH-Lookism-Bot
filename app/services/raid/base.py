@@ -568,7 +568,7 @@ class RaidService:
             4, (speed or 0) + getattr(user, "clan_land_speed_mastery_bonus", 0)
         )
         raw = {0: 0, 1: 5, 2: 10, 3: 15, 4: 20}.get(speed_level, 0)
-        return int(raw * user.skill_path_bonus_multiplier)
+        return int(raw * user.skill_path_bonus_multiplier) + getattr(user, "clan_land_cd_reduction_pct", 0)
 
     def _apply_ui_level(self, user: User, level: int, reset_toggles: bool = False) -> None:
         user.ultra_instinct = level >= 1

@@ -9,7 +9,7 @@ class SquadCasinoService:
     """Работа со статистами в казино."""
 
     MIN_DEPOSIT = 5          # Минимальный депозит
-    WIN_MULTIPLIER = 1.2     # Множитель выигрыша (x1.2)
+    WIN_MULTIPLIER = 2.0     # Множитель выигрыша, как и для остальных ресурсов (x2)
 
     async def get_rank_counts(self, session: AsyncSession, user_id: int) -> dict[str, int]:
         """Возвращает {ранг: количество} доступных статистов."""
@@ -56,10 +56,10 @@ class SquadCasinoService:
 
     async def win(self, session: AsyncSession, user: User, rank: str, amount: int) -> dict:
         """
-        Выигрыш: возвращаем депозит + 20% сверху (округление в меньшую сторону).
+        Выигрыш: возвращаем депозит x2 (округление в меньшую сторону).
         """
-        bonus = int(amount * self.WIN_MULTIPLIER)  # округление в меньшую сторону
-        total_return = amount + bonus
+        total_return = int(amount * self.WIN_MULTIPLIER)  # округление в меньшую сторону
+        bonus = total_return - amount
 
         # Спрашиваем конфиг ранга для base_power
         from app.data.squad import RANKS_BY_ID

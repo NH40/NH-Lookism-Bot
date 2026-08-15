@@ -1,5 +1,4 @@
 """Блэкджек против дилера-бота."""
-import json
 import logging
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message, InlineKeyboardButton
@@ -172,7 +171,7 @@ async def cb_bj_pick(cb: CallbackQuery, session: AsyncSession, user: User, state
             cb,
             "👥 <b>Выберите ранг статистов</b>\n\n"
             f"Минимальный депозит: {squad_casino_service.MIN_DEPOSIT} статистов\n"
-            "При выигрыше: возврат + 20% (x1.2)\n\n"
+            "При выигрыше: x2 от ставки (блэкджек с двух карт — x2.5)\n\n"
             "<i>Выберите ранг для депозита:</i>",
             builder.as_markup()
         )
@@ -215,7 +214,7 @@ async def cb_bj_squad_rank(cb: CallbackQuery, session: AsyncSession, user: User,
         f"👥 <b>Статисты ранга {rank}</b>\n\n"
         f"Доступно: {fmt_num(count)} статистов\n"
         f"Минимальный депозит: {squad_casino_service.MIN_DEPOSIT} статистов\n"
-        f"Множитель выигрыша: x1.2\n\n"
+        f"Множитель выигрыша: x2 (блэкджек с двух карт — x2.5)\n\n"
         f"Введите количество статистов для депозита:",
         builder.as_markup()
     )

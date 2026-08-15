@@ -54,12 +54,8 @@ def is_natural(cards: list[list[str]]) -> bool:
 
 
 def _get_multiplier(resource: str) -> float:
-    """Возвращает множитель выигрыша для ресурса.
-    Статисты и очки пути — x1.2, остальное — x2.
-    """
-    if resource in ("squad", "path_points"):
-        return 1.2
-    return 2.0
+    """Возвращает множитель выигрыша для ресурса — одинаковый для всех: x2."""
+    return BLACKJACK_WIN_MULTIPLIER
 
 
 class BlackjackService:
@@ -113,10 +109,10 @@ class BlackjackService:
                         await squad_repo.update_user_combat_power(session, user)
                     result.update(finished=True, outcome="push_natural")
                 else:
-                    # Блэкджек — x1.2
+                    # Блэкджек — x2.5, как и для остальных ресурсов
                     from app.data.squad import RANKS_BY_ID
                     rank_cfg = RANKS_BY_ID.get(rank)
-                    payout = int(amount * 1.2)
+                    payout = int(amount * BLACKJACK_NATURAL_MULTIPLIER)
                     
                     if rank_cfg:
                         await squad_repo.add_count(
@@ -258,10 +254,10 @@ class BlackjackService:
                 return {"ok": False, "msg": "❌ Ранг не выбран."}
             
             if dealer_value > 21 or player_value > dealer_value:
-                # ВЫИГРЫШ — выдаем 1.2x от ставки одной суммой
+                # ВЫИГРЫШ — выдаем x2 от ставки одной суммой, как и для остальных ресурсов
                 from app.data.squad import RANKS_BY_ID
                 rank_cfg = RANKS_BY_ID.get(rank)
-                payout = int(hand["total_stake"] * 1.2)
+                payout = int(hand["total_stake"] * BLACKJACK_WIN_MULTIPLIER)
                 
                 if rank_cfg:
                     await squad_repo.add_count(

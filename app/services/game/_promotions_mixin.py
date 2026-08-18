@@ -234,51 +234,15 @@ class PromotionsMixin:
         user.extra_attack_count = 0
         user.emperor_entry_power = user.combat_power
 
-        # Как и при повышении банда→король (см. _promote_to_king): районы,
-        # которые Император держал как Король, освобождаются под ботов, чтобы
-        # другие банды/короли снова могли за них соревноваться — но, В ОТЛИЧИЕ
-        # от _release_king_districts (который чистит City.owner_id — так было
-        # нужно для убранного из игры этапа Кулака), трон города (City.owner_id)
-        # у Императора НЕ отбирается: город навсегда остаётся его, и он
-        # продолжает получать долю чужого дохода с этих районов через
-        # существующий налог города (city_tax_percent/city_tax_recipient_id,
-        # см. _recalc_city_tax) — Император не теряет город, просто перестаёт
-        # держать в нём районы лично.
-        from sqlalchemy import update as sql_update, select as sql_select, func as sql_func
-        from app.models.city import City, District
-
-        districts_r = await session.execute(
-            sql_select(District.id, District.city_id)
-            .join(City, City.id == District.city_id)
-            .where(
-                District.owner_id == user.id,
-                District.is_captured == True,
-                City.phase != "fist",
-            )
-        )
-        rows = districts_r.all()
-        if rows:
-            district_ids = [r[0] for r in rows]
-            city_ids = set(r[1] for r in rows)
-
-            await session.execute(
-                sql_update(District)
-                .where(District.id.in_(district_ids))
-                .values(owner_id=None, is_captured=False)
-            )
-            await session.flush()
-
-            for city_id in city_ids:
-                real_captured = await session.scalar(
-                    sql_select(sql_func.count(District.id)).where(
-                        District.city_id == city_id,
-                        District.is_captured == True,
-                    )
-                ) or 0
-                city = await session.get(City, city_id)
-                if city:
-                    city.captured_districts = real_captured
-                    # city.owner_id намеренно НЕ трогаем — трон остаётся у Императора.
+        # В ОТЛИЧИЕ от повышения банда→король (_promote_to_king) и от
+        # убранной из игры фазы Кулака (_release_king_districts), у Императора
+        # НЕ освобождаются ни трон города (City.owner_id), ни лично захваченные
+        # районы (District.owner_id/is_captured) — соревноваться за них больше
+        # не с кем (Emperor — финальная фаза), а доход считается именно по
+        # количеству удержанных районов. Раньше здесь стоял блок, снимавший
+        # District.owner_id/is_captured у игрока при переходе — из-за этого
+        # весь доход обнулялся сразу после становления Императором (репорт:
+        # "сбрасываются районы"). Районы и трон остаются при игроке как есть.
 
         await session.flush()
         return {

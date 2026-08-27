@@ -166,7 +166,7 @@ class SquadRepo:
             total = int(total * (1 + potion_bonus / 100))
 
         # Ограничиваем разумным максимумом (BIGINT safe)
-        total = min(total, 9_000_000_000_000)
+        total = min(total, 100_000_000_000_000)
 
         old_power = user.combat_power or 0
         user.combat_power = total

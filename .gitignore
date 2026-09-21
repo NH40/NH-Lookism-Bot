@@ -6,3 +6,8 @@ __pycache__/
 backups/
 *.sql
 data/*.json
+
+# src/web (Mini App frontend, added 2026-09-21) — same patterns as Universe Anime Planet
+node_modules/
+dist/
+*.tsbuildinfo

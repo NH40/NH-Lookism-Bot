@@ -4,81 +4,87 @@ x-logging: &default-logging
     max-size: "10m"
     max-file: "3"
 
+name: lookism-battle-planet
+
+# Живёт на ОДНОМ физическом сервере с Universe Anime Planet (см. CLAUDE.md, "Железо и
+# нагрузка") — postgres/redis НЕ публикуют порты на хост (см. docker-compose.yml UAP:
+# внутри docker-сети сервисы видят друг друга по имени, наружу торчит только то, что
+# реально должно быть доступно снаружи — этот бот пока ничего не выставляет наружу,
+# нет Mini App/Caddy). mem_limit на каждом сервисе — не "как получится", а бюджет,
+# который обязан ужиться на той же машине рядом с бюджетом UAP: сверяться с реальными
+# лимитами UAP (docker-compose.yml в NH-Universe-Anime-Planet) перед тем как поднимать
+# оба стека одновременно на одном сервере.
 services:
   postgres:
     image: postgres:16-alpine
     container_name: lookism_postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - 5433:5432
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=192MB"
+      - "-c"
+      - "work_mem=8MB"
+      - "-c"
+      - "max_connections=40"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    # Дефолты образа (max_wal_size=1GB, shared_buffers=128MB) не тянут
-    # bulk-операции на миллионы строк (покупка/обмен статистов) — WAL
-    # переполняется за секунды и Postgres уходит в checkpoint каждые
-    # 10-15 сек ("checkpoints are occurring too frequently"), подвешивая
-    # бота для всех. Подстрой shared_buffers/effective_cache_size под
-    # реальную память хоста, если она сильно отличается от ~2GB.
-    command: >
-      postgres
-      -c shared_buffers=256MB
-      -c effective_cache_size=1GB
-      -c max_wal_size=4GB
-      -c min_wal_size=1GB
-      -c checkpoint_completion_target=0.9
-      -c checkpoint_timeout=15min
-      -c wal_buffers=16MB
-      -c work_mem=32MB
-      -c maintenance_work_mem=256MB
-      -c synchronous_commit=off
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U lookism -d lookism_db" ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
-      retries: 5
-    restart: unless-stopped
+      retries: 10
+    mem_limit: 512m
     logging: *default-logging
 
   redis:
     image: redis:7-alpine
     container_name: lookism_redis
+    restart: unless-stopped
+    command: ["redis-server", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru", "--save", ""]
+    volumes:
+      - redis_data:/data
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
-    restart: unless-stopped
+    mem_limit: 192m
     logging: *default-logging
 
   bot:
     build: .
     container_name: lookism_bot
+    restart: unless-stopped
     env_file: .env
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./backups:/app/backups
       - ./data:/app/data
+      - ./migrations:/app/migrations
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    restart: unless-stopped
-    command: python -m app.main
-    logging: *default-logging
-    # app/main.py пишет текущее unix-время в /app/heartbeat каждые 15с из
-    # своего event loop — если процесс зависнет (не крашнется, а именно
-    # подвиснет, событийный цикл перестанет тикать), файл перестаёт
-    # обновляться и HEALTHCHECK это ловит. restart:unless-stopped сам по себе
-    # НЕ помогает в этом случае (процесс формально жив, просто не отвечает) —
-    # нужен autoheal-сайдкар ниже, который перезапускает контейнер по
-    # статусу unhealthy.
+    # Без command: — docker/entrypoint.sh без аргументов сам прогоняет
+    # `alembic upgrade head`, потом стартует бота (см. Dockerfile, тот же удобный
+    # паттерн "один docker compose up -d --build", что у NH-BTFChat).
+    mem_limit: 512m
+    # app/main.py в 1.0 писал heartbeat-файл каждые 15с из event loop, чтобы
+    # HEALTHCHECK/autoheal ловили не крэш, а именно зависание event loop (процесс жив,
+    # но не тикает). TODO: перенести тот же приём в src/bot/main.py, когда появится
+    # первый реальный трафик для проверки — не стал переносить heartbeat-запись вслепую
+    # в пустой скелет main.py.
     healthcheck:
       test: ["CMD-SHELL", "test $(( $(date +%s) - $(cat /app/heartbeat 2>/dev/null || echo 0) )) -lt 60"]
       interval: 20s
@@ -87,6 +93,55 @@ services:
       start_period: 30s
     labels:
       - autoheal=true
+    logging: *default-logging
+
+  # Mini App API (см. src/api) — тот же образ, что и bot (тот же src/, requirements.txt
+  # уже включает fastapi/uvicorn), просто другая команда запуска. В отличие от UAP —
+  # read-write почти целиком (подтверждено пользователем 2026-09-17), не read-only витрина.
+  # Порт наружу НЕ публикуется (никогда не будет — reverse-прокси всегда терминирует TLS
+  # раньше). Публичный домен `lbp.universanimeplanet.ru` обслуживает ОБЩИЙ Caddy соседнего
+  # проекта UAP (см. `networks.edge` ниже и `../NH-Universe-Anime-Planet/Caddyfile`) — тот
+  # реверс-проксирует `/api/*` прямо на этот контейнер по имени (`lookism_api:8000`) через
+  # общую внешнюю сеть, поэтому `api` состоит сразу в двух сетях: `default` (видит
+  # postgres/redis внутри этого проекта) и `edge` (видит его Caddy другого проекта).
+  api:
+    build: .
+    container_name: lookism_api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379/0
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    networks:
+      - default
+      - edge
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    mem_limit: 256m
+    logging: *default-logging
+
+  # Внутренний статический сервер SPA (см. Dockerfile.web/Caddyfile в корне репозитория) —
+  # тот же паттерн, что `caddy` у UAP, но БЕЗ публикации 80/443 и без своего домена/TLS:
+  # два независимых Caddy не могут одновременно слушать 80/443 на одном физическом сервере
+  # (UAP уже занимает их своим `caddy`), поэтому здесь обычный внутренний HTTP на :80,
+  # видимый только внутри сети `edge` — TLS и домен терминирует общий Caddy UAP.
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: lookism_web
+    restart: unless-stopped
+    networks:
+      - edge
+    mem_limit: 64m
+    logging: *default-logging
 
   autoheal:
     image: willfarrell/autoheal
@@ -99,9 +154,12 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     logging: *default-logging
 
+  # Периодический pg_dump + чистка старых бэкапов (см. manager.py) — операционная
+  # утилита 1.0, не завязана на структуру app/, пережила рефакторинг без изменений.
   manager:
     build: .
     container_name: lookism_manager
+    restart: always
     env_file: .env
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
@@ -112,9 +170,20 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    restart: always
     command: python manager.py
+    mem_limit: 128m
     logging: *default-logging
 
 volumes:
   postgres_data:
+  redis_data:
+
+networks:
+  # Общая сеть между ЭТИМ проектом и UAP (см. CLAUDE.md, "Mini App: постоянный домен") —
+  # позволяет Caddy из docker-compose UAP достучаться до `lookism_api`/`lookism_web` по
+  # имени контейнера, не публикуя их порты на хост. Создаётся ОДИН РАЗ вручную ДО первого
+  # `docker compose up` в любом из двух проектов: `docker network create edge` — ни один
+  # из compose-файлов её не создаёт сам (`external: true`), иначе оба проекта попытались
+  # бы создать её независимо и один из них упал бы с конфликтом при повторном запуске.
+  edge:
+    external: true

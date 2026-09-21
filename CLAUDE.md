@@ -1,160 +1,899 @@
-# CLAUDE.md
+# LookismBattlePlanet 2.0.0 — Telegram-бот + Mini App (RPG прогрессии/территорий)
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Полная переработка 1.0 (`app/`, плоские файлы) под domain-per-folder конвенцию
+**Universe Anime Planet** (`../NH-Universe-Anime-Planet`) — второй бот, живущий с этим
+на **одном физическом сервере**. Решение подтверждено пользователем 2026-09-17: код
+2.0.0 полностью заменяет `app/` (не сосуществует рядом), стек — идентичный UAP.
 
-## Running the Bot
+**2026-09-17, тот же день — смена дизайна на "новую эру".** Пользователь прислал
+полный концепт-дизайн игры заново (см. `docs/design/lookism_battle_planet_2_raw_notes.md`
+— хранить как источник правды, не пересказ), который заменяет собой первоначальную идею
+"просто перенести механики 1.0 в новую структуру". Ключевое изменение архитектуры,
+подтверждено через AskUserQuestion:
 
-**With Docker Compose (recommended):**
+- **Telegram Mini App (React) — основной интерфейс ДЛЯ ВСЕХ игровых экранов** (7 вкладок
+  нижней навигации: Профиль/Карта/Развитие/Магазин/Кланы/Задания/Настройки), backend —
+  FastAPI (`src/api`, тот же паттерн, что у UAP: тот же образ, что и bot, другая команда
+  запуска uvicorn). **В отличие от Mini App у UAP (сознательно read-only) — здесь Mini App
+  read-WRITE почти целиком**: подтверждено пользователем явно ("оно должно работать и
+  миниапп и бот в полном функционале") — и бот (инлайн-клавиатуры), и Mini App должны
+  давать доступ к одному и тому же функционалу, не одно вместо другого.
+- Вся бизнес-логика — ТОЛЬКО в `services/<domain>` (см. правило ниже), и `handlers/<domain>`
+  (бот), и `api/routers/<domain>` (Mini App) вызывают ОДИН И ТОТ ЖЕ сервис — никогда не
+  дублировать и не переизобретать правило в API-роутере или в хендлере отдельно.
+- Первая версия домен-скелета (47 доменов, 1:1 с механиками 1.0 — бank/auction/market/
+  king_bot/emperor/gapren/squad/title/fame/prestige и т.п.) **пересобрана заново** под
+  новый дизайн 2026-09-17 (см. "Домены" ниже) — большинство старых доменов не имеют
+  аналога в новом дизайне и были удалены, часть (`gang`, `business`, `card`, `gacha`,
+  `collection`, `profile`) сохранены по имени, но переопределены по смыслу.
 
-```bash
-docker-compose up -d --build
-docker-compose logs bot --tail=20
+**Статус (2026-09-17): готова только структура (скелет), 2-я редакция** — пакеты/домены/
+файлы созданы с TODO-докстрингами, ссылающимися на разделы raw-notes, игровая логика ещё
+нигде не реализована. НЕ запускать в проде. **Очень много механик в raw-notes явно
+недоспецифицированы пользователем** ("получение чуть позже", "время подбери сам" и т.п.)
+— см. "Открытые вопросы дизайна" ниже. Перед реализацией конкретного домена — уточнять
+через AskUserQuestion, не додумывать молча (стандартное пожелание пользователя к этому
+проекту, подтверждено ранее для UAP тем же образом).
+
+## Запуск
+
+Соло (только этот бот + Mini App API): `docker compose up -d --build` — **та же удобная
+развёртка, что в NH-BTFChat**: `docker/entrypoint.sh` без аргументов сам прогоняет
+`alembic upgrade head`, потом стартует `bot.main` — миграции применяются
+автоматически при каждом старте контейнера, руками `docker compose exec bot alembic
+upgrade head` гонять не нужно (см. Dockerfile — `ENTRYPOINT`, не голый `CMD`). Сервисы
+`manager` (бэкапы) и `api` (Mini App, `uvicorn api.main:app`) используют тот же образ,
+но с явной `command:` — entrypoint пропускает миграции и выполняет её как есть (см.
+докстринг `docker/entrypoint.sh`). `api` пока не публикует порт наружу — нет ни
+React-фронтенда, ни реверс-прокси (Caddy/домен/HTTPS) под него, см. TODO в
+"Открытые вопросы дизайна".
+
+Вместе с Universe Anime Planet (сосед по серверу, отдельный репозиторий рядом на
+диске) — одной командой: `./start-all.sh` (git pull + up --build в обоих
+репозиториях; `./start-all.sh up|down|restart|ps|logs` — без pull). Этот скрипт
+живёт ТОЛЬКО в этом репозитории — он лишь читает соседнюю директорию
+`../NH-Universe-Anime-Planet` снаружи (запускает `docker compose` в ней), ничего не
+пишет внутрь неё; копию скрипта в самом UAP заводить не стали по прямой просьбе
+пользователя 2026-09-17 не трогать тот репозиторий.
+
+## Стек (идентичен Universe Anime Planet, подтверждено пользователем 2026-09-17)
+
+- **Python 3.12**, `aiogram 3` (async, long polling)
+- **PostgreSQL** — источник правды (SQLAlchemy 2.0 async + asyncpg, миграции — Alembic,
+  реально настроенный и используемый — **отличие от 1.0**, где Alembic был в
+  зависимостях, но не использовался: схема накатывалась вручную через `migration.sql`.
+  2.0.0 ведёт версии схемы по-настоящему, как UAP.)
+- **Redis** (`redis.asyncio`) — тикеты/КД/антидубликат-локи/лидерборды/кэш горячих данных
+- **Docker / docker-compose** — postgres + redis + bot (+ manager — тот же
+  бэкап/pg_dump-сайдкар, что в 1.0, не завязан на структуру `app/`, перенесён без правок)
+- Общий сервер с UAP — **бюджет памяти/CPU считать СОВМЕСТНО с UAP**, не изолированно
+  (см. "Железо и нагрузка" ниже). `docker-compose.yml` не публикует порты postgres/redis
+  на хост (тот же принцип, что у UAP) — сервисы видят друг друга внутри compose-сети.
+
+## Домен = папка (та же конвенция, что в Universe Anime Planet)
+
+Внутри `db/repositories/`, `services/`, `keyboards/`, `texts/`, `handlers/`,
+`constant/` — **никаких плоских файлов на домен**. Каждый домен — своя папка с
+`__init__.py` (ре-экспортирует публичное API) и главным модулем, повторяющим имя папки:
+
+```
+services/clan/clan.py       (не services/clan_service.py)
+services/clan/__init__.py   -> from bot.services.clan.clan import ...
 ```
 
-**Locally:**
+Вызывающий код импортирует из пакета (`from bot.services.clan import ...`), не через
+дублирование пути. Внутри домена, когда он разрастётся, соседние файлы допустимы
+(`services/clan/war.py`, `services/clan/exchange.py` — 1.0 уже давала пример такого
+разрастания в `app/services/clan/*`, `app/services/bank/*`, `app/services/game/*`).
 
-```bash
-pip install -r requirements.txt
-python -m app.main
-```
+**Осознанное исключение — `db/models/`.** Модели остаются плоскими файлами (каждая уже
+сама по себе один домен), `db/models/__init__.py` агрегирует их для Alembic — как в UAP.
 
-**Manager utility (backups, DB init):**
+**Второе осознанное исключение — `api/routers/`** (новое, 2026-09-17). Плоские файлы
+(`api/routers/profile.py`, не `api/routers/profile/profile.py`) — тот же паттерн, что
+`api/routers` в UAP: каждый роутер уже сам по себе лист (один `APIRouter` на домен, без
+соседних файлов), доменная логика и так живёт в `services/<domain>`, роутер её не
+дублирует и не обрастает своими подфайлами.
 
-```bash
-python manager.py backup          # Create SQL dump
-python manager.py restore <file>  # Restore from backup
-python manager.py migrate         # Initialize database tables
-python manager.py stats           # Show player statistics
-```
+### `config/` и `constant/` — то же разделение, что в UAP
 
-## Architecture
+- **`config/`** — настраиваемые ЧИСЛА/параметры (баланс, интервалы): `config/settings`,
+  `config/game` (баланс — заменяет `app/config/game_balance.py` из 1.0),
+  `config/rate_limit` (заменяет `app/config/rate_limit.py`), `config/scheduler`
+  (заменяет `app/config/scheduler_config.py` — см. "Открытый вопрос: шедулер" ниже).
+- **`constant/`** — строки, которые где-то СРАВНИВАЮТСЯ (`callback_data`, ключ
+  Redis-лока, `reason` в audit-логе). Именованная константа в `constant/<домен>/`, не
+  строковый литерал в хендлере/клавиатуре/сервисе.
 
-**Layered pattern:** Handlers → Services → Repositories → SQLAlchemy ORM → PostgreSQL. Redis stores FSM state and all cooldowns.
+## Обязательные инженерные правила (не нарушать — те же, что в UAP, подтверждены
+## пользователем явно для этого проекта 2026-09-17)
 
-**Request lifecycle:** Each Telegram update passes through 4 middlewares in order:
+1. **Ноль доверия к повторным нажатиям.** Атомарный `UPDATE ... WHERE balance >= X
+   RETURNING` или `SELECT ... FOR UPDATE` — никогда раздельного чтения баланса и списания.
+2. **Идемпотентность callback'ов.** Redis-lock `user_id + action` (SET NX PX) на время
+   обработки действия — повторный клик молча игнорируется.
+3. **Минимум запросов к БД.** Никакого N+1, джойны/агрегации — в Postgres, батчинг где
+   можно, никаких Python-циклов по большим наборам ради сумм/топов.
+4. **Горячие данные — в Redis**, где это дешевле (КД, антидубликат-локи, топы). Postgres
+   — источник правды, Redis — восстанавливаемый кэш.
+5. **Всё асинхронно.** Никаких блокирующих вызовов в event loop.
+6. **Индексы обязательны** на поля фильтрации/сортировки.
+7. **Пагинация везде**, где записей может быть много.
+8. **Игровые числа — не магические константы.** Всё — в `config/game` или БД-таблице.
+9. **Технический режим** — единая middleware, блокирующая все хендлеры кроме admin.
+10. **Границы транзакций — на уровне логической операции, не функции.** Составная
+    операция коммитится ровно один раз, верхнеуровневым сервисом, после всех шагов.
+    Redis обновляется только после успешного commit в Postgres.
+11. **`edit_text`/`edit_message_text` без `reply_markup` СОХРАНЯЕТ старую клавиатуру.**
+    Передавать `reply_markup=InlineKeyboardMarkup(inline_keyboard=[])` явно, если старые
+    кнопки должны перестать быть кликабельны.
+12. **Нельзя `edit_text`↔`edit_media` конвертировать тип сообщения.** Удалить старое
+    (проглотив ошибку) и прислать новое нужного типа.
 
-1. `DbSessionMiddleware` — creates an async SQLAlchemy session, injects `session` into handler data
-2. `UserLoaderMiddleware` — loads or creates the `User` row from `tg_id`, injects `user` into handler data; blocks banned users
-3. `NetworkErrorMiddleware` — handles Telegram API transient errors
-4. `RateLimitMiddleware` — limits callbacks to 0.5 req/sec per user via Redis
+## Железо и нагрузка (пересмотреть перед продом — общий сервер с UAP)
 
-**All handlers receive `(cb/message, session: AsyncSession, user: User)` injected by the middleware stack.**
+UAP один уже целится в 2 vCPU/2GB RAM (30 000 игроков) почти впритык (postgres 512-640MB
++ redis 128-256MB + bot 512MB + возможные api/caddy). Если LookismBattlePlanet 2.0.0
+реально разворачивается на ТОЙ ЖЕ машине одновременно с UAP — суммарного бюджета обоих
+ботов может не хватить на заявленные mem_limit по умолчанию (см. `docker-compose.yml` —
+выставлены скромнее, чем в 1.0, но это не заменяет реальной проверки на сервере).
+**Подтвердить у пользователя фактические характеристики сервера перед первым
+совместным деплоем обоих ботов**, если они окажутся теснее, чем у одного UAP.
 
-**Background scheduler (APScheduler)** — tasks live in `app/scheduler/tasks/` (one file per domain), registered in `app/scheduler/setup.py`, intervals in `app/config/scheduler_config.py`:
+## Открытый вопрос: шедулер (APScheduler vs ленивая финализация)
 
-| Task                  | Interval  | Purpose                                               |
-| --------------------- | --------- | ----------------------------------------------------- |
-| `income_tick`         | 1 min     | Distribute building income to all users               |
-| `ultra_instinct_tick` | 1 min     | Auto-actions (recruit/train/ticket) for UI users      |
-| `auction_round_tick`  | 10 sec    | Advance auction timers and resolve round winners      |
-| `auction_start_tick`  | 2 min     | Start new auctions                                    |
-| `clan_war_tick`       | 5 min     | Finish expired clan wars, distribute treasury rewards |
-| `clan_auction_tick`   | 1 min     | Finish expired clan auctions                          |
-| `campaign_tick`       | 2 min     | Complete expired campaigns                            |
-| `boss_tick`           | 60 sec    | Spawn/expire raid bosses                              |
-| `referral_power_tick` | 30 min    | Recalculate teacher referral power bonuses            |
-| `daily_tick`          | 00:00 UTC | Daily bonuses (circ_daily_districts)                  |
-| `bank_credit_tick`    | 1 min     | Bank loan interest                                    |
-| `storage_fee_tick`    | 1 min     | Bank storage fees                                     |
-| `investment_tick`     | 1 min     | Bank investment maturity                              |
-| `war_genius_tick`     | 1 min     | Auto-attack raids (War Genius skill)                  |
+1.0 держит APScheduler с ~13 периодическими задачами (`app/scheduler/tasks/*` — доход
+построек, тик аукциона, финализация войн клана, спавн боссов, банковские проценты и
+т.д., см. интервалы в `app/config/scheduler_config.py` в 1.0). UAP принципиально
+обходится без шедулера — ленивая финализация при заходе на экран (война клана,
+сезонный пасс) + один `asyncio.create_task` sweep-луп раз в 5 минут для того, что
+физически не может быть ленивым (пуши подписчикам). **Решать по каждой перенесённой
+задаче отдельно, не молча переносить весь APScheduler скопом** — см.
+`config/scheduler/scheduler.py`. Кандидаты на ленивую финализацию (по аналогии с
+войной клана в UAP): `auction_round_tick`, `clan_war_tick`, `clan_auction_tick`,
+`campaign_tick`, `boss_tick`. Кандидаты, которым скорее нужен настоящий тик независимо
+от захода игрока: `income_tick`, `bank_credit_tick`/`storage_fee_tick`/`investment_tick`
+(деньги должны копиться, даже если никто не смотрит на экран).
 
-Scheduler tasks get the bot reference via `app/bot_instance.get_bot()`.
+## Домены (2-я редакция, 2026-09-17 — под новый дизайн, старый 1.0-based список полностью
+## заменён, см. вводный раздел выше)
 
-## Key Files
+Источник для каждого домена — `docs/design/lookism_battle_planet_2_raw_notes.md`, раздел
+указан в TODO-докстринге самого `<domain>.py` (не дублируется здесь).
 
-| File                               | Purpose                                                                                                               |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `app/main.py`                      | Entry point: DB init, city init, router registration, scheduler start, polling                                        |
-| `app/models/user.py`               | Central User model (160+ columns — stats, bonuses, phase progress, all denormalized for performance)                  |
-| `app/config/game_balance.py`       | **All numeric balance constants** (costs, multipliers, war durations, thresholds) — change here, not in service logic |
-| `app/config/scheduler_config.py`   | Scheduler intervals                                                                                                   |
-| `app/database.py`                  | Async SQLAlchemy engine, `AsyncSessionFactory`, `Base`                                                                |
-| `app/services/cooldown_service.py` | Redis-backed cooldown helpers used by every combat/training handler                                                   |
-| `app/utils/safe_edit.py`           | `safe_edit()` — wraps `message.edit_text()` silencing MessageNotModified errors; use instead of raw `edit_text`       |
-| `app/utils/formatters.py`          | `fmt_num()`, `fmt_ttl()` — shared number/time formatters                                                              |
+**Полные домены** (constant + db/repositories + services + keyboards + texts + handlers
++ api/routers — и бот, и Mini App, оба в полном функционале):
+`start`, `common`, `admin`, `settings`, `guide`, `referral`, `promo`, `donate`, `payment`
+— чисто бот-домены, у Mini App нет для них экрана в текущем дизайне (без своего
+`api/routers/*`). Остальные — есть и бот-экран, и `api/routers/<domain>`: `profile`,
+`map` (карта страны/города/районов + экран войны кулаков), `district` (захват района,
+сражения/шпионаж/разведка), `gang` (банда игрока — состав из 9 позиций, статисты,
+уникальная коллекция), `recruit` (вербовка статистов и уникальных персонажей),
+`business` (бизнесы на районе), `training` (личная + тренировка статистов),
+`teacher` (тренировка статистов у учителя — заблокирована до покупки), `mastery`
+(сила/скорость/выносливость/техника, 3 ступени), `card`/`gacha`/`collection`
+(уникальные персонажи — карточки, как раньше, перки по позициям), `raid` (фракции +
+именные боссы), `campaign`, `boss` (боссы и мировые боссы), `ultra_instinct`,
+`unique_technique`, `unique_path`, `bloodline`, `genius`, `awakening` (6 систем
+"Развития" — способ получения НЕ описан, см. открытые вопросы), `clan`, `quest`, `shop`
+(содержание не описано).
 
-## Game Phases
+**Домены только с данными** (db/repositories + services, своего экрана нет):
+`user`, `country` (7 стран), `city`, `ticket` (вербовка уникальных, регенерация 30 мин,
+кап 10), `characteristic` (лестница рангов F- .. Infinity), `extra` (статисты — ранг/
+мощь/лагерь), `phase` (банда → круг → кулак, состояние + переходы).
 
-**Gang → King → Fist → Emperor (prestige resets)**
+**Сквозная инфраструктура** (только services, без api): `combat` (общий движок боя —
+уклонение/блок/контратака/побег, мастерство), `cooldown` (общая проверка/выставление
+КД), `power` (агрегация "мощи" из характеристик/мастерства/статистов/уникальных).
 
-- **Gang**: attack cities to capture districts; need 10+ cities to advance
-- **King**: fight King Bots for influence; need 10 bot wins to advance
-- **Fist**: defeat 10 Fist Bots; advance to Emperor
-- **Emperor**: prestige — full reset, earn permanent bonuses per prestige level
+## Открытые вопросы дизайна (НЕ додумывать молча — AskUserQuestion перед реализацией)
 
-`attack.py` dispatches to the correct phase handler via `build_attack_menu()`. Each phase has its own handler (`app/handlers/game/`) and service (`app/services/game/`). The game service inherits three mixins: `_queries_mixin`, `_promotions_mixin`, `_districts_mixin`.
+Явно недоспецифицировано пользователем в raw-notes (цитаты/формулировки см. в самом
+файле, не пересказываются здесь во избежание расхождения):
 
-## Clan System
+- Способ получения `ultra_instinct`/`unique_technique`/`unique_path`/`bloodline`/
+  `genius`/`awakening` — все 6 систем помечены "о получении чуть позже".
+- Содержание вкладок `shop`, `clan`, `quest` — не описано вообще, только названия в
+  нижней навигации.
+- Событие `campaign` (походы) и обычные `boss`/`world_boss` — упомянуты в списке из 4
+  типов событий, детали (механика, награды, отличие world_boss от boss) не описаны.
+  Таймингы появления — "время подбери сам... учти что они должны быть довольно частыми
+  и рандомными" — прямое делегирование числа автору кода, не пропущенная деталь.
+- Точные проценты шансов уклонения/блока/контратаки/побега в бою (зависят от
+  характеристик + множитель мастерства техники ×1/5/10) — общая механика описана
+  подробно, но не сведена в точную формулу с конкретными базовыми процентами.
+- Формула влияния (влияние → доступный диапазон рангов статистов на вербовке) — дан
+  только начальный показатель (10) и границы диапазонов по фазам (F..EX / F..EXR /
+  F..ZZZ), не сама зависимость влияния от диапазона.
+- Механика "учителя" — упомянута только как будущая заблокированная фича, без деталей.
+- Порядок/переход между новыми доменами `map`/`district`/`phase` и старой моделью
+  капов ("10+ городов", "все районы города", "все города страны") — числа даны, но не
+  весь edge-case арсенал (что при ничьей, что при одновременном захвате и т.п.).
+- **Миграция игроков 1.0 → 2.0** ("мы должны перенести существующих игроков") — упомянута
+  как требование, но маппинг конкретных полей старой схемы (см. git-историю `app/models/
+  user.py` до удаления) на новую пока не спроектирован вообще — отдельная большая
+  задача, делать только когда новая схема реально устоится, не раньше.
+  - **Один конкретный кусок этой миграции УЖЕ подтверждён пользователем 2026-09-21**
+    (не общий, остальное по-прежнему не спроектировано): донаты 1.0 конвертируются в
+    `coins` 2.0 при релизе. В 1.0 (см. git-история, `app/models/payment.py`,
+    `app/handlers/donate.py` до удаления) донат работал через таблицу `payments`
+    (`user_id`, `amount_rub`, `nh_donate_credited`, `status`) курсом **1 NHDonate = 1 ₽**
+    жёстко зашитым в тексте меню. Перенос — просуммировать `amount_rub` по каждому
+    `user_id` ГДЕ `status='success'` (не зачитывать проваленные/возвращённые платежи) и
+    зачислить ту же сумму в `User.coins` 2.0 тем же курсом 1:1. Требует: (а) колонку
+    `coins` в `User` 2.0 (её ещё нет — заводить вместе с доменом `donate`/`shop`, когда
+    экономика 2.0 определится, см. пункт выше про `shop` в "Открытых вопросах"), (б)
+    источник данных 1.0 — **не решено, где физически взять `payments` из 1.0** (дамп
+    таблицы от пользователя, или прямой доступ к живой БД 1.0 в момент миграции —
+    уточнить у пользователя, когда дойдём до реализации). Разовый скрипт, по тому же
+    паттерну, что `manager.py seed` (см. "Сидинг статичного контента..." ниже) — не
+    часть обычного запуска бота.
 
-`ClanService` is a composite of 9 service mixins (base/invite/war/exchange/shop/auction/treasury/upgrades/donat/land) merged in `app/services/clan/__init__.py`.
+## Ассеты 1.0 (`assets/`, переименовано из `images/` 2026-09-17)
 
-**Clan member ranks:** `owner` / `deputy` / `captain` / `member` — stored in `ClanMember.rank`. Deputies and owners can start wars and auctions; only owners can change ranks. `RANK_LABELS`/`get_member_rank`/`set_member_rank` live in `app/services/clan/base.py`; the rank-management UI is `app/handlers/clan/ranks.py`.
+Картинки персонажей/боссов/городов/путей/магазина/учителей из 1.0 — сохранены как есть
+(не удалены вместе с `app/`), просто переименована папка под конвенцию UAP
+(`assets/cards/<universe>/...`, см. её CLAUDE.md, "Формат карточек"). Раскладка внутри
+пока СТАРАЯ (`assets/card/<ранг>/...` и т.п., не `assets/cards/<universe>/<ubpXXXX>UBP/`)
+— переструктурировать под новую схему, когда дойдём до реального переноса домена `card`,
+не раньше (сейчас это просто сохранённый исходный материал, не подключён ни к какому коду).
 
-**Clan Lands** (`app/services/clan/land.py`, patch 4): a clan buys land levels (1–5, NHCoin from `clan.treasury`) via `buy_land_upgrade`, unlocking building slots (3/5/10/15/25). Each of 7 building types (`CLAN_LAND_BUILDINGS` in `app/config/game_balance.py`) is bought per-unit via `buy_land_building` and grants a clan-wide buff (income %, power %, fragment %, mastery/path point %, shop discount %, or +1 level to power/speed mastery — the latter two capped at 4 units each). Buffs are cached on `User.clan_land_*` columns, recalculated by `ClanLandService.recalc_land_bonuses()` whenever buildings change; the clan owner's income contribution is doubled.
+## Статус проекта
 
-## Cooldown Pattern
+**2-я редакция скелета, 2026-09-17.** Инфраструктурный слой без изменений с первой
+редакции: config/settings, db/base+session, минимальная `User`-модель, cache/keys+
+redis_client, все 5 middleware бота (throttling/db_session/tech_mode/ban_check/
+command_state_reset — портированы из UAP почти без изменений, чистая инженерная
+инфраструктура), filters/admin, alembic (реально используется), `bot/main.py`.
+**Новое в этой редакции:** `src/api/` (FastAPI Mini App backend — `main.py`/`auth.py`
+(HMAC initData, порт из UAP)/`db.py` (та же engine/session-фабрика, что бот) — рабочие;
+`api/routers/*` — 25 TODO-заглушек, по одной на домен с Mini App-экраном); домен-список
+пересобран под новый дизайн (см. "Домены" выше) — 33 полных + 7 data-only + 3
+service-only = 43 домена вместо прежних 47 1.0-based. `docker-compose.yml` получил
+сервис `api` (тот же образ, `uvicorn api.main:app`). `python -m py_compile` по всему
+`src/` — чисто.
 
-All combat and training cooldowns go through Redis via `cooldown_service`. The canonical pattern:
+**Дальше:** React-фронтенд (Mini App) ещё не создан вообще — только backend-скелет
+(`src/api`). Начинать реализацию — с `user`/`characteristic`/`country`/`city` (данные,
+без них ничего не работает), затем `start`/`profile`/`map` (первый видимый игроку
+путь), сверяясь с "Открытыми вопросами дизайна" перед каждым неочевидным решением —
+не додумывать молча, как и в UAP. **Обновление 2026-09-21:** `country`/`city` и
+онбординг `/start` реализованы по-настоящему (см. "Онбординг: выбор страны/города" —
+отдельный раздел ниже, самый свежий) — следующий шаг из этого списка теперь
+`characteristic` (ступени рангов F-..Infinity + формулы мощи/КД, см. raw-notes
+«Профиль»), затем `gang` (имя банды — первое, что нужно сразу после выбора города) и
+`profile`.
 
-```python
-from app.services.cooldown_service import cooldown_service
+## Реально проверено локальным запуском (2026-09-17) — впервые для этого проекта
 
-cd_key = f"some_action:{user.id}"
-if await cooldown_service.is_on_cooldown(cd_key):
-    ttl = await cooldown_service.get_ttl(cd_key)
-    # show cooldown message
-    return
-# ... do action ...
-await cooldown_service.set_cooldown(cd_key, SECONDS)
-```
+В отличие от всех более ранних записей "не проверено реальным запуском" — этот скелет
+ДЕЙСТВИТЕЛЬНО поднят через `docker compose up -d --build` целиком (все 5 сервисов:
+postgres/redis/bot/api/manager) на тестовом/свободном боевом токене (`@lbp_newtest_bot`,
+подтверждено пользователем — НЕ токен живого 1.0). Проверено:
 
-**Race condition fix:** Attack handlers (boss/emperor/gang/king/fist) must acquire a Redis lock BEFORE checking cooldown to prevent double-execution on concurrent taps. See `app/services/game/_queries_mixin.py` for the locking pattern.
+- Сгенерирована и применена первая настоящая Alembic-миграция (`alembic revision
+  --autogenerate` → создала таблицу `users`, `alembic upgrade head` внутри
+  `docker compose run --rm bot ...` — до этого `migrations/versions/` был пуст).
+- `bot` стартует, поллит без ошибок (`aiogram.dispatcher: Run polling for bot
+  @lbp_newtest_bot`), healthcheck переходит в `healthy` (см. ниже про heartbeat).
+- `api` отвечает `{"status":"ok"}` на `/api/health` изнутри compose-сети.
+- `manager` — фактически сделал автобэкап (`backups/backup_<ts>.sql`).
+- **НЕ проверено:** реальное сообщение `/start` от живого пользователя в Telegram
+  (нет ни одного реального хендлера кроме fallback-заглушки — проверять пока нечего).
 
-## Notifications from Scheduler Tasks
+**Найден и исправлен реальный баг при этом запуске** — `manager.py` (унаследован из
+1.0 без правок, см. запись про `docker-compose.yml` выше) содержал `from app.config
+import settings` внутри `backup()`/`restore()` — при поверхностной проверке импортов
+(`grep '^import\|^from'`, только начало строки) эти ЛЕНИВЫЕ импорты внутри тела функции
+не попали в выборку, поэтому `manager.py` ошибочно посчитали не зависящим от `app/`.
+Контейнер `manager` реально падал в цикле рестартов (`ModuleNotFoundError: No module
+named 'app'`) при первом же вызове `auto_backup_loop() -> backup()`. Исправлено —
+`backup()`/`restore()` читают `POSTGRES_*` из `os.environ` напрямую (те же переменные
+уже приходят через `env_file: .env` в `docker-compose.yml`, отдельный settings-объект
+не нужен). **Остальные команды `manager.py` (`migrate`/`stats`/`set_clan_leader`/
+`spawnboss`/`reset_emperor`/`rebuild_circ_bonuses`) по-прежнему ссылаются на удалённые
+`app.models`/`app.services`/`app.repositories` и не работают** — не чинил, они не
+вызываются автозапуском (`python manager.py` без аргументов), а чинить их означало бы
+либо воскрешать 1.0-код, либо реализовывать логику по доменам 2.0, которых ещё нет;
+делать по мере необходимости, не сейчас.
 
-Scheduler tasks run in a separate async context — they open their own sessions via `AsyncSessionFactory`. The two-phase pattern (commit first, notify second) prevents holding a transaction open during slow Telegram sends:
+**Добавлен heartbeat в `bot/main.py`** (`_heartbeat_loop`, 15с, пишет `time.time()` в
+`/app/heartbeat`) — без него `HEALTHCHECK` в `docker-compose.yml` (сравнивает файл с
+`date +%s`) не мог перейти в `healthy` вообще, был отмечен как TODO ещё при написании
+compose-файла ("появится первый реальный трафик для проверки" — вот он и появился).
+Портирован из 1.0 почти дословно, единственное отличие — `time.time()` (эпоха), а не
+монотонные часы event loop'а (`asyncio.get_running_loop().time()` — первая попытка,
+поймана и исправлена сразу же, несовместима с `date +%s` в healthcheck-скрипте).
 
-```python
-async with AsyncSessionFactory() as session:
-    async with session.begin():
-        # mutate state, collect notification data into a list
-        pass  # committed here
+**Стек локально поднят и работает** — контейнеры остаются запущенными после этого
+захода (не остановлены намеренно, `docker compose down` не вызывался).
 
-# now send notifications outside the transaction
-bot = get_bot()
-await _send_notifications(bot, tg_ids, text)
-```
+## Онбординг: выбор страны/города — первый реальный игровой домен (2026-09-21)
 
-## Database & Migrations
+Первая реализация по плану из "Дальше" (см. выше) — начали с `country`/`city` (данные,
+без них ничего не работает), довели их до реального видимого игроку флоу `/start`, а не
+только до db/repositories-скелета. `characteristic`/`gang`/`profile`/`map` — по-прежнему
+TODO, следующий шаг.
 
-Tables are created on startup via `metadata.create_all()` in `app/database.py`. New schema changes are applied **manually** via `migration.sql` — there is no Alembic migration history; Alembic is present but unused for versioned migrations.
+- **Список городов — подтверждён пользователем через AskUserQuestion, не додуман.**
+  Raw-notes не задают ни количество городов на страну, ни их размер. LBP 1.0 решало это
+  процедурными именами (субъекты РФ/штаты США и т.п., см. `app/data/cities.py` до
+  удаления) — пользователь явно ОТКАЗАЛСЯ от переноса этой схемы: 2.0.0 использует
+  РЕАЛЬНЫЕ города (Москва, Нью-Йорк, Шанхай и т.д.), поделённые на 4 типоразмера по
+  числу районов (4/8/16/32, больше 32 быть не может — жёсткий потолок) ПРИМЕРНО по
+  реальному масштабу города (население/значимость) — не по формуле "10 городов на
+  типоразмер", как было в 1.0. Список — репрезентативная выборка (не буквально "все
+  города страны в реальности", это нереализуемо), ~16-29 городов на страну.
+- **7 стран, не 11 как в 1.0.** Россия/США/Китай/Япония/Корея/Мексика/Казахстан (точный
+  список из raw-notes, «Карта») — Северная и Южная Корея ОБЪЕДИНЕНЫ в одну страну
+  (явное уточнение пользователя, отличается от 1.0, где они были раздельными). Для
+  Казахстана (не было в 1.0 вообще) взяты его реальные города.
+- **`config/country`/`config/city` — новые config-домены**, статичные списки
+  (`COUNTRIES`, `CITY_SEEDS`) по тому же паттерну, что `EVENT_DEFS` в Universe Anime
+  Planet — код+контент одной записью, не БД-таблица определений (список стран/базовых
+  городов не редактируется через админку, добавление — правка кода). `db/models/country.py`/
+  `city.py` — тем не менее РЕАЛЬНЫЕ таблицы Postgres, не просто Python-структуры:
+  `countries` существует исключительно как FK-цель для `User.country_code`/
+  `City.country_code` (сервис `services/country.list_countries()` читает список из
+  Python, не из БД — незачем запрос ради статичных данных, правило 3), `cities` —
+  настоящая растущая сущность (владение районами появится в домене `district`).
+- **Сид — `ON CONFLICT DO NOTHING`, не count-check, как было в 1.0
+  (`app/main.py: init_cities` пропускал сид целиком, если в таблице уже было >0 строк).**
+  `db/repositories/country.seed_countries`/`city.seed_cities` идемпотентны на каждый
+  рестарт бота и позволяют дописывать новые города в `CITY_SEEDS` в будущем — передеплой
+  просто добавит новые строки, не тронув существующие (владение районами не сбросится).
+  `cities` — уникальный индекс `(country_code, name)` под этот `ON CONFLICT`. Вызывается
+  один раз при старте (`main.py: _seed_world`, до `dp.start_polling`) — не игровая
+  механика с состоянием, поэтому не `asyncio.create_task`, просто `await` при бутстрапе.
+- **Выбор страны — презентационный, ничего не пишет в БД; страна+город фиксируются ОДНИМ
+  атомарным шагом при выборе конкретного города.** Осознанное решение (не через
+  AskUserQuestion, инженерный выбор, не игровой): ранний вариант с отдельным
+  `set_country`/`set_city` (страна фиксируется сразу по нажатию) создавал противоречие с
+  кнопкой "◀️ Другая страна" на экране выбора города — страна уже была бы зафиксирована
+  первым `UPDATE ... WHERE country_code IS NULL`, и повторный выбор другой страны молча
+  не применялся бы, хотя экран продолжал бы показывать её города. Вместо этого
+  `db.repositories.user.set_country_and_city` — единственная точка записи
+  (`UPDATE ... WHERE city_id IS NULL`, правило 1), страна на неё передаётся из
+  `City.country_code` уже выбранного города (не второй независимый параметр) — нет
+  промежуточного состояния "страна есть, город ещё нет" в БД вообще, только "не играет"
+  / "играет". `constant/phase` (`PHASE_GANG`/`CIRCLE`/`FIST`) заведён вместе с этим —
+  `User.phase` сравнивается по коду, не строковым литералом.
+- **`handlers/start` — полный флоу**: `/start` новому игроку показывает список стран
+  (2 в ряд) → тап открывает пагинированный список городов страны (`CITY_PAGE_SIZE=8` в
+  `config/game`, Prev/Next+номер страницы, `constant/common.CB_NOOP` — общая
+  кнопка-заглушка для номера страницы, без действия) → тап по городу завершает
+  онбординг и убирает клавиатуру (`InlineKeyboardMarkup(inline_keyboard=[])`, правило 11).
+  Полностью онбордившийся игрок при повторном `/start` видит текстовую
+  заглушку-статус (страна+город) — НЕ настоящий профиль (домен `profile` ещё не
+  реализован); заменить на `show_profile()`-делегирование, когда профиль будет готов
+  (тот же переход, что уже сделан в Universe Anime Planet).
+- **Требуется миграция — на этот раз файл ЕСТЬ в репозитории** (в отличие от Universe
+  Anime Planet, где такие файлы принципиально не коммитятся): у LookismBattlePlanet
+  2.0.0 Alembic реально используется (см. запись от 2026-09-17), и в `migrations/versions/`
+  уже лежит закоммиченный `1ce13a27b2c5_init_users.py` от первого локального теста.
+  Новый `d92285f86a74_country_city.py` написан ВРУЧНУЮ, не через
+  `alembic revision --autogenerate` — в этом окружении нет доступа к поднятому Postgres
+  (нет `docker`-демона), autogenerate не может подключиться и сравнить схему. Содержимое
+  зеркалит модели напрямую — сверить перед `alembic upgrade head` на реальной БД (тот же
+  риск ручного рассинхрона, что всегда есть у автогенерации, просто без страховки в виде
+  реального диффа).
+- **Проверено статически** (то же ограничение окружения, что и раньше — нет
+  Postgres/Redis, `docker ps` не может достучаться до демона): `python -m py_compile`
+  по всему `src/` — чисто; `python -m pyflakes src` — 0 новых предупреждений сверх
+  стандартного шума `noqa: F401`-реэкспортов в `__init__.py` (тот есть по всем доменам
+  проекта с самого скелета, не специфичен для этой правки); полный `import bot.main`
+  реально исполняет все module-level импорты и регистрирует все 3 таблицы
+  (`countries`/`cities`/`users`) с ожидаемыми колонками в `Base.metadata` — ловит
+  отсутствие переэкспорта/циклический импорт, которые `pyflakes` не видит при
+  изолированной проверке файлов. Дополнительно (новое по сравнению с прошлыми заходами)
+  — клавиатуры (`keyboards/start`) прогнаны напрямую с фейковыми объектами City
+  (`SimpleNamespace`) без БД: пагинация 20 городов по 8 на страницу даёт верные 3
+  страницы, кнопки навигации/номера появляются на нужных страницах. **НЕ проверено**:
+  реальный Postgres/Redis (нет `docker`-демона в этом окружении), реальный round-trip
+  через Telegram, применение самой миграции.
 
-`app/main.py` runs `init_cities()` on every startup (idempotent — skips if data already exists).
+## Города разных стран НЕ уравнены по количеству (2026-09-21, тот же день)
 
-## Configuration
+По прямой правке пользователя ("не обязательно чтобы везде было одинаковое количество
+городов в странах") — предыдущая версия `config/city.CITY_SEEDS` подгоняла все страны
+под похожий диапазон (16-29 городов), это было ненамеренно и не отражало реальный
+масштаб стран. Расширено: RU/CN — 42 (были 29), US — 35 (было 28), JP — 30 (было 25),
+MX — 22 (было 18), KR/KZ остались 18/16 → 18/18 (по паре городов добавлено для ровного
+счёта, без попытки специально уравнять с другими). Итог — 207 городов вместо 158, без
+дублей внутри страны (`(country_code, name)` по-прежнему уникален). Пересобрано и
+досеяно в уже поднятый локальный `docker compose` стек тем же `ON CONFLICT DO NOTHING`
+(новые строки добавились, старые — включая уже выбранный тестовым игроком city_id=1,
+Москва — не тронуты).
 
-All settings come from `.env` (see `.env.example`):
+## Домен `profile` — первый настоящий экран, `/start` делегирует существующим игрокам (2026-09-21)
 
-- `BOT_TOKEN`, `ADMIN_IDS`
-- `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_HOST`, `POSTGRES_PORT`
-- `REDIS_HOST`, `REDIS_PORT`, `REDIS_DB`
-- `DEBUG` (default: false)
+Пока `characteristic`/`gang` ещё не реализованы, `profile` намеренно обогнал их в
+очереди из "Дальше" (см. выше) — понадобился, чтобы `/start` у уже онбордившегося
+игрока показывал РЕАЛЬНЫЙ экран вместо текстовой заглушки-статуса, тем же переходом,
+что уже сделан в Universe Anime Planet ("`/start` для существующего игрока открывает
+профиль").
 
-Docker Compose maps PostgreSQL to host port 5433. Config is loaded via pydantic-settings in `app/config/settings.py`; all other modules import from `app/config` (the package re-exports everything).
+- **Показывает честно только то, что реально есть** — имя/юзернейм/страна/город/фаза
+  (`services/profile.get_profile()` — тонкая агрегация `db.repositories.user.get_by_id`
+  + `services.country.get_country`/`services.city.get_city`, никакой новой БД-таблицы).
+  Банда/клан/мощь/влияние/характеристики/мастерство/уникальные системы — из raw-notes
+  профиля — не выдуманы, просто отсутствуют в тексте карточки до реализации
+  соответствующих доменов (честный MVP лучше вымышленных чисел).
+  `handlers/profile.show_profile()` — публичная функция домена (не `_show`), её
+  переиспользует `handlers/start/start.py: cmd_start` для онбордившихся игроков.
+- **`GET /api/profile`** (`api/routers/profile.py`, `api/schemas.py: ProfileOut`) — тот
+  же сервис, что и бот, никакой отдельной логики в API-слое. 404, если Telegram-игрок
+  открыл Mini App, ни разу не нажав `/start` боту (тот же прецедент, что
+  `GET /api/me` в Universe Anime Planet).
+- **Реально проверено end-to-end** (впервые для этого домена — не только
+  `py_compile`/`pyflakes`/`import`): пересобран `api`-контейнер в уже поднятом локальном
+  стеке, вручную собран и подписан валидный Telegram `initData` (HMAC по реальному
+  `BOT_TOKEN` из `.env` контейнера, тем же алгоритмом, что `api/auth.py`) для реального
+  тестового игрока (`id=1738160024`, уже прошедшего `/start`+онбординг в боте) —
+  `GET /api/profile` с этим `initData` в заголовке `X-Telegram-Init-Data` вернул
+  корректный JSON (`country: Россия, city: Москва, phase: gang`) напрямую из боевой
+  (тестовой) Postgres. **Не проверено**: `/profile`-команда бота тем же живым игроком
+  (сама функция идентична уже провере3нной API-ветке, но отдельный round-trip через
+  Telegram не запускался).
 
-## Adding New Features — Checklist
+## Домен `characteristic` — лестница рангов F-..Infinity и формулы мощи/бонусов (2026-09-21)
 
-1. **Model** in `app/models/` → export from `app/models/__init__.py`
-2. **Service** in `app/services/` (or as a mixin added to a composite service)
-3. **Handler** in `app/handlers/` → include router in the module's `__init__.py` and in `app/main.py`
-4. **Scheduler task** (if needed): add function to `app/scheduler/tasks/clan.py` (or a new file), export from `app/scheduler/tasks/__init__.py`, register in `app/scheduler/setup.py`, add interval constant to `app/config/scheduler_config.py`
-5. **Balance constants** in `app/config/game_balance.py`
-6. **Migration** in `migration.sql`
+Первая часть "Дальше" из предыдущей записи. Раздел «Профиль» в raw-notes оказался
+сильно недоспецифицирован (см. CLAUDE.md, "Открытые вопросы дизайна") — прежде чем
+писать код, уточнено через AskUserQuestion (два вопроса, оба подтверждены пользователем
+2026-09-21):
 
-## No Tests or Linter Config
+1. **Статисты шагают по ПОЛНОЙ лестнице рангов (с минус/плюс на первых буквах:
+   F-, F, F+, E-, E, E+, ...), не по упрощённой "одна ступень на букву".** Раньше
+   казалось, что raw-notes подразумевают две разные лестницы (полную — для
+   характеристик игрока, упрощённую — для статистов, судя по примеру мощи "F=10, E=20,
+   D=40, C=70, B=110" через целые буквы) — пользователь подтвердил: лестница ОДНА,
+   пример мощи просто сокращённо назвал буквами первые 5 ПОДРЯД ИДУЩИХ ступеней полной
+   лестницы (F-, F, F+, E-, E), не имена конкретных рангов "E"/"D"/"C"/"B" по
+   отдельности. `constant/characteristic.RANK_LADDER` — все 53 ступени одним кортежем
+   (F- ... Infinity), общие и для характеристик игрока (Сила/Скорость/Выносливость/
+   Ловкость), и для рангов статистов (`extra`, ещё не реализован).
+2. **Формула мощи статиста продолжается до самого верха лестницы без изменений.**
+   Выведена из тех же 5 примеров (прирост между соседними ступенями растёт на +10 с
+   каждым шагом: +10, +20, +30, +40) — треугольное число
+   `мощь(n) = 10 × (1 + n×(n+1)/2)`, `n` — 0-based индекс в `RANK_LADDER`. Проверено
+   кодом: `extra_power_for_rank` на `F-, F, F+, E-, E` даёт ровно `10, 20, 40, 70, 110` —
+   те же 5 чисел, что в raw-notes. На верхних рангах (`ZZZ`, `n=51`) — уже 13270,
+   `Infinity` (`n=52`) — 13790 (осознанно, эндгейм фазы Кулака, подтверждено
+   пользователем явным "продолжать формулу до конца").
+3. **Мастерство (Сила/Скорость, 3 ступени) — прочитано как ИТОГОВЫЙ бонус НА ступени, не
+   накопительная сумма** (`config/characteristic.strength_mastery_power_percent`:
+   0/10/25/50%, `speed_mastery_cd_reduction_percent`: 0/10/20/30%) — raw-notes дали
+   список величин "10%/25%/50%"/"−10/20/30%" по ступеням, не приросты между ними (в
+   отличие от формулы мощи статиста выше, где прирост был дан явно). Это чтение НЕ
+   переспрашивалось отдельным вопросом (в отличие от двух пунктов выше) — риск ошибки
+   ниже, потребителей формулы пока нет, поправить будет одной строкой, если оно
+   окажется неверным.
+4. **Мастерство Выносливости/Техники — не реализовано.** Raw-notes говорят только
+   "важный показатель в сражениях" без конкретных чисел — то же самое "открытый вопрос
+   дизайна", что уклонение/блок/контратака/побег в бою (см. выше), решать вместе с
+   доменом `combat`.
+5. **Только `constant/`+`config/` в этом заходе — БД/сервис пока не трогали.**
+   `User` ещё не получил колонки характеристик/мастерства (значит и `services/
+   characteristic`/`db.repositories.characteristic` остаются TODO-заглушками) —
+   осознанно: добавлять колонки раньше, чем `gang`/`training`/`profile` реально начнут
+   их читать/писать, означало бы гадать со стартовыми значениями (особенно
+   "Потенциал" — raw-notes прямо говорят "изначально рандомно... уточню где влияет
+   позже", то есть распределение случайного старта ещё не решено самим пользователем).
+   Проверено: чистые функции без сайд-эффектов, `python -m py_compile`/`pyflakes` по
+   всему `src/` (0 новых предупреждений сверх стандартного `noqa: F401`-шума) и прямой
+   вызов формул в интерпретаторе — реальная проверка чисел, не только импорт.
 
-There is no pytest, unittest, or linting configuration. All verification is manual via Docker logs.
+## Mini App: React-фронтенд создан с нуля (2026-09-21)
 
-docker-compose up --build -d
-git pull
+`src/web` был пустой директорией — первая реализация React-стороны Mini App, до этого
+существовал только backend-скелет (`src/api`, см. запись 2026-09-17). Взят как структурный
+образец `NH-Universe-Anime-Planet/src/web` (тот же автор, та же конвенция), но БЕЗ
+переноса Preact — этот проект с самого начала зафиксировал в стеке именно **React**
+(см. "LookismBattlePlanet 2.0.0" в начале файла: "Telegram Mini App (React)"), Preact у
+UAP был выбран ради размера бандла, здесь эту гонку сознательно не продолжаем — React +
+`react-router-dom` без попытки урезать зависимости.
+
+- **`Vite + React + TypeScript`**, ручная сборка конфига (`package.json`/`vite.config.ts`/
+  `tsconfig.json`), не `npm create vite@latest` — быстрее и предсказуемее для точного
+  повторения структуры UAP. Версии зависимостей взяты актуальными на дату написания
+  (`npm view <pkg> version` в момент установки): `react`/`react-dom` 19.3.0,
+  `react-router-dom` 7.18.4, `lucide-react` 1.47.0, `vite` 8.3.0, `@vitejs/plugin-react`
+  6.1.1, `typescript` 5.9.x — сильно новее, чем у UAP (тот фиксировался в 2026-08, здесь
+  октябрь на дворе не был, просто взяли то, что реально резолвится npm сейчас).
+- **Domain-per-folder для `api/`, `telegram/`, `config/`, `constants/`, `types/`** — та же
+  конвенция, что в UAP и в самом боте этого проекта (`<домен>/<домен>.ts` +
+  `<домен>/index.ts` барель-реэкспорт, вызывающий код импортирует из папки:
+  `from '../api'`, никогда `from '../api/api'`). `pages/`/`components/` — плоские файлы без
+  подпапки на компонент (тот же осознанный вырез, что у `db/models` в боте и у
+  `pages`/`components` в UAP — каждый компонент уже сам по себе один домен).
+- **`api/api.ts`** — единственный реальный вызов `fetchProfile()` (`GET /api/profile`,
+  заголовок `X-Telegram-Init-Data` из `telegram/telegram.ts: getInitData()`). Остальные 6
+  вкладок НЕ получили api-клиентов вообще — их `api/routers/*.py` пустые заглушки, писать
+  фронтенд-код под несуществующий контракт означало бы придумывать форму ответа, которую
+  потом пришлось бы либо чинить, либо игнорировать. **`ApiError`** — класс ошибки с
+  сохранённым HTTP-статусом (`status`), чтобы `hooks/useProfile.ts` мог отличить 404
+  ("игрок не жал /start боту") от прочих сетевых ошибок, не парся текст сообщения.
+- **`telegram/telegram.ts`** — портирован из UAP почти дословно (тот же официальный
+  алгоритм чтения `initData`/`themeParams`, тот же приём выставления `--tg-theme-*`
+  CSS-переменных на `document.documentElement`, которого Telegram сам не делает).
+- **`config/config.ts: PHASE_LABELS`** — зеркало `src/bot/texts/profile/profile.py:
+  PHASE_LABELS` (`gang`→"Банда", `circle`→"Круг", `fist`→"Кулак"). В `config/`, не
+  `constants/` — та же граница, что в UAP (`TIER_INFO`): это отображаемая подпись, зеркало
+  текста бота, не строка-идентификатор, участвующая в `===`/`startswith`.
+- **7 вкладок нижней навигации, только "Профиль" реальная.** `NavTabs.tsx` — `react-router-
+  dom`'ный `NavLink` (не `wouter`, как у UAP — тут настоящий React) на 7 маршрутов
+  (`constants/constants.ts: ROUTE_*`). `ProfilePage.tsx` вызывает `useProfile()` и
+  различает 4 состояния: загрузка / нет `Telegram.WebApp` (открыто в обычном браузере —
+  показывается прямо, а не отправляется заведомо обречённый запрос с пустой `initData`) /
+  404 "не зарегистрирован" (текст ведёт открыть бота и нажать `/start`) / прочая ошибка.
+  Остальные 6 (`MapPage`/`DevelopmentPage`/`ShopPage`/`ClansPage`/`QuestsPage`/
+  `SettingsPage`) — все тонкие обёртки над одним `components/PlaceholderPage.tsx` (иконка +
+  заголовок + нейтральная строка "Раздел в разработке.") — сознательно НЕ придуманы
+  конкретные механики/цифры для них, это прямое требование объёма задачи (не додумывать
+  игровой контент за пользователя, см. "Открытые вопросы дизайна" выше — тот же принцип
+  распространён и на UI-заглушки).
+- **Same-origin `/api/*` без хардкода хоста** — `fetch('/api/profile', ...)`, `vite.config.ts`
+  добавляет dev-прокси `/api → http://localhost:8000` (порт `uvicorn` внутри контейнера
+  `api`, см. `docker-compose.yml`) только для локального `npm run dev` вне Docker; в проде
+  реверс-прокси ещё не заведён (см. "Открытый вопрос" в начале файла про Caddy/домен) —
+  тогда same-origin будет работать сам по себе, без прокси-конфига вообще.
+- **`Dockerfile.web` (мульти-стейдж node→caddy, есть у UAP) НЕ заведён.** У UAP он
+  копирует готовый `Caddyfile` из корня репозитория — в этом репозитории `Caddyfile`
+  вообще не существует (реверс-прокси/домен/HTTPS — открытый вопрос, см. выше), писать
+  Caddy-конфиг с нуля ради Dockerfile, который и так явно вне объёма этого захода
+  (задача прямо просила не тратить на это усилия), не стали — тот же самый открытый
+  вопрос, что уже задокументирован, просто фронтенд для него ещё не существовал раньше.
+- **`.gitignore`** пополнен `node_modules/`/`dist/`/`*.tsbuildinfo` (те же 3 паттерна, что
+  у UAP) — раньше в репозитории не было причин их игнорировать (Python-only `.gitignore`).
+- **Реально проверено `npm install` + `npx tsc -b` + `npx vite build`** (Node.js v22.13.1
+  доступен в этом окружении, тот же прецедент, что у всех сборок UAP) — `tsc -b`: 0 ошибок.
+  `vite build`: 1904 модуля, `dist/assets/index-*.js` 270.29 kB (86.54 kB gzip),
+  `index-*.css` 2.42 kB (0.89 kB gzip). Бандл заметно больше, чем у Preact-версии UAP
+  (~54KB/19KB) — ожидаемо и осознанно принято (React+react-router-dom тяжелее Preact+
+  wouter), задача явно попросила не переключаться на Preact ради размера.
+- **НЕ проверено** (то же ограничение окружения, что и у всех записей выше про Mini App
+  UAP): реальный рендер в браузере или в Telegram WebView, клик по вкладкам, реальный
+  round-trip `GET /api/profile` против поднятого `uvicorn`+Postgres (в этом окружении нет
+  `docker`-демона — см. запись 2026-09-17 "Реально проверено локальным запуском"), визуальная
+  проверка тем/отступов/скролла нижней навигации на 7 вкладках на реальном устройстве.
+
+## Mini App: постоянный домен `lbp.universanimeplanet.ru` (2026-09-21)
+
+Подтверждено пользователем через AskUserQuestion: постоянный поддомен уже работающего
+домена UAP (не отдельный домен, не временный туннель) — DNS A-запись
+`lbp.universanimeplanet.ru → 72.56.126.67` уже добавлена пользователем в reg.ru (тот же
+IP, что у `@`/`universanimeplanet.ru`, реальный прод-сервер, НЕ этот дев-компьютер).
+
+- **Два независимых Caddy не могут слушать 80/443 на одной машине одновременно** — LBP
+  СВОЙ Caddy/домен/HTTPS не заводит вообще. Вместо этого `web` (новый сервис,
+  `Dockerfile.web`+`Caddyfile` в корне репозитория — мульти-стейдж node→caddy, тот же
+  паттерн, что у UAP, но собирает `src/web`) отдаёт статику SPA на внутреннем `:80`, БЕЗ
+  публикации портов и БЕЗ собственного домена/TLS. Публичный домен обслуживает ОБЩИЙ
+  `caddy` соседнего проекта UAP — второй `site`-блок в его `Caddyfile`
+  (`lbp.universanimeplanet.ru { handle /api/* { reverse_proxy lookism_api:8000 }
+  handle { reverse_proxy lookism_web:80 } }`) — Caddy поддерживает несколько сайтов в
+  одном Caddyfile из коробки, включая отдельный авто-HTTPS сертификат на каждый.
+- **Внешняя docker-сеть `edge`** — единственный способ, которым `caddy` из ЧУЖОГО
+  docker-compose проекта (UAP) может достучаться до `lookism_api`/`lookism_web` по имени
+  контейнера: оба проекта объявляют `networks: edge: external: true` и подключают к ней
+  нужные сервисы (`api`+`web` у LBP, `caddy` у UAP). Сеть создаётся ОДИН РАЗ ВРУЧНУЮ
+  `docker network create edge` ДО первого `docker compose up` в любом из двух проектов —
+  ни один compose-файл не создаёт её сам (`external: true`), иначе оба попытались бы
+  создать её независимо и один упал бы с конфликтом имени при повторном поднятии.
+  **Реально проверено локально**: после создания сети и поднятия `api`+`web` —
+  контейнер на сети `edge` достаёт `lookism_api:8000/api/health` и `lookism_web:80/`
+  по имени, оба отвечают 200 с реальным содержимым (JSON health-check и настоящий
+  `index.html` от собранного Vite-бандла).
+- **НАЙДЕННЫЙ РИСК при попытке проверить сам Caddy+HTTPS локально: реальные ACME-запросы
+  к Let's Encrypt.** Локальный `caddy`-контейнер UAP, увидев в `.env` настоящий
+  `DOMAIN=universanimeplanet.ru`, честно попытался получить boевые сертификаты для ОБОИХ
+  доменов через реальный `acme-v02.api.letsencrypt.org` — валидация физически стучится
+  не в этот дев-компьютер, а в реальный `72.56.126.67` (куда смотрит DNS), поэтому обе
+  попытки закономерно провалились. Дело не в самой ошибке (она безобидна), а в том, что
+  у Let's Encrypt есть лимит на ПРОВАЛЕННЫЕ попытки валидации на домен (5/час) — при
+  повторных перезапусках этого контейнера с реальным доменом на дев-машине есть риск
+  выжрать этот лимит и временно помешать реальному серверу перевыпустить сертификат.
+  **Локальный `caddy` UAP остановлен вручную (`docker compose stop caddy`) и НЕ должен
+  запускаться на этой машине снова с реальным `DOMAIN`** — тестировать сам Caddy+ACME
+  можно только на реальном проде, где ACME-challenge физически способен дойти до
+  сервера. Сетевая часть (`edge`, резолвинг по имени контейнера) проверяется безопасно
+  где угодно и уже подтверждена (см. выше) — это единственное, что реально могло тихо
+  не заработать после деплоя.
+- **Бот: кнопка "🖼 Профиль (веб)"** на экране `/profile` (`keyboards/profile.profile_menu`,
+  `utils/mini_app.py` — портирован из UAP почти дословно, включая `resolve_mini_app_base_url`:
+  Telegram отклоняет ЦЕЛОЕ сообщение с `web_app`-кнопкой вне приватных чатов, не просто
+  скрывает кнопку — наступили на этот баг в UAP 2026-08-15, учтено сразу). `?view=`
+  параметр (как у UAP) не нужен — фронтенд LBP роутится настоящими путями
+  (`react-router-dom`), `ROUTE_PROFILE="/"` и так дефолтный маршрут.
+- **`MINI_APP_URL=https://lbp.universanimeplanet.ru`** добавлен в `.env`/`.env.example`
+  (`config/settings.Settings.mini_app_url`) — в отличие от UAP, LBP не нужна собственная
+  `DOMAIN` переменная вообще (нет своего Caddy, некому её читать).
+- **Деплой на реальный прод (не сделано, ждёт пользователя)**: `docker network create
+  edge` один раз на реальном сервере, затем обычный `docker compose up -d --build` в
+  обоих репозиториях (тем же `start-all.sh`) — на реальном сервере ACME-challenge дойдёт
+  по-настоящему и сертификат для `lbp.universanimeplanet.ru` выпустится.
+
+## Сидинг статичного контента вынесен из `main.py` в `manager.py seed` (2026-09-21)
+
+По прямой просьбе пользователя — сид стран/городов (`services.country.seed`/
+`services.city.seed`) раньше вызывался автоматически при КАЖДОМ старте `bot.main`
+(`_seed_world`, до `dp.start_polling`). Убрано оттуда: сидинг — не игровая механика с
+состоянием, ему не место в горячем пути автозапуска процесса (тот же принцип, что у
+`seed_cards.py` в Universe Anime Planet — ручной скрипт, не часть старта бота). Новая
+команда **`python manager.py seed`** (тот же elif-диспатч по `sys.argv[1]`, что и
+остальные команды `manager.py` — `backup`/`restore`/`migrate`/... — не переписывал стиль
+файла ради одной новой команды) — идемпотентна (`ON CONFLICT DO NOTHING`), безопасно
+гонять сколько угодно раз, реально прогнана в контейнере `manager` после правки:
+`docker compose exec manager python manager.py seed` → `✅ Страны и города засеяны`,
+данные (7 стран, 207 городов) не пострадали. `bot/main.py` лишился связанных импортов
+(`services.city`/`services.country`) и функции `_seed_world` целиком.
+
+## Домен `gang` — название банды, последний шаг онбординга (2026-09-21)
+
+Продолжение "Дальше" — раньше онбординг заканчивался на выборе города (`ONBOARDING_DONE`);
+raw-notes прямо говорят «банда начинается с названия» сразу после выбора страны/города, до
+начала основных механик — этот шаг был буквально дырой в единственном работающем флоу бота.
+
+- **`gangs` — 1:1 с `User` (`user_id` сразу PK, без суррогатного ключа**, тот же приём,
+  что `User.id`)**. Не путать с `клан` (домен `clan`, отдельная многопользовательская
+  сущность — своя вкладка нижней навигации в дизайне 2.0). Пока только `name` — состав
+  (9 позиций), уникальная коллекция, статисты/лагеря лягут сюда по мере реализации
+  `recruit`/`extra`/`card`, не додумывались заранее.
+- **Длина имени (3-64 символа) — не из raw-notes** (там числа не даны вообще), взята
+  один в один с `CLAN_NAME_MIN/MAX_LENGTH` у клана в Universe Anime Planet — инженерный
+  дефолт того же автора/проекта, не игровой баланс, отдельным вопросом не уточнялся.
+  Имя НЕ уникально глобально (в отличие от клана) — банда сейчас чисто личная сущность
+  без поиска/вступления, дублирующиеся названия не создают путаницы в механиках,
+  которые уже описаны.
+- **Флоу — FSM, не callback**: `states/gang.py: GangStates.waiting_name`,
+  `handlers/gang.prompt_gang_name()` (публичная функция домена, как `show_profile`) —
+  переиспользуется из ДВУХ мест: `cb_choose_city` (сразу после выбора города, новым
+  сообщением) и `cmd_start` (если игрок прервался на этом шаге раньше — страна/город
+  есть, банды нет — `/start` не показывает профиль без банды, а дожимает шаг заново).
+  Валидация длины — до похода в БД (`services.gang.validate_gang_name`, тот же приём,
+  что везде в проекте). Повторное создание банды у того, кто уже её создал
+  (`GangAlreadyExistsError`) — не ошибка пользователю, тихо продолжает в профиль (гонка
+  двух параллельных заходов в это состояние).
+- **Профиль получил вторую строку** — `🏴 Банда: {gang_name}` (сразу после имени, до
+  страны — тот же порядок полей, что в raw-notes «Профиль»: «Название банды:» второй
+  строкой). Синхронизировано в трёх местах разом (тот же контракт, что и раньше):
+  `services/profile.ProfileView.gang_name`, `api/schemas.ProfileOut.gang_name`,
+  `src/web/src/pages/ProfilePage.tsx` (новая строка с иконкой `Flag`, `tsc -b` — 0
+  ошибок).
+- **Требуется миграция — впервые СГЕНЕРИРОВАНА автогенерацией, а не написана вручную**
+  (в отличие от двух предыдущих — тогда не было доступа к поднятому Postgres). Первая
+  попытка `alembic revision --autogenerate` дала ПУСТУЮ миграцию — оказалось, образ
+  `bot`-контейнера был собран ДО того, как появился `db/models/gang.py`, и autogenerate
+  сравнивал живую БД со старой моделью внутри устаревшего образа, не видя новой таблицы
+  вообще. После `docker compose up -d --build bot` (пересборка образа) повторная
+  автогенерация корректно нашла `Detected added table 'gangs'` и сгенерировала
+  правильный `654759350969_gang.py` — **урок**: между правкой моделей и
+  `alembic revision --autogenerate` в контейнере ОБЯЗАТЕЛЬНО пересобирать образ, иначе
+  тихо получишь пустой (или неполный) диф без единой ошибки.
+- **Проверено по-настоящему целиком, не только статически** — впервые в этом проекте
+  есть живой Postgres под рукой: `services.gang.create_gang`/`get_gang` прогнаны
+  напрямую внутри контейнера `bot` против реальной БД для реального тестового игрока
+  (`id=1738160024`) — короткое имя отклонено (`too_short`), обрезка пробелов
+  сработала (`"  Тестовая Банда  "` → `"Тестовая Банда"`), повторное создание банды
+  корректно отклонено (`GangAlreadyExistsError`), `GET /api/profile` (пересобранный
+  `api`-контейнер, тот же приём с подписанным `initData`, что и раньше) вернул
+  `"gang_name":"Тестовая Банда"` в реальном ответе. **Не проверено**: сам FSM-флоу
+  через живой Telegram (нет доступа отправить сообщение от лица реального игрока), но
+  сама бизнес-логика, которую он вызывает, подтверждена реальным прогоном.
+
+## Домены `recruit`/`extra` — вербовка статистов (2026-09-21)
+
+Раздел «Карта» → «Вербовка» из raw-notes. Реализована ТОЛЬКО вербовка статистов —
+вербовка уникальных персонажей за тикеты требует доменов `card`/`gacha` (перки/редкости
+у уникальных персонажей в raw-notes не сведены в реализуемую механику вообще, это
+отдельная большая задача), делать заранее не стали.
+
+- **Формула ранга статиста при вербовке — подтверждена пользователем 2026-09-21
+  (AskUserQuestion), тот самый пункт "Открытых вопросов дизайна", отмеченный ещё
+  17-го.** Raw-notes дают только стартовое влияние (10) и потолки по фазам (F..EX/EXR/
+  ZZZ), без самой зависимости. Подтверждено: вербовка даёт СЛУЧАЙНЫЙ ранг от F- до
+  потолка, где потолок = `min(потолок_фазы, влияние)` — влияние читается как индекс в
+  `RANK_LADDER` напрямую, без доп. коэффициента. Чем больше влияние — тем выше шанс на
+  редкий ранг, но F- всегда возможен (`services/recruit.roll_extra_rank`). Проверено
+  прогоном 2000 бросков при влиянии=10 — индексы держатся строго в `[0, 10]`.
+- **Влияние — пока константа (`INFLUENCE_STARTING=10`), не вычисление.** Raw-notes:
+  «влияние растёт от захваченных районов/городов» — территория (`district`) ещё не
+  реализована, значит расти неоткуда. `services/recruit.get_influence()` — намеренно
+  без параметров сейчас, честная временная заглушка; когда появится захват района, тут
+  будет реальный подсчёт по владению, не константа (задокументировано в коде, чтобы не
+  забыть при реализации `district`).
+- **КД вербовки — в Redis, не в Postgres-колонке** (правило 4: горячее состояние, не
+  Postgres на каждое действие). `SET NX EX 1200` — САМ ключ и есть кулдаун: атомарно и
+  защищает от двойного клика (правило 2), и реализует игровые 20 минут ожидания одним
+  вызовом, без отдельного лока поверх. Реальный прогон подтвердил: второй вызов подряд
+  корректно ловит `RecruitOnCooldownError(retry_after_seconds=1200)`.
+- **`extras` — новая таблица, снимок мощи, не всегда равной формуле ранга.** `power`
+  считается один раз при вербовке (`extra_power_for_rank`, уже был в domain
+  `characteristic`) и живёт как обычное поле — тренировка (мощь ×1.2) и пробуждение
+  (+50%/звезда) будущего домена `training` будут менять его независимо от `rank`, не
+  трогая исходную формулу. `camp` (лагерь атака/защита) — колонка добавлена
+  заранее (nullable), само распределение — действие экрана «Банда», ещё не реализовано.
+- **`utils/formatting.py: format_countdown()`** — впервые в проекте, портирован из
+  Universe Anime Planet дословно (MM:SS, H:MM:SS после часа) — понадобился для текста
+  "вербовка на кулдауне ещё N". Пригодится для всех будущих кулдаунов (тренировки,
+  сражения по фазам и т.д.), не только вербовки.
+- **`/recruit`** — временная команда (по образцу `/profile`, до появления настоящего
+  меню «Карта»): показывает счётчик статистов + кнопку "Завербовать". Popup-алерт
+  кулдауна — БЕЗ HTML-тегов (тот же баг из UAP, "popup не поддерживает HTML") — а вот
+  результат вербовки (с `<b>`) уходит обычным сообщением, не алертом.
+- **НАЙДЕНА И ИСПРАВЛЕНА реальная поломка миграции при разработке** — хороший урок на
+  будущее. `alembic revision --autogenerate` в контейнере `bot` был запущен ПОСЛЕ
+  правки моделей, но ДО пересборки образа — контейнер физически не видел новый
+  `db/models/extra.py`, поэтому первая автогенерация дала пустой (пропущенный) диф.
+  После `docker compose up -d --build bot` повторная генерация нашла файл с багом
+  (`from bot.config.characteristic import RANK_LADDER` — тот на самом деле в
+  `constant.characteristic`, не `config`, опечатка при написании, которую `pyflakes`
+  не ловит — это межмодульная ошибка резолвинга, не синтаксис) и, что важнее,
+  **entrypoint контейнера успел выполнить `alembic upgrade head` (создав `extras` в
+  реальной БД) ДО того, как процесс бота упал** на этом импорте — потом ошибочный файл
+  миграции был удалён вручную, оставив `alembic_version` в БД указывающей на
+  несуществующий файл (`Can't locate revision`). Почищено: (1) исправлен импорт, (2)
+  локально прогнан `import bot.main` ЦЕЛИКОМ ПЕРЕД пересборкой контейнера (этого шага
+  раньше пропускал, полагаясь только на `py_compile`+`pyflakes` — они НЕ ловят
+  "модуль существует, но не экспортирует это имя", только полный import ловит), (3)
+  файл миграции восстановлен вручную с ТЕМ ЖЕ revision id, что совпадает с уже
+  применённым в БД состоянием (не новая миграция — синхронизация файла с реальностью).
+  **Правило на будущее, добавить в привычку**: между правкой моделей и
+  `alembic revision --autogenerate` В КОНТЕЙНЕРЕ — всегда `docker compose up -d --build`
+  первым шагом, и всегда локальный `import bot.main` ПЕРЕД пересборкой, не только
+  `py_compile`.
+- **Проверено по-настоящему целиком** на реальном тестовом игроке (`id=1738160024`):
+  вербовка создала статиста ранга `E-`, мощь `70` (формула даёт ровно это на индексе 3
+  — сходится); повторная вербовка в то же окно корректно заблокирована; счётчик
+  статистов вырос 0→1. Тестовый кулдаун в Redis снят вручную после проверки, чтобы не
+  мешать пользователю тестировать `/recruit` самому.
+
+## Профиль: главное меню на 7 вкладок + Вербовка (2026-09-21)
+
+По прямому запросу пользователя ("чтобы игрок мог использовать все функции игры" через
+бота, не только Mini App, со скриншотом главного меню LBP 1.0 как примером "должно быть
+много кнопок навигации сразу") — `keyboards/profile.profile_menu()` получил сетку из 7
+кнопок под кнопкой "Профиль (веб)": Карта/Развитие/Магазин/Кланы/Задания/Настройки (тот
+же список разделов, что нижняя навигация Mini App, `src/web/src/constants`) + отдельно
+"🎯 Вербовка" (единственная реально рабочая функция без своего домена верхнего уровня —
+по дизайну она живёт ВНУТРИ «Карты», которой ещё нет).
+
+- **НЕ копирует список кнопок LBP 1.0 со скриншота буквально** (Атака/Рейд/Боссы/
+  Походы/Бизнес/Банк/Магазин/Биржа/Аукцион/Группировка/Колода/Титулы/Навыки/
+  Тренировка/Кланы/Задания/Прочее) — это старая, полностью переписываемая игра;
+  скриншот прочитан как пример ФОРМЫ ("сразу много кнопок навигации"), не как
+  список функций для переноса. Реальные разделы 2.0.0 — 7 вкладок дизайна.
+- **Разделы без реализованного домена — честная заглушка, не выдуманный экран**
+  (`handlers/common.cb_menu_placeholder`, один popup-алерт "🚧 Раздел в разработке" на
+  все 6 — тот же принцип, что `PlaceholderPage` в Mini App). Без HTML в тексте (popup
+  не поддерживает разметку, см. CLAUDE.md UAP).
+- **"Вербовка" — отдельный `CB_RECRUIT_OPEN`, не тот же callback, что сама вербовка**
+  (`CB_RECRUIT_EXTRA`) — открытие экрана не должно тратить кулдаун/пытаться
+  завербовать сразу. `handlers/recruit._show_menu` переименован в публичную
+  `show_recruit_menu` (тот же паттерн domain-owns-its-callback, что и everywhere
+  — кнопка в чужой клавиатуре (`keyboards/profile`) просто указывает на чужой
+  callback_data, обработчик которого целиком живёт в `handlers/recruit`, профиль его не
+  дублирует).
+- Проверено: `python -m py_compile`/`pyflakes`/полный `import bot.main` — чисто;
+  клавиатура собрана напрямую в интерпретаторе — все 8 кнопок (веб-профиль + 6
+  заглушек + вербовка) с ожидаемыми callback_data/URL. Пересобран и перезапущен
+  `bot`-контейнер, стартует без ошибок.
+
+## Домен `training` — тренировка статистов, 3 этапа (2026-09-21)
+
+Раздел «Карта» → «Тренировки» из raw-notes. Реализована ТОЛЬКО тренировка статистов —
+**личная тренировка игрока НЕ реализована**: её раскладка баллов/шанс ничего-не-получить
+целиком завязаны на «Потенциал», чей стартовый разброс и механику влияния пользователь
+сам ещё не решил ("уточню где влияет позже", см. "Открытые вопросы дизайна") — додумывать
+не стали, в отличие от тренировки статистов, у которой БАЗОВЫЕ проценты (10%/20%/×1.2/
++50%/25%) даны в raw-notes явно, без ссылки на потенциал вообще (то, что их МОЖНО будет
+УЛУЧШАТЬ от потенциала/влияния — прямая цитата raw-notes про будущий, не текущий апгрейд).
+
+- **Каскад 3 этапов, воронкой** — каждый следующий этап проверяется ТОЛЬКО у тех, кто
+  прошёл предыдущий (не у всей выборки заново): 20% статистов игрока случайно попадают в
+  тренировку (`db.repositories.extra.pick_random_for_training`, `ORDER BY random() LIMIT
+  n` — выборка ограничена ОДНИМ игроком, не глобальным сканом, правило 3 не нарушено) →
+  10% из них поднимают мощь ×1.2 (этап 1) → из ПРОШЕДШИХ этап 1 (и у кого ещё <3 звёзд)
+  10% получают звезду пробуждения (+50% к мощи) (этап 2) → из ПРОШЕДШИХ этап 2 25%
+  поднимают ранг на 1 ступень, не выше потолка фазы (`_next_rank`, та же граница, что у
+  вербовки, `services.recruit.PHASE_RANK_CAP_INDEX`) (этап 3).
+- **`Extra.stars`** — новая колонка (0-3, `EXTRA_TRAINING_MAX_STARS`) — статист с 3
+  звёздами больше не проходит этап 2 (raw-notes: «если у статиста уже есть все 3 звезды
+  он не проходит этот этап»). `power` продолжает жить независимо от `rank` (см. запись
+  про `extra`-домен выше) — этап 3 меняет ТОЛЬКО ранг, не пересчитывает мощь по формуле
+  нового ранга.
+- **КД тренировки (30 минут) — тот же Redis `SET NX EX` паттерн, что у вербовки**
+  (`cache/keys.train_extras_cooldown`) — с одним отличием: если у игрока 0 статистов,
+  КД вообще НЕ выставляется (нечего тренировать — это отсутствие действия, не действие
+  с нулевым результатом, тратить на него игровой ресурс/время не за что).
+- **`/train`** — временная команда (тот же паттерн, что `/recruit`/`/profile`), плюс
+  кнопка "🏋️ Тренировка" в главном меню профиля (`keyboards/profile.profile_menu`,
+  рядом с "🎯 Вербовка").
+- **Пойман и сразу исправлен реальный баг ДО пересборки контейнера** — забыл добавить
+  8 новых констант тренировки в `config/game/__init__.py` (реэкспорт), из-за чего
+  `services/training` падал на `ImportError` при импорте. Поймано ЛОКАЛЬНЫМ полным
+  `import bot.main` ПЕРЕД пересборкой контейнера — ровно то новое правило, которое было
+  сформулировано в предыдущей записи после похожего бага у `recruit` (тогда правило
+  сформулировали, здесь оно сразу же сработало и сэкономило ещё один цикл
+  пересборки/отладки в контейнере).
+- **Проверено по-настоящему целиком на реальных Postgres+Redis**: сначала одиночный
+  прогон (31 статист, охват 7 = ceil(31×20%), кулдаун 1800с корректно блокирует повтор),
+  затем 40 прогонов подряд (со сбросом кулдауна между ними) для статистической проверки
+  всей воронки: 280 попыток → 26 успехов этапа 1 (ожидание ~28, сходится), 3 успеха
+  этапа 2 (ожидание от 26×10%≈2.6, сходится), 0 успехов этапа 3 (ожидание от 3×25%≈0.75,
+  правдоподобный ноль на такой малой выборке) — мощь статистов реально выросла через
+  несколько применений ×1.2/+50% (например, 10→12→18 за проход этап1+этап2), звёзды
+  проставились. Тестовые кулдаун-ключи в Redis сняты вручную после проверки.
+
+## `extra`: статисты переведены на стопки под масштаб "сотни миллиардов" (2026-09-21)
+
+По прямому запросу пользователя (после скриншотов рабочих экранов вербовки/тренировки:
+"хочу видеть ранги и показатели армии, и чтобы это масштабировалось на сотни миллиардов
+статистов") — подтверждено через AskUserQuestion: **одна строка = один статист**
+физически несовместимо с этим масштабом (сотни миллиардов строк на игрока — это
+триллионы строк суммарно, ни одна СУБД так не работает), и тренировка не может кидать
+случайный бросок на каждый юнит по отдельности (миллиарды бросков за один клик не
+посчитать за разумное время). Переведено на **стопки**, тот же принцип, что карточки в
+Universe Anime Planet.
+
+- **`Extra` теперь = (user_id, rank, stars, training_level) → quantity.** Мощь ОДНОЙ
+  единицы НИКОГДА не хранится — всегда считается по формуле
+  (`config/characteristic.extra_unit_power(rank, stars, training_level) =
+  extra_power_for_rank(rank) × 1.2^training_level × 1.5^stars`). `training_level` —
+  новое поле, считает, сколько раз статист (точнее — стопка, к которой он относится)
+  успешно прошёл этап 1 тренировки, ЧАСТЬ КЛЮЧА стопки, не отдельное поле мощи — иначе
+  пришлось бы либо копить триллион разных чисел мощи поштучно, либо хранить историю
+  каждого статиста отдельно, что при таком масштабе невозможно. `quantity` —
+  `BigInteger` (Integer столько не потянет, потолок ~2.1 млрд). `camp` (лагерь атака/
+  защита) убран из модели — его распределение всё ещё не реализовано, а nullable-поле
+  в ключе стопки либо ломает `ON CONFLICT`-апсерты (NULL ≠ NULL в уникальном индексе
+  Postgres), либо требует сентинел-значения до появления реального потребителя.
+- **Вербовка** (`services/recruit.recruit_extra`) — было "создать новую строку",
+  стало "+1 к стопке (ранг, 0, 0)" через `add_to_stack` (`db.repositories.extra`,
+  `INSERT ... ON CONFLICT DO UPDATE quantity = quantity + :delta`, один атомарный
+  апсерт, без "прочитать-потом-обновить", правило 1). Возвращает `RecruitResult(rank,
+  power)` вместо ORM-строки — строки-статиста как отдельной сущности больше не
+  существует.
+- **Тренировка** (`services/training.train_extras`) — переписана вокруг
+  `random.binomialvariate(n, p)` (стандартная библиотека, Python 3.12+): вместо цикла
+  по каждому юниту — один биномиальный бросок НА ЦЕЛУЮ СТОПКУ на каждом из 4 шагов
+  (охват → этап1 → этап2 → этап3), статистически эквивалентно честному броску за
+  каждого статиста, но за одну операцию хоть для 5, хоть для 500 миллиардов. Успешная
+  часть стопки атомарно переносится в стопку-назначение (`add_to_stack` с
+  отрицательным/положительным `quantity`) — несколько исходных стопок, дающих одно и
+  то же назначение, корректно СКЛАДЫВАЮТСЯ через `ON CONFLICT DO UPDATE`, не
+  перезаписывают друг друга. `list_stacks(..., for_update=True)` держит блокировку
+  строк на время всей операции (правило 1) — снимок стопок в начале функции не может
+  устареть посреди применения дельт.
+- **`services/extra.get_army_stats`** — новая агрегация: общее количество, общая мощь
+  армии (сумма по СТОПКАМ, не по юнитам — число стопок ограничено комбинаторикой
+  ранг×звёзды×уровень тренировки, не размером армии, поэтому это дёшево даже при
+  триллионах юнитов, правило 3), разбивка по рангам от лучшего к худшему.
+  `texts/common.render_army_block()` — общий рендер для вербовки И тренировки (раньше
+  показывали только счётчик "Статистов в банде: N", теперь полную картину армии).
+- **`utils/formatting.format_number()`** — впервые в этом проекте, портирован из UAP
+  (разделители разрядов) — без него `125000000001` сливается в нечитаемую цепочку
+  цифр.
+- **Требуется миграция, СТАРЫЕ ДАННЫЕ ПОТЕРЯНЫ НАМЕРЕННО** — тестовые строки от
+  предыдущих прогонов (десятки строк "один статист = одна строка") нарушали НОВЫЙ
+  уникальный индекс `(user_id, rank, stars, training_level)` в лоб (много старых строк
+  с одинаковым рангом/звёздами при training_level по умолчанию 0 — прямой конфликт).
+  Таблица `extras` очищена (`TRUNCATE`) ПЕРЕД применением миграции — это тестовые
+  данные с текущего дев-прогона, не что-то, что нужно было сохранять; на реальном
+  проде таблицы `extras` ещё не существовало вообще (домен `recruit`/`extra` появился
+  только сегодня), это уточнение чисто про порядок действий в ЭТОМ дев-окружении.
+- **Проверено по-настоящему на реальных Postgres+Redis, включая заявленный масштаб**:
+  живая вербовка через публичный сервис (не напрямую в репозиторий), затем ДВЕ стопки
+  по 50 и 75 миллиардов (итого 125,000,000,001 с учётом вербовки) добавлены напрямую
+  для проверки масштаба — `get_army_stats` посчитал итог/мощь/разбивку по рангам
+  мгновенно; `train_extras` над 125 млрд обработался МГНОВЕННО (не завис, не потребовал
+  цикла): охвачено ~25 млрд (≈20%), этап 1 ~2.5 млрд (≈10% от охвата), этап 2 ~250 млн
+  (≈10% от этапа 1), этап 3 ~62.5 млн (≈25% от этапа 2) — все пропорции сошлись с
+  ожидаемыми процентами на выборке такого размера; **общее количество статистов ДО и
+  ПОСЛЕ тренировки совпало день-в-день** (125,000,000,001 → 125,000,000,001) —
+  подтверждает, что тренировка ПЕРЕМЕЩАЕТ юнитов между стопками, а не
+  создаёт/теряет их, при этом общая мощь армии выросла (часть перешла в более сильные
+  стопки). Тестовые данные (обе гигантские стопки) снесены после проверки —
+  `TRUNCATE` ещё раз, тестовый аккаунт начинает армию с нуля через реальную вербовку.

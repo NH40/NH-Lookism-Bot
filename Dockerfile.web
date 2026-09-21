@@ -1,0 +1,14 @@
+# Мульти-стейдж: собираем статику Vite-фронтенда в node-образе, но в финальном образе
+# остаётся только caddy + готовые файлы — без node_modules и тулчейна сборки в проде
+# (тот же паттерн, что Dockerfile.web в Universe Anime Planet). `npm ci` (не `npm
+# install`, как у UAP) — package-lock.json уже есть в src/web, детерминированная сборка.
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY src/web/package.json src/web/package-lock.json ./
+RUN npm ci
+COPY src/web/ ./
+RUN npm run build
+
+FROM caddy:2-alpine
+COPY Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /app/dist /srv/web

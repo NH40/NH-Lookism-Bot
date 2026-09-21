@@ -8,9 +8,6 @@ import os
 from datetime import datetime
 
 BACKUP_DIR = "./backups"
-# Сколько последних бэкапов хранить — auto_backup_loop копит их каждые 6ч
-# бесконечно, без чистки диск через пару месяцев забивается дампами.
-# ~650МБ на дамп, 5 держит ~30ч истории при ~3.2ГБ на диске.
 BACKUP_KEEP = 5
 
 
@@ -33,22 +30,21 @@ def prune_backups(keep: int = BACKUP_KEEP) -> None:
 async def backup():
     """Создаёт бэкап PostgreSQL."""
     os.makedirs(BACKUP_DIR, exist_ok=True)
-    from app.config import settings
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{BACKUP_DIR}/backup_{ts}.sql"
     cmd = (
-        f"PGPASSWORD='{settings.POSTGRES_PASSWORD}' "
+        f"PGPASSWORD='{os.environ['POSTGRES_PASSWORD']}' "
         f"pg_dump "
-        f"-h {settings.POSTGRES_HOST} "
-        f"-p {settings.POSTGRES_PORT} "
-        f"-U {settings.POSTGRES_USER} "
+        f"-h {os.environ.get('POSTGRES_HOST', 'postgres')} "
+        f"-p {os.environ.get('POSTGRES_PORT', '5432')} "
+        f"-U {os.environ['POSTGRES_USER']} "
         f"--no-privileges "
         f"--no-owner "
         f"--clean "
         f"--if-exists "
         f"-F p "
         f"-f '{filename}' "
-        f"{settings.POSTGRES_DB}"
+        f"{os.environ['POSTGRES_DB']}"
     )
     ret = os.system(cmd)
     if ret == 0:
@@ -61,7 +57,6 @@ async def backup():
 
 async def restore(filename: str):
     """Восстанавливает из бэкапа."""
-    from app.config import settings
     if not os.path.exists(filename):
         print(f"❌ Файл не найден: {filename}")
         return
@@ -78,12 +73,12 @@ async def restore(filename: str):
         f.writelines(filtered)
 
     cmd = (
-        f"PGPASSWORD='{settings.POSTGRES_PASSWORD}' "
+        f"PGPASSWORD='{os.environ['POSTGRES_PASSWORD']}' "
         f"psql "
-        f"-h {settings.POSTGRES_HOST} "
-        f"-p {settings.POSTGRES_PORT} "
-        f"-U {settings.POSTGRES_USER} "
-        f"-d {settings.POSTGRES_DB} "
+        f"-h {os.environ.get('POSTGRES_HOST', 'postgres')} "
+        f"-p {os.environ.get('POSTGRES_PORT', '5432')} "
+        f"-U {os.environ['POSTGRES_USER']} "
+        f"-d {os.environ['POSTGRES_DB']} "
         f"-v ON_ERROR_STOP=0 "
         f"-f '{clean_file}'"
     )
@@ -322,6 +317,29 @@ async def rebuild_circ_bonuses():
     print(f"✅ Пересчитаны круговые бонусы для {len(users)} игроков")
 
 
+async def seed():
+    """Засеивает статичный контент карты 2.0.0 (страны/города — см. src/bot/config/country,
+    config/city) — идемпотентно (ON CONFLICT DO NOTHING), безопасно гонять повторно.
+    Раньше вызывалось автоматически при каждом старте bot.main (main.py: _seed_world) —
+    вынесено сюда по прямой просьбе пользователя 2026-09-21: сидинг — не игровая
+    механика с состоянием, ему не место в горячем пути каждого рестарта контейнера
+    (тот же принцип, что seed_cards.py в Universe Anime Planet — ручной запуск, не
+    завязан на процесс бота)."""
+    from bot.config.settings import get_settings
+    from bot.db.session import make_engine, make_session_factory
+    from bot.services import city as city_service
+    from bot.services import country as country_service
+
+    settings = get_settings()
+    engine = make_engine(settings)
+    session_factory = make_session_factory(engine)
+    async with session_factory() as session:
+        await country_service.seed(session)
+        await city_service.seed(session)
+    await engine.dispose()
+    print("✅ Страны и города засеяны")
+
+
 async def auto_backup_loop():
     """Авто-бэкап каждые 6 часов."""
     print("🔄 Запущен авто-бэкап каждые 6 часов")
@@ -339,6 +357,7 @@ Lookism Battle Planet — Manager
   restore <file>                Восстановить из файла
   list                          Список бэкапов
   migrate                       Создать таблицы в БД
+  seed                          Засеять страны/города 2.0.0 (идемпотентно)
   stats                         Статистика игроков
   set_clan_leader <clan> <tg>   Сменить лидера клана
   add_king_cities               Добавить 10 king-городов каждого типа в каждый сектор
@@ -363,6 +382,8 @@ if __name__ == "__main__":
         asyncio.run(list_backups())
     elif args[0] == "migrate":
         asyncio.run(migrate())
+    elif args[0] == "seed":
+        asyncio.run(seed())
     elif args[0] == "stats":
         asyncio.run(stats())
     elif args[0] == "set_clan_leader" and len(args) == 3:

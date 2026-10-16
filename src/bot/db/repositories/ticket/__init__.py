@@ -1,1 +1,2 @@
-"""Публичное API домена ticket (репозиторий). Пока пусто — наполняется по мере переноса."""
+"""Публичное API домена ticket (репозиторий)."""
+from bot.db.repositories.ticket.ticket import get_raw, refund, spend  # noqa: F401

@@ -1,7 +1,6 @@
 """Вербовка — статисты (по влиянию, КД 20 минут) и уникальные персонажи (за тикеты) (хендлеры).
 
-Уникальные персонажи — TODO (см. `services/recruit`). Пока только вербовка статистов —
-команда `/recruit`, до появления настоящего меню «Карта».
+Уникальные персонажи — кнопка крутки за тикеты (`handlers/gacha`), тикеты в шапке экрана.
 """
 from __future__ import annotations
 
@@ -16,7 +15,9 @@ from bot.db.repositories.user import get_by_id
 from bot.keyboards.recruit import recruit_menu
 from bot.services.extra import get_army_stats
 from bot.services.recruit import RecruitOnCooldownError, recruit_extra
+from bot.services.ticket import get_status as get_ticket_status
 from bot.texts.common import render_army_block
+from bot.texts.gacha import tickets_line
 from bot.texts.profile import NOT_ONBOARDED
 from bot.texts.recruit import RECRUIT_COOLDOWN, RECRUIT_MENU_HEADER, RECRUIT_RESULT
 from bot.utils.formatting import format_countdown, format_number
@@ -29,9 +30,21 @@ async def show_recruit_menu(message: Message, session: AsyncSession, user_id: in
     (`handlers/common.cb_recruit_open`, кнопка "🎯 Вербовка")."""
     stats = await get_army_stats(session, user_id)
     army_block = render_army_block(
-        total_quantity=stats.total_quantity, total_power=stats.total_power, by_rank=stats.by_rank
+        total_quantity=stats.total_quantity,
+        total_power=stats.total_power,
+        attack_quantity=stats.attack.quantity,
+        defense_quantity=stats.defense.quantity,
+        by_rank=stats.by_rank,
+        cards_quantity=stats.cards_quantity,
     )
-    await message.answer(RECRUIT_MENU_HEADER.format(army_block=army_block), reply_markup=recruit_menu())
+    tickets = await get_ticket_status(session, user_id)
+    await message.answer(
+        RECRUIT_MENU_HEADER.format(
+            army_block=army_block,
+            tickets_line=tickets_line(tickets.count, tickets.cap, tickets.next_in_seconds),
+        ),
+        reply_markup=recruit_menu(tickets=tickets.count, cap=tickets.cap),
+    )
 
 
 @router.message(Command("recruit"))

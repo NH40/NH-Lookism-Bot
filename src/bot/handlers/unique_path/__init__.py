@@ -1,2 +1,2 @@
 """Публичное API хендлеров домена unique_path."""
-from bot.handlers.unique_path.unique_path import router  # noqa: F401
+from bot.handlers.unique_path.unique_path import notify_conviction, render_path, router  # noqa: F401

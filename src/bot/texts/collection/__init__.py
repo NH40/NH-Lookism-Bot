@@ -1,1 +1,26 @@
-"""Публичное API домена collection (тексты). Пока пусто — наполняется по мере переноса."""
+"""Публичное API домена collection (тексты)."""
+from bot.texts.collection.collection import (  # noqa: F401
+    ASSIGNED,
+    ASSIGNED_REPLACED,
+    BTN_ASSIGN,
+    BTN_BACK_TO_COLLECTION,
+    BTN_BACK_TO_RARITIES,
+    BTN_LINEUP,
+    BTN_TO_ATTACK_ALL,
+    BTN_TO_ATTACK_ONE,
+    BTN_TO_DEFENSE_ALL,
+    BTN_TO_DEFENSE_ONE,
+    CARDS_MOVED,
+    CARDS_NOTHING_TO_MOVE,
+    CARD_BTN,
+    CARD_GONE,
+    CARD_SCREEN,
+    COLLECTION_EMPTY,
+    COLLECTION_HEADER,
+    MOVED,
+    NOTHING_TO_MOVE,
+    NO_FREE_COPY,
+    POSITION_NOT_ALLOWED,
+    RARITY_BTN,
+    RARITY_SCREEN,
+)

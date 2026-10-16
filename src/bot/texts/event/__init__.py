@@ -1,0 +1,22 @@
+"""Публичное API домена event (тексты)."""
+from bot.texts.event.event import (  # noqa: F401
+    BOSS_ABILITIES,
+    BOSS_ALREADY_DEFEATED_ALERT,
+    BOSS_LOST,
+    BOSS_NAMES,
+    BOSS_POWER_PERCENTS,
+    BOSS_RESULT,
+    BOSS_REWARD,
+    BOSS_SCREEN,
+    BOSS_SCREEN_DONE,
+    BOSS_WON,
+    BTN_BACK_TO_MAP,
+    BTN_EVENT_BOSS,
+    BTN_EVENT_BOSS_DONE,
+    BTN_FIGHT_BOSS,
+    EVENT_GONE_ALERT,
+    FRAGMENT_EMOJI,
+    FRAGMENT_NAMES,
+    MAP_EVENTS_LINE,
+    PUSH_BOSS_SPAWNED,
+)

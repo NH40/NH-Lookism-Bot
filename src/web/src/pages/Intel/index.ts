@@ -1,0 +1,1 @@
+export { IntelPage } from "./IntelPage";

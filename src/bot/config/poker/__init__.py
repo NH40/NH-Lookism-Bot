@@ -1,0 +1,13 @@
+"""Публичное API poker-конфига."""
+from bot.config.poker.poker import (  # noqa: F401
+    POKER_ACTION_TIMEOUT_SECONDS,
+    POKER_BIG_BLIND_RATIO,
+    POKER_BUY_INS,
+    POKER_LOBBY_LIMIT,
+    POKER_MAX_PLAYERS,
+    POKER_MIN_PLAYERS,
+    POKER_RAKE_PERCENT,
+    POKER_SMALL_BLIND_RATIO,
+    POKER_TICK_SECONDS,
+    POKER_WAIT_OPTIONS_SECONDS,
+)

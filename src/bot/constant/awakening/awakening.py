@@ -1,6 +1,6 @@
-"""Пробуждения (константы).
+"""Пробуждение (константы). Дизайн — `docs/design/development_systems.md`, «Пробуждение»."""
+from __future__ import annotations
 
-TODO: дизайн — см. `docs/design/lookism_battle_planet_2_raw_notes.md`, раздел: «Профиль» + «Развитие», способ получения не описан. Многое там ЯВНО не доспецифицировано
-(формулы/тайминги/содержание) — перед реализацией уточнять через AskUserQuestion,
-не додумывать молча (см. CLAUDE.md, feedback про это).
-"""
+CB_AWAKEN_OPEN = "awaken:open"
+CB_AWAKEN_ASK = "awaken:ask"
+CB_AWAKEN_CONFIRM = "awaken:confirm"

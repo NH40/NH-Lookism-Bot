@@ -1,1 +1,20 @@
-"""Публичное API домена unique_technique (константы). Пока пусто — наполняется по мере переноса."""
+"""Публичное API домена unique_technique (константы)."""
+from bot.constant.unique_technique.unique_technique import (  # noqa: F401
+    CB_TECH_ACTIVATE_PREFIX,
+    CB_TECH_CLAIM_PREFIX,
+    CB_TECH_LEVEL_UP_PREFIX,
+    CB_TECH_OPEN,
+    CB_TECH_VIEW_PREFIX,
+    TECHNIQUES,
+    TECH_BEAST,
+    TECH_BLADE_HANDS,
+    TECH_INVISIBLE,
+    TECH_KYOKUSHIN,
+    TECH_MA_TAESU,
+    TECH_MIDNIGHT,
+    TECH_MUAY_THAI,
+    TECH_NINJUTSU,
+    TECH_ONE_STEP,
+    TECH_OVERCOME,
+    TECH_TAEKWONDO,
+)

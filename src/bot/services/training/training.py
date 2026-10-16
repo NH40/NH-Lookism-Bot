@@ -1,9 +1,6 @@
-"""Тренировки — личная (характеристики, КД 10 минут) и тренировка статистов (3 этапа: прокачка мощи / пробуждение звёзд / повышение ранга) (сервис).
+"""Тренировки — тренировка статистов (3 этапа: прокачка мощи / пробуждение звёзд / повышение ранга) (сервис).
 
-**Личная тренировка — НЕ реализована.** Раскладка баллов/шанса ничего-не-получить в
-raw-notes целиком завязана на «Потенциал», чей стартовый разброс и механика влияния
-пользователь сам ещё не решил ("изначально рандомно... уточню где влияет позже", см.
-CLAUDE.md "Открытые вопросы дизайна") — додумывать эту формулу сейчас не стали.
+Личная тренировка (очки развития по потенциалу, КД 1 час) — соседний файл `personal.py`.
 
 **Тренировка статистов реализована** — единственный этап raw-notes, у которого БАЗОВЫЕ
 числа даны явно (10%/20%/×1.2/+50%/25%) и НЕ требуют потенциала (см. `config/game.py`).
@@ -20,11 +17,14 @@ CLAUDE.md "Открытые вопросы дизайна") — додумыва
 from __future__ import annotations
 
 from dataclasses import dataclass
-from random import binomialvariate
+from random import binomialvariate, choices
 
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.db.repositories.unique_path import bump_training_reps
+from bot.constant.cooldown import CD_EXTRAS
+from bot.services.cooldown import schedule as schedule_ready
 from bot.cache.keys import train_extras_cooldown
 from bot.config.game import (
     EXTRA_TRAINING_COOLDOWN_SECONDS,
@@ -36,6 +36,10 @@ from bot.config.game import (
 )
 from bot.constant.characteristic import RANK_INDEX, RANK_LADDER
 from bot.db.repositories.extra import add_to_stack, list_stacks
+from bot.constant.dev_quest import TASK_TRAIN_EXTRAS
+from bot.services.dev_quest import emit as quest_event
+from bot.services.business import gym_training_bonus_percent
+from bot.services.characteristic import get_combat_profile
 from bot.services.recruit import PHASE_RANK_CAP_INDEX
 
 
@@ -79,67 +83,81 @@ async def train_extras(session: AsyncSession, redis: Redis, user_id: int, phase:
     if not stacks:
         return TrainResult(attempted=0, stage1=0, stage2=0, stage3=0)
 
-    acquired = await redis.set(key, "1", nx=True, ex=EXTRA_TRAINING_COOLDOWN_SECONDS)
+    profile = await get_combat_profile(session, user_id)
+    cd = profile.cooldown(EXTRA_TRAINING_COOLDOWN_SECONDS, profile.eco.extras_training_cooldown)
+    acquired = await redis.set(key, "1", nx=True, ex=cd)
     if not acquired:
         ttl = await redis.ttl(key)
         raise TrainingOnCooldownError(retry_after_seconds=max(0, ttl))
+    await schedule_ready(redis, user_id, CD_EXTRAS, cd)
 
     coverage_fraction = EXTRA_TRAINING_COVERAGE_PERCENT / 100
-    stage1_p = EXTRA_TRAINING_STAGE1_SUCCESS_PERCENT / 100
-    stage2_p = EXTRA_TRAINING_STAGE2_SUCCESS_PERCENT / 100
-    stage3_p = EXTRA_TRAINING_STAGE3_SUCCESS_PERCENT / 100
+    # Тренажёрные залы: +1 п.п. к шансу КАЖДОГО из трёх этапов за здание (подтверждено
+    # 2026-09-29), шанс не выше 100%. Охват (сколько статистов попадает в тренировку)
+    # зал не трогает — только успешность.
+    # + бонус систем развития (гений тренировок, путь тренировок, Самдак) — в тех же п.п.
+    gym_bonus = await gym_training_bonus_percent(session, user_id) + profile.eco.extras_training
+    stage1_p = min(100, EXTRA_TRAINING_STAGE1_SUCCESS_PERCENT + gym_bonus) / 100
+    stage2_p = min(100, EXTRA_TRAINING_STAGE2_SUCCESS_PERCENT + gym_bonus) / 100
+    stage3_p = min(100, EXTRA_TRAINING_STAGE3_SUCCESS_PERCENT + gym_bonus) / 100
 
     totals = {"attempted": 0, "stage1": 0, "stage2": 0, "stage3": 0}
 
-    for stack in stacks:
-        covered = binomialvariate(stack.quantity, coverage_fraction)
+    covered_by_stack = [binomialvariate(s.quantity, coverage_fraction) for s in stacks]
+    if not any(covered_by_stack):
+        # Мало статистов, разбросанных по отрядам: охват 20% мог не задеть никого — тогда игрок
+        # видел «нечего тренировать», а КД уже потрачен (баг 2026-10-13). Хотя бы один боец —
+        # случайный, с весом по численности отряда — тренируется всегда.
+        pick = choices(range(len(stacks)), weights=[s.quantity for s in stacks])[0]
+        covered_by_stack[pick] = 1
+
+    for stack, covered in zip(stacks, covered_by_stack):
         if covered == 0:
             continue
         totals["attempted"] += covered
 
         s1 = binomialvariate(covered, stage1_p)
+        # Путь тренировок: не прошедшие пробуют ещё раз «у другого учителя».
+        if profile.eco.extras_extra_roll and covered > s1:
+            s1 += binomialvariate(covered - s1, stage1_p * min(1.0, profile.eco.extras_extra_roll))
         if s1 == 0:
             continue
         totals["stage1"] += s1
+        # Лагерь при тренировке не меняется — стопка-назначение в том же лагере.
+        common = {"user_id": user_id, "camp": stack.camp, "school": stack.school, "school_level": stack.school_level}
+        next_level = stack.training_level + 1
         await add_to_stack(
-            session, user_id=user_id, rank=stack.rank, stars=stack.stars, training_level=stack.training_level,
-            quantity=-s1,
+            session, **common, rank=stack.rank, stars=stack.stars, training_level=stack.training_level, quantity=-s1
         )
 
         if stack.stars >= EXTRA_TRAINING_MAX_STARS:
             # Уже максимум звёзд — этап 2 пропускается целиком (raw-notes), весь s1
             # просто поднимает уровень тренировки без звезды.
             await add_to_stack(
-                session, user_id=user_id, rank=stack.rank, stars=stack.stars,
-                training_level=stack.training_level + 1, quantity=s1,
+                session, **common, rank=stack.rank, stars=stack.stars, training_level=next_level, quantity=s1
             )
             continue
 
         s2 = binomialvariate(s1, stage2_p)
-        no_star = s1 - s2
-        if no_star:
-            await add_to_stack(
-                session, user_id=user_id, rank=stack.rank, stars=stack.stars,
-                training_level=stack.training_level + 1, quantity=no_star,
-            )
+        await add_to_stack(
+            session, **common, rank=stack.rank, stars=stack.stars, training_level=next_level, quantity=s1 - s2
+        )
         if s2 == 0:
             continue
         totals["stage2"] += s2
 
         s3 = binomialvariate(s2, stage3_p)
-        star_no_rank = s2 - s3
-        if star_no_rank:
-            await add_to_stack(
-                session, user_id=user_id, rank=stack.rank, stars=stack.stars + 1,
-                training_level=stack.training_level + 1, quantity=star_no_rank,
-            )
+        await add_to_stack(
+            session, **common, rank=stack.rank, stars=stack.stars + 1, training_level=next_level, quantity=s2 - s3
+        )
         if s3:
             totals["stage3"] += s3
-            next_rank = _next_rank(stack.rank, phase)
             await add_to_stack(
-                session, user_id=user_id, rank=next_rank, stars=stack.stars + 1,
-                training_level=stack.training_level + 1, quantity=s3,
+                session, **common, rank=_next_rank(stack.rank, phase), stars=stack.stars + 1,
+                training_level=next_level, quantity=s3,
             )
 
+    await quest_event(session, user_id, TASK_TRAIN_EXTRAS)
+    await bump_training_reps(session, user_id)
     await session.commit()
     return TrainResult(**totals)

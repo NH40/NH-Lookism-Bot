@@ -1,0 +1,23 @@
+"""Публичное API домена deposit (тексты)."""
+from bot.texts.deposit.deposit import (  # noqa: F401
+    AMOUNT_INVALID,
+    AMOUNT_PROMPT,
+    BTN_CLAIM_EARLY,
+    BTN_CLAIM_READY,
+    BTN_DEPOSITS,
+    BTN_NEW_DEPOSIT,
+    BTN_TERM,
+    BUSY_ALERT,
+    CLAIMED_ALERT,
+    CLAIMED_EARLY_ALERT,
+    DEPOSIT_NONE,
+    DEPOSIT_ROW_READY,
+    DEPOSIT_ROW_WAIT,
+    DEPOSIT_SCREEN,
+    NOT_ENOUGH_ALERT,
+    NOT_FOUND_ALERT,
+    OPENED,
+    PICK_RESOURCE,
+    PICK_TERM,
+    TOO_MANY_ALERT,
+)

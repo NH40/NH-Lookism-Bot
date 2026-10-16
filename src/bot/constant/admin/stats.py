@@ -1,0 +1,5 @@
+"""Админка — статистика (callback_data)."""
+CB_ST_OVERVIEW = "adm:st:ov"
+CB_ST_DONATE = "adm:st:dn"
+CB_ST_ECONOMY = "adm:st:ec"
+CB_ST_SERVER = "adm:st:sv"

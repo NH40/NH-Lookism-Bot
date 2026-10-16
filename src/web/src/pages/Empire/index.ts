@@ -1,0 +1,1 @@
+export { EmpirePage } from "./EmpirePage";

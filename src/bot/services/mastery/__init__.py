@@ -1,1 +1,23 @@
-"""Публичное API домена mastery (сервис). Пока пусто — наполняется по мере переноса."""
+"""Публичное API домена mastery (сервис)."""
+from bot.services.mastery.mastery import (  # noqa: F401
+    BuyResult,
+    InvestResult,
+    MasteryCappedError,
+    MasteryView,
+    NoFreePointsError,
+    NotEnoughCoinsError,
+    PointsSoldOutError,
+    QuestNotActiveError,
+    TaskView,
+    TomLockedError,
+    TrainerLockedError,
+    activate_due,
+    buy_point,
+    check_unlock,
+    get_view,
+    invest_point,
+    lock_quest_for_tom,
+    mark_tom_defeated,
+    record_pvp_win,
+    record_training,
+)

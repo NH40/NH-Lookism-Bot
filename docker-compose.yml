@@ -71,6 +71,9 @@ services:
       - ./backups:/app/backups
       - ./data:/app/data
       - ./migrations:/app/migrations
+      # Картинки уников (пока карточки 1.0) — томом, чтобы замена файлов в assets/ не
+      # требовала пересборки образа (бот сам заметит замену по времени изменения файла).
+      - ./assets:/app/assets:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -116,6 +119,11 @@ services:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - REDIS_URL=redis://redis:6379/0
     command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    # Картинки игры для Mini App (`api/routers/img.py`): оригиналы — томом только на чтение,
+    # WebP-превью — в отдельный том, чтобы не генерировать заново после пересборки.
+    volumes:
+      - ./assets:/app/assets:ro
+      - lookism_thumbs:/app/thumbs
     networks:
       - default
       - edge
@@ -177,6 +185,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  lookism_thumbs:
 
 networks:
   # Общая сеть между ЭТИМ проектом и UAP (см. CLAUDE.md, "Mini App: постоянный домен") —

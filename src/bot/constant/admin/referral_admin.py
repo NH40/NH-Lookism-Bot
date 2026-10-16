@@ -1,0 +1,5 @@
+"""Админка/рефералы: callback_data (префикс adm:rf:)."""
+CB_REF_NEW = "adm:rf:new"
+CB_REF_VIEW_PREFIX = "adm:rf:v:"
+CB_REF_DELETE_ASK_PREFIX = "adm:rf:da:"
+CB_REF_DELETE_PREFIX = "adm:rf:dd:"

@@ -1,0 +1,11 @@
+.more-clan-name { font-size: 16px; font-weight: 800; }
+.more-clan-sub { font-size: 12px; font-weight: 600; margin-top: 3px; }
+.more-clan-power { font-size: 15px; font-weight: 800; color: var(--red-2); text-align: right; }
+.more-clan-power small { display: block; font-family: var(--font-body); color: var(--muted); font-size: 10px; font-weight: 700; }
+.more-link { cursor: pointer; text-align: left; font-family: inherit; }
+.tile.violet { border-color: rgba(167, 139, 250, 0.6); background: linear-gradient(180deg, rgba(50, 30, 110, 0.85), rgba(22, 14, 56, 0.92)); }
+.tile.violet .ico-box { border-color: rgba(196, 166, 255, 0.6); background: rgba(139, 92, 246, 0.2); color: var(--violet-2); }
+.tile.gold { border-color: rgba(245, 185, 66, 0.55); }
+.tile.gold .ico-box { border-color: rgba(245, 185, 66, 0.6); background: rgba(245, 185, 66, 0.14); color: var(--gold-2); }
+.promo-input { width: 100%; min-height: 44px; border-radius: 10px; border: 1px solid var(--line-soft); background: var(--card); color: var(--text); padding: 0 12px; font: inherit; font-size: 15px; font-weight: 700; box-sizing: border-box; }
+button.tile { cursor: pointer; }

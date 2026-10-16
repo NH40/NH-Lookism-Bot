@@ -1,0 +1,40 @@
+/* Экран «Магазин»: только токены из styles.css. */
+.shop-note { font-size: 12px; font-weight: 600; line-height: 1.45; color: #cfd8f3; }
+.shop-note b { color: var(--text, #e6ecff); }
+.shop-label { font-size: 11px; font-weight: 700; color: var(--muted); margin: 10px 0 6px; }
+.shop-label:first-of-type { margin-top: 0; }
+.shop-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.shop-pills .pill { min-height: 38px; min-width: 52px; flex: 1 1 52px; padding: 0 8px; font-size: 12px; font-family: inherit; }
+.shop-quote { margin-top: 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(245, 185, 66, 0.45); background: rgba(60, 40, 8, 0.35); }
+.shop-quote .line { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; font-weight: 700; }
+.shop-quote .total { font-family: var(--font-display); font-size: 18px; font-weight: 800; color: var(--gold-2); }
+.shop-empty { text-align: center; padding: 8px 0; color: var(--muted); font-size: 12px; font-weight: 600; }
+.shop-item { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line-soft); background: var(--card); }
+.shop-item.live { border-color: rgba(245, 185, 66, 0.55); }
+.shop-item-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 800; }
+.shop-item-head .name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.shop-list { display: flex; flex-direction: column; gap: 8px; }
+.shop-tiers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.shop-tiers .btn { padding: 0 4px; font-size: 12px; }
+.shop-tiers .btn.locked { opacity: 0.45; }
+.shop-cell { display: flex; flex-direction: column; gap: 8px; padding: 10px 0; border-bottom: 1px dashed var(--line-dash); }
+.shop-cell:last-child { border-bottom: none; padding-bottom: 0; }
+.shop-cell-head { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; }
+.shop-cell-head .ico-box { width: 34px; height: 34px; flex: none; }
+.shop-cell-head .grow { flex: 1; min-width: 0; }
+.shop-cell-head .sub { font-size: 11px; font-weight: 600; color: var(--muted); }
+.shop-cell-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.shop-rates { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.shop-rate { padding: 8px 4px; border-radius: 10px; border: 1px solid var(--line-soft); background: var(--card); text-align: center; font-size: 11px; font-weight: 700; }
+.shop-rate .disp { font-size: 14px; }
+.shop-rate.top { border-color: rgba(245, 185, 66, 0.7); }
+.shop-rate.top .disp { color: var(--gold-2); }
+.shop-input { width: 100%; min-height: 48px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: inherit; font: inherit; font-weight: 800; font-size: 16px; padding: 0 12px; box-sizing: border-box; }
+.shop-input:focus { outline: none; border-color: var(--cyan-2); box-shadow: 0 0 10px rgba(80, 170, 255, 0.4); }
+.shop-sheet-body { display: flex; flex-direction: column; gap: 10px; }
+.shop-sheet-body .btn { width: 100%; }
+.shop-pick { display: flex; flex-direction: column; gap: 6px; max-height: 38vh; overflow-y: auto; }
+.shop-pick button { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line-soft); background: var(--card); color: inherit; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; text-align: left; }
+.shop-pick button.on { border-color: var(--cyan-2); background: linear-gradient(180deg, #2a63e8, #1a3fa8); }
+.shop-tab-fade { animation: shop-fade 0.18s ease; }
+@keyframes shop-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }

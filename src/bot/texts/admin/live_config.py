@@ -1,0 +1,17 @@
+"""Админка — Настройки на лету (тексты)."""
+LINE = "━━━━━━━━━━━━━━━━━━"
+MENU = "⚙️ <b>Настройки на лету</b>\n" + LINE + "\n<i>★ — значение изменено админом. Тап по строке — изменить.</i>"
+BTN_ROW = "{star}{title}: {value}"
+KEY_SCREEN = (
+    "⚙️ <b>{title}</b>\n" + LINE + "\nСейчас: <b>{value}</b>{star}\nПо умолчанию: <b>{default}</b>\nДиапазон: {min} … {max}"
+)
+STAR_LEFT = " ★ (осталось {left})"
+STAR_FOREVER = " ★ (навсегда)"
+BTN_CHANGE = "✏️ Изменить"
+BTN_RESET = "♻️ Сбросить к умолчанию"
+VALUE_PROMPT = "✏️ <b>{title}</b>\nПришли новое значение ({min} … {max}):"
+VALUE_BAD = "❌ Нужно число от {min} до {max}. Пришли ещё раз:"
+DURATION_PROMPT = "⏱ Значение <b>{value}</b> для «{title}». На какой срок?"
+SAVED = "✅ «{title}» = <b>{value}</b> ({duration})."
+RESET_DONE_ALERT = "Сброшено к умолчанию."
+FOREVER = "навсегда"

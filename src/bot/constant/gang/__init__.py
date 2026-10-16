@@ -1,1 +1,18 @@
-"""Публичное API домена gang (константы). Пока пусто — наполняется по мере переноса."""
+"""Публичное API домена gang (константы)."""
+from bot.constant.gang.gang import (  # noqa: F401
+    AMOUNT_ALL,
+    AMOUNT_HALF,
+    CB_GANG_BACK,
+    CB_GANG_CAMP_MOVE_PREFIX,
+    CB_GANG_DELETE_ASK,
+    CB_GANG_DELETE_CONFIRM,
+    CB_GANG_LINEUP,
+    CB_GANG_OPEN,
+    CB_GANG_POSITION_CLEAR_PREFIX,
+    CB_GANG_POSITION_PREFIX,
+    CB_GANG_POSITION_SET_PREFIX,
+    CB_GANG_SQUAD_CUSTOM_PREFIX,
+    CB_GANG_SQUAD_MOVE_PREFIX,
+    CB_GANG_SQUAD_PREFIX,
+    CB_GANG_SQUADS_PREFIX,
+)

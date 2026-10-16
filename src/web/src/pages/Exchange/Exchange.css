@@ -1,0 +1,22 @@
+.ex-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 6px; text-align: center; color: var(--cyan); font-size: 12px; font-weight: 600; line-height: 1.45; }
+.ex-label { font-size: 11px; font-weight: 700; margin-bottom: 6px; }
+.ex-sub { font-size: 10px; color: var(--muted); }
+.ex-fields { margin-top: 10px; }
+.ex-field { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; font-size: 11px; font-weight: 700; }
+.ex-fields .ex-field { margin-top: 0; }
+.ex-field input, .ex-field select, .ex-bid input { min-height: 44px; border-radius: 10px; border: 1px solid var(--line-soft); background: var(--card); color: var(--text); font-family: var(--font-body); font-weight: 800; font-size: 14px; padding: 0 12px; width: 100%; min-width: 0; }
+.ex-field input:focus, .ex-field select:focus, .ex-bid input:focus { outline: none; border-color: var(--cyan); }
+.ex-hours { margin-top: 10px; }
+.ex-chip { flex-direction: column; align-items: flex-start; gap: 2px; }
+.ex-chip b { font-size: 15px; }
+.ex-gold { color: var(--gold); }
+.ex-hint { font-size: 12px; font-weight: 600; line-height: 1.45; margin: 10px 0; }
+.ex-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; }
+.ex-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 13px; }
+.ex-main span { font-size: 11px; font-weight: 600; }
+.ex-price { font-family: var(--font-display); font-size: 12px; font-weight: 800; color: var(--gold); text-align: right; flex-shrink: 0; }
+.ex-time { padding: 6px 10px; flex-shrink: 0; }
+.ex-bid { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: 10px; }
+.ex-trade { padding: 8px 0; border-bottom: 1px dashed var(--line-dash); display: flex; flex-direction: column; gap: 6px; }
+.ex-trade:last-child { border-bottom: none; }
+.ex-pager { font-size: 12px; font-weight: 700; }

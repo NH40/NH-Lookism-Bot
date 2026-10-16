@@ -1,0 +1,14 @@
+"""Публичное API домена absolute (конфиг)."""
+from bot.config.absolute.absolute import (  # noqa: F401
+    ARIAN_BLOCK_SECONDS,
+    ARKHANGEL_INCOME_SHARE,
+    ARKHANGEL_INTERVAL_SECONDS,
+    HASBULLA_SHOP_DISCOUNT,
+    KUROPATKA_REVIVE,
+    MANAGER_COINS_BURN,
+    MARISE_CLONE,
+    MARISE_CLONE_CAP,
+    OGURCHIK_ATTACK,
+    OGURCHIK_REACTIONS,
+    TABASKO_SUPPRESS,
+)

@@ -1,0 +1,13 @@
+.mk-text { font-size: 13px; font-weight: 600; line-height: 1.45; margin-bottom: 12px; }
+.mk-text b { color: var(--violet-2); }
+.mk-list { display: flex; flex-direction: column; gap: 8px; }
+.mk-row { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line-soft); background: var(--card); }
+.mk-row.owned { border-color: rgba(167, 139, 250, 0.6); box-shadow: 0 0 10px rgba(139, 92, 246, 0.2); }
+.mk-head { display: flex; align-items: center; justify-content: space-between; font-size: 14px; }
+.mk-level { font-size: 12px; font-weight: 800; color: var(--violet-2); }
+.mk-row:not(.owned) .mk-level { color: var(--muted); }
+.mk-seg { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
+.mk-seg span { height: 8px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); }
+.mk-seg span.on { background: linear-gradient(180deg, #d6b8ff, #8b5cf6); box-shadow: 0 0 6px rgba(160, 110, 255, 0.7); }
+.mk-row .btn { align-self: flex-end; }
+.mk-max { align-self: flex-end; font-size: 12px; font-weight: 800; color: var(--gold-2); }

@@ -1,1 +1,31 @@
-"""Публичное API домена unique_technique (сервис). Пока пусто — наполняется по мере переноса."""
+"""Публичное API домена unique_technique (сервис)."""
+from bot.services.unique_technique.unique_technique import (  # noqa: F401
+    NotEnoughFragmentsError,
+    QuestAlreadyActiveError,
+    QuestNotCompleteError,
+    TrainingRequiredError,
+    SwapOnCooldownError,
+    TeacherGoneError,
+    TeacherView,
+    TechniqueMaxLevelError,
+    TechniqueNotOwnedError,
+    TechniqueOwnedError,
+    TechniqueView,
+    UnknownTechniqueError,
+    activate,
+    claim_teacher_quest,
+    connect,
+    get_teacher,
+    get_view,
+    grant,
+    level_up,
+    reset,
+)
+from bot.services.unique_technique.training import (  # noqa: F401,E402
+    NotEnoughCoinsError as TrainingCoinsError,
+    TechTraining,
+    TrainingActiveError,
+    get_training,
+    list_trainings,
+    start_training,
+)

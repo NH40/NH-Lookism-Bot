@@ -44,7 +44,7 @@ class TechModeMiddleware(BaseMiddleware):
             session = data.get("session")
             if session is not None:
                 db_user = await get_by_id(session, user.id)
-                if db_user is not None and db_user.is_admin:
+                if db_user is not None and (db_user.is_admin or db_user.admin_role):
                     return await handler(event, data)
 
         if isinstance(event, Message):

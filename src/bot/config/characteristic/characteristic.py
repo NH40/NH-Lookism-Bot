@@ -18,8 +18,20 @@ B=110 — прирост между соседними ступенями рас
 """
 from __future__ import annotations
 
+from typing import NamedTuple
+
 from bot.config.game import EXTRA_TRAINING_STAGE1_POWER_MULTIPLIER, EXTRA_TRAINING_STAGE2_POWER_BONUS_PERCENT
-from bot.constant.characteristic import RANK_INDEX
+from bot.constant.characteristic import (
+    POT_GANG_BOSS,
+    POT_GEN_ZERO,
+    POT_KING,
+    POT_LEGEND,
+    POT_MEMBER,
+    POT_PEAK,
+    POT_STRONG_KING,
+    POT_WEAK_KING,
+    RANK_INDEX,
+)
 
 # --- Мощь статиста по рангу (raw-notes «Карта») ---
 
@@ -81,3 +93,112 @@ def speed_mastery_cd_reduction_percent(tier: int) -> int:
 # Мастерство Выносливости/Техники (важны "в сражениях") — формулы не даны в raw-notes и
 # не реализованы: конкретные проценты уклонения/блока/контратаки/побега — открытый
 # вопрос дизайна (см. CLAUDE.md), уточнить перед реализацией домена `combat`.
+
+
+# --- Прокачка характеристик за очки развития (пользователь, 2026-09-30) ---
+# «F→F+ за одно очко и каждые два ранга повышать цену на одно очко» — вдвое дешевле
+# первого варианта (1 400 очков до Infinity на характеристику): шаг с ранга n на n+1 стоит
+# 1 + n // 2 очков → F-→F и F→F+ по 1, F+→E- и E-→E по 2, … Итого 702 очка на одну
+# характеристику до Infinity, 2 808 на все четыре.
+
+STAT_MAX_INDEX = 52  # Infinity — последний индекс RANK_LADDER
+
+
+def stat_rank_up_cost(index: int, discount: float = 0.0) -> int:
+    """Цена шага с ранга `index` на `index + 1`. `discount` — скидка систем развития
+    (Самдак, гений тренировок; уже обрезанная потолком), не меньше 1 очка."""
+    base = 1 + index // 2
+    return max(1, round(base * (1 - discount))) if discount else base
+
+
+def stat_ranks_affordable(index: int, points: int, limit: int | None = None, discount: float = 0.0) -> tuple[int, int]:
+    """Сколько рангов подряд можно купить от `index` на `points` (не больше `limit` и не выше
+    Infinity) → (рангов, цена). Шагов максимум 52 — цикл дешёвый."""
+    ranks = cost = 0
+    while index + ranks < STAT_MAX_INDEX and (limit is None or ranks < limit):
+        step = stat_rank_up_cost(index + ranks, discount)
+        if cost + step > points:
+            break
+        cost += step
+        ranks += 1
+    return ranks, cost
+
+
+# --- Потенциал → личная тренировка (пользователь, 2026-09-30: «от потенциала зависит,
+# сколько в личной тренировке будет получено очков»; raw-notes: «есть шанс в зависимости от
+# потенциала, что игрок не получит ничего»). Числа — предложение автора кода, калибровка:
+# при ~12 тренировках в сутки (КД 1 час) все 4 характеристики до Infinity (2 808 очков)
+# у Легенды ≈ месяц, у Короля ≈ 3 месяца, у Члена банды ≈ 7 месяцев.
+
+class PotentialTraining(NamedTuple):
+    min_points: int
+    max_points: int
+    nothing_percent: int  # шанс не получить ничего
+
+
+POTENTIAL_TRAINING: dict[str, PotentialTraining] = {
+    POT_MEMBER: PotentialTraining(1, 2, 30),
+    POT_GANG_BOSS: PotentialTraining(1, 3, 25),
+    POT_WEAK_KING: PotentialTraining(2, 3, 20),
+    POT_KING: PotentialTraining(2, 4, 15),
+    POT_STRONG_KING: PotentialTraining(3, 5, 12),
+    POT_GEN_ZERO: PotentialTraining(4, 6, 10),
+    POT_PEAK: PotentialTraining(5, 8, 7),
+    POT_LEGEND: PotentialTraining(6, 10, 5),
+}
+
+# Шанс выпадения стадии при регистрации, % (сумма 100) — чем выше, тем реже.
+POTENTIAL_START_PERCENT: dict[str, float] = {
+    POT_MEMBER: 30,
+    POT_GANG_BOSS: 22,
+    POT_WEAK_KING: 17,
+    POT_KING: 13,
+    POT_STRONG_KING: 9,
+    POT_GEN_ZERO: 5,
+    POT_PEAK: 3,
+    POT_LEGEND: 1,
+}
+
+
+# --- Мастерство выносливости и техники (raw-notes «Сражения») ---
+# «Мастерство выносливости позволяет сохранять 10/20/30% статистов, которые проиграли»;
+# «порог техники увеличивает шансы характеристики на множитель 1/5/10 в зависимости от
+# количества мастерства техники» — ступени 1/2/3 → ×1/×5/×10, без мастерства — ×1.
+_ENDURANCE_MASTERY_LOSS_SAVE_PERCENT: dict[int, int] = {0: 0, 1: 10, 2: 20, 3: 30}
+_TECHNIQUE_MASTERY_MULTIPLIER: dict[int, int] = {0: 1, 1: 1, 2: 5, 3: 10}
+
+
+def endurance_mastery_loss_save_percent(tier: int) -> int:
+    return _ENDURANCE_MASTERY_LOSS_SAVE_PERCENT[tier]
+
+
+def technique_mastery_multiplier(tier: int) -> int:
+    return _TECHNIQUE_MASTERY_MULTIPLIER[tier]
+
+
+# --- Характеристики в бою (пользователь 2026-09-30: «считай самостоятельно, чтобы подходило
+# по балансу»; Выносливость — «поглощает часть урона и даёт множитель к блокам отряда»).
+# Калибровка: без мастерства техники даже Infinity даёт скромные +2.6 п.п. (базовые шансы
+# 5%); с мастерством техники ×10 — до ~31% на реакцию. Потолки ниже не дают армиям двух
+# прокачанных игроков стать почти бессмертными.
+AGILITY_DODGE_PP_PER_RANK = 0.05  # +п.п. уклонения за ранг Ловкости
+SPEED_FLEE_PP_PER_RANK = 0.05  # +п.п. побега за ранг Скорости
+ENDURANCE_BLOCK_MULT_PERCENT_PER_RANK = 1  # блок × (1 + 1% за ранг Выносливости)
+ENDURANCE_ABSORB_PERCENT_PER_RANK = 0.2  # доля поглощённого урона, % за ранг (Infinity 10.4%)
+# raw-notes: «Ловкость — две атаки сразу, игнорируя КД, шанс второй атаки +1% за уровень»;
+# «Скорость — −1% времени у противника на принятие сражения с каждым рангом».
+AGILITY_FREE_ATTACK_PERCENT_PER_RANK = 1
+SPEED_ACCEPT_WINDOW_PERCENT_PER_RANK = 1
+REACTION_MAX = 0.40  # потолок одной реакции (уклонение/блок/контратака/побег)
+REACTIONS_TOTAL_MAX = 0.80  # потолок суммы всех реакций
+
+
+def statist_unit_power(rank: str, stars: int, training_level: int, school: str = "", school_level: int = 0) -> float:
+    """Мощь статиста с учётом школы учителя: школа Силы (и немного Скорости) прибавляет к
+    мощи бойца за каждый уровень (`config/school`). Без школы — ровно `extra_unit_power`."""
+    power = extra_unit_power(rank, stars, training_level)
+    if school and school_level:
+        from bot.config.school import SCHOOL_POWER_PER_LEVEL
+
+        power *= 1 + SCHOOL_POWER_PER_LEVEL.get(school, 0.0) * school_level
+    return power

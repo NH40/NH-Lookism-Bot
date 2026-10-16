@@ -1,0 +1,17 @@
+"""Публичное API домена unique_path (конфиг)."""
+from bot.config.unique_path.unique_path import (  # noqa: F401
+    CONVICTION_QUEST,
+    CONVICTION_RANK_SUM,
+    FORESIGHT_SIMULATIONS,
+    INFINITE_EXTRA_TECHNIQUE_POWER,
+    LEVELS,
+    PATH_AWAKEN_FRAGMENTS,
+    PATH_LEVEL_COST_PER_LEVEL,
+    PATH_POINT_SOURCES,
+    PATH_SWAP_COOLDOWN_SECONDS,
+    TRAINING_KPD_CAP_PER_LEVEL,
+    TRAINING_KPD_EXTRAS_PP,
+    TRAINING_KPD_PER_DAY,
+    TRAINING_KPD_PER_REP,
+    path_level_cost,
+)

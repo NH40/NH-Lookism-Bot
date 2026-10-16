@@ -1,1 +1,2 @@
-"""Публичное API домена genius (клавиатуры). Пока пусто — наполняется по мере переноса."""
+"""Публичное API домена genius (клавиатуры)."""
+from bot.keyboards.genius.genius import genius_detail_menu, genius_menu  # noqa: F401

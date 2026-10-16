@@ -14,7 +14,8 @@ BANNED_TEXT = "⛔️ Ваш аккаунт заблокирован."
 # "онлайн за 24ч" в статистике /admin) — не отдельным запросом на каждый апдейт (правило 4).
 _TOUCH_SQL = text(
     """
-    UPDATE users SET last_active_at = now() WHERE id = :user_id RETURNING is_banned
+    UPDATE users SET last_active_at = now() WHERE id = :user_id
+    RETURNING (is_banned OR COALESCE(banned_until > now(), false)) AS is_banned
     """
 )
 

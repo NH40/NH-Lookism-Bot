@@ -1,1 +1,23 @@
-"""Публичное API домена donate (сервис). Пока пусто — наполняется по мере переноса."""
+"""Публичное API домена donate (сервис)."""
+from bot.services.donate.donate import (  # noqa: F401
+    AlreadyBoughtError,
+    CATALOG,
+    DonateBusyError,
+    MarketItem,
+    MaxLevelError,
+    NotEnoughDonateError,
+    NotUnlockedError,
+    UnknownItemError,
+    apply_all,
+    balance,
+    buy_level,
+    buy_second_body,
+    buy_unlock,
+    claim_lbp1,
+    credit_payment,
+    import_lbp1,
+    item_view,
+    logger,
+    market,
+    unlock_price,
+)

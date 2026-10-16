@@ -1,6 +1,11 @@
-"""Общее reply-меню бота (клавиатуры).
+"""Общие клавиатуры."""
+from __future__ import annotations
 
-TODO: дизайн — см. `docs/design/lookism_battle_planet_2_raw_notes.md`, раздел: —. Многое там ЯВНО не доспецифицировано
-(формулы/тайминги/содержание) — перед реализацией уточнять через AskUserQuestion,
-не додумывать молча (см. CLAUDE.md, feedback про это).
-"""
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+from bot.texts.common import BTN_BACK
+
+
+def back_menu(callback_data: str, text: str = BTN_BACK) -> InlineKeyboardMarkup:
+    """Одна кнопка «◀️ Назад» под сообщением-результатом — чтобы экран не был тупиком."""
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=text, callback_data=callback_data)]])

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import BigInteger, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bot.db.base import Base
@@ -26,3 +26,9 @@ class City(Base):
     )
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     district_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Император, которому платит город (налоги, войны императоров — `docs/design/fist_emperor.md`).
+    # Выставляется коронацией для всех городов страны; война императоров переписывает его
+    # для отбитых городов.
+    emperor_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )

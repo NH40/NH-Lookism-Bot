@@ -1,0 +1,14 @@
+.biz-district { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 56px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line-soft); background: rgba(14, 24, 62, 0.6); color: var(--text); text-align: left; cursor: pointer; margin-bottom: 8px; }
+.biz-district.sel { border-color: var(--cyan-2); box-shadow: 0 0 12px rgba(80, 170, 255, 0.55); background: rgba(30, 60, 140, 0.5); }
+.biz-district.full { opacity: 0.7; cursor: default; }
+.biz-district b { display: block; font-size: 14px; font-weight: 800; }
+.biz-district small { display: block; font-size: 11px; font-weight: 600; color: var(--muted); }
+.biz-tag { font-size: 11px; font-weight: 800; color: var(--cyan-2); white-space: nowrap; }
+.biz-tag.none { color: var(--muted); }
+.biz-item { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px dashed var(--line-dash); }
+.biz-item:last-of-type { border-bottom: none; }
+.biz-item .grow { flex: 1; min-width: 0; }
+.biz-item b { font-size: 13px; font-weight: 800; display: block; }
+.biz-item small { font-size: 11px; font-weight: 600; color: var(--muted); display: block; }
+.biz-cost { font-size: 12px; font-weight: 800; color: var(--gold-2); white-space: nowrap; }
+.biz-note { font-size: 11px; font-weight: 600; margin-top: 8px; text-align: center; }

@@ -1,19 +1,17 @@
-import type { ComponentType } from "react";
+import { Hammer } from "lucide-react";
+import { BackHeader, Panel } from "./ui";
 
-interface PlaceholderPageProps {
-  icon: ComponentType<{ size?: number }>;
-  title: string;
-}
-
-// Честная заглушка для 6 вкладок без backend'а (см. CLAUDE.md — только `country`/`city`/
-// `profile` реализованы по-настоящему, остальные 25 api/routers/*.py — пустые TODO-роутеры).
-// Никаких выдуманных цифр/механик — только нейтральная строка "в разработке".
-export function PlaceholderPage({ icon: Icon, title }: PlaceholderPageProps) {
+/** Экран, который ещё не перенесён в Mini App: честная заглушка с возвратом назад. */
+export function PlaceholderPage({ title }: { title: string }) {
   return (
-    <div className="screen center placeholder">
-      <Icon size={32} />
-      <div className="placeholder-title">{title}</div>
-      <div className="placeholder-body">Раздел в разработке.</div>
+    <div className="page">
+      <BackHeader title={title} />
+      <Panel title={title}>
+        <div className="state" style={{ minHeight: 180 }}>
+          <Hammer size={26} />
+          Экран переносится в Mini App — пока этот раздел доступен в боте.
+        </div>
+      </Panel>
     </div>
   );
 }

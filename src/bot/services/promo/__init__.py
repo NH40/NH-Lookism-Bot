@@ -1,1 +1,21 @@
-"""Публичное API домена promo (сервис). Пока пусто — наполняется по мере переноса."""
+"""Публичное API домена promo (сервис)."""
+from bot.services.promo.promo import (  # noqa: F401
+    PromoAlreadyUsedError,
+    PromoCodeTakenError,
+    PromoDraft,
+    PromoError,
+    PromoExhaustedError,
+    PromoExpiredError,
+    PromoFormatError,
+    PromoInactiveError,
+    PromoNotAllowedError,
+    PromoNotFoundError,
+    create,
+    delete,
+    get,
+    is_alive,
+    list_recent,
+    parse_create,
+    redeem,
+    set_active,
+)

@@ -1,1 +1,2 @@
-"""Публичное API домена shop (клавиатуры). Пока пусто — наполняется по мере переноса."""
+"""Публичное API домена shop (клавиатуры)."""
+from bot.keyboards.shop.shop import shop_menu  # noqa: F401

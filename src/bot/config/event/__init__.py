@@ -1,0 +1,23 @@
+"""Публичное API event-конфига."""
+from bot.config.event.art import (  # noqa: F401
+    ART_ALIASES,
+    BOSS_ART,
+    SCHOOL_TEACHER_ART,
+    TECHNIQUE_TEACHER_ART,
+)
+from bot.config.event.event import (  # noqa: F401
+    BOSS_DURATION_SECONDS,
+    BOSS_FRAGMENTS,
+    BOSS_MODS,
+    BOSS_POWER_MIN,
+    BOSS_POWER_PERCENT,
+    BOSS_SPAWN_CHANCE_PER_TICK,
+    BOSS_UNIT_FLOOR_RANK,
+    EVENT_PUSH_ACTIVE_DAYS,
+    EVENT_PUSH_BATCH,
+    EVENT_PUSH_PAUSE_SECONDS,
+    EVENT_TICK_SECONDS,
+    TEACHERS_MAX_ACTIVE,
+    TEACHER_DURATION_SECONDS,
+    TEACHER_SPAWN_CHANCE_PER_TICK,
+)

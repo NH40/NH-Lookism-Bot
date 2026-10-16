@@ -1,0 +1,46 @@
+"""Админка/промокоды: тексты."""
+SEP = "━━━━━━━━━━━━━━━━━━"
+
+BTN_NEW = "➕ Создать"
+BTN_BACK = "◀️ Назад"
+BTN_BACK_LIST = "◀️ К списку"
+BTN_ACTIVATE = "✅ Включить"
+BTN_DEACTIVATE = "⛔️ Выключить"
+BTN_DELETE = "🗑 Удалить"
+BTN_CONFIRM_DELETE = "🗑 Да, удалить"
+
+LIST_TITLE = "🎟 <b>Промокоды</b>\n" + SEP + "\n"
+LIST_EMPTY = "Пока ни одного промокода.\n"
+LIST_HINT = "\n<i>Последние {limit}. Нажми на код — детали, включение и удаление.</i>"
+
+CREATE_PROMPT = (
+    "🎟 <b>Новый промокод</b>\n" + SEP + "\n"
+    "Одной строкой:\n"
+    "<code>КОД [uses|time|users] ПАРАМ РЕСУРС:КОЛ ...</code>\n\n"
+    "• <b>uses N</b> — не больше N активаций\n"
+    "• <b>time N</b> — действует N часов\n"
+    "• <b>users @a,@b</b> — только эти игроки\n"
+    "• ресурсы: <code>{resources}</code>\n"
+    "• минус — штраф (ниже 0 не уйдёт)\n\n"
+    "Примеры:\n<code>START uses 100 coins:500 tickets:5</code>\n"
+    "<code>GIFT time 24 donate:50</code>\n<code>VIP users @ivan,@petr blood:10</code>\n"
+    "<code>BONUS coins:1000</code>\n\n"
+    "<i>Пришли строку сообщением.</i>"
+)
+FORMAT_ERROR = "⚠️ Не разобрал строку. Проверь формат — пример выше. Пришли заново."
+CODE_TAKEN = "⚠️ Такой код уже есть. Пришли другой."
+CREATED = "✅ Промокод <b>{code}</b> создан.\n{reward}"
+
+DETAIL = (
+    "🎟 <b>{code}</b> — {status}\n" + SEP + "\n"
+    "🎁 Награда: {reward}\n"
+    "👥 Использовано: <b>{used}</b>{limit}\n"
+    "⏳ Срок: {expires}\n"
+    "{users}"
+)
+DELETE_ASK = "🗑 Удалить промокод <b>{code}</b> навсегда? Записи об активациях тоже уйдут."
+NOT_FOUND_ALERT = "Промокод не найден."
+DELETED_ALERT = "Промокод удалён."
+STATUS_ALIVE = "✅ активен"
+STATUS_OFF = "⛔️ выключен"
+STATUS_DEAD = "❌ истёк/исчерпан"

@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     redis_url: str
 
     yookassa_provider_token: str = ""
+    # Адрес БД LBP 1.3 — один раз перенести донат игроков (`services/donate.import_lbp1`).
+    lbp1_database_url: str = ""
 
     # Пусто -> кнопка "Профиль (веб)" не показывается (см. utils/mini_app.py). Заполняется
     # только когда домен реально поднят и обслуживается общим Caddy UAP (см. CLAUDE.md,

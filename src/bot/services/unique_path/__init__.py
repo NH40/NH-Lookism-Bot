@@ -1,1 +1,21 @@
-"""Публичное API домена unique_path (сервис). Пока пусто — наполняется по мере переноса."""
+"""Публичное API домена unique_path (сервис)."""
+from bot.services.unique_path.unique_path import (  # noqa: F401
+    NoSecondBodyError,
+    activate2,
+    NotEnoughFragmentsError,
+    NotEnoughPointsError,
+    PathMaxLevelError,
+    PathNotOwnedError,
+    PathView,
+    QuestNotCompleteError,
+    SwapOnCooldownError,
+    WrongStageError,
+    activate,
+    award_daily,
+    awaken_path,
+    check_conviction,
+    claim_conviction,
+    get_view,
+    grant,
+    level_up,
+)

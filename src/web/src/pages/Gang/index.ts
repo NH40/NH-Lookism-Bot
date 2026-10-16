@@ -1,0 +1,1 @@
+export { GangPage } from "./GangPage";

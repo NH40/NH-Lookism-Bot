@@ -1,1 +1,25 @@
-"""Публичное API домена map (тексты). Пока пусто — наполняется по мере переноса."""
+"""Публичное API домена map (тексты)."""
+from bot.texts.map.map import (  # noqa: F401
+    BTN_ATTACK_CITY_BOTS,
+    BTN_BACK_TO_COUNTRY,
+    BTN_CHALLENGE_OWNER,
+    BTN_MY_CITY_DISTRICTS,
+    CITY_BOTS_LINE,
+    CITY_BTN,
+    CITY_BTN_MINE,
+    CITY_EMPEROR_NOTE,
+    CITY_FULLY_MINE,
+    CITY_NO_BOTS_LINE,
+    CITY_NO_OWNERS,
+    CITY_OWNER_CHALLENGED,
+    CITY_OWNER_LINE,
+    CITY_OWNER_MINE,
+    CITY_SCREEN,
+    COUNTRY_MAP_HEADER,
+    COUNTRY_MAP_HEADER_EMPEROR,
+    DISTRICT_BTN_BOT,
+    DISTRICT_BTN_MINE,
+    DISTRICT_BTN_OTHER,
+    MAP_HEADER,
+    SOLE_OWNER_LINE,
+)

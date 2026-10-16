@@ -1,1 +1,15 @@
-"""Публичное API домена district (константы). Пока пусто — наполняется по мере переноса."""
+"""Публичное API домена district (константы)."""
+from bot.constant.district.district import (  # noqa: F401
+    CB_CHALLENGE_ACCEPT_PREFIX,
+    CB_CITY_ATTACK_BOTS_PREFIX,
+    CB_CITY_CHALLENGE_PREFIX,
+    CB_DISTRICT_ATTACK_PREFIX,
+    CB_DISTRICT_VIEW_PREFIX,
+    CHALLENGE_PENDING,
+    CHALLENGE_RESOLVED,
+    RESOLUTION_ACCEPTED,
+    RESOLUTION_TIMEOUT,
+    RESOLUTION_VOID,
+    SCOPE_CITY,
+    SCOPE_DISTRICT,
+)

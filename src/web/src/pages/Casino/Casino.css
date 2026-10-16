@@ -1,0 +1,55 @@
+.cs-reel { height: 92px; border-radius: 12px; border: 1px solid rgba(245, 185, 66, 0.6); background: linear-gradient(180deg, #0b1230, #1a2a6a, #0b1230); display: flex; align-items: center; justify-content: center; font-size: 46px; box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.6); overflow: hidden; }
+.cs-reel.spin { animation: cs-shake 0.18s linear infinite; filter: blur(0.6px); }
+.cs-reel.win { box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.6), 0 0 16px rgba(245, 185, 66, 0.8); }
+@keyframes cs-shake { 0% { transform: translateY(-4px); } 50% { transform: translateY(4px); } 100% { transform: translateY(-4px); } }
+.cs-note { text-align: center; margin: 8px 0; color: var(--gold-2, #f5c96a); font-size: 12px; font-weight: 600; line-height: 1.45; }
+.cs-note.win { color: var(--green); font-weight: 800; }
+.cs-table { gap: 6px; }
+.cs-sym { padding: 6px 4px; border-radius: 9px; border: 1px solid var(--line-soft); background: var(--card); text-align: center; font-size: 11px; font-weight: 800; }
+.cs-sub { font-size: 10px; color: var(--muted); }
+.cs-presets { margin-top: 8px; gap: 6px; }
+.cs-pill { min-height: 36px; }
+.cs-custom { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin: 8px 0; }
+.cs-custom input, .cs-field select { min-height: 44px; border-radius: 10px; border: 1px solid var(--line-soft); background: var(--card); color: var(--text); font-family: var(--font-body); font-weight: 800; font-size: 14px; padding: 0 12px; width: 100%; min-width: 0; }
+.cs-custom input:focus, .cs-field select:focus { outline: none; border-color: var(--cyan); }
+.cs-field { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; font-size: 11px; font-weight: 700; }
+.cs-label { font-size: 11px; font-weight: 700; margin: 10px 0 6px; }
+.cs-hint { font-size: 11px; font-weight: 600; line-height: 1.45; margin: 8px 0; }
+.cs-empty { font-size: 12px; font-weight: 600; text-align: center; padding: 8px 0; }
+.cs-time { padding: 6px 10px; flex-shrink: 0; }
+.cs-lobby-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px dashed var(--line-dash); }
+.cs-lobby-row:last-child { border-bottom: none; }
+.cs-lobby-main { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; font-size: 13px; }
+.cs-lobby-main span { font-size: 11px; font-weight: 600; }
+
+/* игральные карты */
+.pc-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.pc { width: 46px; height: 66px; border-radius: 8px; background: linear-gradient(180deg, #f4f7ff, #cfd8f3); color: #0b1230; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 800; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.7); animation: pc-in 0.25s ease-out; }
+.pc-red { color: #d6264a; }
+.pc-rank { font-size: 18px; line-height: 1; }
+.pc-suit { font-size: 20px; line-height: 1.1; }
+.pc-small { width: 38px; height: 54px; }
+.pc-back { background: repeating-linear-gradient(45deg, #1a3fa8 0 6px, #2a63e8 6px 12px); border-color: var(--cyan); }
+@keyframes pc-in { from { transform: translateY(-6px) scale(0.92); opacity: 0; } to { transform: none; opacity: 1; } }
+
+.bj-side { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; font-weight: 700; }
+.bj-side b { font-family: var(--font-display); font-size: 15px; }
+.bj-mine { margin-top: 10px; }
+.bj-info { font-size: 11px; font-weight: 600; margin-top: 8px; }
+.bj-actions { margin-top: 10px; gap: 6px; }
+
+/* покерный стол */
+.pk-pot { text-align: center; font-size: 12px; font-weight: 700; color: var(--muted); }
+.pk-pot b { font-family: var(--font-display); color: var(--gold); font-size: 16px; }
+.pk-board { display: flex; justify-content: center; margin: 6px 0 10px; }
+.pk-seat { display: flex; justify-content: space-between; gap: 8px; padding: 7px 8px; border-radius: 10px; font-size: 12px; font-weight: 700; margin-top: 4px; border: 1px solid transparent; }
+.pk-seat b { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.pk-seat span { color: var(--muted); text-align: right; }
+.pk-seat.turn { border-color: var(--cyan); background: rgba(80, 150, 255, 0.14); }
+.pk-seat.folded { opacity: 0.5; }
+.pk-turn { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; font-weight: 800; margin: 10px 0; color: var(--cyan); }
+.pk-turn.muted { color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+	.cs-reel.spin, .pc { animation: none; }
+}

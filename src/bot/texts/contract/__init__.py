@@ -1,0 +1,19 @@
+"""Публичное API домена contract (тексты)."""
+from bot.texts.contract.contract import (  # noqa: F401
+    BOUGHT_ALERT,
+    BTN_CONFIRM_BUY,
+    BTN_CONTRACT_NEXT,
+    BTN_CONTRACT_PREV,
+    BTN_CONTRACT_RANK,
+    BTN_CONTRACTS,
+    BUSY_ALERT,
+    CONTRACT_ACTIVE_HEAD,
+    CONTRACT_ACTIVE_LINE,
+    CONTRACT_DISCOUNT_LINE,
+    CONTRACT_SCREEN,
+    NOT_ENOUGH_ALERT,
+    QUANTITY_INVALID,
+    QUANTITY_PROMPT,
+    QUOTE_SCREEN,
+    RANK_LOCKED_ALERT,
+)

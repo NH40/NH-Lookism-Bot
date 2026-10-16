@@ -1,0 +1,6 @@
+"""Админка/промокоды: callback_data (префикс adm:pr:)."""
+CB_PROMO_NEW = "adm:pr:new"
+CB_PROMO_VIEW_PREFIX = "adm:pr:v:"
+CB_PROMO_TOGGLE_PREFIX = "adm:pr:t:"
+CB_PROMO_DELETE_ASK_PREFIX = "adm:pr:da:"
+CB_PROMO_DELETE_PREFIX = "adm:pr:dd:"

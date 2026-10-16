@@ -1,1 +1,11 @@
-"""Публичное API домена characteristic (репозиторий). Пока пусто — наполняется по мере переноса."""
+"""Публичное API домена characteristic (репозиторий)."""
+from bot.db.repositories.characteristic.characteristic import (  # noqa: F401
+    CombatRow,
+    StatsRow,
+    add_points,
+    get_combat_row,
+    get_stats,
+    get_strength,
+    invest,
+    set_potential_if_missing,
+)

@@ -1,0 +1,23 @@
+"""Публичное API домена exchange (сервис)."""
+from bot.services.exchange.exchange import (  # noqa: F401
+    Deal,
+    ExchangeError,
+    accept_trade,
+    bid,
+    buy_lot,
+    cancel_auction,
+    cancel_lot,
+    create_auction,
+    create_lot,
+    decline_trade,
+    expire_trades,
+    finish_auctions,
+    get_auction,
+    get_lot,
+    list_auctions,
+    list_lots,
+    list_trades,
+    min_next_bid,
+    mine,
+    propose_trade,
+)

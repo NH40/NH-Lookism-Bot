@@ -1,1 +1,20 @@
-"""Публичное API домена genius (константы). Пока пусто — наполняется по мере переноса."""
+"""Публичное API домена genius (константы)."""
+from bot.constant.genius.genius import (  # noqa: F401
+    CB_GENIUS_ACTIVATE_PREFIX,
+    CB_GENIUS_LEVEL_UP_PREFIX,
+    CB_GENIUS_OPEN,
+    CB_GENIUS_ROLL,
+    CB_GENIUS_VIEW_PREFIX,
+    GENIUSES,
+    GENIUS_BUSINESS,
+    GENIUS_CHARISMA,
+    GENIUS_HACKING,
+    GENIUS_MEDIA,
+    GENIUS_MEDICINE,
+    GENIUS_OBSERVATION,
+    GENIUS_TACTICS,
+    GENIUS_TRAINING,
+    GENIUS_WAR,
+    GENIUS_WEAPONS,
+    LOCK_ACTION_GENIUS,
+)

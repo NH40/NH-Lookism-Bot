@@ -1,0 +1,6 @@
+.set-row { width: 100%; min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; background: none; border: none; border-bottom: 1px dashed var(--line-dash); color: var(--text); font-size: 13px; font-weight: 700; text-align: left; cursor: pointer; }
+.set-row:last-child { border-bottom: none; }
+.set-switch { flex: none; width: 44px; height: 24px; border-radius: 12px; background: rgba(255, 255, 255, 0.1); border: 1px solid var(--line-soft); position: relative; transition: background 0.2s ease; }
+.set-switch i { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--dim); transition: transform 0.2s ease, background 0.2s ease; }
+.set-switch.on { background: rgba(61, 220, 132, 0.25); border-color: rgba(61, 220, 132, 0.7); }
+.set-switch.on i { transform: translateX(20px); background: var(--green); }

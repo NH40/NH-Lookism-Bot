@@ -1,1 +1,21 @@
-"""Публичное API домена awakening (тексты). Пока пусто — наполняется по мере переноса."""
+"""Публичное API домена awakening (тексты)."""
+from bot.texts.awakening.awakening import (  # noqa: F401
+    AWAKENED,
+    AWAKENING_LINE,
+    AWAKENING_LINE_ZERO,
+    BTN_AWAKEN,
+    BTN_AWAKENING,
+    BTN_AWAKEN_CONFIRM,
+    CONFIRM_EXPIRED_ALERT,
+    CONFIRM_SCREEN,
+    LEVEL_LINE_DONE,
+    LEVEL_LINE_LOCKED,
+    MAXED_ALERT,
+    NOT_EMPEROR_ALERT,
+    QUEST_NOT_DONE_ALERT,
+    SCREEN,
+    STATUS_MAXED,
+    STATUS_NOT_EMPEROR,
+    STATUS_QUEST,
+    STATUS_READY,
+)

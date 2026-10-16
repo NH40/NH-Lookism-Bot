@@ -1,0 +1,17 @@
+.emp-input { flex: 1; min-width: 0; min-height: 44px; border-radius: 10px; border: 1px solid var(--line-soft); background: var(--card); color: var(--text); padding: 0 12px; font: inherit; font-size: 15px; font-weight: 700; box-sizing: border-box; }
+.emp-rates { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.emp-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line-soft); background: var(--card); }
+.emp-row + .emp-row { margin-top: 8px; }
+.emp-row .grow { flex: 1; min-width: 0; }
+.emp-row b { display: block; font-size: 14px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.emp-row small { display: block; font-size: 11px; font-weight: 700; color: var(--muted); }
+.emp-note { margin: 8px 0 0; font-size: 11px; font-weight: 700; line-height: 1.45; color: var(--muted); }
+.emp-act { width: 100%; justify-content: space-between; }
+.emp-act + .emp-act { margin-top: 8px; }
+.emp-hist { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px dashed var(--line-soft); font-size: 12px; font-weight: 700; }
+.emp-hist:last-child { border-bottom: 0; }
+.emp-hist small { display: block; font-size: 10px; color: var(--muted); }
+.emp-hist .win { color: var(--green-2, #8ff0b8); }
+.emp-hist .lose { color: var(--red-2, #ff8aa0); }
+.emp-chip { flex-direction: column; align-items: flex-start; gap: 2px; }
+.emp-chip .disp { font-size: 15px; font-weight: 800; }

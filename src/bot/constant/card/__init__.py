@@ -1,1 +1,24 @@
-"""Публичное API домена card (константы). Пока пусто — наполняется по мере переноса."""
+"""Публичное API домена card (константы)."""
+from bot.constant.card.card import (  # noqa: F401
+    POS_BUSINESSMAN,
+    POS_DEFENDER,
+    POS_DEPUTY,
+    POS_LEADER,
+    POS_SCOUT,
+    POS_SECURITY,
+    POS_SPY,
+    POS_TACTICIAN,
+    POS_WARLORD,
+    POSITIONS,
+    RARITY_ABSOLUTE,
+    RARITY_BOSS,
+    RARITY_GEN_ZERO,
+    RARITY_INDEX,
+    RARITY_KING,
+    RARITY_LEGEND,
+    RARITY_MEMBER,
+    RARITY_NEW_LEGEND,
+    RARITY_ORDER,
+    RARITY_PEAK,
+    RARITY_STRONG_KING,
+)

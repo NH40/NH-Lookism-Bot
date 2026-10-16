@@ -1,1 +1,19 @@
-"""Публичное API домена donate (константы). Пока пусто — наполняется по мере переноса."""
+"""Публичное API домена donate (константы)."""
+from bot.constant.donate.donate import (  # noqa: F401
+    CB_DONATE_CUSTOM,
+    CB_DONATE_OPEN,
+    CB_DONATE_PRESET_PREFIX,
+    CB_MARKET_BODY,
+    CB_MARKET_BODY_BUY,
+    CB_MARKET_ITEM_PREFIX,
+    CB_MARKET_KIND_PREFIX,
+    CB_MARKET_LEVEL_PREFIX,
+    CB_MARKET_OPEN,
+    CB_MARKET_UNLOCK_PREFIX,
+    DONATE_KINDS,
+    KIND_GENIUS,
+    KIND_PATH,
+    KIND_TECHNIQUE,
+    LOCK_ACTION_DONATE,
+    PAYLOAD_DONATE_PREFIX,
+)

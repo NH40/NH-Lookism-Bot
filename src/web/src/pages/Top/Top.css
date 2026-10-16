@@ -1,0 +1,13 @@
+.top-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px dashed var(--line-dash); }
+.top-row:last-of-type { border-bottom: none; }
+.top-row.me { background: rgba(80, 170, 255, 0.08); border-radius: 10px; padding-left: 6px; padding-right: 6px; }
+.top-place { width: 30px; height: 30px; flex: none; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; border: 1px solid var(--line-soft); color: var(--muted); }
+.top-place.gold { border-color: var(--gold); color: var(--gold-2); background: rgba(245, 185, 66, 0.15); }
+.top-place.silver { border-color: #c9d3e6; color: #e6ecf7; background: rgba(201, 211, 230, 0.12); }
+.top-place.bronze { border-color: #cd8a52; color: #f0b27f; background: rgba(205, 138, 82, 0.14); }
+.top-name { font-size: 14px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top-sub { font-size: 11px; font-weight: 700; display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
+.top-reward { font-size: 11px; font-weight: 700; color: var(--gold-2); margin-top: 3px; display: flex; align-items: center; gap: 4px; }
+.top-power { flex: none; font-size: 13px; font-weight: 800; color: var(--red-2); display: flex; align-items: center; gap: 4px; }
+.top-hint { font-size: 12px; font-weight: 600; line-height: 1.45; margin-top: 8px; }
+.top-pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 10px; font-size: 12px; font-weight: 700; }

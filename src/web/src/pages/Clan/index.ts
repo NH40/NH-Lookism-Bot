@@ -1,0 +1,1 @@
+export { ClanPage } from "./ClanPage";

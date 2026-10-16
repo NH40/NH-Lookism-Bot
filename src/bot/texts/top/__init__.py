@@ -1,0 +1,22 @@
+"""Публичное API домена top (тексты)."""
+from bot.texts.top.top import (  # noqa: F401
+    BTN_ALL_PLAYERS,
+    BTN_TAB_CLANS,
+    BTN_TAB_PLAYERS,
+    BTN_TO_TOP,
+    CLAN_ROW,
+    EMPTY_ROWS,
+    MEDALS,
+    NOT_IN_TOP,
+    PLAYERS_CLAN,
+    PLAYERS_ROW,
+    PLAYERS_SCREEN,
+    PLAYER_ROW,
+    PUSH_CLAN_REWARD,
+    PUSH_PLAYER_REWARD,
+    REWARD_SUFFIX,
+    SEASON_LINE,
+    TOP_CLANS_SCREEN,
+    TOP_PLAYERS_SCREEN,
+    reward_text,
+)

@@ -11,11 +11,13 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config.settings import Settings
-from bot.db.repositories.user import get_by_id
 
 
 async def is_admin(session: AsyncSession, user_id: int, settings: Settings) -> bool:
+    """Любая роль админки (супер — ADMIN_IDS; остальные — `users.admin_role`, см. `roles`)."""
     if user_id in settings.admin_ids:
         return True
-    user = await get_by_id(session, user_id)
-    return user is not None and user.is_admin
+    from bot.services.admin.roles import role_of
+
+    return await role_of(session, user_id) is not None
+

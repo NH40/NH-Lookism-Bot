@@ -1,0 +1,43 @@
+"""Публичное API домена empire (сервис)."""
+from bot.services.empire.empire import (  # noqa: F401
+    InvalidRateError,
+    NotEmperorError,
+    SubjectNotFoundError,
+    SubjectRate,
+    find_subject,
+    get_emperor,
+    get_overview,
+    set_global_rate,
+    set_personal_rate,
+)
+from bot.services.empire.sabotage import (  # noqa: F401
+    NoEmperorError,
+    NotMarkedTargetError,
+    NothingToStealError,
+    SabotageOnCooldownError,
+    SabotageResult,
+    SabotageView,
+    UnknownSabotageError,
+    get_view as get_sabotage_view,
+    sabotage,
+)
+from bot.services.empire.war import (  # noqa: F401
+    NotEmperorError as WarNotEmperorError,
+    OutgoingWarExistsError,
+    TargetAtWarError,
+    TargetHasNoCitiesError,
+    TargetNotEmperorError,
+    TargetShieldedError,
+    TargetsPage,
+    WarIssued,
+    WarNotFoundError,
+    WarOnCooldownError,
+    WarOutcome,
+    accept_war,
+    declare_war,
+    get_incoming as get_incoming_war,
+    get_target as get_war_target,
+    list_targets as list_war_targets,
+    resolve_expired as resolve_expired_wars,
+    war_history,
+)

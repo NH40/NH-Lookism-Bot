@@ -5,7 +5,7 @@
 
 export interface TelegramWebApp {
   initData: string;
-  initDataUnsafe: Record<string, unknown>;
+  initDataUnsafe: { user?: { id: number; first_name?: string; last_name?: string; username?: string; photo_url?: string } } & Record<string, unknown>;
   colorScheme: "light" | "dark";
   themeParams: Record<string, string>;
   ready: () => void;
@@ -17,6 +17,14 @@ export interface TelegramWebApp {
     onClick: (cb: () => void) => void;
     offClick: (cb: () => void) => void;
   };
+  HapticFeedback?: {
+    impactOccurred?: (style: "light" | "medium" | "heavy") => void;
+    notificationOccurred?: (type: "success" | "error" | "warning") => void;
+  };
+  openTelegramLink?: (url: string) => void;
+  openInvoice?: (url: string, callback?: (status: "paid" | "cancelled" | "failed" | "pending") => void) => void;
+  setHeaderColor?: (color: string) => void;
+  setBackgroundColor?: (color: string) => void;
 }
 
 declare global {

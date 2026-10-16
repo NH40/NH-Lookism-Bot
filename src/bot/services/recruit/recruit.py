@@ -14,17 +14,21 @@ raw-notes не сведены в реализуемую механику, см. 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from random import randint
+from random import randint, random
 
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.cache.keys import recruit_extra_cooldown
 from bot.config.characteristic import extra_power_for_rank
-from bot.config.game import INFLUENCE_STARTING, RECRUIT_EXTRA_COOLDOWN_SECONDS
+from bot.config.game import RECRUIT_EXTRA_COOLDOWN_SECONDS
 from bot.constant.characteristic import RANK_INDEX, RANK_LADDER
 from bot.constant.phase import PHASE_CIRCLE, PHASE_FIST, PHASE_GANG
+from bot.constant.dev_quest import TASK_RECRUIT
+from bot.services.dev_quest import emit as quest_event
+from bot.services.district import get_influence
 from bot.services.extra import recruit_into_stack
+from bot.services.characteristic import get_combat_profile
 
 # Потолок ранга статиста по фазе игрока (raw-notes «Карта») — 0-based индекс в
 # RANK_LADDER, не сам ранг: банда F..EX, круг F..EXR, кулак F..ZZZ (каждый следующий
@@ -47,15 +51,17 @@ class RecruitResult:
     power: int
 
 
-def get_influence() -> int:
-    """Пока всегда стартовое значение — «влияние растёт от захваченных районов/городов»
-    (raw-notes), а захват территории ещё не реализован (домен `district`). Как только
-    он появится, здесь будет реальный подсчёт по владению, не константа."""
-    return INFLUENCE_STARTING
+def recruit_ceiling_rank(phase: str, influence: int) -> str:
+    """Лучший ранг, который вообще может выпасть при вербовке: min(потолок фазы, влияние)."""
+    return RANK_LADDER[min(PHASE_RANK_CAP_INDEX[phase], influence)]
 
 
-def roll_extra_rank(phase: str) -> str:
-    ceiling_index = min(PHASE_RANK_CAP_INDEX[phase], get_influence())
+def roll_extra_rank(phase: str, influence: int, rank_bonus: int = 0) -> str:
+    """Влияние считается от захваченных районов (`services/district.get_influence`, +1 за
+    район) — каждый захваченный район поднимает потолок вербовки на одну ступень.
+    `rank_bonus` — ступени сверх потолка от систем развития (Джинчоль, гений войны):
+    поднимает и потолок влияния, и потолок фазы — «военные вербуют лучше»."""
+    ceiling_index = min(PHASE_RANK_CAP_INDEX[phase] + rank_bonus, influence + rank_bonus, len(RANK_LADDER) - 1)
     return RANK_LADDER[randint(0, ceiling_index)]
 
 
@@ -66,12 +72,18 @@ async def recruit_extra(session: AsyncSession, redis: Redis, user_id: int, phase
     коммитит здесь один раз (правило 10 — это top-level операция, не композируется
     ни с чем ещё)."""
     key = recruit_extra_cooldown(user_id)
-    acquired = await redis.set(key, "1", nx=True, ex=RECRUIT_EXTRA_COOLDOWN_SECONDS)
+    profile = await get_combat_profile(session, user_id)
+    acquired = await redis.set(key, "1", nx=True, ex=profile.cooldown(RECRUIT_EXTRA_COOLDOWN_SECONDS, profile.eco.recruit_cooldown))
     if not acquired:
         ttl = await redis.ttl(key)
         raise RecruitOnCooldownError(retry_after_seconds=max(0, ttl))
 
-    rank = roll_extra_rank(phase)
-    await recruit_into_stack(session, user_id, rank)
+    eco = profile.eco
+    rank = roll_extra_rank(phase, await get_influence(session, user_id), eco.recruit_rank_bonus)
+    # Шанс завербовать сразу двоих (Джинчоль, гений харизмы) — второй того же ранга.
+    count = 2 if eco.recruit_double and random() < min(0.9, eco.recruit_double) else 1
+    for _ in range(count):
+        await recruit_into_stack(session, user_id, rank)
+    await quest_event(session, user_id, TASK_RECRUIT, count)
     await session.commit()
     return RecruitResult(rank=rank, power=extra_power_for_rank(rank))

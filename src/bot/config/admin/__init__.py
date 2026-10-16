@@ -1,0 +1,12 @@
+"""Публичное API домена admin (конфиг)."""
+from bot.config.admin.admin import (  # noqa: F401
+    ADMIN_AUDIT_PAGE,
+    BETA_ATTEMPTS_WINDOW_SECONDS,
+    BETA_CODE_MAX_LENGTH,
+    BETA_CODE_MIN_LENGTH,
+    BETA_GENERATED_CODE_LENGTH,
+    BETA_MAX_ATTEMPTS,
+    ROLE_LEVEL,
+    SECTION_MIN_ROLE,
+    SECTION_ORDER,
+)

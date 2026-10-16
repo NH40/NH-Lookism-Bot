@@ -319,7 +319,8 @@ async def rebuild_circ_bonuses():
 
 async def seed():
     """Засеивает статичный контент карты 2.0.0 (страны/города — см. src/bot/config/country,
-    config/city) — идемпотентно (ON CONFLICT DO NOTHING), безопасно гонять повторно.
+    config/city; районы — по district_count каждого города) — идемпотентно (ON CONFLICT
+    DO NOTHING), безопасно гонять повторно: владельцы уже захваченных районов не трогаются.
     Раньше вызывалось автоматически при каждом старте bot.main (main.py: _seed_world) —
     вынесено сюда по прямой просьбе пользователя 2026-09-21: сидинг — не игровая
     механика с состоянием, ему не место в горячем пути каждого рестарта контейнера
@@ -329,6 +330,7 @@ async def seed():
     from bot.db.session import make_engine, make_session_factory
     from bot.services import city as city_service
     from bot.services import country as country_service
+    from bot.services import district as district_service
 
     settings = get_settings()
     engine = make_engine(settings)
@@ -336,8 +338,9 @@ async def seed():
     async with session_factory() as session:
         await country_service.seed(session)
         await city_service.seed(session)
+        await district_service.seed(session)
     await engine.dispose()
-    print("✅ Страны и города засеяны")
+    print("✅ Страны, города и районы засеяны")
 
 
 async def auto_backup_loop():
@@ -357,7 +360,7 @@ Lookism Battle Planet — Manager
   restore <file>                Восстановить из файла
   list                          Список бэкапов
   migrate                       Создать таблицы в БД
-  seed                          Засеять страны/города 2.0.0 (идемпотентно)
+  seed                          Засеять страны/города/районы 2.0.0 (идемпотентно)
   stats                         Статистика игроков
   set_clan_leader <clan> <tg>   Сменить лидера клана
   add_king_cities               Добавить 10 king-городов каждого типа в каждый сектор

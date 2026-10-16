@@ -1,0 +1,4 @@
+.guide-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.guide-tabs .pill { min-height: 38px; }
+.guide-body { font-size: 13px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.guide-body b { font-weight: 800; }

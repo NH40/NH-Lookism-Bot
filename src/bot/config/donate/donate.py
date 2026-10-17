@@ -60,7 +60,9 @@ LBP1_TITLE_PRICES: dict[str, int] = {
     "raid_cd": 600, "duel_cd": 500, "ui_title": 1000, "ui_potion": 500, "rom_extra_skills": 500,
     "rom_max_chance": 400,
 }
-# Круг: (цена за круг, максимум кругов); сверх максимума цена росла ×1.5 за каждый следующий.
+# Круг: (цена за круг, максимум кругов). В 1.3 сверх максимума цена росла ×1.5 за круг, но такие
+# круги — выдача админкой (200/40 «Архангелов» у двух аккаунтов дали бы 10²⁸ 💎); при переносе
+# все круги — по базовой цене (пользователь 2026-10-17).
 LBP1_CIRCLE_PRICES: dict[str, tuple[int, int]] = {
     "archangel": (1000, 10), "clan_head": (1200, 5), "korea_devil": (1200, 6), "mountain_lord": (1200, 4),
     "shadow": (1200, 5), "dragon": (1200, 6), "dungeon_lord": (800, 4), "emperor_circle": (1200, 10),
@@ -69,4 +71,4 @@ LBP1_CIRCLE_PRICES: dict[str, tuple[int, int]] = {
 
 def lbp1_circles_cost(donat_id: str, circles: int) -> int:
     price, cap = LBP1_CIRCLE_PRICES.get(donat_id, (0, 0))
-    return sum(price if i <= cap else round(price * 1.5 ** (i - cap)) for i in range(1, circles + 1))
+    return price * max(circles, 0)

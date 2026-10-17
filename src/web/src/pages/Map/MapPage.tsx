@@ -134,7 +134,9 @@ function DistrictSheet({ district, onClose, onChanged }: { district: MapDistrict
   );
 }
 
-function EventCard({ event, onFight, busy, bossCd }: { event: MapEvent; onFight: (e: MapEvent) => void; busy: boolean; bossCd: number }) {
+function EventCard({ event, onFight, onMeet, busy, bossCd }: {
+  event: MapEvent; onFight: (e: MapEvent) => void; onMeet: (e: MapEvent) => void; busy: boolean; bossCd: number;
+}) {
   const left = useCountdown(event.ends_in_seconds);
   if (event.kind === "boss") {
     return (
@@ -151,8 +153,11 @@ function EventCard({ event, onFight, busy, bossCd }: { event: MapEvent; onFight:
       </div>
     );
   }
+  // Учитель техник / школы: «Взять задание» (как кнопка под учителем в боте), дальше — куда сдавать.
+  const target = event.kind === "school" ? ROUTE_TRAINING : ROUTE_DEVELOPMENT;
+  const where = event.kind === "school" ? "Тренировки" : "Развитие";
   return (
-    <Link className="tile" to={event.kind === "school" ? ROUTE_TRAINING : ROUTE_DEVELOPMENT}>
+    <div className="tile">
       <div className="event-row">
         <div className="ico-box"><Users size={18} /></div>
         <div>
@@ -160,7 +165,22 @@ function EventCard({ event, onFight, busy, bossCd }: { event: MapEvent; onFight:
           <small style={{ display: "block" }}>{event.subtitle} · {countdown(left)}</small>
         </div>
       </div>
-    </Link>
+      {event.state === "new" && (
+        <button className="btn gold block small" type="button" style={{ marginTop: 8 }} disabled={busy} onClick={() => onMeet(event)}>
+          Взять задание
+        </button>
+      )}
+      {event.state === "active" && (
+        <Link className={`btn block small ${event.quest_complete ? "green" : "ghost"}`} style={{ marginTop: 8 }} to={target}>
+          {event.quest_complete ? `Задание выполнено — сдать (${where})` : `Задание взято — прогресс (${where})`}
+        </Link>
+      )}
+      {event.state === "done" && (
+        <Link className="btn ghost block small" style={{ marginTop: 8 }} to={target}>
+          {event.kind === "school" ? "Учитель уже открыт" : "Техника уже изучена"}
+        </Link>
+      )}
+    </div>
   );
 }
 
@@ -172,6 +192,10 @@ export function MapPage() {
   const { run, busy } = useAction(reload);
   const cd = useCountdown(data?.attack_cooldown_seconds ?? 0);
   const bossCd = useCountdown(data?.boss_cooldown_seconds ?? 0);
+
+  const meetTeacher = async (e: MapEvent) => {
+    await run(`/map/events/${e.id}/meet`);
+  };
 
   const fightBoss = async (e: MapEvent) => {
     const result = await run(`/boss/${e.id}/fight`);
@@ -260,7 +284,7 @@ export function MapPage() {
           )}
 
           {data.events.map((e) => (
-            <EventCard key={e.id} event={e} onFight={fightBoss} busy={busy} bossCd={bossCd} />
+            <EventCard key={e.id} event={e} onFight={fightBoss} onMeet={meetTeacher} busy={busy} bossCd={bossCd} />
           ))}
           <Link to={ROUTE_MAP_EVENTS} className="row" style={{ justifyContent: "center", gap: 4, color: "var(--cyan-2)", fontSize: 13, fontWeight: 800, textDecoration: "none", minHeight: 44 }}>
             Кто может появиться<ChevronRight size={16} />

@@ -101,6 +101,9 @@ class SchoolOut(BaseModel):
     effect: str
     state: str  # owned / unlocked / locked
     cooldown: int
+    # locked: взятое задание учителя (его берут у учителя на карте); unlocked: цена покупки.
+    quest: dict | None = None
+    price: int = 0
 
 
 class TrainingOut(BaseModel):
@@ -260,13 +263,20 @@ async def get_training(
     )
 
 
+class SchoolIn(BaseModel):
+    school: str
+
+
 async def _schools(session: AsyncSession, redis: Redis, user_id: int) -> list[SchoolOut]:
     """Школы статистов (2026-10-13: занятия — в тренировках, покупка учителя — в магазине)."""
+    from api.routers.development import _quest
+    from bot.config.school import SCHOOL_TEACHER_PRICE
     from bot.constant.school import SCHOOLS
-    from bot.services.school import shop_teachers
+    from bot.services.school import quests, shop_teachers
     from bot.texts.school import SCHOOL_EFFECTS, SCHOOL_NAMES, SCHOOL_TEACHERS
 
     teachers = {t.school: t for t in await shop_teachers(session, redis, user_id)}
+    active = {q.ref: q for q in await quests(session, user_id)}
     out = []
     for s in SCHOOLS:
         t = teachers.get(s)
@@ -274,12 +284,48 @@ async def _schools(session: AsyncSession, redis: Redis, user_id: int) -> list[Sc
         out.append(SchoolOut(
             code=s, teacher=SCHOOL_TEACHERS[s], school=SCHOOL_NAMES[s], effect=SCHOOL_EFFECTS[s], state=state,
             cooldown=t.cooldown if t and t.owned else 0,
+            quest=_quest(active.get(s), SCHOOL_TEACHERS[s]) if state == "locked" else None,
+            price=SCHOOL_TEACHER_PRICE if state == "unlocked" else 0,
         ))
     return out
 
 
-class SchoolIn(BaseModel):
-    school: str
+@router.post("/school/claim")
+async def post_school_claim(
+    body: SchoolIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)
+) -> dict:
+    """Выполненное задание учителя → учитель в магазине (как «Позвать» в боте)."""
+    from bot.services.school import QuestNotCompleteError, UnknownSchoolError, claim_quest
+    from bot.texts.school import QUEST_NOT_DONE_ALERT, SCHOOL_TEACHERS
+
+    await _user(session, user_id)
+    try:
+        await claim_quest(session, user_id, body.school)
+    except (UnknownSchoolError, QuestNotCompleteError):
+        raise HTTPException(400, QUEST_NOT_DONE_ALERT)
+    return {"message": f"Учитель {SCHOOL_TEACHERS[body.school]} теперь доступен — купи его, чтобы открыть занятия."}
+
+
+@router.post("/school/buy")
+async def post_school_buy(
+    body: SchoolIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    from bot.services.school import NotEnoughCoinsError as BuyCoinsError, SchoolBusyError, TeacherAlreadyOwnedError, TeacherNotUnlockedError, buy_teacher
+    from bot.texts.school import BOUGHT_ALERT, SCHOOL_TEACHERS
+
+    await _user(session, user_id)
+    try:
+        await buy_teacher(session, redis, user_id, body.school)
+    except SchoolBusyError:
+        raise HTTPException(400, "Обрабатываю…")
+    except TeacherNotUnlockedError:
+        raise HTTPException(400, "Сначала выполни задание этого учителя — его дают на карте.")
+    except TeacherAlreadyOwnedError:
+        raise HTTPException(400, "Этот учитель уже твой.")
+    except BuyCoinsError as exc:
+        raise HTTPException(400, f"Не хватает NHCoin: нужно {format_number(exc.cost)}.")
+    return {"message": BOUGHT_ALERT.format(teacher=SCHOOL_TEACHERS[body.school])}
 
 
 @router.post("/school/lesson")

@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import get_current_user_id
 from api.db import get_session
 from api.deps import get_redis
-from api.routers._common import clean_label, require_user, ttl_seconds
+from api.routers._common import bad, clean_label, require_user, ttl_seconds
 from api.routers.img import ASSETS_DIR
 from bot.cache.keys import battle_cooldown, boss_cooldown
 from bot.config.country import COUNTRY_BY_CODE
@@ -94,6 +94,9 @@ class MapEventOut(BaseModel):
     image: str | None = None
     ends_in_seconds: int
     won: bool = False
+    # Учителя: new — задание не взято, active — взято (выполняется), done — техника/учитель уже есть.
+    state: str | None = None
+    quest_complete: bool = False
 
 
 class EmpireOut(BaseModel):
@@ -209,8 +212,69 @@ async def get_map(
         income_per_minute=float(wallet.per_minute) if wallet else 0.0,
         attack_cooldown_seconds=await ttl_seconds(redis, battle_cooldown(user.id)),
         boss_cooldown_seconds=await ttl_seconds(redis, boss_cooldown(user.id)),
-        events=[_event_out(e) for e in events],
+        events=[await _with_teacher_state(session, user.id, _event_out(e)) for e in events],
     )
+
+
+async def _with_teacher_state(session: AsyncSession, user_id: int, out: MapEventOut) -> MapEventOut:
+    """Статус учителя для кнопки «Взять задание» (как кнопки под учителем в боте)."""
+    if out.kind not in ("teacher", "school"):
+        return out
+    from bot.services import school as school_svc
+    from bot.services import unique_technique as tech_svc
+
+    try:
+        if out.kind == "teacher":
+            view = await tech_svc.get_teacher(session, user_id, out.id)
+            have = view.owned
+        else:
+            view = await school_svc.get_teacher(session, user_id, out.id)
+            have = view.unlocked
+    except (tech_svc.TeacherGoneError, school_svc.TeacherGoneError):
+        return out
+    out.state = "done" if have else "active" if view.quest else "new"
+    out.quest_complete = bool(view.quest and view.quest.complete)
+    return out
+
+
+class MeetOut(BaseModel):
+    message: str
+    tasks: list[str]
+
+
+@router.post("/events/{event_id}/meet", response_model=MeetOut)
+async def post_meet(event_id: int, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> MeetOut:
+    """Взять задание у учителя на карте — техник (`connect`) или школы статистов (`meet`), как в боте."""
+    from bot.db.repositories import event as event_repo
+    from bot.services import school as school_svc
+    from bot.services import unique_technique as tech_svc
+    from bot.texts import school as t_school
+    from bot.texts import unique_technique as t_tech
+    from bot.texts.dev_quest import TASK_LABELS
+
+    await require_user(session, user_id)
+    event = await event_repo.get_active(session, event_id, user_id)
+    if event is None:
+        raise bad(t_school.TEACHER_GONE_ALERT)
+    try:
+        if event.kind == EVENT_SCHOOL_TEACHER:
+            quest = await school_svc.meet(session, user_id, event_id)
+            title = clean_label(SCHOOL_TEACHERS.get(quest.ref, quest.ref))
+            hint = "Выполни — и учитель появится в магазине (Тренировки → Школы статистов)."
+        else:
+            quest = await tech_svc.connect(session, user_id, event_id)
+            title = clean_label(TEACHER_NAMES.get(quest.ref, quest.ref))
+            hint = "Выполни — и получишь технику (Развитие → Техники)."
+    except (school_svc.TeacherGoneError, tech_svc.TeacherGoneError):
+        raise bad(t_school.TEACHER_GONE_ALERT)
+    except school_svc.AlreadyUnlockedError:
+        raise bad(t_school.ALREADY_UNLOCKED_ALERT)
+    except tech_svc.TechniqueOwnedError:
+        raise bad(t_tech.TECHNIQUE_OWNED_ALERT)
+    except (school_svc.QuestAlreadyActiveError, tech_svc.QuestAlreadyActiveError):
+        raise bad(t_school.QUEST_ACTIVE_ALERT)
+    tasks = [f"{clean_label(TASK_LABELS.get(t, t))}: {min(quest.progress.get(t, 0), n)}/{n}" for t, n in quest.tasks.items()]
+    return MeetOut(message=f"{title} даёт задание:\n" + "\n".join(tasks) + f"\n{hint}", tasks=tasks)
 
 
 class CatalogEntryOut(BaseModel):

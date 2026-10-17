@@ -155,7 +155,10 @@ export interface TrainingResponse {
     fragments: number;
     coins: number;
   } | null;
-  schools: { code: string; teacher: string; school: string; effect: string; state: "owned" | "unlocked" | "locked"; cooldown: number }[];
+  schools: {
+    code: string; teacher: string; school: string; effect: string; state: "owned" | "unlocked" | "locked"; cooldown: number;
+    quest: DevQuest | null; price: number;
+  }[];
   school_lesson_price: number;
 }
 

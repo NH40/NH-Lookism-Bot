@@ -20,6 +20,9 @@ export interface MapEvent {
   image: string | null;
   ends_in_seconds: number;
   won: boolean;
+  // Учителя: new — задание не взято, active — взято, done — уже открыт.
+  state?: "new" | "active" | "done" | null;
+  quest_complete?: boolean;
 }
 
 export interface MapData {

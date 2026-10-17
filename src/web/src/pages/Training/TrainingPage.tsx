@@ -89,16 +89,36 @@ export function TrainingPage() {
           {data.schools.length > 0 && (
             <Panel title="ШКОЛЫ СТАТИСТОВ" tone="gold">
               <div className="muted" style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.45, marginBottom: 8 }}>
-                Занятие — {fmt(data.school_lesson_price)} NHCoin, раз в час на школу. Учителя покупаются в магазине после их задания.
+                Учителя дают задание на карте. Выполнил — сдай задание здесь и купи учителя. Занятие — {fmt(data.school_lesson_price)} NHCoin, раз в час на школу.
               </div>
               {data.schools.map((s) => (
                 <div key={s.code} className="tr-tech">
                   <div>
                     <b>{s.teacher}</b> <span className="muted" style={{ fontSize: 12 }}>· школа «{s.school}»</span>
                     <div className="muted" style={{ fontSize: 11, fontWeight: 700 }}>
-                      {s.state === "owned" ? s.effect : s.state === "unlocked" ? "Учитель ждёт в магазине → Обучение" : "Встреть учителя на карте и выполни задание"}
+                      {s.state === "owned" ? s.effect : s.state === "unlocked" ? "Задание выполнено — учителя можно купить" : s.quest ? "Задание взято:" : "Встреть учителя на карте и возьми задание"}
                     </div>
+                    {s.state === "locked" && s.quest && (
+                      <div style={{ margin: "6px 0" }}>
+                        {s.quest.tasks.map((t) => (
+                          <div key={t.label} className="row" style={{ fontSize: 12, fontWeight: 700 }}>
+                            <span className="muted">{t.label}</span>
+                            <span style={{ color: t.done >= t.need ? "var(--green-2)" : "var(--text)" }}>{fmt(t.done)} / {fmt(t.need)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
+                  {s.state === "locked" && s.quest?.complete && (
+                    <button className="btn green block" disabled={busy} onClick={() => run("/training/school/claim", { school: s.code })}>
+                      Сдать задание
+                    </button>
+                  )}
+                  {s.state === "unlocked" && (
+                    <button className="btn gold block" disabled={busy} onClick={() => run("/training/school/buy", { school: s.code })}>
+                      Купить учителя · {fmt(s.price)} NHCoin
+                    </button>
+                  )}
                   {s.state === "owned" && (
                     <button className={`btn gold block ${s.cooldown ? "off" : ""}`} disabled={busy || s.cooldown > 0} onClick={() => run("/training/school/lesson", { school: s.code })}>
                       {s.cooldown ? `Через ${countdown(s.cooldown)}` : `Занятие · ${fmt(data.school_lesson_price)} NHCoin`}

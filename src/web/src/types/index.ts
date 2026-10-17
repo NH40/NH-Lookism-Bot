@@ -12,3 +12,4 @@ export * from "./empire";
 export * from "./stats";
 export * from "./country";
 export * from "./intel";
+export * from "./admin";

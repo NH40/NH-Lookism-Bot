@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
 
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
@@ -27,8 +26,6 @@ from bot.handlers.admin.common import guard
 from bot.keyboards.admin.patch import back_menu, menu, step1_menu, step2_menu
 from bot.services.admin import audit
 from bot.services.admin import live_config, patch as patch_service
-from bot.services import top as top_service
-from bot.constant.top import PAYOUT_KEY_PATCH
 from bot.texts.admin.patch import (
     ALREADY_RUNNING,
     EXPIRED_ALERT,
@@ -104,7 +101,7 @@ async def cb_patch_step2(callback: CallbackQuery, session: AsyncSession, redis: 
     if not await patch_service.take(redis, CONFIRM_KIND_PATCH, callback.from_user.id):
         await callback.answer(EXPIRED_ALERT, show_alert=True)
         return
-    if patch_service.is_running():
+    if not await patch_service.try_start(redis):
         await callback.answer(ALREADY_RUNNING, show_alert=True)
         return
     admin_id = callback.from_user.id
@@ -120,16 +117,13 @@ async def cb_patch_step2(callback: CallbackQuery, session: AsyncSession, redis: 
 
     async def job() -> None:
         try:
-            # Вайп = конец сезона: победителей снимаем ДО сброса (патч обнулит армии), а
-            # начисляем ПОСЛЕ — иначе сброс съел бы NHCoin и тикеты награды.
-            winners = await top_service.snapshot_winners(session_factory)
-            done = await patch_service.run_patch(session_factory, progress)
-            stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-            await top_service.award(bot, session_factory, PAYOUT_KEY_PATCH.format(stamp=stamp), winners)
+            done = await patch_service.season_patch(bot, session_factory, progress)
             await notify(bot, admin_id, PATCH_DONE.format(done=format_number(done)))
         except Exception as exc:  # отчёт инициатору, остальное — в лог
             await notify(bot, admin_id, PATCH_FAILED.format(done="?", error=type(exc).__name__))
             raise
+        finally:
+            await patch_service.finish(redis)
 
     task = asyncio.create_task(job())
     _tasks.add(task)

@@ -24,6 +24,12 @@ export const ROUTE_SETTINGS = "/more/settings";
 export const ROUTE_EXCHANGE = "/more/exchange";
 export const ROUTE_CASINO = "/more/casino";
 export const ROUTE_TOP = "/more/top";
+// Админ-панель (только сотрудники; права разделов — с сервера, `/api/admin`).
+export const ROUTE_ADMIN = "/more/admin";
+export const ROUTE_ADMIN_SECTION = "/more/admin/s/:section";
+export const ROUTE_ADMIN_PLAYER = "/more/admin/player/:id";
+export const adminSectionPath = (section: string) => `/more/admin/s/${section}`;
+export const adminPlayerPath = (id: number) => `/more/admin/player/${id}`;
 
 // Фазы игрока (`MapData.phase` и т.п.) — те же строки, что `bot/constant/phase`.
 export const PHASE_CIRCLE = "circle";

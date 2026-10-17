@@ -1,4 +1,4 @@
-import { BookOpen, Briefcase, Dices, Eye, Gem, Gift, Repeat, Settings, ShoppingBag, Trophy, Users, VenetianMask } from "lucide-react";
+import { BookOpen, Briefcase, Dices, Eye, Gem, Gift, Repeat, Settings, ShieldCheck, ShoppingBag, Trophy, Users, VenetianMask } from "lucide-react";
 import { useState } from "react";
 import { Sheet } from "../../components/Sheet";
 import { useAction } from "../../hooks/useApi";
@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { MoreData } from "../../types";
 import { Panel, Screen, fmt } from "../../components/ui";
-import { ROUTE_BUSINESS, ROUTE_CASINO, ROUTE_CLAN, ROUTE_DONATE, ROUTE_EXCHANGE, ROUTE_GANG, ROUTE_GUIDE, ROUTE_INTEL, ROUTE_MARKET, ROUTE_SETTINGS, ROUTE_SHOP, ROUTE_TOP } from "../../constants";
+import { ROUTE_ADMIN, ROUTE_BUSINESS, ROUTE_CASINO, ROUTE_CLAN, ROUTE_DONATE, ROUTE_EXCHANGE, ROUTE_GANG, ROUTE_GUIDE, ROUTE_INTEL, ROUTE_MARKET, ROUTE_SETTINGS, ROUTE_SHOP, ROUTE_TOP } from "../../constants";
 import { useApi } from "../../hooks/useApi";
 import "./More.css";
 
@@ -51,9 +51,13 @@ function MoreView({ d }: { d: MoreData }) {
             </div>
           ) : (
             <div className="muted" style={{ fontSize: 13, fontWeight: 600 }}>
-              Ты не состоишь в клане. Вступить или создать клан можно в боте.
+              Ты не состоишь в клане — найди клан по душе или создай свой.
             </div>
           )}
+          {/* Вся панель — ссылка, но без кнопки это не очевидно (пользователь 2026-10-17). */}
+          <div className="btn block small" style={{ marginTop: 10 }}>
+            {c ? "Открыть клан" : "Найти или создать клан"}
+          </div>
         </Panel>
       </Link>
 
@@ -79,6 +83,7 @@ function MoreView({ d }: { d: MoreData }) {
           <small>ввести код</small>
         </button>
         {tile(<Settings size={18} />, "Настройки", "уведомления", ROUTE_SETTINGS)}
+        {d.is_admin && tile(<ShieldCheck size={18} />, "Админ-панель", "только для сотрудников", ROUTE_ADMIN, "violet")}
       </div>
       {promoOpen && (
         <Sheet title="Промокод" onClose={() => setPromoOpen(false)}>

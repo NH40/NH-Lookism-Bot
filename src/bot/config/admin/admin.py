@@ -68,3 +68,5 @@ SECTION_ORDER: tuple[str, ...] = (
     SECTION_CONFIG, SECTION_SYSTEM,
 )
 ADMIN_AUDIT_PAGE = 15  # записей журнала на страницу
+# Как часто бот и API перечитывают настройки на лету (правка из другого процесса — с этой задержкой).
+LIVE_CONFIG_REFRESH_SECONDS = 15

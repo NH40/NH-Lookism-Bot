@@ -16,6 +16,7 @@ CB_PATCH_WIPE_STEP1 = "adm:pt:w1"
 CB_PATCH_WIPE_STEP2 = "adm:pt:w2"
 CONFIRM_TTL_SECONDS = 30
 PATCH_BATCH_SIZE = 200
+PATCH_RUNNING_TTL_SECONDS = 6 * 3600  # страховка: упавший процесс не держит флаг вечно
 WIPE_KEEP_TABLES = ("lbp1_donations",)  # перенос доната из 1.3 не теряем
 CONFIRM_KIND_PATCH = "patch"
 CONFIRM_KIND_WIPE = "wipe"

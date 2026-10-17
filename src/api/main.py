@@ -19,6 +19,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.db import engine
 from api.push import close_bot
+from api.routers import admin
+from api.routers import admin_ops
+from api.routers import admin_players
 from api.routers import awakening
 from api.routers import bloodline
 from api.routers import boss
@@ -61,7 +64,16 @@ from api.routers import unique_technique
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Настройки на лету: API — отдельный процесс от бота, свой кэш (см. services/admin/live_config).
+    import asyncio
+
+    from api.db import session_factory
+    from bot.services.admin.live_config import load as load_live_config, refresh_loop
+
+    await load_live_config(session_factory)
+    refresher = asyncio.create_task(refresh_loop(session_factory))
     yield
+    refresher.cancel()
     await close_bot()
     await engine.dispose()
 
@@ -115,6 +127,10 @@ app.include_router(promo.router)
 app.include_router(stats.router)
 app.include_router(casino.router)
 app.include_router(settings_router.router)
+# Админ-панель: игрок — раньше ядра (`/api/admin/players/find` не должен уйти в чужой маршрут).
+app.include_router(admin_players.router)
+app.include_router(admin_ops.router)
+app.include_router(admin.router)
 
 
 @app.get("/api/health")

@@ -6,6 +6,7 @@ from bot.config.admin.admin import (  # noqa: F401
     BETA_CODE_MIN_LENGTH,
     BETA_GENERATED_CODE_LENGTH,
     BETA_MAX_ATTEMPTS,
+    LIVE_CONFIG_REFRESH_SECONDS,
     ROLE_LEVEL,
     SECTION_MIN_ROLE,
     SECTION_ORDER,

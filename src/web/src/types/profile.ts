@@ -56,6 +56,7 @@ export interface MoreData {
   donate_balance: number;
   income_per_minute: number;
   income_pending: number;
+  is_admin?: boolean;  // плитка «Админ-панель» — только сотрудникам
   bot_link: string | null;
 }
 

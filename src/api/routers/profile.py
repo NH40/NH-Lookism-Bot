@@ -177,6 +177,7 @@ class MoreOut(BaseModel):
     income_per_minute: float
     income_pending: int
     bot_link: str | None
+    is_admin: bool = False  # плитка «Админ-панель» — только сотрудникам (роль в админке)
 
 
 @router.get("/more", response_model=MoreOut)
@@ -206,4 +207,11 @@ async def get_more(
         income_per_minute=round(wallet.per_minute, 1),
         income_pending=wallet.pending,
         bot_link=await get_bot_link(),
+        is_admin=await _is_staff(session, user_id),
     )
+
+
+async def _is_staff(session: AsyncSession, user_id: int) -> bool:
+    from bot.services.admin.roles import role_of
+
+    return await role_of(session, user_id) is not None

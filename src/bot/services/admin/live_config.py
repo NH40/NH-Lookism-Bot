@@ -1,7 +1,9 @@
 """Настройки на лету: реестр ключей, кэш в памяти (загружается при старте), запись в `game_settings`.
 
 `get(key)` — синхронный: переопределение (если не истекло) или значение по умолчанию из config.
-Бот один процесс, запись идёт из него же — кэш не разъезжается."""
+Пишут и бот, и API Mini App (админка в Mini App, 2026-10-17) — у каждого процесса свой кэш,
+поэтому оба перечитывают таблицу раз в `LIVE_CONFIG_REFRESH_SECONDS` (`refresh_loop`): правка из
+другого процесса доходит с этой задержкой, свой процесс видит её сразу."""
 from __future__ import annotations
 
 import logging
@@ -91,7 +93,21 @@ def _parse(raw: dict) -> tuple[float, datetime | None] | None:
         return None
 
 
-async def load(session_factory: async_sessionmaker[AsyncSession]) -> None:
+async def refresh_loop(session_factory: async_sessionmaker[AsyncSession]) -> None:
+    """Фоновое перечитывание переопределений (бот и API — разные процессы, см. докстринг)."""
+    import asyncio
+
+    from bot.config.admin import LIVE_CONFIG_REFRESH_SECONDS
+
+    while True:
+        await asyncio.sleep(LIVE_CONFIG_REFRESH_SECONDS)
+        try:
+            await load(session_factory, quiet=True)
+        except Exception:  # noqa: BLE001 — БД недоступна: попробуем в следующий раз
+            log.exception("Live config refresh failed")
+
+
+async def load(session_factory: async_sessionmaker[AsyncSession], *, quiet: bool = False) -> None:
     async with session_factory() as session:
         rows = (await session.execute(select(GameSetting).where(GameSetting.key.in_(list(LIVE_KEYS))))).scalars().all()
     _cache.clear()
@@ -99,7 +115,8 @@ async def load(session_factory: async_sessionmaker[AsyncSession]) -> None:
         parsed = _parse(row.value)
         if parsed:
             _cache[row.key] = parsed
-    log.info("Live config loaded: %d overrides", len(_cache))
+    if not quiet:
+        log.info("Live config loaded: %d overrides", len(_cache))
 
 
 def override(key: str) -> tuple[float, datetime | None] | None:

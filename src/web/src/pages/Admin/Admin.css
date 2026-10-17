@@ -1,0 +1,57 @@
+/* Админ-панель — те же токены, что весь макет (styles.css), без своих цветов. */
+.adm-input,
+.adm-select,
+.adm-textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  border-radius: 10px;
+  border: 1px solid var(--line-soft);
+  background: var(--card);
+  color: var(--text);
+  padding: 0 12px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  box-sizing: border-box;
+}
+.adm-textarea { min-height: 110px; padding: 10px 12px; resize: vertical; font-weight: 600; line-height: 1.35; }
+.adm-input:focus,
+.adm-select:focus,
+.adm-textarea:focus { outline: none; border-color: var(--cyan); }
+
+.adm-field { display: grid; gap: 5px; margin-bottom: 10px; }
+.adm-field > span { font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.adm-inline { display: flex; gap: 8px; align-items: center; }
+.adm-inline > * { flex: 1; min-width: 0; }
+.adm-inline > .btn { flex: 0 0 auto; }
+
+.adm-hint { font-size: 12px; font-weight: 600; color: var(--muted); line-height: 1.4; margin-bottom: 10px; }
+.adm-hint code, .adm-code { font-family: ui-monospace, monospace; font-size: 12px; color: #cfe0ff; background: rgba(120, 160, 255, 0.12); border-radius: 6px; padding: 1px 5px; word-break: break-all; }
+
+.adm-list { display: grid; gap: 6px; }
+.adm-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-soft); background: var(--card);
+  color: var(--text); font: inherit; text-align: left; text-decoration: none; width: 100%; box-sizing: border-box;
+}
+button.adm-item { cursor: pointer; }
+.adm-item b { font-size: 13px; }
+.adm-item small { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-top: 2px; }
+.adm-item .adm-right { text-align: right; font-size: 12px; font-weight: 800; white-space: nowrap; }
+.adm-item.on { border-color: var(--cyan-2); }
+.adm-item.off { opacity: 0.6; }
+
+.adm-tag { display: inline-block; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--line-soft); color: #cfe0ff; margin-left: 6px; vertical-align: middle; }
+.adm-tag.red { border-color: #ff9fb0; color: #ffb3c2; }
+.adm-tag.green { border-color: rgba(140, 240, 190, 0.9); color: #9ff0c4; }
+.adm-tag.gold { border-color: #ffd27a; color: #ffd27a; }
+
+.adm-grid-btn { display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 6px; }
+.adm-pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; font-size: 12px; font-weight: 800; color: var(--muted); }
+.adm-kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; }
+.adm-kv > span { color: var(--muted); font-weight: 700; }
+.adm-kv > b { text-align: right; word-break: break-word; }
+.adm-split { display: grid; gap: 10px; }
+.adm-tabs { grid-template-columns: repeat(3, 1fr); margin-bottom: 12px; }
+.adm-danger { border-color: #ff9fb0 !important; }

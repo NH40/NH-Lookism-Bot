@@ -12,6 +12,7 @@ from aiogram.fsm.storage.redis import RedisStorage
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from bot.services.admin.live_config import refresh_loop as refresh_live_config
 from bot.cache.redis_client import make_redis, make_redis_pool
 from bot.config.game import CHALLENGE_SWEEP_INTERVAL_SECONDS
 from bot.config.settings import get_settings
@@ -303,6 +304,7 @@ async def main() -> None:
         asyncio.create_task(_top_loop(bot, session_factory)),
         asyncio.create_task(_cooldown_loop(bot, session_factory, redis)),
         asyncio.create_task(_arkhangel_loop(bot, session_factory, redis)),
+        asyncio.create_task(refresh_live_config(session_factory)),
     ]
 
     try:

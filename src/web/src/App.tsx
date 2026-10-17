@@ -3,6 +3,9 @@ import { Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { NavTabs } from "./components/NavTabs";
 import { ToastProvider } from "./components/ui";
 import {
+  ROUTE_ADMIN,
+  ROUTE_ADMIN_PLAYER,
+  ROUTE_ADMIN_SECTION,
   ROUTE_BUSINESS,
   ROUTE_CARDS,
   ROUTE_EMPIRE,
@@ -28,6 +31,7 @@ import {
   ROUTE_MASTERY,
   ROUTE_TOP,
 } from "./constants";
+import { AdminPage, AdminPlayerPage, AdminSectionPage } from "./pages/Admin";
 import { BusinessPage } from "./pages/Business";
 import { CardsPage } from "./pages/Cards";
 import { CasinoPage } from "./pages/Casino";
@@ -94,6 +98,9 @@ export function App() {
       <div className="app">
         <Routes>
           <Route path={ROUTE_PROFILE} element={<ProfilePage />} />
+          <Route path={ROUTE_ADMIN} element={<AdminPage />} />
+          <Route path={ROUTE_ADMIN_SECTION} element={<AdminSectionPage />} />
+          <Route path={ROUTE_ADMIN_PLAYER} element={<AdminPlayerPage />} />
           <Route path={ROUTE_MAP} element={<MapPage />} />
           <Route path={ROUTE_MAP_EVENTS} element={<MapEventsPage />} />
           <Route path={ROUTE_GANG} element={<GangPage />} />

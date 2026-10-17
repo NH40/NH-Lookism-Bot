@@ -83,7 +83,11 @@ export function App() {
     return () => back.offClick(goBack);
   }, [location.pathname, navigate]);
 
-  useEffect(() => window.scrollTo(0, 0), [location.pathname]);
+  // Фигурные скобки обязательны: в свежих Chromium `scrollTo` возвращает Promise, и стрелка без
+  // скобок отдала бы его React как функцию очистки — падение на первом же переходе.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   return (
     <ToastProvider>

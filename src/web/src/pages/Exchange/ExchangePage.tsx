@@ -203,7 +203,9 @@ function LotRow({ lot, busy, onBuy }: { lot: ExLot; busy: boolean; onBuy: () => 
 
 function AuctionRow({ a, left, busy, onBid }: { a: ExAuction; left: number; busy: boolean; onBid: (amount: number) => unknown }) {
 	const [amount, setAmount] = useState(String(a.next_bid));
-	useEffect(() => setAmount(String(a.next_bid)), [a.next_bid]);
+	useEffect(() => {
+		setAmount(String(a.next_bid))
+	}, [a.next_bid]);
 	return (
 		<Panel tone="violet">
 			<div className="ex-row">

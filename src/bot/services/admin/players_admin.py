@@ -300,7 +300,9 @@ async def set_phase(session: AsyncSession, user_id: int, phase: str) -> None:
         other = await phase_repo.country_emperor(session, country, exclude_user_id=user_id)
         if other is not None:
             raise EmperorTakenError
-        await phase_repo.crown(session, user_id, country)
+        from bot.services.phase import crown_with_autobuild
+
+        await crown_with_autobuild(session, user_id, country)
         return
     if current == PHASE_FIST:
         await session.execute(update(City).where(City.emperor_id == user_id).values(emperor_id=None))

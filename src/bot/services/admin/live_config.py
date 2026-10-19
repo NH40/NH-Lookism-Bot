@@ -20,6 +20,16 @@ from bot.constant.admin.live_config import (
     AUDIT_CONFIG_SET,
     KEY_BODY_PRICE,
     KEY_BP_PRICE,
+    KEY_CD_BATTLE_PREFIX,
+    KEY_CD_EMPIRE_WAR,
+    KEY_CD_EXTRAS,
+    KEY_CD_PERSONAL,
+    KEY_CD_RECRUIT,
+    KEY_CD_SABOTAGE,
+    KEY_CD_SCHOOL,
+    KEY_CD_SWAP_GENIUS,
+    KEY_CD_SWAP_PATH,
+    KEY_CD_SWAP_TECH,
     KEY_BP_XP_MULT,
     KEY_INCOME_MULT,
     KEY_START_COINS,
@@ -66,6 +76,38 @@ def _d_tickets() -> int:
     return TICKET_STARTING
 
 
+def _cfg_minutes(module: str, name: str, key=None):
+    """Значение по умолчанию — константа конфига (секунды) в минутах; `key` — для словарей по фазе."""
+    def read() -> int:
+        import importlib
+
+        value = getattr(importlib.import_module(module), name)
+        return int((value[key] if key is not None else value) // 60)
+
+    return read
+
+
+_PHASE_TITLES = {"gang": "банда", "circle": "круг", "fist": "кулак"}
+_MINUTES_MAX = 7 * 24 * 60
+
+_COOLDOWN_KEYS = (
+    *(
+        LiveKey(f"{KEY_CD_BATTLE_PREFIX}{phase}", f"КД боя ({title}), мин", int, 0, _MINUTES_MAX,
+                _cfg_minutes("bot.config.game", "BATTLE_COOLDOWN_SECONDS", phase))
+        for phase, title in _PHASE_TITLES.items()
+    ),
+    LiveKey(KEY_CD_PERSONAL, "КД личной тренировки, мин", int, 0, _MINUTES_MAX, _cfg_minutes("bot.config.game", "PERSONAL_TRAINING_COOLDOWN_SECONDS")),
+    LiveKey(KEY_CD_EXTRAS, "КД тренировки статистов, мин", int, 0, _MINUTES_MAX, _cfg_minutes("bot.config.game", "EXTRA_TRAINING_COOLDOWN_SECONDS")),
+    LiveKey(KEY_CD_RECRUIT, "КД вербовки статистов, мин", int, 0, _MINUTES_MAX, _cfg_minutes("bot.config.game", "RECRUIT_EXTRA_COOLDOWN_SECONDS")),
+    LiveKey(KEY_CD_SCHOOL, "КД занятия в школе, мин", int, 0, _MINUTES_MAX, _cfg_minutes("bot.config.school", "SCHOOL_LESSON_COOLDOWN_SECONDS")),
+    LiveKey(KEY_CD_SABOTAGE, "КД саботажа (на действие), мин", int, 0, _MINUTES_MAX, _cfg_minutes("bot.config.empire", "SABOTAGE_COOLDOWN_SECONDS")),
+    LiveKey(KEY_CD_EMPIRE_WAR, "КД объявления войны императоров, мин", int, 0, _MINUTES_MAX, _cfg_minutes("bot.config.empire", "EMPIRE_WAR_COOLDOWN_SECONDS")),
+    LiveKey(KEY_CD_SWAP_PATH, "КД смены пути, мин", int, 0, _MINUTES_MAX, _cfg_minutes("bot.config.unique_path", "PATH_SWAP_COOLDOWN_SECONDS")),
+    LiveKey(KEY_CD_SWAP_TECH, "КД смены техники, мин", int, 0, _MINUTES_MAX, _cfg_minutes("bot.config.unique_technique", "TECHNIQUE_SWAP_COOLDOWN_SECONDS")),
+    LiveKey(KEY_CD_SWAP_GENIUS, "КД смены гениальности, мин", int, 0, _MINUTES_MAX, _cfg_minutes("bot.config.genius", "GENIUS_SWAP_COOLDOWN_SECONDS")),
+)
+
+
 LIVE_KEYS: dict[str, LiveKey] = {
     k.key: k
     for k in (
@@ -75,6 +117,7 @@ LIVE_KEYS: dict[str, LiveKey] = {
         LiveKey(KEY_START_TICKETS, "Стартовые тикеты новичка", int, 0, 10_000, _d_tickets),
         LiveKey(KEY_BP_PRICE, "Цена премиум-пасса (донат-коины)", int, 0, 1_000_000, _d_bp_price),
         LiveKey(KEY_BODY_PRICE, "Цена второго тела (донат-коины)", int, 0, 10_000_000, _d_body_price),
+        *_COOLDOWN_KEYS,
     )
 }
 
@@ -160,3 +203,13 @@ async def reset(session: AsyncSession, admin_id: int, key: str) -> None:
     await audit.log(session, admin_id, AUDIT_CONFIG_RESET, None, {"key": key})
     await session.commit()
     _cache.pop(key, None)
+
+
+def cooldown_seconds(key: str) -> int:
+    """КД из настроек на лету (ключи `KEY_CD_*` хранятся в минутах) → секунды."""
+    return int(get(key)) * 60
+
+
+def battle_cooldown_seconds(phase: str) -> int:
+    """КД боя по фазе игрока (банда/круг/кулак) — секунды."""
+    return cooldown_seconds(f"{KEY_CD_BATTLE_PREFIX}{phase}")

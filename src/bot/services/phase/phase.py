@@ -55,7 +55,7 @@ async def check_promotion(session: AsyncSession, user_id: int, city_id: int) -> 
         incumbent = await phase_repo.country_emperor(session, country_code, exclude_user_id=user_id)
         if incumbent is not None:
             return Promotion(phase=promoted, throne_incumbent=incumbent)
-        await phase_repo.crown(session, user_id, country_code)
+        await crown_with_autobuild(session, user_id, country_code)
         promoted = PHASE_FIST
 
     return Promotion(phase=promoted)
@@ -64,7 +64,17 @@ async def check_promotion(session: AsyncSession, user_id: int, city_id: int) -> 
 async def crown(session: AsyncSession, user_id: int) -> None:
     """Коронация (после выигранного боя за трон). НЕ коммитит."""
     country_code = (await phase_repo.get_phase(session, user_id))[1]
+    await crown_with_autobuild(session, user_id, country_code)
+
+
+async def crown_with_autobuild(session: AsyncSession, user_id: int, country_code: str) -> int:
+    """Единая точка коронации: сначала бесплатная застройка свободных мест (`autobuild_for_crown`),
+    потом районы освобождаются, а здания уходят во владения. → сколько построено. НЕ коммитит."""
+    from bot.services.business import autobuild_for_crown
+
+    built = await autobuild_for_crown(session, user_id)
     await phase_repo.crown(session, user_id, country_code)
+    return built
 
 
 async def demote_to_gang(session: AsyncSession, user_id: int) -> None:

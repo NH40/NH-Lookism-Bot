@@ -14,13 +14,13 @@ from dataclasses import dataclass
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.services.admin.live_config import battle_cooldown_seconds
 from bot.services.absolute import after_battle
 from bot.constant.position_skill import VS_BOSS
 from bot.services.position_skill.battle import journal, matchup
 from bot.constant.cooldown import CD_BATTLE
 from bot.services.cooldown import schedule as schedule_ready
 from bot.cache.keys import battle_cooldown
-from bot.config.game import BATTLE_COOLDOWN_SECONDS
 from bot.config.mastery import TOM_COMBAT_UNITS
 from bot.constant.extra import CAMP_ATTACK
 from bot.db.models.user import User
@@ -52,7 +52,7 @@ async def fight_tom(session: AsyncSession, redis: Redis, user: User) -> TomFight
 
     profile = await get_combat_profile(session, user.id)
     key = battle_cooldown(user.id)
-    if not await redis.set(key, "1", nx=True, ex=profile.cooldown(BATTLE_COOLDOWN_SECONDS[user.phase], profile.eco.battle_cooldown)):
+    if not await redis.set(key, "1", nx=True, ex=profile.cooldown(battle_cooldown_seconds(user.phase), profile.eco.battle_cooldown)):
         raise BattleOnCooldownError(retry_after_seconds=max(0, await redis.ttl(key)))
 
     tom = [CombatStack(key="tom", unit_power=quest.tom_power / TOM_COMBAT_UNITS, quantity=TOM_COMBAT_UNITS)]

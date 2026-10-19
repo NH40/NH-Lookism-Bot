@@ -22,6 +22,7 @@ import { apiGet } from "../../api";
 import { BackHeader, Panel, Screen, useToast } from "../../components/ui";
 import { ROUTE_ADMIN, ROUTE_MORE, adminPlayerPath, adminSectionPath } from "../../constants";
 import type { AdminMeta } from "../../types";
+import { useApi } from "../../hooks/useApi";
 import { TextInput, useAdminMeta } from "./AdminKit";
 import { ConfigSection, LogsSection, PatchSection, RolesSection, StatsSection, SystemSection } from "./SectionsCore";
 import { ClansSection, EventsSection, MassSection, PromoSection, ReferralSection, SeasonSection, WorldSection } from "./SectionsOps";
@@ -153,6 +154,7 @@ function PlayersSection() {
     }
   };
   return (
+    <>
     <Panel title="Поиск игрока">
       <div className="adm-hint">@ник или Telegram id игрока.</div>
       <form
@@ -167,6 +169,29 @@ function PlayersSection() {
           Найти
         </button>
       </form>
+    </Panel>
+    <RecentPlayers />
+    </>
+  );
+}
+
+/** Последние 10 карточек, открытых этим админом (хранятся на сервере — видны с любого устройства). */
+function RecentPlayers() {
+  const { data } = useApi<{ items: { id: number; name: string; username: string | null; phase: string; banned: boolean }[] }>("/admin/players/recent");
+  if (!data?.items.length) return null;
+  return (
+    <Panel title="Недавние">
+      <div className="adm-list">
+        {data.items.map((p) => (
+          <Link key={p.id} to={adminPlayerPath(p.id)} className="adm-item">
+            <div style={{ minWidth: 0 }}>
+              <b>{p.name}{p.banned && <span className="adm-tag red">бан</span>}</b>
+              <small>{p.username ? `@${p.username} · ` : ""}id {p.id}</small>
+            </div>
+            <span className="adm-right muted">{p.phase}</span>
+          </Link>
+        ))}
+      </div>
     </Panel>
   );
 }

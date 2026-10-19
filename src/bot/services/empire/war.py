@@ -24,6 +24,8 @@ from redis.asyncio import Redis
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from bot.services.admin.live_config import cooldown_seconds
+from bot.constant.admin.live_config import KEY_CD_EMPIRE_WAR
 from bot.services.absolute import after_battle
 from bot.services.intel.scout import has_report as has_scout_report
 from bot.constant.position_skill import ROLE_ATTACK, ROLE_DEFENSE, VS_WAR
@@ -31,7 +33,6 @@ from bot.services.position_skill.battle import journal, matchup
 from bot.cache.keys import empire_war_cooldown, empire_war_shield
 from bot.config.empire import (
     EMPIRE_WAR_ACCEPT_SECONDS,
-    EMPIRE_WAR_COOLDOWN_SECONDS,
     EMPIRE_WAR_SHIELD_SECONDS,
     EMPIRE_WAR_SWEEP_BATCH,
     EMPIRE_WAR_HISTORY_SHOWN,
@@ -188,7 +189,7 @@ async def declare_war(session: AsyncSession, redis: Redis, attacker_id: int, def
 
     profile = await get_combat_profile(session, attacker_id)
     key = empire_war_cooldown(attacker_id)
-    if not await redis.set(key, "1", nx=True, ex=profile.cooldown(EMPIRE_WAR_COOLDOWN_SECONDS)):
+    if not await redis.set(key, "1", nx=True, ex=profile.cooldown(cooldown_seconds(KEY_CD_EMPIRE_WAR))):
         raise WarOnCooldownError(max(0, await redis.ttl(key)))
     window = profile.accept_window(EMPIRE_WAR_ACCEPT_SECONDS)
     try:

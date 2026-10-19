@@ -13,6 +13,8 @@
 """
 from __future__ import annotations
 
+from bot.services.admin.live_config import cooldown_seconds
+from bot.constant.admin.live_config import KEY_CD_SWAP_TECH
 from bot.constant.donate import KIND_TECHNIQUE
 from bot.db.repositories import donate as donate_repo
 
@@ -26,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.cache.keys import swap_cooldown
 from bot.config.development import MAX_LEVEL
-from bot.config.unique_technique import TEACHER_QUESTS, TECHNIQUE_SWAP_COOLDOWN_SECONDS, technique_level_cost
+from bot.config.unique_technique import TEACHER_QUESTS, technique_level_cost
 from bot.constant.activity import ACT_DEVELOPMENT
 from bot.constant.dev_quest import QUEST_TECH_LEVEL, QUEST_TEACHER, TASK_DEV_LEVEL
 from bot.constant.event import EVENT_TEACHER
@@ -184,7 +186,7 @@ async def activate(session: AsyncSession, redis: Redis, user_id: int, code: str)
     if code not in owned:
         raise TechniqueNotOwnedError
     key = swap_cooldown(user_id, "technique")
-    if not await redis.set(key, "1", nx=True, ex=await _swap_cd(session, user_id, TECHNIQUE_SWAP_COOLDOWN_SECONDS)):
+    if not await redis.set(key, "1", nx=True, ex=await _swap_cd(session, user_id, cooldown_seconds(KEY_CD_SWAP_TECH))):
         raise SwapOnCooldownError(max(0, await redis.ttl(key)))
     await tech_repo.set_active(session, user_id, code)
     await session.commit()

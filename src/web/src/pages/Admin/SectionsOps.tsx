@@ -252,40 +252,127 @@ export function EventsSection({ meta }: { meta: AdminMeta }) {
 
 // ---------------------------------------------------------------- мир
 
+interface CountryRow {
+  code: string;
+  name: string;
+  cities: number;
+  owned: number;
+  bots: number;
+  emperor: { id: number; label: string } | null;
+}
+
+interface CountryCity {
+  id: number;
+  name: string;
+  districts: number;
+  bots: number;
+  owners: number;
+  emperor: { id: number; label: string } | null;
+}
+
+/** Полоса «районы у игроков / у ботов» (доля игроков — акцентом). */
+function OwnedBar({ owned, total }: { owned: number; total: number }) {
+  return (
+    <div className="bar" style={{ marginTop: 6 }}>
+      <div className="fill-violet" style={{ width: `${total ? (owned / total) * 100 : 0}%` }} />
+    </div>
+  );
+}
+
 export function WorldSection() {
-  const [cities, setCities] = useState<{ id: number; name: string; country: string }[] | null>(null);
+  const [country, setCountry] = useState<string | null>(null);
   const [cityId, setCityId] = useState<number | null>(null);
+  const [found, setFound] = useState<{ id: number; name: string; country: string }[] | null>(null);
   const toast = useToast();
   const search = async (q: string) => {
     try {
       const r = await apiGet<{ items: { id: number; name: string; country: string }[] }>(`/admin/world/cities?q=${encodeURIComponent(q)}`);
-      setCities(r.items);
-      if (r.items.length === 1) setCityId(r.items[0].id);
+      setFound(r.items);
+      if (r.items.length === 1) {
+        setCountry(r.items[0].country);
+        setCityId(r.items[0].id);
+      }
     } catch (e) {
       toast(e instanceof Error ? e.message : String(e), "err");
     }
   };
   return (
     <div className="adm-split">
-      <Panel title="Город">
+      <Panel title="Поиск города">
         <SearchBox placeholder="Название города" onSearch={search} />
-        {cities && !cityId && (
+        {found && found.length !== 1 && (
           <div className="adm-list" style={{ marginTop: 10 }}>
-            {cities.map((c) => (
-              <button key={c.id} type="button" className="adm-item" onClick={() => setCityId(c.id)}>
+            {found.map((c) => (
+              <button key={c.id} type="button" className="adm-item" onClick={() => { setCountry(c.country); setCityId(c.id); setFound(null); }}>
                 <b>{c.name}</b>
                 <span className="adm-right">{c.country}</span>
               </button>
             ))}
-            {!cities.length && <div className="adm-hint">Не нашлось.</div>}
+            {!found.length && <div className="adm-hint">Не нашлось.</div>}
           </div>
         )}
-        {cityId && (
-          <button type="button" className="btn ghost small" style={{ marginTop: 10 }} onClick={() => setCityId(null)}>← К списку</button>
-        )}
       </Panel>
+      {(country || cityId) && (
+        <div className="adm-inline">
+          <button type="button" className="btn ghost small" onClick={() => { setCountry(null); setCityId(null); }}>Все страны</button>
+          {country && cityId && <button type="button" className="btn ghost small" onClick={() => setCityId(null)}>Города страны</button>}
+        </div>
+      )}
+      {!country && !cityId && <Countries onPick={setCountry} />}
+      {country && !cityId && <CountryCities code={country} onPick={setCityId} />}
       {cityId && <CityCard cityId={cityId} />}
     </div>
+  );
+}
+
+function Countries({ onPick }: { onPick: (code: string) => void }) {
+  const data = useApi<{ items: CountryRow[] }>("/admin/world/countries");
+  return (
+    <Screen status={data.status} error={data.error}>
+      {data.data && (
+        <div className="grid-2" style={{ gap: 8 }}>
+          {data.data.items.map((c) => (
+            <button key={c.code} type="button" className="tile" style={{ font: "inherit", textAlign: "left" }} onClick={() => onPick(c.code)}>
+              <b>{c.name}</b>
+              <small>{c.cities} городов · {fmt(c.owned)}/{fmt(c.owned + c.bots)} районов у игроков</small>
+              <OwnedBar owned={c.owned} total={c.owned + c.bots} />
+              <small style={{ marginTop: 6 }}>{c.emperor ? `император ${c.emperor.label}` : "без императора"}</small>
+            </button>
+          ))}
+        </div>
+      )}
+    </Screen>
+  );
+}
+
+function CountryCities({ code, onPick }: { code: string; onPick: (id: number) => void }) {
+  const data = useApi<{ name: string; cities: CountryCity[] }>(`/admin/world/countries/${code}`);
+  const [filter, setFilter] = useState<"all" | "contested" | "bots">("all");
+  const d = data.data;
+  const list = d?.cities.filter((c) => filter === "all" || (filter === "bots" ? c.bots === c.districts : c.owners > 1)) ?? [];
+  return (
+    <Screen status={data.status} error={data.error}>
+      {d && (
+        <Panel title={d.name}>
+          <Seg value={filter} onChange={setFilter} options={[{ value: "all", label: "Все" }, { value: "contested", label: "Делят игроки" }, { value: "bots", label: "Только боты" }]} cols={3} />
+          <div className="adm-list">
+            {list.map((c) => (
+              <button key={c.id} type="button" className="adm-item" style={{ display: "block" }} onClick={() => onPick(c.id)}>
+                <div className="row">
+                  <b>{c.name}</b>
+                  <span className="adm-right">{fmt(c.districts - c.bots)}/{fmt(c.districts)}</span>
+                </div>
+                <OwnedBar owned={c.districts - c.bots} total={c.districts} />
+                <small>
+                  {c.emperor ? `император ${c.emperor.label} · ` : ""}владельцев {c.owners}{c.bots ? ` · у ботов ${c.bots}` : ""}
+                </small>
+              </button>
+            ))}
+            {!list.length && <div className="adm-hint">Нет городов под фильтр.</div>}
+          </div>
+        </Panel>
+      )}
+    </Screen>
   );
 }
 
@@ -307,6 +394,7 @@ function CityCard({ cityId }: { cityId: number }) {
               ["Районов", `${d.districts.length} (у ботов ${d.districts.filter((x) => x.owner_id == null).length})`],
               ["Вызовов в ожидании", d.pending_challenges], ["Войн императора", d.pending_wars],
             ]} />
+            <OwnerSummary districts={d.districts} />
             <div className="adm-hint" style={{ marginTop: 10 }}>Район:</div>
             <div className="adm-grid-btn">
               {d.districts.map((x) => (
@@ -531,5 +619,30 @@ function SeasonPlayer({ uid }: { uid: number }) {
         </>
       )}
     </Screen>
+  );
+}
+
+
+/** Кто сколько районов держит в городе (крупнейшие — сверху). */
+function OwnerSummary({ districts }: { districts: AdminCity["districts"] }) {
+  const groups = new Map<number | null, { label: string; count: number }>();
+  for (const x of districts) {
+    const g = groups.get(x.owner_id) ?? { label: x.owner ?? "Боты", count: 0 };
+    g.count += 1;
+    groups.set(x.owner_id, g);
+  }
+  const rows = [...groups.entries()].sort((a, b) => b[1].count - a[1].count);
+  return (
+    <div className="adm-list" style={{ marginTop: 10 }}>
+      {rows.map(([id, g]) => (
+        <div key={String(id)} className="adm-item" style={{ display: "block" }}>
+          <div className="row">
+            {id ? <Link to={adminPlayerPath(id)} style={{ color: "inherit" }}><b>{g.label}</b></Link> : <b className="muted">{g.label}</b>}
+            <span className="adm-right">{g.count}</span>
+          </div>
+          <OwnedBar owned={g.count} total={districts.length} />
+        </div>
+      ))}
+    </div>
   );
 }

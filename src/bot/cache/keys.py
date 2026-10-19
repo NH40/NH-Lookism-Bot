@@ -77,6 +77,11 @@ def empire_war_shield(user_id: int) -> str:
     return f"shield:empire_war:{user_id}"
 
 
+def admin_recent_players(admin_id: int) -> str:
+    """Последние открытые админом карточки игроков (список id, свежие слева, до 10)."""
+    return f"admin:recent_players:{admin_id}"
+
+
 def patch_running_flag() -> str:
     """Идёт патч (сброс всех игроков). В Redis, а не в памяти процесса: патч запускают и бот,
     и API Mini App — второй запуск из другого процесса не должен начаться поверх первого."""

@@ -19,9 +19,10 @@ from random import randint, random
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.services.admin.live_config import cooldown_seconds
+from bot.constant.admin.live_config import KEY_CD_RECRUIT
 from bot.cache.keys import recruit_extra_cooldown
 from bot.config.characteristic import extra_power_for_rank
-from bot.config.game import RECRUIT_EXTRA_COOLDOWN_SECONDS
 from bot.constant.characteristic import RANK_INDEX, RANK_LADDER
 from bot.constant.phase import PHASE_CIRCLE, PHASE_FIST, PHASE_GANG
 from bot.constant.dev_quest import TASK_RECRUIT
@@ -73,7 +74,7 @@ async def recruit_extra(session: AsyncSession, redis: Redis, user_id: int, phase
     ни с чем ещё)."""
     key = recruit_extra_cooldown(user_id)
     profile = await get_combat_profile(session, user_id)
-    acquired = await redis.set(key, "1", nx=True, ex=profile.cooldown(RECRUIT_EXTRA_COOLDOWN_SECONDS, profile.eco.recruit_cooldown))
+    acquired = await redis.set(key, "1", nx=True, ex=profile.cooldown(cooldown_seconds(KEY_CD_RECRUIT), profile.eco.recruit_cooldown))
     if not acquired:
         ttl = await redis.ttl(key)
         raise RecruitOnCooldownError(retry_after_seconds=max(0, ttl))

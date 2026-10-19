@@ -2,6 +2,7 @@
 from bot.db.repositories.business.business import (  # noqa: F401
     OwnedDistrictRow,
     WalletRow,
+    add_coins,
     bump_upgrade,
     count_by_type,
     count_by_type_on_district,

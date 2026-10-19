@@ -12,11 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import get_current_user_id
 from api.db import get_session
 from api.deps import get_redis
+from bot.services.admin.live_config import cooldown_seconds
+from bot.constant.admin.live_config import KEY_CD_EXTRAS, KEY_CD_PERSONAL
 from bot.cache.keys import last_extras_training, train_extras_cooldown
 from bot.config.characteristic import POTENTIAL_TRAINING
 from bot.config.school import SCHOOL_LESSON_PRICE
 from bot.config.game import (
-    EXTRA_TRAINING_COOLDOWN_SECONDS,
     EXTRA_TRAINING_COVERAGE_PERCENT,
     EXTRA_TRAINING_MAX_STARS,
     EXTRA_TRAINING_STAGE1_POWER_MULTIPLIER,
@@ -24,7 +25,6 @@ from bot.config.game import (
     EXTRA_TRAINING_STAGE2_POWER_BONUS_PERCENT,
     EXTRA_TRAINING_STAGE2_SUCCESS_PERCENT,
     EXTRA_TRAINING_STAGE3_SUCCESS_PERCENT,
-    PERSONAL_TRAINING_COOLDOWN_SECONDS,
 )
 from bot.db.repositories.user import get_by_id
 from bot.services.business import gym_training_bonus_percent
@@ -241,7 +241,7 @@ async def get_training(
     return TrainingOut(
         personal=PersonalOut(
             left=status.personal_left,
-            total=profile.cooldown(PERSONAL_TRAINING_COOLDOWN_SECONDS, profile.eco.personal_cooldown),
+            total=profile.cooldown(cooldown_seconds(KEY_CD_PERSONAL), profile.eco.personal_cooldown),
             min_points=table.min_points,
             max_points=table.max_points,
             nothing_percent=table.nothing_percent,
@@ -250,7 +250,7 @@ async def get_training(
         ),
         extras=ExtrasOut(
             left=status.extras_left,
-            total=profile.cooldown(EXTRA_TRAINING_COOLDOWN_SECONDS, profile.eco.extras_training_cooldown),
+            total=profile.cooldown(cooldown_seconds(KEY_CD_EXTRAS), profile.eco.extras_training_cooldown),
             coverage_percent=EXTRA_TRAINING_COVERAGE_PERCENT,
             stages=stages,
             gym_bonus=int(gym),

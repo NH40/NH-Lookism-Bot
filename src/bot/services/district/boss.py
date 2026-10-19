@@ -21,6 +21,7 @@ from dataclasses import dataclass, replace
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.services.admin.live_config import battle_cooldown_seconds
 from bot.services.absolute import after_battle
 from bot.constant.position_skill import VS_BOSS
 from bot.services.position_skill.battle import journal, matchup
@@ -33,7 +34,6 @@ from bot.config.event import (
     BOSS_UNIT_FLOOR_RANK,
 )
 from bot.config.characteristic import extra_unit_power
-from bot.config.game import BATTLE_COOLDOWN_SECONDS
 from bot.constant.event import BOSS_FRAGMENT, EVENT_BOSS
 from bot.constant.extra import CAMP_ATTACK
 from bot.db.models.user import User
@@ -109,7 +109,7 @@ async def fight_boss(
 
     profile = await get_combat_profile(session, user.id)
     key = boss_cooldown(user.id)
-    if not await redis.set(key, "1", nx=True, ex=profile.cooldown(BATTLE_COOLDOWN_SECONDS[user.phase], profile.eco.battle_cooldown)):
+    if not await redis.set(key, "1", nx=True, ex=profile.cooldown(battle_cooldown_seconds(user.phase), profile.eco.battle_cooldown)):
         raise BattleOnCooldownError(retry_after_seconds=max(0, await redis.ttl(key)))
 
     boss, boss_power = boss_army(event.code, stacks, user.phase)

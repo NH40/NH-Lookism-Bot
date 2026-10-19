@@ -14,6 +14,8 @@
 """
 from __future__ import annotations
 
+from bot.services.admin.live_config import cooldown_seconds
+from bot.constant.admin.live_config import KEY_CD_SWAP_GENIUS
 from bot.constant.dev_quest import TASK_DEV_LEVEL
 
 from bot.services.dev_quest import emit as quest_event
@@ -30,7 +32,6 @@ from bot.config.game import ACTION_LOCK_MS
 from bot.config.genius import (
     GENIUS_ROLL_COINS,
     GENIUS_ROLL_FRAGMENTS,
-    GENIUS_SWAP_COOLDOWN_SECONDS,
     genius_level_cost,
 )
 from bot.constant.genius import GENIUS_MEDICINE, GENIUSES, LOCK_ACTION_GENIUS
@@ -136,7 +137,7 @@ async def activate(session: AsyncSession, redis: Redis, user_id: int, code: str)
     if code not in owned:
         raise GeniusNotOwnedError
     key = swap_cooldown(user_id, "genius")
-    if not await redis.set(key, "1", nx=True, ex=await _swap_cd(session, user_id, GENIUS_SWAP_COOLDOWN_SECONDS)):
+    if not await redis.set(key, "1", nx=True, ex=await _swap_cd(session, user_id, cooldown_seconds(KEY_CD_SWAP_GENIUS))):
         raise SwapOnCooldownError(max(0, await redis.ttl(key)))
     await genius_repo.set_active(session, user_id, code)
     await session.commit()

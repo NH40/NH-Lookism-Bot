@@ -110,3 +110,31 @@ async def server(session: AsyncSession, redis) -> dict:
     except Exception:  # noqa: BLE001 — Redis недоступен: просто прочерк
         pass
     return {"srv": stats, "db_size": int(db_size or 0), "redis_mem": redis_mem, "uptime": int(time.time() - _STARTED_AT)}
+
+
+async def series(session: AsyncSession, days: int) -> dict:
+    """Ряды по дням для графиков админки (Mini App): регистрации и донат — за `days` дней,
+    активные игроки — по журналу действий (он хранится `ACTIVITY_KEEP_DAYS`). Пустые дни — нули."""
+    from bot.config.activity import ACTIVITY_KEEP_DAYS
+
+    def rows(sql: str, n: int):
+        return session.execute(text(sql), {"n": n})
+
+    reg = await rows("""
+        SELECT d::date, count(u.id) FROM generate_series(current_date - (:n - 1), current_date, interval '1 day') d
+        LEFT JOIN users u ON u.created_at::date = d::date AND u.id NOT BETWEEN 990000000 AND 990000999
+        GROUP BY 1 ORDER BY 1
+    """, days)
+    pay = await rows("""
+        SELECT d::date, COALESCE(sum(p.amount_rub), 0) FROM generate_series(current_date - (:n - 1), current_date, interval '1 day') d
+        LEFT JOIN payments p ON p.created_at::date = d::date
+        GROUP BY 1 ORDER BY 1
+    """, days)
+    act_days = min(days, ACTIVITY_KEEP_DAYS)
+    act = await rows("""
+        SELECT d::date, count(DISTINCT a.user_id) FROM generate_series(current_date - (:n - 1), current_date, interval '1 day') d
+        LEFT JOIN activity_log a ON a.created_at::date = d::date AND a.user_id NOT BETWEEN 990000000 AND 990000999
+        GROUP BY 1 ORDER BY 1
+    """, act_days)
+    pack = lambda result: [{"day": d.isoformat(), "value": int(v or 0)} for d, v in result.all()]  # noqa: E731
+    return {"registrations": pack(reg), "donate": pack(pay), "active": pack(act), "active_days": act_days}

@@ -14,6 +14,7 @@ from dataclasses import dataclass, replace
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.services.admin.live_config import battle_cooldown_seconds
 from bot.services.absolute import after_battle
 from bot.services.build import get_build
 from bot.constant.position_skill import VS_DISTRICT
@@ -22,7 +23,7 @@ from bot.constant.cooldown import CD_BATTLE
 from bot.services.cooldown import schedule as schedule_ready
 from bot.cache.keys import battle_cooldown
 from bot.config.characteristic import extra_power_for_rank
-from bot.config.game import BATTLE_COOLDOWN_SECONDS, BOT_DISTRICT_ARMY, INFLUENCE_PER_DISTRICT, INFLUENCE_STARTING
+from bot.config.game import BOT_DISTRICT_ARMY, INFLUENCE_PER_DISTRICT, INFLUENCE_STARTING
 from bot.constant.extra import CAMP_ATTACK
 from bot.db.models.user import User
 from bot.db.repositories.district import challenge as challenge_repo
@@ -245,7 +246,7 @@ async def attack_district(session: AsyncSession, redis: Redis, user: User, distr
 
     key = battle_cooldown(user.id)
     profile = await get_combat_profile(session, user.id)
-    acquired = await redis.set(key, "1", nx=True, ex=profile.cooldown(BATTLE_COOLDOWN_SECONDS[user.phase], profile.eco.battle_cooldown))
+    acquired = await redis.set(key, "1", nx=True, ex=profile.cooldown(battle_cooldown_seconds(user.phase), profile.eco.battle_cooldown))
     if not acquired:
         ttl = await redis.ttl(key)
         raise BattleOnCooldownError(retry_after_seconds=max(0, ttl))

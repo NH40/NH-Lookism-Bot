@@ -453,10 +453,12 @@ async def post_patch_confirm(
 
 @router.get("/stats/{tab}")
 async def get_stats(
-    tab: str, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
-    redis: Redis = Depends(get_redis),
+    tab: str, days: int = Query(30, ge=7, le=90), user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session), redis: Redis = Depends(get_redis),
 ) -> dict:
     await access(session, user_id, SECTION_STATS)
+    if tab == "series":
+        return await stats_svc.series(session, days)
     if tab == "overview":
         return plain(await stats_svc.overview(session))
     if tab == "donate":

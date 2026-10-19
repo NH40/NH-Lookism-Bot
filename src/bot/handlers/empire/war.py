@@ -10,8 +10,10 @@ from aiogram.types import CallbackQuery
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.services.admin.live_config import cooldown_seconds
+from bot.constant.admin.live_config import KEY_CD_EMPIRE_WAR
 from bot.services.position_skill import journal_block
-from bot.config.empire import EMPIRE_WAR_ACCEPT_SECONDS, EMPIRE_WAR_COOLDOWN_SECONDS
+from bot.config.empire import EMPIRE_WAR_ACCEPT_SECONDS
 from bot.constant.empire import (
     CB_WAR_ACCEPT_PREFIX,
     CB_WAR_DECLARE_PREFIX,
@@ -125,7 +127,7 @@ async def cb_war_target(callback: CallbackQuery, session: AsyncSession) -> None:
             cities=target.cities,
             coins=format_number(target.nh_coins),
             window=format_countdown(EMPIRE_WAR_ACCEPT_SECONDS),
-            cooldown=format_countdown(EMPIRE_WAR_COOLDOWN_SECONDS),
+            cooldown=format_countdown(cooldown_seconds(KEY_CD_EMPIRE_WAR)),
         ),
         reply_markup=war_target_menu(target_id),
     )

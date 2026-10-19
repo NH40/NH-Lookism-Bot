@@ -25,13 +25,14 @@ from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.services.admin.live_config import cooldown_seconds
+from bot.constant.admin.live_config import KEY_CD_SCHOOL
 from bot.db.repositories.unique_path import bump_training_reps
 from bot.cache.keys import action_lock, school_lesson_cooldown
 from bot.config.game import ACTION_LOCK_MS
 from bot.config.school import (
     SCHOOL_COVERAGE_PERCENT,
     SCHOOL_JOIN_PERCENT,
-    SCHOOL_LESSON_COOLDOWN_SECONDS,
     SCHOOL_LESSON_PRICE,
     SCHOOL_LEVEL_UP_PERCENT,
     SCHOOL_MAX_LEVEL,
@@ -220,7 +221,7 @@ async def lesson(session: AsyncSession, redis: Redis, user_id: int, school: str,
         raise NoStudentsError
     profile = await get_combat_profile(session, user_id)
     key = school_lesson_cooldown(user_id, school)
-    if not await redis.set(key, "1", nx=True, ex=profile.cooldown(SCHOOL_LESSON_COOLDOWN_SECONDS, profile.eco.extras_training_cooldown)):
+    if not await redis.set(key, "1", nx=True, ex=profile.cooldown(cooldown_seconds(KEY_CD_SCHOOL), profile.eco.extras_training_cooldown)):
         raise LessonOnCooldownError(max(0, await redis.ttl(key)))
     try:
         if not await business_repo.spend_coins(session, user_id, SCHOOL_LESSON_PRICE):

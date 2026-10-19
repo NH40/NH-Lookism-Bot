@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import func, select, update
+from sqlalchemy import text, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.constant.admin.world import (
@@ -159,3 +159,47 @@ async def cancel_emperor_wars(session: AsyncSession, admin_id: int, emperor_id: 
     await audit.log(session, admin_id, AUDIT_W_CANCEL_WAR, emperor_id, {"count": count})
     await session.commit()
     return count
+
+
+async def countries_overview(session: AsyncSession) -> list[dict]:
+    """Страны для раздела «Мир»: городов, районов у игроков/ботов, император (один запрос)."""
+    from bot.config.country import COUNTRIES
+
+    rows = (await session.execute(text("""
+        SELECT c.country_code, count(DISTINCT c.id),
+               count(d.id) FILTER (WHERE d.owner_id IS NOT NULL), count(d.id) FILTER (WHERE d.owner_id IS NULL),
+               (SELECT u.username FROM cities c2 JOIN users u ON u.id = c2.emperor_id
+                 WHERE c2.country_code = c.country_code GROUP BY u.id, u.username ORDER BY count(*) DESC LIMIT 1),
+               (SELECT c3.emperor_id FROM cities c3 WHERE c3.country_code = c.country_code AND c3.emperor_id IS NOT NULL
+                 GROUP BY c3.emperor_id ORDER BY count(*) DESC LIMIT 1)
+        FROM cities c LEFT JOIN districts d ON d.city_id = c.id
+        GROUP BY c.country_code
+    """))).all()
+    by_code = {r[0]: r for r in rows}
+    out = []
+    for c in COUNTRIES:
+        r = by_code.get(c.code)
+        if r is None:
+            continue
+        out.append({
+            "code": c.code, "name": c.name, "cities": r[1], "owned": r[2], "bots": r[3],
+            "emperor": {"id": r[5], "label": f"@{r[4]}" if r[4] else f"id{r[5]}"} if r[5] else None,
+        })
+    return out
+
+
+async def country_cities(session: AsyncSession, country_code: str) -> list[dict]:
+    """Города страны: император, районов всего/у ботов, сколько разных владельцев."""
+    rows = (await session.execute(text("""
+        SELECT c.id, c.name, c.emperor_id, u.username, count(d.id), count(d.id) FILTER (WHERE d.owner_id IS NULL),
+               count(DISTINCT d.owner_id)
+        FROM cities c LEFT JOIN districts d ON d.city_id = c.id LEFT JOIN users u ON u.id = c.emperor_id
+        WHERE c.country_code = :cc GROUP BY c.id, c.name, c.emperor_id, u.username ORDER BY c.name
+    """), {"cc": country_code})).all()
+    return [
+        {
+            "id": cid, "name": name, "districts": total, "bots": bots, "owners": owners,
+            "emperor": {"id": eid, "label": f"@{uname}" if uname else f"id{eid}"} if eid else None,
+        }
+        for cid, name, eid, uname, total, bots, owners in rows
+    ]

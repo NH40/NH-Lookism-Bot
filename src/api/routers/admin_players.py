@@ -7,6 +7,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from redis.asyncio import Redis
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +17,7 @@ from api.deps import get_redis
 from api.push import get_bot
 from api.routers._common import bad, clean_label
 from api.routers.admin import access, done, role_title
+from bot.cache.keys import admin_recent_players
 from bot.config.awakening import AWAKENING_MAX
 from bot.config.card import CARD_BY_CODE
 from bot.config.development import MAX_LEVEL
@@ -68,6 +70,7 @@ from bot.utils.formatting import format_number
 from bot.utils.notify import notify
 
 router = APIRouter(prefix="/api/admin/players", tags=["admin"])
+RECENT_PLAYERS_LIMIT = 10
 
 
 def _sign(value: int) -> str:
@@ -96,18 +99,41 @@ async def find_player(q: str, user_id: int = Depends(get_current_user_id), sessi
     return {"id": user.id}
 
 
+@router.get("/recent")
+async def recent_players(
+    user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session), redis: Redis = Depends(get_redis)
+) -> dict:
+    """Последние 10 карточек, которые открывал этот админ (свежие сверху)."""
+    await access(session, user_id, SECTION_PLAYERS)
+    ids = [int(x) for x in await redis.lrange(admin_recent_players(user_id), 0, RECENT_PLAYERS_LIMIT - 1)]
+    users = {u.id: u for u in (await session.scalars(select(User).where(User.id.in_(ids)))).all()} if ids else {}
+    return {
+        "items": [
+            {"id": i, "name": _name_of(users[i]), "username": users[i].username, "phase": clean_label(PHASE_LABELS.get(users[i].phase, users[i].phase or "")),
+             "banned": players.is_banned(users[i])}
+            for i in ids if i in users
+        ]
+    }
+
+
 def _levels(items: list[tuple[str, int]], kind: str, active: str | None, active2: str | None = None) -> list[dict]:
     names = t.DEV_NAMES[kind]
     return [{"code": c, "name": names.get(c, c), "level": lvl, "active": c == active, "active2": c == active2} for c, lvl in items]
 
 
 @router.get("/{uid}")
-async def get_card(uid: int, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+async def get_card(
+    uid: int, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> dict:
     await access(session, user_id, SECTION_PLAYERS)
     card = await players.card(session, uid)
     if card is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Игрок не найден.")
     await session.commit()  # сезон пасса мог открыться при чтении
+    key = admin_recent_players(user_id)  # «последние игроки» админа: без дублей, свежий — первым
+    async with redis.pipeline(transaction=True) as pipe:
+        await pipe.lrem(key, 0, uid).lpush(key, uid).ltrim(key, 0, RECENT_PLAYERS_LIMIT - 1).execute()
     u = card.user
     blood = lambda code, level: {"code": code, "name": t.BLOODLINE_TITLES.get(code, code), "level": level} if code else None  # noqa: E731
     return {

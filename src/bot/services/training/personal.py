@@ -17,12 +17,13 @@ from dataclasses import dataclass
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.services.admin.live_config import cooldown_seconds
+from bot.constant.admin.live_config import KEY_CD_PERSONAL
 from bot.db.repositories.unique_path import bump_training_reps
 from bot.constant.cooldown import CD_PERSONAL
 from bot.services.cooldown import schedule as schedule_ready
 from bot.cache.keys import personal_training_cooldown
 from bot.config.characteristic import POTENTIAL_TRAINING
-from bot.config.game import PERSONAL_TRAINING_COOLDOWN_SECONDS
 from bot.db.repositories import characteristic as char_repo
 from bot.constant.dev_quest import TASK_PERSONAL_TRAIN
 from bot.services.dev_quest import emit as quest_event
@@ -45,7 +46,7 @@ async def train_personal(
     rng = rng or random
     key = personal_training_cooldown(user_id)
     profile = await get_combat_profile(session, user_id)
-    cooldown = profile.cooldown(PERSONAL_TRAINING_COOLDOWN_SECONDS, profile.eco.personal_cooldown)
+    cooldown = profile.cooldown(cooldown_seconds(KEY_CD_PERSONAL), profile.eco.personal_cooldown)
     if not await redis.set(key, "1", nx=True, ex=cooldown):
         raise TrainingOnCooldownError(retry_after_seconds=max(0, await redis.ttl(key)))
     await schedule_ready(redis, user_id, CD_PERSONAL, cooldown)

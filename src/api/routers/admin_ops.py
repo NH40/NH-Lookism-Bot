@@ -310,6 +310,23 @@ def _owner(row) -> str | None:
     return f"{row.owner_gang or row.owner_name or 'id' + str(row.owner_id)} (id{row.owner_id})"
 
 
+@router.get("/world/countries")
+async def get_countries(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    await access(session, user_id, SECTION_WORLD)
+    return {"items": await world_svc.countries_overview(session)}
+
+
+@router.get("/world/countries/{code}")
+async def get_country(code: str, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    await access(session, user_id, SECTION_WORLD)
+    from bot.config.country import COUNTRY_BY_CODE
+
+    country = COUNTRY_BY_CODE.get(code.upper())
+    if country is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Страна не найдена.")
+    return {"code": country.code, "name": country.name, "cities": await world_svc.country_cities(session, country.code)}
+
+
 @router.get("/world/cities")
 async def get_cities(q: str, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
     await access(session, user_id, SECTION_WORLD)

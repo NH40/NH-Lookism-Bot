@@ -43,5 +43,16 @@ KEY_START_COINS = "starting_nh_coins"
 KEY_START_TICKETS = "starting_tickets"
 KEY_BP_PRICE = "bp_premium_price"
 KEY_BODY_PRICE = "second_body_price"
+# Кулдауны (пользователь 2026-10-19: «вынеси побольше переменных, например КД») — в минутах.
+KEY_CD_BATTLE_PREFIX = "cd_battle_"  # + фаза (gang/circle/fist)
+KEY_CD_PERSONAL = "cd_personal_training"
+KEY_CD_EXTRAS = "cd_extras_training"
+KEY_CD_RECRUIT = "cd_recruit_extra"
+KEY_CD_SCHOOL = "cd_school_lesson"
+KEY_CD_SABOTAGE = "cd_sabotage"
+KEY_CD_EMPIRE_WAR = "cd_empire_war"
+KEY_CD_SWAP_PATH = "cd_swap_path"
+KEY_CD_SWAP_TECH = "cd_swap_technique"
+KEY_CD_SWAP_GENIUS = "cd_swap_genius"
 
 CONFIG_DURATIONS = ((1, "1ч"), (24, "24ч"), (72, "3д"), (168, "7д"), (0, "Навсегда"))

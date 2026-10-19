@@ -14,6 +14,8 @@
 """
 from __future__ import annotations
 
+from bot.services.admin.live_config import cooldown_seconds
+from bot.constant.admin.live_config import KEY_CD_SWAP_PATH
 from bot.constant.donate import KIND_PATH
 from bot.db.repositories import donate as donate_repo
 
@@ -31,7 +33,6 @@ from bot.config.unique_path import (
     CONVICTION_QUEST,
     CONVICTION_RANK_SUM,
     PATH_AWAKEN_FRAGMENTS,
-    PATH_SWAP_COOLDOWN_SECONDS,
     path_level_cost,
 )
 from bot.constant.activity import ACT_DEVELOPMENT
@@ -240,7 +241,7 @@ async def activate(session: AsyncSession, redis: Redis, user_id: int, code: str)
     if code not in owned:
         raise PathNotOwnedError
     key = swap_cooldown(user_id, "path")
-    if not await redis.set(key, "1", nx=True, ex=await _swap_cd(session, user_id, PATH_SWAP_COOLDOWN_SECONDS)):
+    if not await redis.set(key, "1", nx=True, ex=await _swap_cd(session, user_id, cooldown_seconds(KEY_CD_SWAP_PATH))):
         raise SwapOnCooldownError(max(0, await redis.ttl(key)))
     body = await donate_repo.body_state(session, user_id)
     if body and body[1] == code:  # путь был вторым — меняются местами
@@ -260,7 +261,7 @@ async def activate2(session: AsyncSession, redis: Redis, user_id: int, code: str
     if code not in owned or (state and state[1] == code):
         raise PathNotOwnedError
     key = swap_cooldown(user_id, "path2")
-    if not await redis.set(key, "1", nx=True, ex=await _swap_cd(session, user_id, PATH_SWAP_COOLDOWN_SECONDS)):
+    if not await redis.set(key, "1", nx=True, ex=await _swap_cd(session, user_id, cooldown_seconds(KEY_CD_SWAP_PATH))):
         raise SwapOnCooldownError(max(0, await redis.ttl(key)))
     await donate_repo.set_active_path2(session, user_id, code)
     await session.commit()

@@ -20,11 +20,12 @@ from dataclasses import dataclass, replace
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.services.admin.live_config import cooldown_seconds
+from bot.constant.admin.live_config import KEY_CD_SABOTAGE
 from bot.constant.absolute import ABSOLUTES
 from bot.cache.keys import sabotage_cooldown
 from bot.config.empire import (
     SABOTAGE_CHANCE_PERCENT,
-    SABOTAGE_COOLDOWN_SECONDS,
     SABOTAGE_STATISTS_FLOOR,
     SABOTAGE_STATISTS_PERCENT,
     SABOTAGE_TREASURY_CAP,
@@ -181,7 +182,7 @@ async def sabotage(
         raise NothingToStealError
 
     profile = await get_combat_profile(session, user_id)
-    if not await redis.set(key, "1", nx=True, ex=profile.cooldown(SABOTAGE_COOLDOWN_SECONDS, profile.eco.sabotage_cooldown)):
+    if not await redis.set(key, "1", nx=True, ex=profile.cooldown(cooldown_seconds(KEY_CD_SABOTAGE), profile.eco.sabotage_cooldown)):
         raise SabotageOnCooldownError(retry_after_seconds=max(0, await redis.ttl(key)))
     try:
         eco = profile.eco

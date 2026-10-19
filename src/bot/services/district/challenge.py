@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from bot.services.admin.live_config import battle_cooldown_seconds
 from bot.services.absolute import after_battle
 from bot.services.build import get_build
 from bot.services.intel.scout import has_report as has_scout_report
@@ -30,7 +31,7 @@ from bot.services.position_skill.battle import journal, matchup
 from bot.constant.cooldown import CD_BATTLE
 from bot.services.cooldown import schedule as schedule_ready
 from bot.cache.keys import battle_cooldown
-from bot.config.game import BATTLE_COOLDOWN_SECONDS, CHALLENGE_ACCEPT_SECONDS, CHALLENGE_SWEEP_BATCH
+from bot.config.game import CHALLENGE_ACCEPT_SECONDS, CHALLENGE_SWEEP_BATCH
 from bot.constant.district import RESOLUTION_ACCEPTED, RESOLUTION_TIMEOUT, RESOLUTION_VOID, SCOPE_CITY, SCOPE_DISTRICT
 from bot.constant.extra import CAMP_ATTACK, CAMP_DEFENSE
 from bot.db.models.user import User
@@ -459,7 +460,7 @@ async def _resolve(session: AsyncSession, redis: Redis, challenge_id: int, resol
     # мастерством Скорости; Ловкость — с шансом КД не ставится вовсе («вторая атака»).
     free_attack = attacker_profile.rolls_free_attack()
     if not free_attack:
-        cd = attacker_profile.cooldown(BATTLE_COOLDOWN_SECONDS[attacker_phase], attacker_profile.eco.battle_cooldown)
+        cd = attacker_profile.cooldown(battle_cooldown_seconds(attacker_phase), attacker_profile.eco.battle_cooldown)
         await redis.set(battle_cooldown(challenge.attacker_id), "1", ex=cd)
         await schedule_ready(redis, challenge.attacker_id, CD_BATTLE, cd)
 

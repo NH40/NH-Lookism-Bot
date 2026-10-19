@@ -278,7 +278,10 @@ async def get_wallet(session: AsyncSession, user_id: int, *, now: datetime | Non
         return None
     build_ = await get_build(session, user_id)
     eco = build_.eco
-    counts = weighted_counts(await business_repo.count_by_type(session, user_id), build_.positions)
+    raw_counts = await business_repo.count_by_type(session, user_id)
+    # Навыки позиций «утяжеляют» постройки только для дохода (дробные веса) — наружу (экран,
+    # бонус спортзала/парламента) идут настоящие штуки: дробь роняла экран бизнеса Mini App.
+    counts = weighted_counts(raw_counts, build_.positions)
     cap = _cap_minutes(eco)
     minutes, _ = _accrual_window(wallet.coins_accrued_at, now, cap)
     tax = await empire_repo.get_tax_context(session, user_id)
@@ -300,7 +303,7 @@ async def get_wallet(session: AsyncSession, user_id: int, *, now: datetime | Non
         storage_full_in_seconds=_storage_full_in(wallet.coins_accrued_at, now, cap),
         level=wallet.business_level,
         capacity=wallet.business_capacity,
-        counts=counts,
+        counts=raw_counts,
         tax=tax,
     )
 
@@ -614,3 +617,36 @@ async def upgrade(session: AsyncSession, user_id: int, kind: str) -> UpgradeResu
     await _cashback(session, user_id, cost)
     await session.commit()
     return UpgradeResult(kind=kind, new_level=current + 1, cost=cost, collected=collected)
+
+
+async def autobuild_for_crown(session: AsyncSession, user_id: int) -> int:
+    """Перед коронацией: бесплатно занять все свободные места на районах игрока тем же набором
+    зданий, что у него уже есть (нет зданий — кафе). Коронация освобождает районы, а здания уходят
+    во «владения» — без этого только что захваченный последний город (десятки пустых районов)
+    не давал бы ничего (пользователь 2026-10-19, AskUserQuestion: «бесплатно, тем же набором»).
+    → сколько построено. НЕ коммитит."""
+    wallet = await business_repo.get_wallet(session, user_id, for_update=True)
+    districts = await business_repo.lock_owned_districts(session, user_id)
+    if wallet is None or not districts:
+        return 0
+    capacity = _capacity_per_district(wallet.business_capacity)
+    per_district = await business_repo.count_by_type_per_district(session, user_id)
+    free = [(d.id, capacity - sum(per_district.get(d.id, {}).values())) for d in districts]
+    total = sum(n for _, n in free if n > 0)
+    if total <= 0:
+        return 0
+    mix = await business_repo.count_by_type(session, user_id) or {BIZ_CAFE: 1}
+    weight = sum(mix.values())
+    # Наибольший остаток: доли по типам в точности дают `total` мест.
+    shares = {t: total * c / weight for t, c in mix.items()}
+    plan = {t: int(v) for t, v in shares.items()}
+    for t in sorted(shares, key=lambda k: shares[k] - plan[k], reverse=True)[: total - sum(plan.values())]:
+        plan[t] += 1
+    queue = [t for t, n in sorted(plan.items()) for _ in range(n)]
+    items, i = [], 0
+    for district_id, n in free:
+        for _ in range(max(0, n)):
+            items.append((district_id, queue[i]))
+            i += 1
+    await business_repo.create_many(session, items)
+    return len(items)

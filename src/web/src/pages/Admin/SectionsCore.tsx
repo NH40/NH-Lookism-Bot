@@ -1,11 +1,12 @@
 // Админка — разделы ядра: бета/техрежим, роли, настройки на лету, патч/вайп, статистика, журналы.
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Panel, Screen, countdown, fmt } from "../../components/ui";
+import { Chip, Panel, Screen, countdown, fmt } from "../../components/ui";
 import { adminPlayerPath } from "../../constants";
 import { useAction, useApi } from "../../hooks/useApi";
 import type { AdminConfigKey, AdminMeta, AdminSystem, Paged } from "../../types";
 import { ConfirmButton, Field, Kv, Pager, Select, Seg, TextInput } from "./AdminKit";
+import { BarChart, type Point } from "./Charts";
 import { LogRow } from "./PlayerPage";
 
 // ---------------------------------------------------------------- бета и техрежим
@@ -203,23 +204,68 @@ export function PatchSection() {
 
 // ---------------------------------------------------------------- статистика
 
-type StatTab = "overview" | "donate" | "economy" | "server";
+type StatTab = "charts" | "overview" | "donate" | "economy" | "server";
 
 function mb(bytes: number): string {
   return bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} ГБ` : `${Math.round(bytes / 1e6)} МБ`;
 }
 
 export function StatsSection() {
-  const [tab, setTab] = useState<StatTab>("overview");
+  const [tab, setTab] = useState<StatTab>("charts");
   return (
     <>
-      <Seg value={tab} onChange={setTab} options={[
-        { value: "overview", label: "Игроки" }, { value: "donate", label: "Донат" },
+      <Seg value={tab} onChange={setTab} cols={3} options={[
+        { value: "charts", label: "Графики" }, { value: "overview", label: "Игроки" }, { value: "donate", label: "Донат" },
         { value: "economy", label: "Экономика" }, { value: "server", label: "Сервер" },
       ]} />
       {/* key — свой экземпляр на вкладку: иначе на миг рисуются данные прошлой вкладки */}
-      <StatsTab key={tab} tab={tab} />
+      {tab === "charts" ? <ChartsTab /> : <StatsTab key={tab} tab={tab} />}
     </>
+  );
+}
+
+interface Series {
+  registrations: Point[];
+  donate: Point[];
+  active: Point[];
+  active_days: number;
+}
+
+function ChartsTab() {
+  const [days, setDays] = useState<"7" | "30" | "90">("30");
+  const series = useApi<Series>(`/admin/stats/series?days=${days}`);
+  const overview = useApi<Record<string, number>>("/admin/stats/overview");
+  const o = overview.data;
+  const s = series.data;
+  const last = (xs: Point[] | undefined) => (xs && xs.length ? xs[xs.length - 1].value : 0);
+  return (
+    <div className="adm-split">
+      {o && (
+        <div className="grid-2" style={{ gap: 8 }}>
+          <Chip value={fmt(Number(o.total ?? 0))} label="игроков всего" />
+          <Chip value={fmt(Number(o.online_24h ?? 0))} label="активны за 24 ч" variant="active" />
+          <Chip value={fmt(last(s?.registrations))} label="новых сегодня" />
+          <Chip value={`${fmt(last(s?.donate))} ₽`} label="донат сегодня" variant="gold" />
+        </div>
+      )}
+      <Seg value={days} onChange={setDays} options={[{ value: "7", label: "7 дней" }, { value: "30", label: "30 дней" }, { value: "90", label: "90 дней" }]} cols={3} />
+      <Screen status={series.status} error={series.error}>
+        {s && (
+          <>
+            <Panel title="Регистрации">
+              <BarChart data={s.registrations} color="var(--cyan)" />
+            </Panel>
+            <Panel title={`Активные игроки · ${s.active_days} дн.`} tone="green">
+              <BarChart data={s.active} color="var(--green)" />
+              <div className="adm-hint" style={{ marginTop: 6, marginBottom: 0 }}>Журнал действий хранится {s.active_days} дней — поэтому период короче.</div>
+            </Panel>
+            <Panel title="Донат, ₽" tone="gold">
+              <BarChart data={s.donate} color="var(--gold)" unit=" ₽" />
+            </Panel>
+          </>
+        )}
+      </Screen>
+    </div>
   );
 }
 

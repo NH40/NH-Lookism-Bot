@@ -22,12 +22,13 @@ from random import binomialvariate, choices
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.services.admin.live_config import cooldown_seconds
+from bot.constant.admin.live_config import KEY_CD_EXTRAS
 from bot.db.repositories.unique_path import bump_training_reps
 from bot.constant.cooldown import CD_EXTRAS
 from bot.services.cooldown import schedule as schedule_ready
 from bot.cache.keys import train_extras_cooldown
 from bot.config.game import (
-    EXTRA_TRAINING_COOLDOWN_SECONDS,
     EXTRA_TRAINING_COVERAGE_PERCENT,
     EXTRA_TRAINING_MAX_STARS,
     EXTRA_TRAINING_STAGE1_SUCCESS_PERCENT,
@@ -84,7 +85,7 @@ async def train_extras(session: AsyncSession, redis: Redis, user_id: int, phase:
         return TrainResult(attempted=0, stage1=0, stage2=0, stage3=0)
 
     profile = await get_combat_profile(session, user_id)
-    cd = profile.cooldown(EXTRA_TRAINING_COOLDOWN_SECONDS, profile.eco.extras_training_cooldown)
+    cd = profile.cooldown(cooldown_seconds(KEY_CD_EXTRAS), profile.eco.extras_training_cooldown)
     acquired = await redis.set(key, "1", nx=True, ex=cd)
     if not acquired:
         ttl = await redis.ttl(key)

@@ -65,6 +65,12 @@ class CountryCityOut(BaseModel):
     fully_mine: bool
 
 
+class ThroneStatusOut(BaseModel):
+    can_challenge: bool  # круг держит все районы страны, а её города у императора(ов)
+    missing: int  # сколько районов страны ещё не его
+    has_emperor: bool  # у страны есть император / чужие держатели
+
+
 class CountryOut(BaseModel):
     available: bool  # карта страны — у круга и императора; банда воюет за районы своего города
     country: str | None
@@ -72,6 +78,7 @@ class CountryOut(BaseModel):
     influence: int
     cities_mine: int
     cities: list[CountryCityOut]
+    throne: ThroneStatusOut | None = None
 
 
 @router.get("", response_model=CountryOut)
@@ -80,7 +87,11 @@ async def get_country(user_id: int = Depends(get_current_user_id), session: Asyn
     if not is_city_conqueror(user.phase):
         return CountryOut(available=False, country=None, emperor=False, influence=0, cities_mine=0, cities=[])
     cm = await get_country_map(session, user)
+    from bot.services.district import throne_status
+
+    ts = await throne_status(session, user_id)
     return CountryOut(
+        throne=ThroneStatusOut(can_challenge=ts.can_challenge, missing=ts.missing, has_emperor=bool(ts.incumbent_id or ts.foreign_holders)),
         available=True, country=clean_label(cm.country_name), emperor=is_emperor(user.phase),
         influence=await get_influence(session, user_id), cities_mine=cm.cities_mine,
         cities=[
@@ -242,3 +253,54 @@ async def post_city_challenge(
         await notify_player(bot, session, issued.defender_id, NOTIFY_PVP_CALL, incoming, reply_markup=accept_menu(issued.challenge_id))
     sent = CITY_CHALLENGE_SENT.format(owner=issued.defender_label, window=window, city=issued.city_name, count=issued.districts)
     return MessageOut(message=clean_label(sent).replace("Итог придёт сюда.", "Итог придёт в чат с ботом."))
+
+
+
+class ThroneBattleOut(BaseModel):
+    message: str
+    crowned: bool
+    won: bool
+
+
+@router.post("/throne", response_model=ThroneBattleOut)
+async def post_throne(
+    user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> ThroneBattleOut:
+    """Бой за трон по кнопке (2026-10-20) — те же бои за освобождение и трон, что после захвата,
+    закрывшего страну; круг, державший всю страну, больше не застревает после проигрыша."""
+    from api.push import get_bot
+    from bot.constant.phase import PHASE_FIST
+    from bot.handlers.district.district import _notify_liberations, _notify_throne
+    from bot.services.district import BattleOnCooldownError, NoThroneTargetError, NotThroneContenderError, challenge_throne
+    from bot.texts.map import THRONE_NO_TARGET, THRONE_NOT_CONTENDER, THRONE_NOT_CONTENDER_MISSING
+
+    await require_user(session, user_id)
+    try:
+        promoted, throne, liberations = await challenge_throne(session, redis, user_id)
+    except NotThroneContenderError as exc:
+        raise bad(THRONE_NOT_CONTENDER_MISSING.format(missing=exc.missing) if exc.missing else THRONE_NOT_CONTENDER)
+    except NoThroneTargetError:
+        raise bad(THRONE_NO_TARGET)
+    except BattleOnCooldownError as exc:
+        raise bad(cooldown_text(BATTLE_PREFIX, exc.retry_after_seconds))
+    parts = []
+    for lib in liberations:
+        parts.append(
+            f"Освобождение: победа над «{lib.holder_label}», вернул городов {len(lib.city_names)}."
+            if lib.contender_won else f"Освобождение: поражение от «{lib.holder_label}» — ты остаёшься кругом."
+        )
+    if throne is not None:
+        parts.append(
+            f"Бой за трон: победа над «{throne.incumbent_label}» за {throne.rounds} раунд."
+            if throne.contender_won else f"Бой за трон: поражение от «{throne.incumbent_label}»."
+        )
+    crowned = promoted == PHASE_FIST
+    if crowned:
+        parts.append("Ты — император страны!")
+    bot = get_bot()
+    await _notify_liberations(bot, session, liberations)
+    await _notify_throne(bot, session, throne)
+    won = crowned or bool(liberations and all(lib.contender_won for lib in liberations) and (throne is None or throne.contender_won))
+    return ThroneBattleOut(message=" ".join(parts) or "Бой окончен.", crowned=crowned, won=won)

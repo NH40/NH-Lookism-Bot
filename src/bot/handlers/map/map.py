@@ -9,12 +9,13 @@ raw-notes «Карта»: игрок в фазе банды видит свой 
 """
 from __future__ import annotations
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.constant.map import CB_MAP_CITY_PREFIX, CB_MAP_COUNTRY_PAGE_PREFIX, CB_MAP_OPEN, CB_MAP_PAGE_PREFIX
+from bot.constant.map import CB_MAP_CITY_PREFIX, CB_MAP_COUNTRY_PAGE_PREFIX, CB_MAP_OPEN, CB_MAP_PAGE_PREFIX, CB_MAP_THRONE
 from bot.db.models.user import User
 from bot.db.repositories.user import get_by_id
 from bot.keyboards.map import city_map_menu, city_owners_menu, country_map_menu
@@ -171,6 +172,18 @@ async def show_country_map(message: Message, session: AsyncSession, user: User, 
         influence=await get_influence(session, user.id),
     )
     line, rows = await _events_block(session, user.id)
+    # Бой за трон по кнопке (2026-10-20): круг со всей страной — вызвать императора/держателей.
+    from aiogram.types import InlineKeyboardButton
+
+    from bot.services.district import throne_status
+    from bot.texts.map import BTN_THRONE, THRONE_HINT_MISSING, THRONE_HINT_READY
+
+    throne = await throne_status(session, user.id)
+    if throne.can_challenge:
+        rows = [[InlineKeyboardButton(text=BTN_THRONE, callback_data=CB_MAP_THRONE)], *rows]
+        line += THRONE_HINT_READY
+    elif throne.missing and (throne.incumbent_id or throne.foreign_holders):
+        line += THRONE_HINT_MISSING.format(missing=format_number(throne.missing))
     markup = country_map_menu([(c.city_id, _city_label(c)) for c in country_map.cities], page, top_rows=rows)
     text += line
     if edit:
@@ -255,3 +268,40 @@ async def cb_city_view(callback: CallbackQuery, session: AsyncSession) -> None:
         await callback.answer(CITY_NOT_FOUND, show_alert=True)
         return
     await callback.answer()
+
+
+@router.callback_query(F.data == CB_MAP_THRONE)
+async def cb_throne(callback: CallbackQuery, session: AsyncSession, redis: Redis, bot: Bot) -> None:
+    """Бой за трон по кнопке — те же бои за освобождение и трон, что после захвата, закрывшего страну."""
+    from bot.constant.phase import PHASE_FIST
+    from bot.keyboards.common import back_menu
+    from bot.handlers.district.district import _liberation_lines, _notify_liberations, _notify_throne, _throne_line
+    from bot.services.district import BattleOnCooldownError, NoThroneTargetError, NotThroneContenderError, challenge_throne
+    from bot.texts.map import (
+        THRONE_COOLDOWN, THRONE_CROWNED, THRONE_NO_TARGET, THRONE_NOT_CONTENDER, THRONE_NOT_CONTENDER_MISSING, THRONE_REPORT,
+    )
+    from bot.utils.formatting import format_countdown
+
+    user = await _onboarded_user(session, callback.from_user.id)
+    if user is None:
+        await callback.answer(NOT_ONBOARDED, show_alert=True)
+        return
+    try:
+        promoted, throne, liberations = await challenge_throne(session, redis, user.id)
+    except NotThroneContenderError as exc:
+        await callback.answer(THRONE_NOT_CONTENDER_MISSING.format(missing=exc.missing) if exc.missing else THRONE_NOT_CONTENDER, show_alert=True)
+        return
+    except NoThroneTargetError:
+        await callback.answer(THRONE_NO_TARGET, show_alert=True)
+        return
+    except BattleOnCooldownError as exc:
+        await callback.answer(THRONE_COOLDOWN.format(countdown=format_countdown(exc.retry_after_seconds)), show_alert=True)
+        return
+    await callback.answer()
+    text = THRONE_REPORT.format(
+        liberations=_liberation_lines(liberations), throne=_throne_line(throne),
+        crowned=THRONE_CROWNED if promoted == PHASE_FIST else "",
+    )
+    await callback.message.answer(text, reply_markup=back_menu(CB_MAP_OPEN))
+    await _notify_liberations(bot, session, liberations)
+    await _notify_throne(bot, session, throne)

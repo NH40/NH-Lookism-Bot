@@ -20,6 +20,10 @@ from bot.constant.business import (
     CB_BUSINESS_COLLECT,
     CB_BUSINESS_DEMOLISH_ALL_ASK_PREFIX,
     CB_BUSINESS_DEMOLISH_ALL_PREFIX,
+    CB_BUSINESS_DEMOLISH_EVERY_ALL,
+    CB_BUSINESS_DEMOLISH_EVERY_ALL_ASK,
+    CB_BUSINESS_DEMOLISH_EVERY_MENU,
+    CB_BUSINESS_DEMOLISH_EVERY_PREFIX,
     CB_BUSINESS_DEMOLISH_MENU_PREFIX,
     CB_BUSINESS_DEMOLISH_PREFIX,
     CB_BUSINESS_DISTRICT_PREFIX,
@@ -32,7 +36,15 @@ from bot.constant.business import (
     UPGRADE_CAPACITY,
     UPGRADE_LEVEL,
 )
-from bot.keyboards.business import demolish_confirm_menu, demolish_menu, district_menu, fill_menu, overview_menu
+from bot.keyboards.business import (
+    demolish_confirm_menu,
+    demolish_everywhere_confirm_menu,
+    demolish_everywhere_menu,
+    demolish_menu,
+    district_menu,
+    fill_menu,
+    overview_menu,
+)
 from bot.services.business import (
     DistrictBusinesses,
     MaxUpgradeError,
@@ -45,6 +57,7 @@ from bot.services.business import (
     build_all,
     collect,
     demolish,
+    demolish_everywhere,
     get_districts_catalog,
     get_district_businesses,
     get_overview,
@@ -62,6 +75,9 @@ from bot.texts.business import (
     BUILT,
     BUILT_ALL,
     DEMOLISH_ALL_CONFIRM,
+    DEMOLISH_EVERY_ALL_CONFIRM,
+    DEMOLISH_EVERY_SCREEN,
+    DEMOLISHED_EVERYWHERE,
     DEMOLISH_SCREEN,
     DEMOLISHED,
     FILL_SCOPE_ALL,
@@ -487,3 +503,64 @@ async def cb_business_demolish(callback: CallbackQuery, session: AsyncSession, r
         await callback.answer()
         return
     await _do_demolish(callback, session, redis, district_id, type_)
+
+
+# --- снос во всех районах (пользователи 2026-10-20) ---
+
+async def _everywhere_screen(session: AsyncSession, user_id: int):
+    from bot.services.business import owned_counts
+
+    counts = await owned_counts(session, user_id)
+    text = DEMOLISH_EVERY_SCREEN.format(buildings=buildings_summary(counts))
+    return text, demolish_everywhere_menu(counts), counts
+
+
+@router.callback_query(F.data == CB_BUSINESS_DEMOLISH_EVERY_MENU)
+async def cb_demolish_everywhere_menu(callback: CallbackQuery, session: AsyncSession) -> None:
+    text, markup, _ = await _everywhere_screen(session, callback.from_user.id)
+    await callback.answer()
+    await safe_edit_text(callback.message, text, reply_markup=markup)
+
+
+@router.callback_query(F.data == CB_BUSINESS_DEMOLISH_EVERY_ALL_ASK)
+async def cb_demolish_everywhere_ask(callback: CallbackQuery, session: AsyncSession) -> None:
+    _, _, counts = await _everywhere_screen(session, callback.from_user.id)
+    if not counts:
+        await callback.answer(NOTHING_TO_DEMOLISH, show_alert=True)
+        return
+    await callback.answer()
+    await safe_edit_text(
+        callback.message, DEMOLISH_EVERY_ALL_CONFIRM.format(count=format_number(sum(counts.values()))),
+        reply_markup=demolish_everywhere_confirm_menu(),
+    )
+
+
+async def _do_demolish_everywhere(callback: CallbackQuery, session: AsyncSession, redis: Redis, type_: str | None) -> None:
+    user_id = callback.from_user.id
+    lock = await _acquire(redis, user_id)
+    if lock is None:
+        await callback.answer(BUSY)
+        return
+    try:
+        removed = await demolish_everywhere(session, user_id, type_)
+    except UnknownBusinessTypeError:
+        await callback.answer()
+        return
+    except NothingToDemolishError:
+        await callback.answer(NOTHING_TO_DEMOLISH, show_alert=True)
+        return
+    finally:
+        await redis.delete(lock)
+    await callback.answer(DEMOLISHED_EVERYWHERE.format(count=format_number(removed)), show_alert=True)
+    text, markup, _ = await _everywhere_screen(session, user_id)
+    await safe_edit_text(callback.message, text, reply_markup=markup)
+
+
+@router.callback_query(F.data == CB_BUSINESS_DEMOLISH_EVERY_ALL)
+async def cb_demolish_everywhere_all(callback: CallbackQuery, session: AsyncSession, redis: Redis) -> None:
+    await _do_demolish_everywhere(callback, session, redis, None)
+
+
+@router.callback_query(F.data.startswith(CB_BUSINESS_DEMOLISH_EVERY_PREFIX))
+async def cb_demolish_everywhere_type(callback: CallbackQuery, session: AsyncSession, redis: Redis) -> None:
+    await _do_demolish_everywhere(callback, session, redis, callback.data.removeprefix(CB_BUSINESS_DEMOLISH_EVERY_PREFIX))

@@ -40,6 +40,12 @@ CB_BUSINESS_DEMOLISH_PREFIX = "biz:dem:"
 """f"{CB_BUSINESS_DEMOLISH_PREFIX}{district_id}:{type}" — снести одно здание."""
 CB_BUSINESS_DEMOLISH_ALL_ASK_PREFIX = "biz:demaa:"
 CB_BUSINESS_DEMOLISH_ALL_PREFIX = "biz:dema:"
+CB_BUSINESS_DEMOLISH_EVERY_MENU = "biz:demem"
+"""Экран «снести во всех районах»."""
+CB_BUSINESS_DEMOLISH_EVERY_PREFIX = "biz:deme:"
+"""f"{CB_BUSINESS_DEMOLISH_EVERY_PREFIX}{type}" — снести все здания типа на всех районах."""
+CB_BUSINESS_DEMOLISH_EVERY_ALL_ASK = "biz:demeaa"
+CB_BUSINESS_DEMOLISH_EVERY_ALL = "biz:demea"
 """f"{...}{district_id}" — снести всё на районе (сначала подтверждение)."""
 
 # Правило 2: стройка и прокачка тратят NHCoin — один лок на оба действия (общий ресурс).

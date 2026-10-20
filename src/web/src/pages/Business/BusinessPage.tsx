@@ -11,6 +11,23 @@ export function BusinessPage() {
   const { run, busy } = useAction(reload);
   const [sel, setSel] = useState<number | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
+  // Снос во всех районах: тип (или "*" — всё), ожидающий второго нажатия.
+  const [confirmEvery, setConfirmEvery] = useState<string | null>(null);
+  const everywhere = new Map<string, { name: string; count: number }>();
+  for (const d of data?.district_list ?? []) {
+    for (const b of d.buildings) {
+      const cur = everywhere.get(b.code) ?? { name: b.name, count: 0 };
+      cur.count += b.count;
+      everywhere.set(b.code, cur);
+    }
+  }
+  const everyTotal = [...everywhere.values()].reduce((n, x) => n + x.count, 0);
+  const demolishEvery = async (type: string | null) => {
+    const key = type ?? "*";
+    if (confirmEvery !== key) return setConfirmEvery(key);
+    setConfirmEvery(null);
+    await run("/business/demolish-everywhere", { type });
+  };
   const selDistrict = data?.district_list.find((d) => d.id === sel) ?? null;
   const anyFree = selDistrict ? selDistrict.free > 0 : (data?.district_list.some((d) => d.free > 0) ?? false);
   return (
@@ -112,6 +129,25 @@ export function BusinessPage() {
                 {confirmAll ? "Точно снести всё? Нажми ещё раз" : "Снести всё на районе"}
               </button>
               <div className="muted biz-note">NHCoin за снос не возвращаются — место освобождается под другую постройку.</div>
+            </Panel>
+          )}
+          {everyTotal > 0 && (
+            <Panel title="Снос во всех районах" tone="red">
+              {[...everywhere.entries()].map(([code, b]) => (
+                <div key={code} className="biz-item">
+                  <div className="grow">
+                    <b>{b.name}</b>
+                    <small>во всех районах ×{fmt(b.count)}</small>
+                  </div>
+                  <button className="btn red small" disabled={busy} onClick={() => demolishEvery(code)}>
+                    {confirmEvery === code ? "Точно?" : "Снести все"}
+                  </button>
+                </div>
+              ))}
+              <button className="btn red block" style={{ marginTop: 8 }} disabled={busy} onClick={() => demolishEvery(null)}>
+                {confirmEvery === "*" ? `Точно снести все ${fmt(everyTotal)}? Нажми ещё раз` : `Снести вообще всё (${fmt(everyTotal)})`}
+              </button>
+              <div className="muted biz-note">Сносит сразу на всех районах. NHCoin не возвращаются, доход до сноса зачислится.</div>
             </Panel>
           )}
           <Panel title="Постройка">

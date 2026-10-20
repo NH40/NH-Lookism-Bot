@@ -35,7 +35,7 @@ BUSINESS_DESCRIPTIONS: dict[str, str] = {
     ),
     BIZ_BLACK_MARKET: f"каждую минуту случайно от {BUSINESS_BLACK_MARKET_MIN} до {BUSINESS_BLACK_MARKET_MAX}",
     BIZ_GYM: f"{BUSINESS_GYM_INCOME}/мин и +{BUSINESS_GYM_TRAINING_BONUS_PERCENT}% к шансам тренировки статистов",
-    BIZ_PARLIAMENT: f"{BUSINESS_PARLIAMENT_INCOME}/мин и +{BUSINESS_PARLIAMENT_INFLUENCE} влияния",
+    BIZ_PARLIAMENT: f"{BUSINESS_PARLIAMENT_INCOME:.2g}/мин и +{BUSINESS_PARLIAMENT_INFLUENCE} влияния",
 }
 
 OVERVIEW_HEADER = (
@@ -78,6 +78,16 @@ BTN_DEMOLISH = "🏚 Снести"
 BTN_DEMOLISH_ONE = "🏚 {name} ×1"
 BTN_DEMOLISH_ALL = "💥 Снести всё на районе"
 BTN_DEMOLISH_ALL_CONFIRM = "💥 Да, снести всё"
+BTN_DEMOLISH_EVERYWHERE = "🧨 Снести во всех районах"
+BTN_DEMOLISH_EVERY_TYPE = "🏚 Все {name} ({count})"
+BTN_DEMOLISH_EVERY_ALL = "💥 Вообще всё ({count})"
+DEMOLISH_EVERY_SCREEN = (
+    "🧨 <b>Снос во всех районах</b>\n"
+    "Сносит здания сразу на всех твоих районах. NHCoin <b>не возвращаются</b>, доход до сноса зачислится.\n\n"
+    "{buildings}\n\nВыбери, что снести:"
+)
+DEMOLISH_EVERY_ALL_CONFIRM = "💥 Снести <b>все {count}</b> зданий на всех районах? Это необратимо."
+DEMOLISHED_EVERYWHERE = "Снесено зданий во всех районах: {count}"
 BTN_CANCEL = "◀️ Отмена"
 FILL_SCREEN = (
     "🏗 <b>Застроить всё</b> — {scope}\n━━━━━━━━━━━━━━━━━━\n"

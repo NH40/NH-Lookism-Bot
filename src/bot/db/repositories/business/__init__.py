@@ -12,6 +12,7 @@ from bot.db.repositories.business.business import (  # noqa: F401
     create_many,
     credit_accrual,
     delete_on_district,
+    delete_on_owned_districts,
     get_wallet,
     list_owned_districts,
     lock_owned_district,

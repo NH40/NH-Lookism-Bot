@@ -877,3 +877,93 @@ async def war_attack(
         attacker_dead=r.attacker_dead, defender_dead=r.defender_dead, lands_taken=r.lands_taken,
         lands_gained=r.lands_gained, treasury_taken=r.treasury_taken, defender_name=r.defender_name,
     )
+
+
+# ---------------------------------------------------------------- магазин клана (2026-10-20)
+# Тот же магазин, что в боте (`handlers/clan/economy`): тикеты и зелья каждому участнику, контрактники
+# в роту на сутки — из казны, покупают владелец и зам (права проверяет сервис).
+
+class ShopTicketsIn(BaseModel):
+    tickets: int
+
+
+class ShopPotionIn(BaseModel):
+    kind: str
+    tier: int
+
+
+class ShopContractsIn(BaseModel):
+    rank: str
+    quantity: int = Field(gt=0)
+
+
+@router.get("/shop")
+async def get_shop(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    from bot.config.clan import CLAN_CONTRACT_HOURS, CLAN_SHOP_POTION_TIERS, CLAN_SHOP_TICKETS
+    from bot.constant.potion import POTION_WEALTH, POTIONS
+    from bot.services.contract import terms as contract_terms
+    from bot.texts.potion import POTION_NAMES
+
+    await require_user(session, user_id)
+    member = await clan_service.member_of(session, user_id)
+    if member is None:
+        raise bad("Ты не в клане.")
+    clan = await clan_repo.get(session, member.clan_id)
+    members = await clan_repo.count_members(session, clan.id)
+    t = await contract_terms(session, user_id)
+    return {
+        "treasury": clan.treasury, "members": members, "can_buy": member.rank in MANAGER_RANKS,
+        "tickets": [{"tickets": n, "price": clan_service.tickets_price(n, members)} for n, _ in CLAN_SHOP_TICKETS],
+        "potions": [
+            {"kind": k, "name": clean_label(POTION_NAMES[k]),
+             "tiers": [{"tier": tier, "price": clan_service.potion_price(tier, members)} for tier in CLAN_SHOP_POTION_TIERS]}
+            for k in POTIONS if k != POTION_WEALTH
+        ],
+        "contracts": {
+            "hours": CLAN_CONTRACT_HOURS, "ceiling": t.ceiling,
+            "ranks": [{"rank": r, "price": clan_service.contract_unit_price(r)} for r in t.ranks[:12]],
+        },
+    }
+
+
+@router.post("/shop/tickets")
+async def post_shop_tickets(
+    body: ShopTicketsIn, user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session), redis: Redis = Depends(get_redis),
+) -> dict:
+    await require_user(session, user_id)
+    try:
+        price, members = await clan_service.shop_tickets(session, redis, user_id, body.tickets)
+    except ClanError as exc:
+        raise _err(exc) from None
+    return _ok(f"Всем {members} участникам по {body.tickets} тикет. — из казны {format_number(price)} NHCoin.")
+
+
+@router.post("/shop/potion")
+async def post_shop_potion(
+    body: ShopPotionIn, user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session), redis: Redis = Depends(get_redis),
+) -> dict:
+    await require_user(session, user_id)
+    try:
+        price, members = await clan_service.shop_potion(session, redis, user_id, body.kind, body.tier)
+    except ClanError as exc:
+        raise _err(exc) from None
+    return _ok(f"Зелье выпили все {members} участников — из казны {format_number(price)} NHCoin.")
+
+
+@router.post("/shop/contracts")
+async def post_shop_contracts(
+    body: ShopContractsIn, user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session), redis: Redis = Depends(get_redis),
+) -> dict:
+    from bot.config.clan import CLAN_CONTRACT_HOURS
+    from bot.services.contract import terms as contract_terms
+
+    await require_user(session, user_id)
+    t = await contract_terms(session, user_id)
+    try:
+        price = await clan_service.shop_contracts(session, redis, user_id, body.rank, body.quantity, t.ceiling)
+    except ClanError as exc:
+        raise _err(exc) from None
+    return _ok(f"Контракт: {format_number(body.quantity)} × {body.rank} в роту на {CLAN_CONTRACT_HOURS} ч — из казны {format_number(price)} NHCoin.")

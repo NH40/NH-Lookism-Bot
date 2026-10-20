@@ -114,7 +114,8 @@ function CityView({ cityId }: { cityId: number }) {
 export function CountryPage() {
   const [params, setParams] = useSearchParams();
   const cityId = Number(params.get("city")) || null;
-  const { data, status, error } = useApi<CountryData>(cityId ? null : "/country");
+  const { data, status, error, reload } = useApi<CountryData>(cityId ? null : "/country");
+  const { run, busy } = useAction(reload);
   if (cityId) return <CityView cityId={cityId} />;
   return (
     <Screen status={status} error={error}>
@@ -129,6 +130,23 @@ export function CountryPage() {
                 <div className="chip ct-chip"><span className="muted">Городов</span><span className="disp">{data.cities.length}</span></div>
                 <div className="chip ct-chip"><span className="muted">Влияние</span><span className="disp">{fmt(data.influence)}</span></div>
               </div>
+              {data.throne?.can_challenge && (
+                <Panel title="ТРОН" tone="gold" badgeMark="👑">
+                  <p className="ct-note" style={{ marginTop: 0 }}>
+                    Вся страна твоя, но её города держит император. Сначала бои с чужими императорами по очереди, потом — за трон.
+                  </p>
+                  <button className="btn gold block" type="button" disabled={busy} onClick={() => run("/country/throne")}>
+                    Бой за трон
+                  </button>
+                </Panel>
+              )}
+              {data.throne && !data.throne.can_challenge && data.throne.has_emperor && data.throne.missing > 0 && (
+                <Panel title="ТРОН" badgeMark="👑">
+                  <p className="ct-note" style={{ margin: 0 }}>
+                    Чтобы вызвать императора на бой за трон, захвати все районы страны — осталось {fmt(data.throne.missing)}.
+                  </p>
+                </Panel>
+              )}
               <Panel title="ГОРОДА">
                 <p className="ct-note" style={{ marginTop: 0 }}>
                   {data.emperor ? "Свою страну император не захватывает — только смотрит." : "Круг берёт город целиком: ботов — одним боем, игрока — вызовом за все его районы."}

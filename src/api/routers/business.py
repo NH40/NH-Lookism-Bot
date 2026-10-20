@@ -295,3 +295,29 @@ async def demolish_business(
     finally:
         await redis.delete(lock)
     return {"message": DEMOLISHED.format(count=result.removed, number=result.district_number), "removed": result.removed}
+
+
+class DemolishEverywhereIn(BaseModel):
+    type: str | None = None  # None — снести всё
+
+
+@router.post("/demolish-everywhere")
+async def demolish_everywhere_endpoint(
+    body: DemolishEverywhereIn,
+    user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    """Снести всё (или все здания типа) сразу во всех районах — как кнопка в боте (2026-10-20)."""
+    from bot.services.business import demolish_everywhere
+
+    lock = await _lock(redis, user_id)
+    try:
+        removed = await demolish_everywhere(session, user_id, body.type)
+    except UnknownBusinessTypeError:
+        raise bad("Неизвестный тип здания.")
+    except NothingToDemolishError:
+        raise bad(NOTHING_TO_DEMOLISH)
+    finally:
+        await redis.delete(lock)
+    return {"message": f"Снесено зданий во всех районах: {format_number(removed)}"}

@@ -188,3 +188,13 @@ async def delete_on_district(session: AsyncSession, district_id: int, type_: str
     )
     result = await session.execute(delete(Business).where(Business.id == one))
     return result.rowcount or 0
+
+
+async def delete_on_owned_districts(session: AsyncSession, user_id: int, type_: str | None) -> int:
+    """Снести все здания (или все типа `type_`) на ВСЕХ районах игрока одним DELETE; владения
+    императора не трогает. → сколько снесено. НЕ коммитит."""
+    cond = Business.district_id.in_(select(District.id).where(District.owner_id == user_id))
+    if type_ is not None:
+        cond = cond & (Business.type == type_)
+    result = await session.execute(delete(Business).where(cond))
+    return result.rowcount or 0

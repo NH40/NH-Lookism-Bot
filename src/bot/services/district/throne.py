@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.services.absolute import after_battle
@@ -202,3 +203,75 @@ async def promote_or_throne(
         return promotion.phase, None, tuple(liberations)
     outcome = await resolve_throne(session, user_id, promotion.throne_incumbent)
     return (PHASE_FIST if outcome.contender_won else None), outcome, tuple(liberations)
+
+
+# ---------------------------------------------------------------- вызов на трон вручную (2026-10-20)
+# Бой за трон и освобождение раньше шли ТОЛЬКО в момент захвата, закрывшего страну. Проиграл этот
+# бой (или страна закрылась раньше) — круг застревал: все районы его, атаковать некого, повторить
+# нечем (жалоба: «как я должен императора завалить, если я его не могу атаковать»). Теперь круг,
+# держащий все районы страны, сам вызывает: сначала чужих держателей по очереди, потом трон.
+
+class NotThroneContenderError(Exception):
+    """Вызывать может только круг, держащий все районы своей страны."""
+
+    def __init__(self, missing: int = 0) -> None:
+        self.missing = missing  # районов страны ещё не его
+
+
+class NoThroneTargetError(Exception):
+    """Страна и так свободна — вызывать некого (коронация пройдёт на ближайшем захвате)."""
+
+
+@dataclass(frozen=True, slots=True)
+class ThroneStatus:
+    can_challenge: bool
+    missing: int  # районов страны ещё не у игрока (для подсказки)
+    incumbent_id: int | None
+    foreign_holders: tuple[int, ...]
+
+
+async def throne_status(session: AsyncSession, user_id: int) -> ThroneStatus:
+    from bot.constant.phase import PHASE_CIRCLE
+
+    phase, country = await phase_repo.get_phase(session, user_id)
+    if phase != PHASE_CIRCLE or country is None:
+        return ThroneStatus(False, 0, None, ())
+    missing = int(await phase_repo.count_not_owned_in_country(session, country, user_id) or 0)
+    holders = tuple(uid for uid, _ in await phase_repo.foreign_holders(session, country))
+    incumbent = await phase_repo.country_emperor(session, country, exclude_user_id=user_id)
+    return ThroneStatus(missing == 0 and bool(holders or incumbent), missing, incumbent, holders)
+
+
+async def challenge_throne(session: AsyncSession, redis, user_id: int):
+    """Вызов на трон (и бои за освобождение) по кнопке. КД — как у боя круга. Коммитит.
+    → (новая фаза или None, итог трона или None, бои за освобождение)."""
+    from bot.cache.keys import battle_cooldown
+    from bot.constant.cooldown import CD_BATTLE
+    from bot.constant.phase import PHASE_CIRCLE
+    from bot.db.models.user import User
+    from bot.services.admin.live_config import battle_cooldown_seconds
+    from bot.services.cooldown import schedule as schedule_ready
+    from bot.services.district.district import BattleOnCooldownError
+
+    status = await throne_status(session, user_id)
+    if not status.can_challenge:
+        if status.missing:
+            raise NotThroneContenderError(status.missing)
+        phase = (await phase_repo.get_phase(session, user_id))[0]
+        if phase != PHASE_CIRCLE:
+            raise NotThroneContenderError
+        raise NoThroneTargetError
+    key = battle_cooldown(user_id)
+    profile = await get_combat_profile(session, user_id)
+    if not await redis.set(key, "1", nx=True, ex=profile.cooldown(battle_cooldown_seconds(PHASE_CIRCLE), profile.eco.battle_cooldown)):
+        raise BattleOnCooldownError(retry_after_seconds=max(0, await redis.ttl(key)))
+    city_id = await session.scalar(select(User.city_id).where(User.id == user_id))
+    try:
+        result = await promote_or_throne(session, user_id, city_id)
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        await redis.delete(key)
+        raise
+    await schedule_ready(redis, user_id, CD_BATTLE, await redis.ttl(key))
+    return result

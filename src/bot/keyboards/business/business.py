@@ -12,6 +12,10 @@ from bot.constant.business import (
     CB_BUSINESS_COLLECT,
     CB_BUSINESS_DEMOLISH_ALL_ASK_PREFIX,
     CB_BUSINESS_DEMOLISH_ALL_PREFIX,
+    CB_BUSINESS_DEMOLISH_EVERY_ALL,
+    CB_BUSINESS_DEMOLISH_EVERY_ALL_ASK,
+    CB_BUSINESS_DEMOLISH_EVERY_MENU,
+    CB_BUSINESS_DEMOLISH_EVERY_PREFIX,
     CB_BUSINESS_DEMOLISH_MENU_PREFIX,
     CB_BUSINESS_DEMOLISH_PREFIX,
     CB_BUSINESS_FILL_MENU_PREFIX,
@@ -19,6 +23,7 @@ from bot.constant.business import (
     CB_BUSINESS_DISTRICT_PREFIX,
     CB_BUSINESS_PAGE_PREFIX,
     CB_BUSINESS_UPGRADE_PREFIX,
+    CB_BUSINESS_OPEN,
     UPGRADE_CAPACITY,
     UPGRADE_LEVEL,
 )
@@ -33,6 +38,9 @@ from bot.texts.business import (
     BTN_DEMOLISH,
     BTN_DEMOLISH_ALL,
     BTN_DEMOLISH_ALL_CONFIRM,
+    BTN_DEMOLISH_EVERY_ALL,
+    BTN_DEMOLISH_EVERY_TYPE,
+    BTN_DEMOLISH_EVERYWHERE,
     BTN_DEMOLISH_ONE,
     BTN_FILL,
     BTN_FILL_ALL_DISTRICTS,
@@ -93,6 +101,7 @@ def overview_menu(
         rows.append(nav)
     if districts:
         rows.append([_btn(BTN_FILL_ALL_DISTRICTS, f"{CB_BUSINESS_FILL_MENU_PREFIX}0")])
+        rows.append([_btn(BTN_DEMOLISH_EVERYWHERE, CB_BUSINESS_DEMOLISH_EVERY_MENU)])
 
     rows.append([_upgrade_button(UPGRADE_LEVEL, level, level_cost)])
     rows.append([_upgrade_button(UPGRADE_CAPACITY, capacity, capacity_cost)])
@@ -166,5 +175,27 @@ def demolish_confirm_menu(district_id: int) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [_btn(BTN_DEMOLISH_ALL_CONFIRM, f"{CB_BUSINESS_DEMOLISH_ALL_PREFIX}{district_id}")],
             [_btn(BTN_CANCEL, f"{CB_BUSINESS_DEMOLISH_MENU_PREFIX}{district_id}")],
+        ]
+    )
+
+
+def demolish_everywhere_menu(counts: dict[str, int]) -> InlineKeyboardMarkup:
+    """Снос во всех районах: по типу (сразу) или всё (через подтверждение)."""
+    present = [t for t in BUSINESS_TYPES if counts.get(t)]
+    rows = [
+        [_btn(BTN_DEMOLISH_EVERY_TYPE.format(name=BUSINESS_NAMES[t], count=format_number(counts[t])), f"{CB_BUSINESS_DEMOLISH_EVERY_PREFIX}{t}")]
+        for t in present
+    ]
+    if present:
+        rows.append([_btn(BTN_DEMOLISH_EVERY_ALL.format(count=format_number(sum(counts.values()))), CB_BUSINESS_DEMOLISH_EVERY_ALL_ASK)])
+    rows.append([_btn(BTN_BACK_TO_BUSINESS, CB_BUSINESS_OPEN)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def demolish_everywhere_confirm_menu() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [_btn(BTN_DEMOLISH_ALL_CONFIRM, CB_BUSINESS_DEMOLISH_EVERY_ALL)],
+            [_btn(BTN_CANCEL, CB_BUSINESS_DEMOLISH_EVERY_MENU)],
         ]
     )

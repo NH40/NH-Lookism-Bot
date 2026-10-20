@@ -73,7 +73,7 @@ from bot.constant.activity import ACT_BUSINESS
 from bot.constant.dev_quest import TASK_BUILD, TASK_COLLECT, TASK_INCOME
 from bot.services.dev_quest import emit as quest_event
 from bot.services.activity import log as log_activity
-from bot.texts.activity import LOG_BUILD, LOG_BUILD_ALL, LOG_DEMOLISH
+from bot.texts.activity import LOG_BUILD, LOG_BUILD_ALL, LOG_DEMOLISH, LOG_DEMOLISH_EVERYWHERE
 from bot.texts.business import BUSINESS_NAMES
 from bot.services.build import NO_ECO, EconomyMods, capped, get_build
 from bot.db.repositories import empire as empire_repo
@@ -650,3 +650,29 @@ async def autobuild_for_crown(session: AsyncSession, user_id: int) -> int:
             i += 1
     await business_repo.create_many(session, items)
     return len(items)
+
+
+async def demolish_everywhere(session: AsyncSession, user_id: int, type_: str | None) -> int:
+    """Снести всё (или все здания типа `type_`) сразу на всех районах игрока (пользователи
+    2026-10-20: «кнопку сноса всех районов разом»). Как обычный снос — без возврата NHCoin,
+    доход до сноса зачисляется по старому набору. Коммитит. → сколько снесено."""
+    if type_ is not None and type_ not in BUSINESS_TYPES:
+        raise UnknownBusinessTypeError
+    await accrue(session, user_id)
+    await business_repo.get_wallet(session, user_id, for_update=True)
+    removed = await business_repo.delete_on_owned_districts(session, user_id, type_)
+    if not removed:
+        await session.rollback()
+        raise NothingToDemolishError
+    await log_activity(session, user_id, ACT_BUSINESS, LOG_DEMOLISH_EVERYWHERE.format(count=removed))
+    await session.commit()
+    return removed
+
+
+async def owned_counts(session: AsyncSession, user_id: int) -> dict[str, int]:
+    """Здания по типам на районах игрока (без владений) — для экрана «снести везде»."""
+    total: dict[str, int] = {}
+    for counts in (await business_repo.count_by_type_per_district(session, user_id)).values():
+        for t, n in counts.items():
+            total[t] = total.get(t, 0) + n
+    return total

@@ -8,6 +8,7 @@ from bot.texts.activity.activity import (  # noqa: F401
     LOG_CAPTURED,
     LOG_CITY_BOTS,
     LOG_DEMOLISH,
+    LOG_DEMOLISH_EVERYWHERE,
     LOG_GENIUS_LEVEL,
     LOG_GENIUS_NEW,
     LOG_LIBERATION_CONTENDER,

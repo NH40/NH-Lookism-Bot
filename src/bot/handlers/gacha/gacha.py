@@ -7,7 +7,8 @@
 from __future__ import annotations
 
 from aiogram import F, Router
-from aiogram.types import CallbackQuery
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,7 +17,7 @@ from bot.services.position_skill import card_skill_lines
 from bot.texts.absolute import PERKS
 from bot.texts.card import POSITION_LABELS
 from bot.texts.gacha import ROLL_PERK_LINE, ROLL_SKILLS_LINE, ROLL_SKILLS_TAIL
-from bot.constant.gacha import CB_GACHA_ROLL
+from bot.constant.gacha import CB_GACHA_ROLL, CB_GACHA_ROLL_MANY
 from bot.keyboards.gacha import roll_result_menu
 from bot.services.gacha import NoTicketsError, RollBusyError, roll
 from bot.services.gang import get_gang
@@ -76,3 +77,86 @@ async def cb_gacha_roll(callback: CallbackQuery, session: AsyncSession, redis: R
         return
     sent = await callback.message.answer_photo(photo, caption=text, reply_markup=roll_result_menu())
     await remember_card_photo(redis, card, sent)
+
+
+# --- массовое открытие вводом количества (пользователь 2026-10-21) ---
+
+
+@router.callback_query(F.data == CB_GACHA_ROLL_MANY)
+async def cb_gacha_roll_many(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
+    from bot.config.card import GACHA_MASS_MAX
+    from bot.constant.recruit import CB_RECRUIT_OPEN
+    from bot.keyboards.common import back_menu
+    from bot.services.ticket import get_status
+    from bot.states.gacha import GachaStates
+    from bot.texts.gacha import ROLL_MANY_PROMPT
+
+    if await get_gang(session, callback.from_user.id) is None:
+        await callback.answer(NOT_ONBOARDED, show_alert=True)
+        return
+    status = await get_status(session, callback.from_user.id)
+    await session.commit()
+    await state.set_state(GachaStates.waiting_count)
+    await callback.answer()
+    await callback.message.answer(
+        ROLL_MANY_PROMPT.format(count=format_number(status.count), max=GACHA_MASS_MAX),
+        reply_markup=back_menu(CB_RECRUIT_OPEN),
+    )
+
+
+async def on_gacha_count(message: Message, state: FSMContext, session: AsyncSession, redis: Redis) -> None:
+    from collections import Counter
+
+    from bot.config.card import GACHA_MASS_MAX, RARITY_CHANCE_PERCENT
+    from bot.services.gacha import roll_many
+    from bot.texts.gacha import (
+        ROLL_MANY_FREE, ROLL_MANY_INVALID, ROLL_MANY_RARITY_LINE, ROLL_MANY_RESULT, ROLL_MANY_STOPPED,
+    )
+
+    raw = (message.text or "").strip().replace(" ", "")
+    if not raw.isdigit() or int(raw) < 1:
+        await message.answer(ROLL_MANY_INVALID)
+        return
+    count = min(int(raw), GACHA_MASS_MAX)
+    await state.clear()
+    try:
+        results = await roll_many(session, redis, message.from_user.id, count)
+    except RollBusyError:
+        await message.answer(ROLL_BUSY)
+        return
+    except NoTicketsError as exc:
+        await message.answer(NO_TICKETS.format(countdown=format_countdown(exc.status.next_in_seconds or 0)))
+        return
+
+    order = list(RARITY_CHANCE_PERCENT)  # от частой к редкой
+    rarities = Counter(r.card.rarity for r in results)
+    rarity_lines = "\n".join(
+        ROLL_MANY_RARITY_LINE.format(rarity=RARITY_LABELS.get(k, k), count=rarities[k])
+        for k in sorted(rarities, key=lambda k: order.index(k) if k in order else -1, reverse=True)
+    )
+    new_cards = [r.card for r in results if r.copies == 1]
+    new_list = (": " + ", ".join(esc(c.name) for c in new_cards[:15]) + ("…" if len(new_cards) > 15 else "")) if new_cards else ""
+    best = max(results, key=lambda r: (order.index(r.card.rarity) if r.card.rarity in order else -1, r.card.power)).card
+    free = sum(1 for r in results if r.free)
+    tickets = results[-1].tickets
+    text = ROLL_MANY_RESULT.format(
+        count=len(results), rarities=rarity_lines, new=len(new_cards), new_list=new_list,
+        free_line=ROLL_MANY_FREE.format(free=free) if free else "",
+        best=esc(card_label(best)), tickets_line=tickets_line(tickets.count, tickets.cap, tickets.next_in_seconds),
+        stopped=ROLL_MANY_STOPPED if len(results) < count else "",
+    )
+    photo = await get_card_photo(redis, best)
+    if photo is None or len(text) > 1000:
+        await message.answer(text, reply_markup=roll_result_menu())
+        return
+    sent = await message.answer_photo(photo, caption=text, reply_markup=roll_result_menu())
+    await remember_card_photo(redis, best, sent)
+
+
+def _register_count_handler() -> None:
+    from bot.states.gacha import GachaStates
+
+    router.message.register(on_gacha_count, GachaStates.waiting_count)
+
+
+_register_count_handler()

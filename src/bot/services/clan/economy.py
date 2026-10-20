@@ -27,7 +27,8 @@ from bot.config.clan import (
     CLAN_CONTRACT_COINS_PER_POWER,
     CLAN_CONTRACT_HOURS,
     CLAN_SHOP_POTION_TIERS,
-    CLAN_SHOP_TICKETS,
+    CLAN_SHOP_TICKET_PRICE,
+    CLAN_SHOP_TICKETS_MAX,
     building_price,
     land_price,
 )
@@ -91,6 +92,7 @@ async def donate(session: AsyncSession, redis: Redis, user_id: int, amount: int)
         if not await business_repo.spend_coins(session, user_id, amount):
             raise ClanError("no_coins", amount)
         await clan_repo.change_treasury(session, member.clan_id, amount)
+        await clan_repo.bump_stats(session, member.clan_id, user_id, treasury=amount)
         await clan_repo.log(session, member.clan_id, f"💰 {await _name(session, user_id)} внёс(ла) в казну {amount_label(RES_COINS, amount)}")
         await quest_event(session, user_id, TASK_CLAN_DONATE)
         await session.commit()
@@ -113,6 +115,7 @@ async def buy_land(session: AsyncSession, redis: Redis, user_id: int) -> int:
         price = land_price(clan.lands)
         if not await clan_repo.change_treasury(session, clan.id, -price):
             raise ClanError("no_treasury", price)
+        await clan_repo.bump_stats(session, clan.id, user_id, build_spent=price)
         clan.lands += 1
         await clan_repo.log(session, clan.id, f"🌍 {await _name(session, user_id)} освоил(а) землю ({clan.lands}) за {amount_label(RES_COINS, price)}")
         lands = clan.lands
@@ -142,6 +145,7 @@ async def build(session: AsyncSession, redis: Redis, user_id: int, kind: str) ->
         price = building_price(kind, have)
         if not await clan_repo.change_treasury(session, clan.id, -price):
             raise ClanError("no_treasury", price)
+        await clan_repo.bump_stats(session, clan.id, user_id, build_spent=price)
         await clan_repo.add_building(session, clan.id, kind, 1)
         await clan_repo.log(session, clan.id, f"🏗 {await _name(session, user_id)} построил(а) {BUILDING_NAMES[kind]} за {amount_label(RES_COINS, price)}")
         await session.commit()
@@ -190,6 +194,7 @@ async def exchange(session: AsyncSession, redis: Redis, user_id: int, target_id:
         if not await spend(session, user_id, resource, amount):
             raise ClanError("not_enough")
         await grant(session, target_id, resource, amount)
+        await clan_repo.bump_stats(session, member.clan_id, user_id, exchanges=1)
         await clan_repo.log(
             session, member.clan_id,
             f"🔄 {await _name(session, user_id)} → {await _name(session, target_id)}: {amount_label(resource, amount)}",
@@ -204,14 +209,15 @@ async def exchange(session: AsyncSession, redis: Redis, user_id: int, target_id:
 
 # --- магазин клана (из казны, для всех участников) ---
 
-async def _pay(session: AsyncSession, clan_id: int, price: int) -> None:
+async def _pay(session: AsyncSession, clan_id: int, price: int, user_id: int | None = None) -> None:
     if not await clan_repo.change_treasury(session, clan_id, -price):
         raise ClanError("no_treasury", price)
+    if user_id is not None:
+        await clan_repo.bump_stats(session, clan_id, user_id, shop_spent=price)
 
 
 def tickets_price(tickets: int, members: int) -> int:
-    per_member = dict(CLAN_SHOP_TICKETS)[tickets]
-    return per_member * members
+    return tickets * CLAN_SHOP_TICKET_PRICE * members
 
 
 def potion_price(tier: int, members: int) -> int:
@@ -224,14 +230,14 @@ def contract_unit_price(rank: str) -> int:
 
 async def shop_tickets(session: AsyncSession, redis: Redis, user_id: int, tickets: int) -> tuple[int, int]:
     """Тикеты каждому участнику. → (цена, участников)."""
-    if tickets not in dict(CLAN_SHOP_TICKETS):
+    if not 1 <= tickets <= CLAN_SHOP_TICKETS_MAX:
         raise ClanError("bad_item")
     member = await require_member(session, user_id, MANAGER_RANKS)
     key = await _lock(redis, user_id)
     try:
         ids = await clan_repo.member_ids(session, member.clan_id)
         price = tickets_price(tickets, len(ids))
-        await _pay(session, member.clan_id, price)
+        await _pay(session, member.clan_id, price, user_id)
         for uid in sorted(ids):
             await grant(session, uid, RES_TICKETS, tickets)
         await clan_repo.log(session, member.clan_id, f"🛒 {await _name(session, user_id)}: всем по {tickets} 🎟 за {amount_label(RES_COINS, price)}")
@@ -253,7 +259,7 @@ async def shop_potion(session: AsyncSession, redis: Redis, user_id: int, kind: s
     try:
         ids = await clan_repo.member_ids(session, member.clan_id)
         price = potion_price(tier, len(ids))
-        await _pay(session, member.clan_id, price)
+        await _pay(session, member.clan_id, price, user_id)
         now = datetime.now(timezone.utc)
         ends = now + timedelta(minutes=POTION_EFFECTS[kind][0])
         for uid in sorted(ids):
@@ -277,7 +283,7 @@ async def shop_contracts(session: AsyncSession, redis: Redis, user_id: int, rank
     key = await _lock(redis, user_id)
     try:
         price = contract_unit_price(rank) * quantity
-        await _pay(session, member.clan_id, price)
+        await _pay(session, member.clan_id, price, user_id)
         await contract_repo.create_clan(session, member.clan_id, rank, quantity, datetime.now(timezone.utc) + timedelta(hours=CLAN_CONTRACT_HOURS))
         await clan_repo.log(
             session, member.clan_id,

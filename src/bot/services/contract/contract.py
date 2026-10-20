@@ -27,7 +27,7 @@ from bot.config.contract import (
     CONTRACT_HOURS,
     CONTRACT_MAX_QUANTITY,
 )
-from bot.config.game import ACTION_LOCK_MS
+from bot.config.game import ACTION_LOCK_MS, influence_rank_index
 from bot.constant.characteristic import RANK_INDEX, RANK_LADDER
 from bot.constant.shop import LOCK_ACTION_SHOP
 from bot.db.repositories import business as business_repo
@@ -94,7 +94,7 @@ async def terms(session: AsyncSession, user_id: int) -> Terms:
     phase = (await get_phase(session, user_id))[0]
     eco = (await get_build(session, user_id)).eco
     bonus = eco.recruit_rank_bonus
-    ceiling = min(PHASE_RANK_CAP_INDEX[phase] + bonus, await get_influence(session, user_id) + bonus, len(RANK_LADDER) - 1)
+    ceiling = min(PHASE_RANK_CAP_INDEX[phase] + bonus, influence_rank_index(await get_influence(session, user_id)) + bonus, len(RANK_LADDER) - 1)
     return Terms(
         ceiling=RANK_LADDER[max(0, ceiling)],
         discount=capped(eco.contract_discount, CONTRACT_DISCOUNT_CAP),

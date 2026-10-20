@@ -162,6 +162,8 @@ async def put_statists(session: AsyncSession, redis: Redis, user_id: int, key: S
         if not await take_statists(session, user_id, key, amount):
             raise ClanError("not_enough")
         await clan_repo.add_garrison_extra(session, member.clan_id, key.stack(), amount)
+        power = statist_unit_power(key.rank, key.stars, key.training_level, key.school, key.school_level) * amount
+        await clan_repo.bump_stats(session, member.clan_id, user_id, garrison_units=amount, garrison_power=round(power))
         await clan_repo.log(session, member.clan_id, f"⚔️ {await _name(session, user_id)} внёс(ла) в роту {amount} × {key.rank}")
         await quest_event(session, user_id, TASK_GARRISON)
         await session.commit()
@@ -181,6 +183,7 @@ async def put_cards(session: AsyncSession, redis: Redis, user_id: int, code: str
         if not await _take_cards(session, user_id, code, amount):
             raise ClanError("not_enough")
         await clan_repo.add_garrison_card(session, member.clan_id, code, amount)
+        await clan_repo.bump_stats(session, member.clan_id, user_id, garrison_units=amount, garrison_power=_card_power(code) * amount)
         await clan_repo.log(session, member.clan_id, f"⚔️ {await _name(session, user_id)} внёс(ла) в роту уника {CARD_BY_CODE[code].name} ×{amount}")
         await quest_event(session, user_id, TASK_GARRISON)
         await session.commit()
@@ -259,6 +262,7 @@ async def take_statists_from(session: AsyncSession, redis: Redis, user_id: int, 
         if not await clan_repo.take_garrison_extra(session, member.clan_id, key.stack(), amount):
             raise ClanError("not_enough")
         await give_statists(session, user_id, key, amount)
+        await clan_repo.bump_stats(session, member.clan_id, user_id, garrison_taken=amount)
         await clan_repo.log(session, member.clan_id, f"📤 {await _name(session, user_id)} забрал(а) из роты {amount} × {key.rank}")
         await session.commit()
     except Exception:
@@ -278,6 +282,7 @@ async def take_cards_from(session: AsyncSession, redis: Redis, user_id: int, cod
         if not await clan_repo.take_garrison_card(session, member.clan_id, code, amount):
             raise ClanError("not_enough")
         await card_repo.add_to_stack(session, user_id=user_id, card_code=code, camp=CAMP_DEFENSE, quantity=amount)
+        await clan_repo.bump_stats(session, member.clan_id, user_id, garrison_taken=amount)
         name = CARD_BY_CODE[code].name if code in CARD_BY_CODE else code
         await clan_repo.log(session, member.clan_id, f"📤 {await _name(session, user_id)} забрал(а) из роты уника {name} ×{amount}")
         await session.commit()

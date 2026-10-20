@@ -183,6 +183,7 @@ async def attack(session: AsyncSession, redis: Redis, user_id: int, target_id: i
             attacker_dead=a_dead, defender_dead=d_dead,
         )
         actor = await _name(session, user_id)
+        await clan_repo.bump_stats(session, attacker.id, user_id, wars=1, wars_won=int(won), lands_won=lands_gained)
         verdict = "победа" if won else "поражение"
         await clan_repo.log(session, attacker.id, f"⚔️ {actor} напал(а) на «{defender.name}»: {verdict}, земель +{lands_gained}")
         await clan_repo.log(session, defender.id, f"🛡 «{attacker.name}» напал на клан: {'оборона прорвана' if won else 'отбились'}, земель −{lands_taken}")

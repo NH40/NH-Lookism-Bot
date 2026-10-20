@@ -1,4 +1,4 @@
-import { Landmark, Shield, ShoppingBag, Swords, Users } from "lucide-react";
+import { Landmark, Shield, ShoppingBag, Swords, Users, BarChart3 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import type { ClanCan, ClanData, ClanInfo } from "../../types";
 import { BackHeader, fmt } from "../../components/ui";
@@ -7,6 +7,7 @@ import { GarrisonTab } from "./GarrisonTab";
 import { LandsTab } from "./LandsTab";
 import { MembersTab } from "./MembersTab";
 import { ShopTab } from "./ShopTab";
+import { StatsTab } from "./StatsTab";
 import { WarTab } from "./WarTab";
 
 const TABS = [
@@ -15,6 +16,7 @@ const TABS = [
 	{ code: "garrison", label: "Рота", icon: <Shield size={15} /> },
 	{ code: "war", label: "Война", icon: <Swords size={15} /> },
 	{ code: "shop", label: "Магазин", icon: <ShoppingBag size={15} /> },
+	{ code: "stats", label: "Вклад", icon: <BarChart3 size={15} /> },
 ] as const;
 type Tab = (typeof TABS)[number]["code"];
 
@@ -49,6 +51,7 @@ export function ClanHome({ data, clan, can, reload }: { data: ClanData; clan: Cl
 			{tab === "garrison" && <GarrisonTab clan={clan} onChanged={reload} />}
 			{tab === "war" && <WarTab can={can} onChanged={reload} />}
 			{tab === "shop" && <ShopTab onChanged={reload} />}
+			{tab === "stats" && <StatsTab />}
 		</div>
 	);
 }

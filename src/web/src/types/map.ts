@@ -211,3 +211,16 @@ export interface EventsCatalog {
   teachers: EventCatalogEntry[];
   schools: EventCatalogEntry[];
 }
+
+export interface RollManyResult {
+  message: string;
+  count: number;
+  requested: number;
+  new: number;
+  free: number;
+  rarities: { rarity: string; label: string; count: number }[];
+  cards: { code: string; name: string; rarity: string; rarity_label: string; power: number; image: string | null; is_new: boolean }[];
+  tickets: number;
+  tickets_cap: number;
+  max: number;
+}

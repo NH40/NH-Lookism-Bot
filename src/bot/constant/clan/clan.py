@@ -74,7 +74,7 @@ CB_CLAN_BUILD_DOWN_PREFIX = "clan:bdn:"  # f"{...}{kind}" — снести од�
 CB_CLAN_TREASURY = "clan:treasury"
 CB_CLAN_DONATE_COINS = "clan:give"  # внести NHCoin в казну (ввод суммы)
 CB_CLAN_SHOP = "clan:shop"
-CB_CLAN_SHOP_TICKETS_PREFIX = "clan:shtk:"  # f"{...}{tickets}"
+CB_CLAN_SHOP_TICKETS = "clan:shtk"  # дальше — ввод количества (ClanStates.waiting_shop_tickets)
 CB_CLAN_SHOP_POTION_PREFIX = "clan:shpt:"  # f"{...}{kind}:{tier}"
 CB_CLAN_SHOP_MERCS = "clan:shmc"  # наёмники в роту: выбрать ранг
 CB_CLAN_SHOP_MERCS_PREFIX = "clan:shmr:"  # f"{...}{rank}" — ввод количества
@@ -108,3 +108,12 @@ GARRISON_CARD = "card"
 
 # Правило 2: действия, двигающие ресурсы или людей, — Redis-лок на клик.
 LOCK_ACTION_CLAN = "clan"
+
+# Статистика вклада участников (2026-10-21): f"{CB_CLAN_STATS_PREFIX}{сортировка}".
+CB_CLAN_STATS_PREFIX = "clan:stats:"
+STATS_SORT_TREASURY = "treasury"
+STATS_SORT_GARRISON = "garrison"
+STATS_SORT_SPENT = "spent"
+STATS_SORT_WARS = "wars"
+STATS_SORT_ACTIVITY = "activity"
+STATS_SORTS = (STATS_SORT_TREASURY, STATS_SORT_GARRISON, STATS_SORT_SPENT, STATS_SORT_WARS, STATS_SORT_ACTIVITY)

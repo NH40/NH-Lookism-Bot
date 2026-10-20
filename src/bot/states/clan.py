@@ -13,3 +13,4 @@ class ClanStates(StatesGroup):
     waiting_exchange = State()  # сумма обменника (кому и что — в данных)
     waiting_garrison = State()  # сколько внести/забрать (что — в данных)
     waiting_mercs = State()  # сколько наёмников в роту (ранг — в данных)
+    waiting_shop_tickets = State()  # сколько тикетов каждому участнику

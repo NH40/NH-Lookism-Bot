@@ -13,6 +13,7 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config.clan import (
+    CLAN_SHOP_TICKETS_MAX,
     CLAN_CONTRACT_HOURS,
     CLAN_BUILDINGS,
     CLAN_BUY_LANDS_MAX,
@@ -39,7 +40,8 @@ from bot.constant.clan import (
     CB_CLAN_SHOP_MERCS,
     CB_CLAN_SHOP_MERCS_PREFIX,
     CB_CLAN_SHOP_POTION_PREFIX,
-    CB_CLAN_SHOP_TICKETS_PREFIX,
+    CB_CLAN_SHOP_TICKETS,
+    CB_CLAN_STATS_PREFIX,
     CB_CLAN_TREASURY,
     MANAGER_RANKS,
 )
@@ -90,6 +92,7 @@ from bot.texts.clan import (
     MERCS_SCREEN,
     PUSH_EXCHANGE,
     SHOP_DONE,
+    SHOP_TICKETS_PROMPT,
     SHOP_SCREEN,
     TREASURY_SCREEN,
 )
@@ -268,18 +271,35 @@ async def _shop_done(callback: CallbackQuery, session: AsyncSession, price: int)
     await send_screen(callback.bot, callback.message.chat.id, callback.message, text, markup)
 
 
-@router.callback_query(F.data.startswith(CB_CLAN_SHOP_TICKETS_PREFIX))
-async def cb_shop_tickets(callback: CallbackQuery, session: AsyncSession, redis: Redis) -> None:
-    raw = callback.data.removeprefix(CB_CLAN_SHOP_TICKETS_PREFIX)
-    if not raw.isdigit():
-        await callback.answer()
+@router.callback_query(F.data == CB_CLAN_SHOP_TICKETS)
+async def cb_shop_tickets(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
+    member = await _member(callback, session, MANAGER_RANKS)
+    if member is None:
+        return
+    clan = await clan_repo.get(session, member.clan_id)
+    members = await clan_repo.count_members(session, clan.id)
+    await state.set_state(ClanStates.waiting_shop_tickets)
+    await callback.answer()
+    text = SHOP_TICKETS_PROMPT.format(
+        members=members, price=format_number(clan_service.tickets_price(1, members)),
+        treasury=format_number(clan.treasury), max=format_number(CLAN_SHOP_TICKETS_MAX),
+    )
+    await send_screen(callback.bot, callback.message.chat.id, callback.message, text, back_menu(CB_CLAN_SHOP))
+
+
+@router.message(ClanStates.waiting_shop_tickets)
+async def on_shop_tickets(message: Message, state: FSMContext, session: AsyncSession, redis: Redis) -> None:
+    tickets = _number(message.text)
+    if tickets is None:
+        await message.answer(AMOUNT_INVALID, reply_markup=back_menu(CB_CLAN_SHOP))
         return
     try:
-        price, _ = await clan_service.shop_tickets(session, redis, callback.from_user.id, int(raw))
+        price, _ = await clan_service.shop_tickets(session, redis, message.from_user.id, tickets)
     except clan_service.ClanError as exc:
-        await callback.answer(error_text(exc), show_alert=True)
+        await message.answer(error_text(exc), reply_markup=back_menu(CB_CLAN_SHOP))
         return
-    await _shop_done(callback, session, price)
+    await state.clear()
+    await message.answer(SHOP_DONE.format(price=format_number(price)), reply_markup=back_menu(CB_CLAN_SHOP))
 
 
 @router.callback_query(F.data.startswith(CB_CLAN_SHOP_POTION_PREFIX))
@@ -454,3 +474,53 @@ async def on_exchange(message: Message, state: FSMContext, session: AsyncSession
     await message.answer(EXCHANGED.format(amount=amount_label(res, amount), name=esc(labels[target][0])), reply_markup=back_menu())
     await notify_player(message.bot, session, target, NOTIFY_CLAN, PUSH_EXCHANGE.format(name=esc(labels[message.from_user.id][0]), amount=amount_label(res, amount)))
 
+
+
+
+# --- статистика вклада участников (2026-10-21) ---
+
+def _ago(dt) -> str:
+    from datetime import datetime, timezone
+
+    from bot.texts.clan import STATS_SEEN_AGO, STATS_SEEN_NOW
+
+    if dt is None:
+        return STATS_SEEN_AGO.format(ago="давно")
+    minutes = int((datetime.now(timezone.utc) - dt).total_seconds() // 60)
+    if minutes < 10:
+        return STATS_SEEN_NOW
+    if minutes < 60:
+        return STATS_SEEN_AGO.format(ago=f"{minutes} мин")
+    if minutes < 48 * 60:
+        return STATS_SEEN_AGO.format(ago=f"{minutes // 60} ч")
+    return STATS_SEEN_AGO.format(ago=f"{minutes // 1440} дн")
+
+
+@router.callback_query(F.data.startswith(CB_CLAN_STATS_PREFIX))
+async def cb_stats(callback: CallbackQuery, session: AsyncSession) -> None:
+    from bot.constant.clan import STATS_SORT_TREASURY, STATS_SORTS
+    from bot.keyboards.clan import stats_menu
+    from bot.texts.clan import RANK_EMOJI, STATS_HINT, STATS_ROW, STATS_SCREEN, STATS_SORT_LABELS, STATS_TAKEN
+
+    sort = callback.data.removeprefix(CB_CLAN_STATS_PREFIX)
+    if sort not in STATS_SORTS:
+        sort = STATS_SORT_TREASURY
+    if await _member(callback, session) is None:
+        return
+    rows = await clan_service.member_stats(session, callback.from_user.id, sort)
+    n = format_number
+    lines = "".join(
+        STATS_ROW.format(
+            place=i + 1, emoji=RANK_EMOJI.get(r["rank"], "👤"), name=esc(r["name"]), seen=_ago(r["last_active_at"]),
+            treasury=n(r["treasury"]), units=n(r["garrison_units"]), power=n(r["garrison_power"]),
+            taken=STATS_TAKEN.format(taken=n(r["garrison_taken"])) if r["garrison_taken"] else "",
+            shop=n(r["shop_spent"]), build=n(r["build_spent"]), wars=r["wars"], wars_won=r["wars_won"],
+            lands=r["lands_won"], exchanges=r["exchanges"],
+        )
+        for i, r in enumerate(rows)
+    )
+    text = STATS_SCREEN.format(sort=STATS_SORT_LABELS[sort], rows=lines)
+    if len(text) + len(STATS_HINT) < 4000:
+        text += STATS_HINT
+    await callback.answer()
+    await send_screen(callback.bot, callback.message.chat.id, callback.message, text[:4090], stats_menu(sort))

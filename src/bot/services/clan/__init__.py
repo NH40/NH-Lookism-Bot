@@ -17,6 +17,7 @@ from bot.services.clan.clan import (  # noqa: F401
     kickable,
     leave,
     member_of,
+    member_stats,
     reject,
     require_member,
     set_image,

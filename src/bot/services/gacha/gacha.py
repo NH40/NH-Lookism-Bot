@@ -81,3 +81,18 @@ async def roll(session: AsyncSession, redis: Redis, user_id: int) -> RollResult:
         return RollResult(card=card, copies=copies, tickets=tickets, free=free)
     finally:
         await redis.delete(key)
+
+
+async def roll_many(session: AsyncSession, redis: Redis, user_id: int, count: int) -> list[RollResult]:
+    """Массовое открытие: `count` обычных круток подряд (каждая — свой лок и commit, все шансы,
+    бесплатные крутки и задания как у одиночной). Тикеты кончились посреди — отдаём то, что
+    выпало; не хватило даже на первую — `NoTicketsError` наружу."""
+    results: list[RollResult] = []
+    for _ in range(max(1, count)):
+        try:
+            results.append(await roll(session, redis, user_id))
+        except NoTicketsError:
+            if not results:
+                raise
+            break
+    return results

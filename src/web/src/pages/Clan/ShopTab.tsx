@@ -9,6 +9,8 @@ interface ClanShop {
 	members: number;
 	can_buy: boolean;
 	tickets: { tickets: number; price: number }[];
+	ticket_price: number;
+	tickets_max: number;
 	potions: { kind: string; name: string; tiers: { tier: number; price: number }[] }[];
 	contracts: { hours: number; ceiling: string; ranks: { rank: string; price: number }[] };
 }
@@ -24,6 +26,7 @@ export function ShopTab({ onChanged }: { onChanged: () => Promise<void> }) {
 	});
 	const [confirm, setConfirm] = useState<{ title: string; text: string; path: string; body: unknown } | null>(null);
 	const [mercRank, setMercRank] = useState<{ rank: string; price: number } | null>(null);
+	const [ticketsN, setTicketsN] = useState("");
 	return (
 		<Screen status={data ? "ready" : status} error={error}>
 			{data && (
@@ -42,6 +45,23 @@ export function ShopTab({ onChanged }: { onChanged: () => Promise<void> }) {
 								</button>
 							))}
 						</div>
+						{(() => {
+							const n = Math.floor(Number(ticketsN)) || 0;
+							const price = n * data.ticket_price * data.members;
+							return (
+								<>
+									<div className="qty-row" style={{ gridTemplateColumns: "minmax(0, 1fr) auto" }}>
+										<input className="mass-input" inputMode="numeric" value={ticketsN} placeholder={`Своё число (до ${data.tickets_max})`} aria-label="Тикетов каждому"
+											onChange={(e) => setTicketsN(e.target.value.replace(/\D/g, ""))} />
+										<button type="button" className="btn small" disabled={busy || !data.can_buy || n < 1 || n > data.tickets_max || price > data.treasury}
+											onClick={() => setConfirm({ title: "Тикеты всем", text: `Каждому из ${data.members} участников по ${n} тикет. за ${fmt(price)} NHCoin из казны?`, path: "/clan/shop/tickets", body: { tickets: n } })}>
+											<Ticket size={14} /> {n > 0 ? fmt(price) : "Купить"}
+										</button>
+									</div>
+									<div className="muted clan-hint">1 тикет всем = {fmt(data.ticket_price * data.members)} NHCoin</div>
+								</>
+							);
+						})()}
 					</Panel>
 					<Panel title="Зелья всем" tone="violet">
 						{data.potions.map((p) => (

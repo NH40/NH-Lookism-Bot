@@ -259,3 +259,27 @@ async def set_image(session: AsyncSession, actor_id: int, file_id: str) -> None:
         raise ClanError("not_top", CLAN_TOP_IMAGE)
     await clan_repo.update_profile(session, actor.clan_id, image=file_id)
     await session.commit()
+
+
+
+# --- статистика вклада (2026-10-21) ---
+
+def _stats_key(sort: str):
+    from datetime import datetime, timezone
+
+    from bot.constant.clan import STATS_SORT_ACTIVITY, STATS_SORT_GARRISON, STATS_SORT_SPENT, STATS_SORT_WARS
+
+    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    return {
+        STATS_SORT_GARRISON: lambda r: (r["garrison_power"], r["garrison_units"]),
+        STATS_SORT_SPENT: lambda r: r["shop_spent"] + r["build_spent"],
+        STATS_SORT_WARS: lambda r: (r["wars_won"], r["wars"], r["lands_won"]),
+        STATS_SORT_ACTIVITY: lambda r: r["last_active_at"] or epoch,
+    }.get(sort, lambda r: r["treasury"])
+
+
+async def member_stats(session: AsyncSession, user_id: int, sort: str) -> list:
+    """Вклад всех текущих участников клана игрока, отсортированный по `sort` (по убыванию)."""
+    member = await require_member(session, user_id)
+    rows = await clan_repo.member_stats(session, member.clan_id)
+    return sorted(rows, key=_stats_key(sort), reverse=True)

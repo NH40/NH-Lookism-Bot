@@ -32,7 +32,7 @@ from bot.db.models.storage_cell import StorageCell  # noqa: F401
 from bot.db.models.deposit import Deposit  # noqa: F401
 from bot.db.models.poker import PokerPlayer, PokerTable  # noqa: F401
 from bot.db.models.exchange import ExchangeAuction, ExchangeLot, ExchangeTrade  # noqa: F401
-from bot.db.models.clan import Clan, ClanBuilding, ClanContract, ClanDonatePurchase, ClanGarrisonCard, ClanGarrisonExtra, ClanIncomeShare, ClanJoinRequest, ClanLog, ClanMember, ClanWar  # noqa: F401
+from bot.db.models.clan import Clan, ClanBuilding, ClanContract, ClanDonatePurchase, ClanGarrisonCard, ClanGarrisonExtra, ClanIncomeShare, ClanJoinRequest, ClanLog, ClanMember, ClanMemberStat, ClanWar  # noqa: F401
 from bot.db.models.quest import DailyQuest, DailyQuestState  # noqa: F401
 from bot.db.models.battle_pass import BattlePass, BattlePassClaim, BpSeason  # noqa: F401
 from bot.db.models.donate import DonateUnlock, Lbp1Donation, Payment  # noqa: F401

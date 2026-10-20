@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from bot.config.clan import CLAN_BUILDINGS, CLAN_CREATE_COST, CLAN_SHOP_POTION_TIERS, CLAN_SHOP_TICKETS
+from bot.config.clan import CLAN_BUILDINGS, CLAN_CREATE_COST, CLAN_SHOP_POTION_TIERS
 from bot.constant.clan import (
     CB_CLAN_GAR_REVOKE_PREFIX,
     CB_CLAN_LEVEL_BUY,
@@ -48,6 +48,7 @@ from bot.constant.clan import (
     CB_CLAN_LEAVE_CONFIRM,
     CB_CLAN_LEVELS,
     CB_CLAN_LOG,
+    CB_CLAN_STATS_PREFIX,
     CB_CLAN_MEMBERS,
     CB_CLAN_MY_INVITES,
     CB_CLAN_OPEN,
@@ -59,7 +60,7 @@ from bot.constant.clan import (
     CB_CLAN_SHOP_MERCS,
     CB_CLAN_SHOP_MERCS_PREFIX,
     CB_CLAN_SHOP_POTION_PREFIX,
-    CB_CLAN_SHOP_TICKETS_PREFIX,
+    CB_CLAN_SHOP_TICKETS,
     CB_CLAN_TOP_PREFIX,
     CB_CLAN_TRANSFER,
     CB_CLAN_TRANSFER_PREFIX,
@@ -117,6 +118,7 @@ from bot.texts.clan import (
     BTN_LEAVE,
     BTN_LEVELS,
     BTN_LOG,
+    BTN_STATS,
     BTN_MEMBERS,
     BTN_MERCS_RANK,
     BTN_MY_INVITES,
@@ -179,6 +181,7 @@ def clan_menu(rank: str, requests: int, access_requests: int = 0) -> InlineKeybo
         [_btn(BTN_SHOP, CB_CLAN_SHOP), _btn(BTN_WAR, CB_CLAN_WAR)],
         [_btn(BTN_EXCHANGE, CB_CLAN_EXCHANGE), _btn(BTN_LOG, CB_CLAN_LOG)],
         [_btn(BTN_LEVELS, CB_CLAN_LEVELS), _btn(BTN_TOP, f"{CB_CLAN_TOP_PREFIX}0")],
+        [_btn(BTN_STATS, f"{CB_CLAN_STATS_PREFIX}treasury")],
     ]
     if rank in MANAGER_RANKS:
         rows.append([_btn(BTN_REQUESTS.format(count=requests), CB_CLAN_REQUESTS), _btn(BTN_INVITE, CB_CLAN_INVITE)])
@@ -314,7 +317,7 @@ def treasury_menu() -> InlineKeyboardMarkup:
 
 
 def shop_menu(members: int, tickets_price, potion_price) -> InlineKeyboardMarkup:
-    rows = [[_btn(BTN_SHOP_TICKETS.format(tickets=t, price=format_number(tickets_price(t, members))), f"{CB_CLAN_SHOP_TICKETS_PREFIX}{t}")] for t, _ in CLAN_SHOP_TICKETS]
+    rows = [[_btn(BTN_SHOP_TICKETS.format(price=format_number(tickets_price(1, members))), CB_CLAN_SHOP_TICKETS)]]
     for kind in POTIONS:
         if kind == POTION_WEALTH:
             continue
@@ -410,3 +413,11 @@ def exchange_res_menu(user_id: int) -> InlineKeyboardMarkup:
 
 def exchange_members_menu(members: list[tuple[int, str]]) -> InlineKeyboardMarkup:
     return members_pick_menu(members, CB_CLAN_EXCHANGE_MEMBER_PREFIX)
+
+
+def stats_menu(current: str) -> InlineKeyboardMarkup:
+    from bot.constant.clan import STATS_SORTS
+    from bot.texts.clan import STATS_SORT_LABELS
+
+    buttons = [_btn(("• " if s == current else "") + STATS_SORT_LABELS[s], f"{CB_CLAN_STATS_PREFIX}{s}") for s in STATS_SORTS]
+    return InlineKeyboardMarkup(inline_keyboard=[buttons[:3], buttons[3:], _back()])

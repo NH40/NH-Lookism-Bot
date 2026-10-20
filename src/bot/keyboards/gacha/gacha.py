@@ -3,10 +3,10 @@ from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from bot.constant.gacha import CB_GACHA_ROLL
+from bot.constant.gacha import CB_GACHA_ROLL, CB_GACHA_ROLL_MANY
 from bot.constant.recruit import CB_RECRUIT_OPEN
 from bot.texts.common import BTN_BACK
-from bot.texts.gacha import BTN_ROLL_AGAIN
+from bot.texts.gacha import BTN_ROLL_AGAIN, BTN_ROLL_MANY
 
 
 def roll_result_menu() -> InlineKeyboardMarkup:
@@ -16,6 +16,7 @@ def roll_result_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=BTN_ROLL_AGAIN, callback_data=CB_GACHA_ROLL)],
+            [InlineKeyboardButton(text=BTN_ROLL_MANY, callback_data=CB_GACHA_ROLL_MANY)],
             [InlineKeyboardButton(text=BTN_BACK, callback_data=CB_RECRUIT_OPEN)],
         ]
     )

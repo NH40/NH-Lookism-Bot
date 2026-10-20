@@ -61,6 +61,7 @@ from bot.config.game.game import (  # noqa: F401
     GANG_SQUADS_PAGE_SIZE,
     GANG_SQUAD_MOVE_AMOUNTS,
     INFLUENCE_PER_DISTRICT,
+    INFLUENCE_PER_RANK,
     INFLUENCE_STARTING,
     NH_COINS_STARTING,
     PERSONAL_TRAINING_COOLDOWN_SECONDS,
@@ -68,4 +69,5 @@ from bot.config.game.game import (  # noqa: F401
     TICKET_CAP,
     TICKET_REGEN_SECONDS,
     TICKET_STARTING,
+    influence_rank_index,
 )

@@ -899,7 +899,7 @@ class ShopContractsIn(BaseModel):
 
 @router.get("/shop")
 async def get_shop(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
-    from bot.config.clan import CLAN_CONTRACT_HOURS, CLAN_SHOP_POTION_TIERS, CLAN_SHOP_TICKETS
+    from bot.config.clan import CLAN_CONTRACT_HOURS, CLAN_SHOP_POTION_TIERS, CLAN_SHOP_TICKET_PRICE, CLAN_SHOP_TICKETS_MAX
     from bot.constant.potion import POTION_WEALTH, POTIONS
     from bot.services.contract import terms as contract_terms
     from bot.texts.potion import POTION_NAMES
@@ -913,7 +913,8 @@ async def get_shop(user_id: int = Depends(get_current_user_id), session: AsyncSe
     t = await contract_terms(session, user_id)
     return {
         "treasury": clan.treasury, "members": members, "can_buy": member.rank in MANAGER_RANKS,
-        "tickets": [{"tickets": n, "price": clan_service.tickets_price(n, members)} for n, _ in CLAN_SHOP_TICKETS],
+        "tickets": [{"tickets": n, "price": clan_service.tickets_price(n, members)} for n in (1, 5, 10)],
+        "ticket_price": CLAN_SHOP_TICKET_PRICE, "tickets_max": CLAN_SHOP_TICKETS_MAX,
         "potions": [
             {"kind": k, "name": clean_label(POTION_NAMES[k]),
              "tiers": [{"tier": tier, "price": clan_service.potion_price(tier, members)} for tier in CLAN_SHOP_POTION_TIERS]}
@@ -967,3 +968,22 @@ async def post_shop_contracts(
     except ClanError as exc:
         raise _err(exc) from None
     return _ok(f"Контракт: {format_number(body.quantity)} × {body.rank} в роту на {CLAN_CONTRACT_HOURS} ч — из казны {format_number(price)} NHCoin.")
+
+
+
+@router.get("/stats")
+async def get_stats(sort: str = "treasury", user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    """Вклад участников клана (2026-10-21) — те же счётчики, что экран «📊 Вклад» в боте."""
+    await require_user(session, user_id)
+    try:
+        rows = await clan_service.member_stats(session, user_id, sort)
+    except ClanError as exc:
+        raise _err(exc) from None
+    return {"sort": sort, "rows": [
+        {"user_id": r["user_id"], "name": r["name"], "rank": r["rank"], "is_me": r["user_id"] == user_id,
+         "joined_at": r["joined_at"].isoformat() if r["joined_at"] else None,
+         "last_active": r["last_active_at"].isoformat() if r["last_active_at"] else None,
+         **{k: int(r[k]) for k in ("treasury", "garrison_units", "garrison_power", "garrison_taken", "shop_spent",
+                                   "build_spent", "wars", "wars_won", "lands_won", "exchanges")}}
+        for r in rows
+    ]}

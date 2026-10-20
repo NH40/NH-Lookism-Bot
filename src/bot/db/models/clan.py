@@ -166,3 +166,26 @@ class ClanIncomeShare(Base):
 
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     pending: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
+
+
+
+class ClanMemberStat(Base):
+    """Вклад участника в клан — накопительные счётчики (пользователь 2026-10-21: «статистика,
+    чтобы смотреть эффективность игроков для клана: вклад в казну, роту, магазин, войны»).
+    Ключ — (клан, игрок): ушёл и вернулся — счёт продолжается; в другом клане — с нуля.
+    Растёт только через `repositories/clan.bump_stats` внутри транзакции самого действия."""
+
+    __tablename__ = "clan_member_stats"
+
+    clan_id: Mapped[int] = mapped_column(Integer, ForeignKey("clans.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    treasury: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")  # 🪙 внесено в казну
+    garrison_units: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")  # бойцов отдано в роту
+    garrison_power: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")  # их мощь
+    garrison_taken: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")  # бойцов забрано из роты
+    shop_spent: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")  # из казны на магазин
+    build_spent: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")  # из казны на земли/здания
+    wars: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")  # атак проведено
+    wars_won: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    lands_won: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")  # земель взято в атаках
+    exchanges: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")  # передач через обменник

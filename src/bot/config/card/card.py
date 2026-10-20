@@ -40,6 +40,10 @@ class CardDef(NamedTuple):
 ASSETS_DIR = Path(__file__).resolve().parents[4] / "assets"
 
 # Шанс крутки по редкости, % (сумма = 100).
+# Массовое открытие тикетов вводом числа (пользователь 2026-10-21) — не больше за раз, чтобы
+# один ввод не держал бота минутами; каждая карта — отдельная обычная крутка.
+GACHA_MASS_MAX = 200
+
 RARITY_CHANCE_PERCENT: dict[str, float] = {
     RARITY_MEMBER: 45.04,
     RARITY_BOSS: 25.0,

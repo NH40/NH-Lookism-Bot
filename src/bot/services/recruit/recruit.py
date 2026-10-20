@@ -23,6 +23,7 @@ from bot.services.admin.live_config import cooldown_seconds
 from bot.constant.admin.live_config import KEY_CD_RECRUIT
 from bot.cache.keys import recruit_extra_cooldown
 from bot.config.characteristic import extra_power_for_rank
+from bot.config.game import influence_rank_index
 from bot.constant.characteristic import RANK_INDEX, RANK_LADDER
 from bot.constant.phase import PHASE_CIRCLE, PHASE_FIST, PHASE_GANG
 from bot.constant.dev_quest import TASK_RECRUIT
@@ -54,7 +55,7 @@ class RecruitResult:
 
 def recruit_ceiling_rank(phase: str, influence: int) -> str:
     """Лучший ранг, который вообще может выпасть при вербовке: min(потолок фазы, влияние)."""
-    return RANK_LADDER[min(PHASE_RANK_CAP_INDEX[phase], influence)]
+    return RANK_LADDER[min(PHASE_RANK_CAP_INDEX[phase], influence_rank_index(influence))]
 
 
 def roll_extra_rank(phase: str, influence: int, rank_bonus: int = 0) -> str:
@@ -62,7 +63,7 @@ def roll_extra_rank(phase: str, influence: int, rank_bonus: int = 0) -> str:
     район) — каждый захваченный район поднимает потолок вербовки на одну ступень.
     `rank_bonus` — ступени сверх потолка от систем развития (Джинчоль, гений войны):
     поднимает и потолок влияния, и потолок фазы — «военные вербуют лучше»."""
-    ceiling_index = min(PHASE_RANK_CAP_INDEX[phase] + rank_bonus, influence + rank_bonus, len(RANK_LADDER) - 1)
+    ceiling_index = min(PHASE_RANK_CAP_INDEX[phase] + rank_bonus, influence_rank_index(influence) + rank_bonus, len(RANK_LADDER) - 1)
     return RANK_LADDER[randint(0, ceiling_index)]
 
 

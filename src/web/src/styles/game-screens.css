@@ -54,6 +54,9 @@
 .sq:last-child { border-bottom: none; }
 .sq-body { flex: 1; min-width: 0; }
 .rk { width: 30px; height: 30px; flex: none; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 800; font-size: 12px; background: rgba(147, 163, 207, 0.15); border: 1px solid var(--muted); color: #cfd8f3; }
+.rk { overflow: hidden; white-space: nowrap; }
+.rk.rk-3 { font-size: 9.5px; letter-spacing: -0.03em; }
+.rk.rk-inf { font-size: 18px; }
 .rk.r-high { background: rgba(245, 185, 66, 0.18); border-color: var(--gold); color: var(--gold-2); }
 .rk.r-mid { background: rgba(167, 139, 250, 0.18); border-color: var(--violet); color: var(--violet-2); }
 .rk.r-low { background: rgba(96, 180, 255, 0.18); border-color: var(--cyan); color: #bfe6ff; }

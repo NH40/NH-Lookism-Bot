@@ -80,3 +80,53 @@ async def gacha_roll(
         copies=result.copies, free=result.free,
         tickets=result.tickets.count, tickets_cap=result.tickets.cap,
     )
+
+
+class RollManyIn(BaseModel):
+    count: int
+
+
+@router.post("/roll-many")
+async def gacha_roll_many(
+    body: RollManyIn,
+    user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    """Массовое открытие тикетов вводом количества (2026-10-21) — те же обычные крутки подряд."""
+    from collections import Counter
+
+    from bot.config.card import GACHA_MASS_MAX, RARITY_CHANCE_PERCENT
+    from bot.services.gacha import roll_many
+
+    user = await require_user(session, user_id, need_city=False)
+    if body.count < 1:
+        raise bad("Нужно число от 1.")
+    count = min(body.count, GACHA_MASS_MAX)
+    try:
+        results = await roll_many(session, redis, user.id, count)
+    except RollBusyError:
+        raise bad("Предыдущая крутка ещё обрабатывается.")
+    except NoTicketsError as exc:
+        wait = exc.status.next_in_seconds
+        raise bad("Тикетов нет." + (f" Следующий через {format_countdown(wait)}." if wait else ""))
+    order = list(RARITY_CHANCE_PERCENT)
+    rank = {k: i for i, k in enumerate(order)}
+    rarities = Counter(r.card.rarity for r in results)
+    last = results[-1].tickets
+    cards = sorted(results, key=lambda r: (rank.get(r.card.rarity, -1), r.card.power), reverse=True)
+    return {
+        "message": f"Открыто тикетов: {len(results)}",
+        "count": len(results), "requested": count,
+        "new": sum(1 for r in results if r.copies == 1), "free": sum(1 for r in results if r.free),
+        "rarities": [
+            {"rarity": k, "label": RARITY_LABELS.get(k, k), "count": rarities[k]}
+            for k in sorted(rarities, key=lambda k: rank.get(k, -1), reverse=True)
+        ],
+        "cards": [
+            {"code": r.card.code, "name": r.card.name, "rarity": r.card.rarity, "rarity_label": RARITY_LABELS.get(r.card.rarity, r.card.rarity),
+             "power": r.card.power, "image": r.card.image, "is_new": r.copies == 1}
+            for r in cards
+        ],
+        "tickets": last.count, "tickets_cap": last.cap, "max": GACHA_MASS_MAX,
+    }

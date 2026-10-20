@@ -8,6 +8,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models.clan import (
+    ClanMemberStat,
     Clan,
     ClanBuilding,
     ClanGarrisonCard,
@@ -434,3 +435,40 @@ async def donate_buyers(session: AsyncSession, clan_id: int) -> list[tuple[int, 
         text("SELECT user_id, price FROM clan_donate_purchases WHERE clan_id = :c ORDER BY id"), {"c": clan_id}
     )
     return [(u, p) for u, p in rows.all()]
+
+
+
+# --- статистика вклада (2026-10-21) ---
+
+_STAT_FIELDS = (
+    "treasury", "garrison_units", "garrison_power", "garrison_taken", "shop_spent", "build_spent",
+    "wars", "wars_won", "lands_won", "exchanges",
+)
+
+
+async def bump_stats(session: AsyncSession, clan_id: int, user_id: int, **deltas: int) -> None:
+    """+= к счётчикам вклада одним upsert'ом, без commit (коммитит само действие клана)."""
+    deltas = {k: int(v) for k, v in deltas.items() if k in _STAT_FIELDS and v}
+    if not deltas:
+        return
+    stmt = pg_insert(ClanMemberStat).values(clan_id=clan_id, user_id=user_id, **deltas)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[ClanMemberStat.clan_id, ClanMemberStat.user_id],
+        set_={k: getattr(ClanMemberStat, k) + stmt.excluded[k] for k in deltas},
+    )
+    await session.execute(stmt)
+
+
+async def member_stats(session: AsyncSession, clan_id: int) -> list:
+    """Текущие участники клана + их вклад + активность — одним запросом."""
+    rows = await session.execute(text(
+        "SELECT m.user_id, COALESCE(u.display_name, u.username, m.user_id::text) AS name, m.rank, m.joined_at, u.last_active_at, "
+        "COALESCE(s.treasury,0) AS treasury, COALESCE(s.garrison_units,0) AS garrison_units, "
+        "COALESCE(s.garrison_power,0) AS garrison_power, COALESCE(s.garrison_taken,0) AS garrison_taken, "
+        "COALESCE(s.shop_spent,0) AS shop_spent, COALESCE(s.build_spent,0) AS build_spent, COALESCE(s.wars,0) AS wars, "
+        "COALESCE(s.wars_won,0) AS wars_won, COALESCE(s.lands_won,0) AS lands_won, COALESCE(s.exchanges,0) AS exchanges "
+        "FROM clan_members m JOIN users u ON u.id = m.user_id "
+        "LEFT JOIN clan_member_stats s ON s.clan_id = m.clan_id AND s.user_id = m.user_id "
+        "WHERE m.clan_id = :c"
+    ), {"c": clan_id})
+    return list(rows.mappings().all())

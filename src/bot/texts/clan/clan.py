@@ -190,7 +190,12 @@ SHOP_SCREEN = (
     "🧪 Зелья — выпиваются сразу у всех участников.\n"
     "⚔️ Наёмники — навсегда в клановую роту."
 )
-BTN_SHOP_TICKETS = "🎟 Всем по {tickets} · {price} 🪙"
+BTN_SHOP_TICKETS = "🎟 Тикеты всем · {price} 🪙 за штуку"
+SHOP_TICKETS_PROMPT = (
+    "🎟 Тикеты каждому из <b>{members}</b> участников.\n"
+    "1 тикет всем = <b>{price}</b> 🪙 из казны ({treasury} 🪙).\n\n"
+    "Сколько тикетов дать каждому? Напиши число (до {max})."
+)
 BTN_SHOP_POTION = "{name} {roman} всем · {price} 🪙"
 BTN_SHOP_MERCS = "📜 Контракты в роту"
 MERCS_SCREEN = (
@@ -347,3 +352,23 @@ ERRORS: dict[str, str] = {
 LEFT_ALERT = "Ты покинул(а) клан"
 ACCEPTED_ALERT = "Принят(а) в клан"
 DONE_ALERT = "Готово"
+
+
+# Статистика вклада участников (2026-10-21).
+BTN_STATS = "📊 Вклад участников"
+STATS_SORT_LABELS = {
+    "treasury": "💰 Казна", "garrison": "⚔️ Рота", "spent": "🛒 Траты", "wars": "🗡 Войны", "activity": "🕒 Актив",
+}
+STATS_SCREEN = "📊 <b>Вклад участников</b> · сортировка: {sort}\n━━━━━━━━━━━━━━━━━━\n{rows}"
+STATS_ROW = (
+    "<b>{place}. {emoji} {name}</b> · {seen}\n"
+    "   💰 {treasury} · ⚔️ {units} бойц. ({power} мощи){taken}\n"
+    "   🛒 {shop} · 🏗 {build} · 🗡 {wars_won}/{wars} (+{lands} зем.) · 🔄 {exchanges}\n"
+)
+STATS_TAKEN = " · забрал {taken}"
+STATS_SEEN_NOW = "в сети"
+STATS_SEEN_AGO = "был {ago} назад"
+STATS_HINT = (
+    "\n<i>💰 внесено в казну · ⚔️ отдано в роту · 🛒 потрачено из казны на магазин · "
+    "🏗 на земли и здания · 🗡 атак выиграно/всего · 🔄 передач через обменник. Считается с 21.10.2026.</i>"
+)

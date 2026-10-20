@@ -83,16 +83,52 @@ async def roll(session: AsyncSession, redis: Redis, user_id: int) -> RollResult:
         await redis.delete(key)
 
 
-async def roll_many(session: AsyncSession, redis: Redis, user_id: int, count: int) -> list[RollResult]:
-    """Массовое открытие: `count` обычных круток подряд (каждая — свой лок и commit, все шансы,
-    бесплатные крутки и задания как у одиночной). Тикеты кончились посреди — отдаём то, что
-    выпало; не хватило даже на первую — `NoTicketsError` наружу."""
-    results: list[RollResult] = []
-    for _ in range(max(1, count)):
-        try:
-            results.append(await roll(session, redis, user_id))
-        except NoTicketsError:
-            if not results:
-                raise
-            break
-    return results
+
+@dataclass(frozen=True, slots=True)
+class MassRollResult:
+    requested: int
+    opened: int
+    counts: dict[str, int]  # код карты → сколько выпало
+    new_codes: frozenset[str]  # карт не было до открытия
+    free: int  # сколько тикетов вернулось (Элита)
+    tickets: TicketStatus
+
+
+async def roll_many(session: AsyncSession, redis: Redis, user_id: int, count: int) -> MassRollResult:
+    """Массовое открытие — ПАКЕТОМ, а не циклом одиночных круток (у игроков тысячи тикетов):
+    тот же лок, что у одиночной крутки, одно атомарное списание `min(count, баланс)` вместе с
+    регеном, розыгрыш всех карт в памяти по тем же шансам/удаче/бесплатным круткам, один
+    INSERT на все выпавшие карты, задания одним событием на N круток, один commit.
+    Не хватило даже на одну — `NoTicketsError`."""
+    from collections import Counter
+
+    key = action_lock(user_id, LOCK_ACTION_ROLL)
+    if not await redis.set(key, "1", nx=True, px=max(ACTION_LOCK_MS, 30_000)):
+        raise RollBusyError
+    try:
+        status = await get_status(session, user_id)
+        amount = min(max(1, count), status.count)
+        tickets = await spend(session, user_id, amount) if amount > 0 else None
+        if tickets is None:
+            raise NoTicketsError(await get_status(session, user_id))
+        eco = (await get_build(session, user_id)).eco
+        rng = random.Random()
+        cards = [pick_card(rng, luck=eco.gacha_luck) for _ in range(amount)]
+        free_chance = min(0.5, eco.gacha_free_roll) if eco.gacha_free_roll else 0.0
+        free = sum(1 for _ in range(amount) if rng.random() < free_chance) if free_chance else 0
+        if free:
+            tickets = await refund(session, user_id, free)
+        counts = Counter(c.code for c in cards)
+        before = await card_repo.owned_codes(session, user_id, list(counts))
+        await card_repo.add_many_to_stacks(session, user_id=user_id, camp=CAMP_ATTACK, quantities=dict(counts))
+        await quest_event(session, user_id, TASK_ROLL, amount)
+        await session.commit()
+        return MassRollResult(
+            requested=count, opened=amount, counts=dict(counts),
+            new_codes=frozenset(set(counts) - before), free=free, tickets=tickets,
+        )
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
+        await redis.delete(key)

@@ -91,3 +91,30 @@ async def count_copies(session: AsyncSession, user_id: int, card_code: str) -> i
         )
     )
     return int(army) + int(placed)
+
+
+
+async def add_many_to_stacks(session: AsyncSession, *, user_id: int, camp: str, quantities: dict[str, int]) -> None:
+    """Пакетный `add_to_stack`: один INSERT ... ON CONFLICT на все карты сразу (массовое
+    открытие тикетов). НЕ коммитит."""
+    rows = [{"user_id": user_id, "card_code": code, "camp": camp, "quantity": q} for code, q in quantities.items() if q]
+    if not rows:
+        return
+    stmt = pg_insert(CardStack).values(rows)
+    await session.execute(stmt.on_conflict_do_update(
+        index_elements=[CardStack.user_id, CardStack.card_code, CardStack.camp],
+        set_={"quantity": CardStack.quantity + stmt.excluded.quantity},
+    ))
+
+
+async def owned_codes(session: AsyncSession, user_id: int, codes: list[str]) -> set[str]:
+    """Какие из `codes` у игрока уже есть (в армии или на позициях) — двумя запросами."""
+    if not codes:
+        return set()
+    army = await session.scalars(
+        select(CardStack.card_code).where(CardStack.user_id == user_id, CardStack.card_code.in_(codes), CardStack.quantity > 0)
+    )
+    placed = await session.scalars(
+        select(CardPosition.card_code).where(CardPosition.user_id == user_id, CardPosition.card_code.in_(codes))
+    )
+    return set(army) | set(placed)

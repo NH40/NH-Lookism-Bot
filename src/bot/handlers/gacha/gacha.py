@@ -128,22 +128,26 @@ async def on_gacha_count(message: Message, state: FSMContext, session: AsyncSess
         await message.answer(NO_TICKETS.format(countdown=format_countdown(exc.status.next_in_seconds or 0)))
         return
 
-    order = list(RARITY_CHANCE_PERCENT)  # от частой к редкой
-    rarities = Counter(r.card.rarity for r in results)
+    from bot.config.card import CARD_BY_CODE
+
+    order = {k: i for i, k in enumerate(RARITY_CHANCE_PERCENT)}  # от частой к редкой
+    drawn = [(CARD_BY_CODE[code], n) for code, n in results.counts.items() if code in CARD_BY_CODE]
+    rarities = Counter()
+    for card, n in drawn:
+        rarities[card.rarity] += n
     rarity_lines = "\n".join(
-        ROLL_MANY_RARITY_LINE.format(rarity=RARITY_LABELS.get(k, k), count=rarities[k])
-        for k in sorted(rarities, key=lambda k: order.index(k) if k in order else -1, reverse=True)
+        ROLL_MANY_RARITY_LINE.format(rarity=RARITY_LABELS.get(k, k), count=format_number(rarities[k]))
+        for k in sorted(rarities, key=lambda k: order.get(k, -1), reverse=True)
     )
-    new_cards = [r.card for r in results if r.copies == 1]
+    new_cards = sorted((c for c, _ in drawn if c.code in results.new_codes), key=lambda c: order.get(c.rarity, -1), reverse=True)
     new_list = (": " + ", ".join(esc(c.name) for c in new_cards[:15]) + ("…" if len(new_cards) > 15 else "")) if new_cards else ""
-    best = max(results, key=lambda r: (order.index(r.card.rarity) if r.card.rarity in order else -1, r.card.power)).card
-    free = sum(1 for r in results if r.free)
-    tickets = results[-1].tickets
+    best = max(drawn, key=lambda d: (order.get(d[0].rarity, -1), d[0].power))[0]
+    tickets = results.tickets
     text = ROLL_MANY_RESULT.format(
-        count=len(results), rarities=rarity_lines, new=len(new_cards), new_list=new_list,
-        free_line=ROLL_MANY_FREE.format(free=free) if free else "",
+        count=format_number(results.opened), rarities=rarity_lines, new=len(new_cards), new_list=new_list,
+        free_line=ROLL_MANY_FREE.format(free=format_number(results.free)) if results.free else "",
         best=esc(card_label(best)), tickets_line=tickets_line(tickets.count, tickets.cap, tickets.next_in_seconds),
-        stopped=ROLL_MANY_STOPPED if len(results) < count else "",
+        stopped=ROLL_MANY_STOPPED if results.opened < count else "",
     )
     photo = await get_card_photo(redis, best)
     if photo is None or len(text) > 1000:

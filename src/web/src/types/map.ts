@@ -219,7 +219,7 @@ export interface RollManyResult {
   new: number;
   free: number;
   rarities: { rarity: string; label: string; count: number }[];
-  cards: { code: string; name: string; rarity: string; rarity_label: string; power: number; image: string | null; is_new: boolean }[];
+  cards: { code: string; name: string; rarity: string; rarity_label: string; power: number; image: string | null; is_new: boolean; count: number }[];
   tickets: number;
   tickets_cap: number;
   max: number;

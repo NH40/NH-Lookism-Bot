@@ -110,23 +110,27 @@ async def gacha_roll_many(
     except NoTicketsError as exc:
         wait = exc.status.next_in_seconds
         raise bad("Тикетов нет." + (f" Следующий через {format_countdown(wait)}." if wait else ""))
-    order = list(RARITY_CHANCE_PERCENT)
-    rank = {k: i for i, k in enumerate(order)}
-    rarities = Counter(r.card.rarity for r in results)
-    last = results[-1].tickets
-    cards = sorted(results, key=lambda r: (rank.get(r.card.rarity, -1), r.card.power), reverse=True)
+    from bot.config.card import CARD_BY_CODE
+
+    rank = {k: i for i, k in enumerate(RARITY_CHANCE_PERCENT)}
+    drawn = [(CARD_BY_CODE[code], n) for code, n in results.counts.items() if code in CARD_BY_CODE]
+    rarities = Counter()
+    for card, n in drawn:
+        rarities[card.rarity] += n
+    drawn.sort(key=lambda d: (rank.get(d[0].rarity, -1), d[0].power), reverse=True)
+    last = results.tickets
     return {
-        "message": f"Открыто тикетов: {len(results)}",
-        "count": len(results), "requested": count,
-        "new": sum(1 for r in results if r.copies == 1), "free": sum(1 for r in results if r.free),
+        "message": f"Открыто тикетов: {results.opened}",
+        "count": results.opened, "requested": count,
+        "new": len(results.new_codes), "free": results.free,
         "rarities": [
             {"rarity": k, "label": RARITY_LABELS.get(k, k), "count": rarities[k]}
             for k in sorted(rarities, key=lambda k: rank.get(k, -1), reverse=True)
         ],
         "cards": [
-            {"code": r.card.code, "name": r.card.name, "rarity": r.card.rarity, "rarity_label": RARITY_LABELS.get(r.card.rarity, r.card.rarity),
-             "power": r.card.power, "image": r.card.image, "is_new": r.copies == 1}
-            for r in cards
+            {"code": c.code, "name": c.name, "rarity": c.rarity, "rarity_label": RARITY_LABELS.get(c.rarity, c.rarity),
+             "power": c.power, "image": c.image, "is_new": c.code in results.new_codes, "count": n}
+            for c, n in drawn
         ],
         "tickets": last.count, "tickets_cap": last.cap, "max": GACHA_MASS_MAX,
     }

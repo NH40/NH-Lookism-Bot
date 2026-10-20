@@ -178,14 +178,14 @@ export function GangPage() {
         </Sheet>
       )}
       {many && (
-        <Sheet title={`Открыто тикетов: ${many.count}`} onClose={() => setMany(null)}>
+        <Sheet title={`Открыто тикетов: ${fmt(many.count)}`} onClose={() => setMany(null)}>
           <div className="grid-2" style={{ gap: 8 }}>
             <div className="camp"><div className="camp-title">Новых</div><div className="disp" style={{ fontSize: 17, fontWeight: 800 }}>{many.new}</div></div>
             <div className="camp"><div className="camp-title">Тикетов</div><div className="disp" style={{ fontSize: 17, fontWeight: 800 }}>{many.tickets}/{many.tickets_cap}</div></div>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "10px 0" }}>
             {many.rarities.map((r) => (
-              <span key={r.rarity} className="pill on">{r.label}: {r.count}</span>
+              <span key={r.rarity} className="pill on">{r.label}: {fmt(r.count)}</span>
             ))}
           </div>
           {many.free > 0 && <div className="muted" style={{ fontSize: 12, fontWeight: 700 }}>Тикет вернулся: {many.free} раз</div>}
@@ -195,6 +195,7 @@ export function GangPage() {
               <div key={`${c.code}-${i}`} style={{ position: "relative", borderRadius: 10, overflow: "hidden", aspectRatio: "2 / 3", background: "rgba(16,28,70,.7)", border: "1px solid var(--line, rgba(120,160,255,.35))" }}>
                 {c.image && <img src={imgUrl(c.image, 160)} alt={c.name} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
                 {c.is_new && <span style={{ position: "absolute", top: 3, left: 3, fontSize: 9, fontWeight: 800, background: "#2fbf71", borderRadius: 5, padding: "1px 4px" }}>NEW</span>}
+                {c.count > 1 && <span style={{ position: "absolute", top: 3, right: 3, fontSize: 9, fontWeight: 800, background: "rgba(3,6,20,.8)", color: "var(--gold-2)", borderRadius: 5, padding: "1px 4px" }}>×{fmt(c.count)}</span>}
                 <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "10px 4px 3px", fontSize: 9, fontWeight: 800, background: "linear-gradient(transparent, rgba(3,6,20,.92))", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
               </div>
             ))}

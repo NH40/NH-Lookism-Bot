@@ -1,5 +1,6 @@
 """Публичное API домена card (репозиторий)."""
 from bot.db.repositories.card.card import (  # noqa: F401
+    add_many_to_stacks,
     add_to_stack,
     count_copies,
     delete_position,
@@ -7,5 +8,6 @@ from bot.db.repositories.card.card import (  # noqa: F401
     get_stack_for_update,
     list_positions,
     list_stacks,
+    owned_codes,
     set_position,
 )

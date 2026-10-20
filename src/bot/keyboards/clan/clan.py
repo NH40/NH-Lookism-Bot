@@ -316,8 +316,8 @@ def treasury_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[_btn(BTN_DONATE, CB_CLAN_DONATE_COINS)], _back()])
 
 
-def shop_menu(members: int, tickets_price, potion_price) -> InlineKeyboardMarkup:
-    rows = [[_btn(BTN_SHOP_TICKETS.format(price=format_number(tickets_price(1, members))), CB_CLAN_SHOP_TICKETS)]]
+def shop_menu(members: int, tickets_price, potion_price, bought_today: int = 0) -> InlineKeyboardMarkup:
+    rows = [[_btn(BTN_SHOP_TICKETS.format(price=format_number(tickets_price(1, members, bought_today))), CB_CLAN_SHOP_TICKETS)]]
     for kind in POTIONS:
         if kind == POTION_WEALTH:
             continue

@@ -42,6 +42,7 @@ from bot.services.clan.economy import (  # noqa: F401
     shop_contracts,
     shop_potion,
     shop_tickets,
+    tickets_bought_today,
     tickets_price,
 )
 from bot.services.clan.garrison import (  # noqa: F401

@@ -24,8 +24,10 @@ from bot.config.clan.clan import (  # noqa: F401
     CLAN_OWNER_SHARE,
     CLAN_PAGE,
     CLAN_SHOP_POTION_TIERS,
+    CLAN_SHOP_TICKETS_DAILY_LIMIT,
     CLAN_SHOP_TICKETS_MAX,
     CLAN_SHOP_TICKET_PRICE,
+    CLAN_SHOP_TICKET_PRICE_STEP,
     CLAN_START_LANDS,
     CLAN_TEACHER_CHANCE_PER_DOJO,
     CLAN_TOP_IMAGE,
@@ -35,6 +37,7 @@ from bot.config.clan.clan import (  # noqa: F401
     CLAN_WAR_TREASURY_PERCENT,
     building_price,
     clan_donate_price,
+    clan_tickets_price,
     land_price,
     war_lands,
 )

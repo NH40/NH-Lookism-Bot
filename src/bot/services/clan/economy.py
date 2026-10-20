@@ -27,8 +27,8 @@ from bot.config.clan import (
     CLAN_CONTRACT_COINS_PER_POWER,
     CLAN_CONTRACT_HOURS,
     CLAN_SHOP_POTION_TIERS,
-    CLAN_SHOP_TICKET_PRICE,
-    CLAN_SHOP_TICKETS_MAX,
+    CLAN_SHOP_TICKETS_DAILY_LIMIT,
+    clan_tickets_price,
     building_price,
     land_price,
 )
@@ -216,8 +216,15 @@ async def _pay(session: AsyncSession, clan_id: int, price: int, user_id: int | N
         await clan_repo.bump_stats(session, clan_id, user_id, shop_spent=price)
 
 
-def tickets_price(tickets: int, members: int) -> int:
-    return tickets * CLAN_SHOP_TICKET_PRICE * members
+def tickets_bought_today(clan: Clan) -> int:
+    """Сколько тикетов клан купил за текущие сутки (МСК); вчерашний счётчик — 0."""
+    from bot.services.quest import today
+
+    return clan.shop_tickets_bought if clan.shop_tickets_day == today() else 0
+
+
+def tickets_price(tickets: int, members: int, bought_today: int = 0) -> int:
+    return clan_tickets_price(tickets, members, bought_today)
 
 
 def potion_price(tier: int, members: int) -> int:
@@ -230,14 +237,25 @@ def contract_unit_price(rank: str) -> int:
 
 async def shop_tickets(session: AsyncSession, redis: Redis, user_id: int, tickets: int) -> tuple[int, int]:
     """Тикеты каждому участнику. → (цена, участников)."""
-    if not 1 <= tickets <= CLAN_SHOP_TICKETS_MAX:
+    from bot.services.quest import today
+
+    if tickets < 1:
         raise ClanError("bad_item")
     member = await require_member(session, user_id, MANAGER_RANKS)
     key = await _lock(redis, user_id)
     try:
+        # Строка клана под FOR UPDATE: счётчик за сутки и казна меняются вместе, без гонки
+        # между двумя управляющими, жмущими «купить» одновременно (правило 1).
+        clan = await clan_repo.get(session, member.clan_id, for_update=True)
+        bought = tickets_bought_today(clan)
+        left = CLAN_SHOP_TICKETS_DAILY_LIMIT - bought
+        if tickets > left:
+            raise ClanError("tickets_daily_limit", max(0, left))
         ids = await clan_repo.member_ids(session, member.clan_id)
-        price = tickets_price(tickets, len(ids))
+        price = tickets_price(tickets, len(ids), bought)
         await _pay(session, member.clan_id, price, user_id)
+        clan.shop_tickets_day = today()
+        clan.shop_tickets_bought = bought + tickets
         for uid in sorted(ids):
             await grant(session, uid, RES_TICKETS, tickets)
         await clan_repo.log(session, member.clan_id, f"🛒 {await _name(session, user_id)}: всем по {tickets} 🎟 за {amount_label(RES_COINS, price)}")

@@ -3,9 +3,9 @@
 журнал и доля дохода владельца/зама."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -25,6 +25,9 @@ class Clan(Base):
     treasury: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
     # Донат-уровень 0–5 (+4 к потолку земель и бафы; покупка — с доменом доната).
     donate_level: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # Тикеты из клан-магазина за сутки (МСК) — для растущей цены и дневного лимита (2026-10-21).
+    shop_tickets_day: Mapped[date | None] = mapped_column(Date, nullable=True)
+    shop_tickets_bought: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     last_attack_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     shield_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

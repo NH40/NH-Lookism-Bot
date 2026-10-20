@@ -899,7 +899,7 @@ class ShopContractsIn(BaseModel):
 
 @router.get("/shop")
 async def get_shop(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
-    from bot.config.clan import CLAN_CONTRACT_HOURS, CLAN_SHOP_POTION_TIERS, CLAN_SHOP_TICKET_PRICE, CLAN_SHOP_TICKETS_MAX
+    from bot.config.clan import CLAN_CONTRACT_HOURS, CLAN_SHOP_POTION_TIERS, CLAN_SHOP_TICKET_PRICE_STEP, CLAN_SHOP_TICKETS_DAILY_LIMIT
     from bot.constant.potion import POTION_WEALTH, POTIONS
     from bot.services.contract import terms as contract_terms
     from bot.texts.potion import POTION_NAMES
@@ -910,11 +910,14 @@ async def get_shop(user_id: int = Depends(get_current_user_id), session: AsyncSe
         raise bad("Ты не в клане.")
     clan = await clan_repo.get(session, member.clan_id)
     members = await clan_repo.count_members(session, clan.id)
+    bought = clan_service.tickets_bought_today(clan)
     t = await contract_terms(session, user_id)
     return {
         "treasury": clan.treasury, "members": members, "can_buy": member.rank in MANAGER_RANKS,
-        "tickets": [{"tickets": n, "price": clan_service.tickets_price(n, members)} for n in (1, 5, 10)],
-        "ticket_price": CLAN_SHOP_TICKET_PRICE, "tickets_max": CLAN_SHOP_TICKETS_MAX,
+        "tickets": [{"tickets": n, "price": clan_service.tickets_price(n, members, bought)} for n in (1, 5, 10)],
+        "ticket_price": clan_service.tickets_price(1, 1, bought), "ticket_step": CLAN_SHOP_TICKET_PRICE_STEP,
+        "tickets_bought_today": bought, "tickets_max": max(0, CLAN_SHOP_TICKETS_DAILY_LIMIT - bought),
+        "tickets_daily_limit": CLAN_SHOP_TICKETS_DAILY_LIMIT,
         "potions": [
             {"kind": k, "name": clean_label(POTION_NAMES[k]),
              "tiers": [{"tier": tier, "price": clan_service.potion_price(tier, members)} for tier in CLAN_SHOP_POTION_TIERS]}

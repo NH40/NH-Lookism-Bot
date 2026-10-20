@@ -13,7 +13,8 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config.clan import (
-    CLAN_SHOP_TICKETS_MAX,
+    CLAN_SHOP_TICKET_PRICE_STEP,
+    CLAN_SHOP_TICKETS_DAILY_LIMIT,
     CLAN_CONTRACT_HOURS,
     CLAN_BUILDINGS,
     CLAN_BUY_LANDS_MAX,
@@ -252,7 +253,7 @@ async def render_shop(session: AsyncSession, user_id: int):
     clan = await clan_repo.get(session, member.clan_id)
     members = await clan_repo.count_members(session, clan.id)
     text = SHOP_SCREEN.format(treasury=format_number(clan.treasury), members=members)
-    return text, shop_menu(members, clan_service.tickets_price, clan_service.potion_price)
+    return text, shop_menu(members, clan_service.tickets_price, clan_service.potion_price, clan_service.tickets_bought_today(clan))
 
 
 @router.callback_query(F.data == CB_CLAN_SHOP)
@@ -278,11 +279,13 @@ async def cb_shop_tickets(callback: CallbackQuery, state: FSMContext, session: A
         return
     clan = await clan_repo.get(session, member.clan_id)
     members = await clan_repo.count_members(session, clan.id)
+    bought = clan_service.tickets_bought_today(clan)
     await state.set_state(ClanStates.waiting_shop_tickets)
     await callback.answer()
     text = SHOP_TICKETS_PROMPT.format(
-        members=members, price=format_number(clan_service.tickets_price(1, members)),
-        treasury=format_number(clan.treasury), max=format_number(CLAN_SHOP_TICKETS_MAX),
+        members=members, price=format_number(clan_service.tickets_price(1, members, bought)),
+        step=format_number(CLAN_SHOP_TICKET_PRICE_STEP), bought=format_number(bought),
+        limit=format_number(CLAN_SHOP_TICKETS_DAILY_LIMIT), treasury=format_number(clan.treasury),
     )
     await send_screen(callback.bot, callback.message.chat.id, callback.message, text, back_menu(CB_CLAN_SHOP))
 

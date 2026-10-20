@@ -10,7 +10,10 @@ interface ClanShop {
 	can_buy: boolean;
 	tickets: { tickets: number; price: number }[];
 	ticket_price: number;
+	ticket_step: number;
+	tickets_bought_today: number;
 	tickets_max: number;
+	tickets_daily_limit: number;
 	potions: { kind: string; name: string; tiers: { tier: number; price: number }[] }[];
 	contracts: { hours: number; ceiling: string; ranks: { rank: string; price: number }[] };
 }
@@ -47,7 +50,8 @@ export function ShopTab({ onChanged }: { onChanged: () => Promise<void> }) {
 						</div>
 						{(() => {
 							const n = Math.floor(Number(ticketsN)) || 0;
-							const price = n * data.ticket_price * data.members;
+							// Как на сервере: каждый следующий тикет за сутки дороже на шаг (арифметическая прогрессия).
+							const price = (n * data.ticket_price + (data.ticket_step * n * (n - 1)) / 2) * data.members;
 							return (
 								<>
 									<div className="qty-row" style={{ gridTemplateColumns: "minmax(0, 1fr) auto" }}>
@@ -58,7 +62,7 @@ export function ShopTab({ onChanged }: { onChanged: () => Promise<void> }) {
 											<Ticket size={14} /> {n > 0 ? fmt(price) : "Купить"}
 										</button>
 									</div>
-									<div className="muted clan-hint">1 тикет всем = {fmt(data.ticket_price * data.members)} NHCoin</div>
+									<div className="muted clan-hint">Следующий тикет всем = {fmt(data.ticket_price * data.members)} NHCoin, каждый следующий за сутки дороже на {fmt(data.ticket_step * data.members)}. Куплено сегодня: {fmt(data.tickets_bought_today)} из {fmt(data.tickets_daily_limit)}.</div>
 								</>
 							);
 						})()}

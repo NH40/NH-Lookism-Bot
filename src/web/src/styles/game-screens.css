@@ -99,3 +99,4 @@
 .boss-card.teacher-card { border-color: rgba(245, 185, 66, 0.7); box-shadow: 0 0 20px rgba(245, 185, 66, 0.25); background: #241a06; min-height: 150px; }
 .teacher-card .boss-over { min-height: 150px; background: linear-gradient(90deg, rgba(36, 26, 6, 0.97) 48%, rgba(36, 26, 6, 0.15)); }
 .teacher-card .boss-tag { color: var(--gold-2, #f5c96a); }
+.teacher-btn { display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; width: auto; min-width: 150px; padding: 0 16px; }

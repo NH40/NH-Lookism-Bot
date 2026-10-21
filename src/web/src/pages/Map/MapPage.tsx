@@ -184,7 +184,19 @@ function EventCard({ event, onFight, onMeet, busy, bossCd }: {
           <div className="boss-tag">{event.kind === "school" ? "УЧИТЕЛЬ СТАТИСТОВ" : "УЧИТЕЛЬ ТЕХНИКИ"}</div>
           <div className="disp" style={{ fontSize: 17, fontWeight: 800 }}>{event.title}</div>
           <div className="boss-desc">{event.subtitle} · исчезнет через {countdown(left)}</div>
-          <div style={{ marginTop: "auto", maxWidth: 220 }}>{actions}</div>
+          <div style={{ marginTop: "auto" }}>
+            {event.state === "new" && (
+              <button className="btn gold small teacher-btn" type="button" disabled={busy} onClick={() => onMeet(event)}>Взять задание</button>
+            )}
+            {event.state === "active" && (
+              <Link className={`btn small teacher-btn ${event.quest_complete ? "green" : "ghost"}`} to={target}>
+                {event.quest_complete ? "Сдать задание" : "Прогресс задания"}
+              </Link>
+            )}
+            {event.state === "done" && (
+              <Link className="btn ghost small teacher-btn" to={target}>{event.kind === "school" ? "Учитель открыт" : "Техника изучена"}</Link>
+            )}
+          </div>
         </div>
       </div>
     );

@@ -32,6 +32,8 @@ from bot.constant.clan import (
     CB_CLAN_GAR_ACCESS,
     CB_CLAN_GAR_APPROVE_PREFIX,
     CB_CLAN_GAR_PUT,
+    CB_CLAN_GAR_PUT_ALL_CARDS,
+    CB_CLAN_GAR_PUT_ALL_STATISTS,
     CB_CLAN_GAR_PUT_CARD_PREFIX,
     CB_CLAN_GAR_PUT_CARDS,
     CB_CLAN_GAR_PUT_SQUAD_PREFIX,
@@ -106,6 +108,8 @@ from bot.texts.clan import (
     BTN_FIND,
     BTN_GAR_ACCESS,
     BTN_GAR_PUT,
+    BTN_GAR_PUT_ALL_CARDS,
+    BTN_GAR_PUT_ALL_STATISTS,
     BTN_GAR_PUT_CARDS,
     BTN_GAR_PUT_STATISTS,
     BTN_GAR_REQUEST,
@@ -362,6 +366,7 @@ def access_menu(members: list[tuple[int, str, bool, bool]]) -> InlineKeyboardMar
 def garrison_put_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [_btn(BTN_GAR_PUT_STATISTS, f"{CB_CLAN_GAR_PUT_SQUAD_PREFIX}"), _btn(BTN_GAR_PUT_CARDS, CB_CLAN_GAR_PUT_CARDS)],
+        [_btn(BTN_GAR_PUT_ALL_STATISTS, CB_CLAN_GAR_PUT_ALL_STATISTS), _btn(BTN_GAR_PUT_ALL_CARDS, CB_CLAN_GAR_PUT_ALL_CARDS)],
         _back(CB_CLAN_GARRISON),
     ])
 
@@ -421,3 +426,9 @@ def stats_menu(current: str) -> InlineKeyboardMarkup:
 
     buttons = [_btn(("• " if s == current else "") + STATS_SORT_LABELS[s], f"{CB_CLAN_STATS_PREFIX}{s}") for s in STATS_SORTS]
     return InlineKeyboardMarkup(inline_keyboard=[buttons[:3], buttons[3:], _back()])
+
+
+def put_all_confirm_menu(ok_data: str) -> InlineKeyboardMarkup:
+    from bot.texts.clan import BTN_YES_PUT
+
+    return InlineKeyboardMarkup(inline_keyboard=[[_btn(BTN_YES_PUT, ok_data)], _back(CB_CLAN_GAR_PUT)])

@@ -51,6 +51,8 @@ from bot.services.clan.garrison import (  # noqa: F401
     access_requests,
     clan_power,
     needs_approval,
+    put_all_cards,
+    put_all_statists,
     put_cards,
     put_statists,
     request_access,

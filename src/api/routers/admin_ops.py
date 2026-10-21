@@ -172,7 +172,12 @@ def _promo(p) -> dict:
 @router.get("/promo")
 async def get_promos(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
     await access(session, user_id, SECTION_PROMO)
-    return {"items": [_promo(p) for p in await promo_service.list_recent(session)], "resources": list(RESOURCES)}
+    from bot.texts.resource import resource_label
+
+    return {
+        "items": [_promo(p) for p in await promo_service.list_recent(session)], "resources": list(RESOURCES),
+        "resource_labels": {r: resource_label(r) for r in RESOURCES},
+    }
 
 
 @router.post("/promo")

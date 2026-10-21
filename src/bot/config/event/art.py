@@ -56,4 +56,21 @@ ART_ALIASES: dict[str, tuple[str, ...]] = {
     BOSS_GAPRYONG: ("gapryong", "gapren", "gauren"),
     BOSS_JINYEONG: ("jinyeong", "jinong", "jinyoung", "jinnen"),
     BOSS_ELITE: ("elite",),
+    # Учителя статистов (assets/teacher_statist, файлы 2026-10-20): по имени учителя/школы.
+    SCHOOL_STRENGTH: ("baekho", "strength"),
+    SCHOOL_AGILITY: ("agility", "elite"),
+    SCHOOL_SPEED: ("musasi", "musashi", "speed"),
+    SCHOOL_TECHNIQUE: ("hansu", "technique"),
+    # Учителя уникальных техник (assets/teacher_ut).
+    TECH_BEAST: ("instinctbeast",),
+    TECH_INVISIBLE: ("invisibleattack",),
+    TECH_NINJUTSU: ("ninjutsu",),
+    TECH_OVERCOME: ("overcome",),
+    TECH_KYOKUSHIN: ("kyokushinkai",),
+    TECH_TAEKWONDO: ("takewando", "taekwondo"),
+    TECH_MA_TAESU: ("fist",),
+    TECH_ONE_STEP: ("onestep",),
+    TECH_BLADE_HANDS: ("gandhiblade", "bladehands"),
+    TECH_MUAY_THAI: ("muaythai",),
+    TECH_MIDNIGHT: ("fullmoon",),
 }

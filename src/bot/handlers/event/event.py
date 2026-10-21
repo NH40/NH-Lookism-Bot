@@ -164,6 +164,25 @@ def spawn_push_text(event: SpawnedEvent) -> str | None:
     return None
 
 
+async def _push_photo(bot: Bot, user_id: int, art, caption: str, file_ids: dict[str, str]) -> bool:
+    """Фото с подписью; True — доставлено. Ошибку доставки глотаем, как `notify`; если
+    упала именно картинка (а не получатель) — вызывающий пошлёт текстом."""
+    from aiogram.exceptions import TelegramAPIError, TelegramForbiddenError
+    from aiogram.types import FSInputFile
+
+    key = str(art)
+    try:
+        msg = await bot.send_photo(user_id, file_ids.get(key) or FSInputFile(art), caption=caption)
+    except TelegramForbiddenError:
+        return True  # бот заблокирован — текстом тоже не дойдёт
+    except TelegramAPIError:
+        log.warning("spawn push photo failed: %s", art)
+        return False
+    if key not in file_ids and msg.photo:
+        file_ids[key] = msg.photo[-1].file_id
+    return True
+
+
 async def send_spawn_pushes(
     bot: Bot, session_factory: async_sessionmaker[AsyncSession], events: list[SpawnedEvent], extra_texts=None
 ) -> None:
@@ -171,8 +190,10 @@ async def send_spawn_pushes(
     `extra_texts` — тексты событий других доменов (учителя), по событию → текст. Каждый
     получатель видит только события тех категорий, что не выключил в «🔔 Уведомлениях»
     (`users.notify_muted` пришёл тем же запросом, что и список получателей)."""
+    from bot.utils.event_art import event_art_path
+
     items = [
-        (_EVENT_CATEGORY[e.kind], t, e.clan_id)
+        (_EVENT_CATEGORY[e.kind], t, e.clan_id, event_art_path(e.kind, e.code))
         for e in events
         if (t := spawn_push_text(e) or (extra_texts(e) if extra_texts else None))
     ]
@@ -180,21 +201,26 @@ async def send_spawn_pushes(
         return
     # Клановые события (Сторожевая башня, Додзё) — только участникам своего клана.
     clan_members: dict[int, set[int]] = {}
-    clan_ids = {c for *_, c in items if c is not None}
+    clan_ids = {c for _, _, c, _ in items if c is not None}
     if clan_ids:
         async with session_factory() as session:
             for clan_id in clan_ids:
                 clan_members[clan_id] = set(await clan_member_ids(session, clan_id))
     sent = 0
+    # Картинка события (пользователь 2026-10-21: «отправлять картинки появившихся в пушах»):
+    # файл заливается в Telegram один раз, дальше — по file_id.
+    file_ids: dict[str, str] = {}
     for user_id, muted in await push_recipients(session_factory):
-        text = "\n\n".join(
-            (CLAN_EVENT_PREFIX if clan_id else "") + t
-            for category, t, clan_id in items
+        mine = [
+            (t, clan_id, art) for category, t, clan_id, art in items
             if category not in muted and (clan_id is None or user_id in clan_members.get(clan_id, ()))
-        )
-        if not text:
+        ]
+        if not mine:
             continue
-        await notify(bot, user_id, text)
+        text = "\n\n".join((CLAN_EVENT_PREFIX if clan_id else "") + t for t, clan_id, _ in mine)
+        art = next((a for _, _, a in mine if a is not None), None)
+        if art is None or len(text) > 1024 or not await _push_photo(bot, user_id, art, text, file_ids):
+            await notify(bot, user_id, text)
         sent += 1
         if sent % EVENT_PUSH_BATCH == 0:
             await asyncio.sleep(EVENT_PUSH_PAUSE_SECONDS)

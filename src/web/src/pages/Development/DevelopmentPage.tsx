@@ -311,6 +311,13 @@ function PathTab({ d, max, post, busy }: { d: PathData; max: number; post: Post;
               <span>{fmt(d.fragments)} / {fmt(d.awaken_cost)}</span>
             </div>
             <Bar value={d.fragments} max={d.awaken_cost} fill="violet" />
+            {d.bought.length === 0 && (
+              <div className="muted" style={{ fontSize: 11, fontWeight: 700, marginTop: 8, lineHeight: 1.45 }}>
+                Купленных за донат путей нет — выпадет случайный, с 1-го уровня. Путь за донат покупается в чёрном
+                рынке во вкладке «Пути» (гений — отдельная система): тогда здесь появится выбор, и путь придёт с
+                купленного уровня.
+              </div>
+            )}
             <div className="dev-tx" style={{ marginTop: 12 }}>
               <button
                 type="button"

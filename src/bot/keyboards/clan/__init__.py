@@ -26,6 +26,7 @@ from bot.keyboards.clan.clan import (  # noqa: F401
     ranks_menu,
     requests_menu,
     shop_menu,
+    put_all_confirm_menu,
     stats_menu,
     take_menu,
     transfer_confirm_menu,

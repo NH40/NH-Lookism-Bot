@@ -16,6 +16,10 @@ from bot.constant.clan import (
     CB_CLAN_GAR_APPROVE_PREFIX,
     CB_CLAN_GAR_DENY_PREFIX,
     CB_CLAN_GAR_PUT,
+    CB_CLAN_GAR_PUT_ALL_CARDS,
+    CB_CLAN_GAR_PUT_ALL_CARDS_OK,
+    CB_CLAN_GAR_PUT_ALL_STATISTS,
+    CB_CLAN_GAR_PUT_ALL_STATISTS_OK,
     CB_CLAN_GAR_PUT_CARD_PREFIX,
     CB_CLAN_GAR_PUT_CARDS,
     CB_CLAN_GAR_PUT_SQUAD_PREFIX,
@@ -443,3 +447,38 @@ async def cb_gar_revoke(callback: CallbackQuery, session: AsyncSession) -> None:
     await callback.answer()
     await notify_player(callback.bot, session, int(raw), NOTIFY_CLAN, PUSH_GAR_REVOKED)
     await _show_access(callback, session)
+
+
+
+# --- «внести всех» в роту (2026-10-21) ---
+
+@router.callback_query(F.data.in_({CB_CLAN_GAR_PUT_ALL_STATISTS, CB_CLAN_GAR_PUT_ALL_CARDS}))
+async def cb_gar_put_all_ask(callback: CallbackQuery, session: AsyncSession) -> None:
+    from bot.keyboards.clan import put_all_confirm_menu
+    from bot.texts.clan import GAR_PUT_ALL_CONFIRM_CARDS, GAR_PUT_ALL_CONFIRM_STATISTS
+
+    if await _member(callback, session) is None:
+        return
+    statists = callback.data == CB_CLAN_GAR_PUT_ALL_STATISTS
+    await callback.answer()
+    await send_screen(
+        callback.bot, callback.message.chat.id, callback.message,
+        GAR_PUT_ALL_CONFIRM_STATISTS if statists else GAR_PUT_ALL_CONFIRM_CARDS,
+        put_all_confirm_menu(CB_CLAN_GAR_PUT_ALL_STATISTS_OK if statists else CB_CLAN_GAR_PUT_ALL_CARDS_OK),
+    )
+
+
+@router.callback_query(F.data.in_({CB_CLAN_GAR_PUT_ALL_STATISTS_OK, CB_CLAN_GAR_PUT_ALL_CARDS_OK}))
+async def cb_gar_put_all(callback: CallbackQuery, session: AsyncSession, redis: Redis) -> None:
+    from bot.texts.clan import GAR_PUT_ALL_DONE
+
+    if await _member(callback, session) is None:
+        return
+    fn = clan_service.put_all_statists if callback.data == CB_CLAN_GAR_PUT_ALL_STATISTS_OK else clan_service.put_all_cards
+    try:
+        units, power = await fn(session, redis, callback.from_user.id)
+    except clan_service.ClanError as exc:
+        await callback.answer(error_text(exc), show_alert=True)
+        return
+    await callback.answer(GAR_PUT_ALL_DONE.format(units=format_number(units), power=format_number(power)), show_alert=True)
+    await send_screen(callback.bot, callback.message.chat.id, callback.message, GAR_PUT_PICK, garrison_put_menu())

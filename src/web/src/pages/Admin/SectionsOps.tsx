@@ -105,24 +105,53 @@ export function MassSection({ meta }: { meta: AdminMeta }) {
 // ---------------------------------------------------------------- промокоды
 
 export function PromoSection() {
-  const data = useApi<{ items: AdminPromo[]; resources: string[] }>("/admin/promo");
+  const data = useApi<{ items: AdminPromo[]; resources: string[]; resource_labels?: Record<string, string> }>("/admin/promo");
   const { run, busy } = useAction(data.reload);
-  const [line, setLine] = useState("");
   const [open, setOpen] = useState<number | null>(null);
+  // Форма как в UAP (пользователь 2026-10-21): поля вместо одной строки. Отправляем ту же строку
+  // `КОД [uses|time|users] ПАРАМ ресурс:кол ...` — проверка и создание остаются на сервере.
+  const [code, setCode] = useState("");
+  const [mode, setMode] = useState<"uses" | "time" | "users" | "none">("uses");
+  const [param, setParam] = useState("100");
+  const [reward, setReward] = useState<Record<string, string>>({});
+  const parts = Object.entries(reward).filter(([, v]) => Number(v)).map(([k, v]) => `${k}:${Math.trunc(Number(v))}`);
+  const line = [code.trim().toUpperCase(), mode === "none" ? "" : `${mode} ${param.trim()}`, ...parts].filter(Boolean).join(" ");
+  const ready = !!code.trim() && parts.length > 0 && (mode === "none" || !!param.trim());
+  const create = async () => {
+    if (await run("/admin/promo", { line })) {
+      setCode("");
+      setReward({});
+    }
+  };
   return (
     <Screen status={data.status} error={data.error}>
       {data.data && (
         <div className="adm-split">
           <Panel title="Новый промокод">
-            <div className="adm-hint">
-              Одной строкой: <code>КОД [uses N | time ЧАСЫ | users @a,@b] ресурс:кол ...</code>
-              <br />Ресурсы: <code>{data.data.resources.join(" ")}</code>. Минус — штраф.
-              <br />Примеры: <code>START uses 100 coins:500 tickets:5</code> · <code>GIFT time 24 donate:50</code>
-            </div>
             <div className="adm-inline">
-              <TextInput value={line} onChange={setLine} placeholder="BONUS coins:1000" />
-              <button type="button" className="btn small" disabled={busy || !line.trim()} onClick={async () => { if (await run("/admin/promo", { line })) setLine(""); }}>Создать</button>
+              <TextInput value={code} onChange={setCode} placeholder="КОД" />
             </div>
+            <div className="adm-inline" style={{ marginTop: 8 }}>
+              <Select value={mode} onChange={setMode} options={[
+                { value: "uses", label: "По активациям" },
+                { value: "time", label: "По времени (ч)" },
+                { value: "users", label: "Для @username" },
+                { value: "none", label: "Без лимита" },
+              ]} />
+              {mode !== "none" && (
+                <TextInput value={param} onChange={setParam} placeholder={mode === "users" ? "@a,@b" : mode === "time" ? "часов" : "активаций"} />
+              )}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6, marginTop: 8 }}>
+              {data.data.resources.map((r) => (
+                <TextInput key={r} type="number" value={reward[r] ?? ""} onChange={(v) => setReward({ ...reward, [r]: v })}
+                  placeholder={data.data?.resource_labels?.[r] ?? r} />
+              ))}
+            </div>
+            <div className="adm-hint" style={{ marginTop: 6 }}>
+              Отрицательная награда — штраф (баланс не уйдёт ниже 0). Итог: <code>{line || "—"}</code>
+            </div>
+            <button type="button" className="btn gold block" style={{ marginTop: 8 }} disabled={busy || !ready} onClick={create}>Создать</button>
           </Panel>
           <Panel title="Последние коды">
             <div className="adm-list">

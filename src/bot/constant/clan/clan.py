@@ -117,3 +117,9 @@ STATS_SORT_SPENT = "spent"
 STATS_SORT_WARS = "wars"
 STATS_SORT_ACTIVITY = "activity"
 STATS_SORTS = (STATS_SORT_TREASURY, STATS_SORT_GARRISON, STATS_SORT_SPENT, STATS_SORT_WARS, STATS_SORT_ACTIVITY)
+
+# «Внести всех» в роту (2026-10-21): сначала экран подтверждения, потом исполнение.
+CB_CLAN_GAR_PUT_ALL_STATISTS = "clan:gpas"
+CB_CLAN_GAR_PUT_ALL_CARDS = "clan:gpac"
+CB_CLAN_GAR_PUT_ALL_STATISTS_OK = "clan:gpas!"
+CB_CLAN_GAR_PUT_ALL_CARDS_OK = "clan:gpac!"

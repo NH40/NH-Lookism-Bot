@@ -291,3 +291,77 @@ async def take_cards_from(session: AsyncSession, redis: Redis, user_id: int, cod
         raise
     finally:
         await redis.delete(lock)
+
+
+
+# --- «внести всех» одной кнопкой (пользователь 2026-10-21) ---
+
+async def put_all_statists(session: AsyncSession, redis: Redis, user_id: int) -> tuple[int, int]:
+    """Все статисты игрока (оба лагеря) — в роту клана: один INSERT ... SELECT по стопкам и один
+    UPDATE, обнуляющий армию (правило 3 — без цикла по отрядам). → (бойцов, их мощь)."""
+    from sqlalchemy import text
+
+    member = await require_member(session, user_id)
+    lock = await _lock(redis, user_id)
+    try:
+        rows = (await session.execute(text(
+            "SELECT rank, stars, training_level, school, school_level, SUM(quantity) AS q FROM extras "
+            "WHERE user_id = :u AND quantity > 0 GROUP BY rank, stars, training_level, school, school_level"
+        ), {"u": user_id})).all()
+        # Блокируем строки армии игрока до конца транзакции (двойной клик не внесёт дважды).
+        await session.execute(text("SELECT id FROM extras WHERE user_id = :u AND quantity > 0 FOR UPDATE"), {"u": user_id})
+        units = sum(int(r.q) for r in rows)
+        if not units:
+            raise ClanError("not_enough")
+        power = round(sum(statist_unit_power(r.rank, r.stars, r.training_level, r.school, r.school_level) * int(r.q) for r in rows))
+        await session.execute(text(
+            "INSERT INTO clan_garrison_extras (clan_id, rank, stars, training_level, school, school_level, quantity) "
+            "SELECT :c, rank, stars, training_level, school, school_level, SUM(quantity) FROM extras "
+            "WHERE user_id = :u AND quantity > 0 GROUP BY rank, stars, training_level, school, school_level "
+            "ON CONFLICT (clan_id, rank, stars, training_level, school, school_level) "
+            "DO UPDATE SET quantity = clan_garrison_extras.quantity + EXCLUDED.quantity"
+        ), {"c": member.clan_id, "u": user_id})
+        await session.execute(text("UPDATE extras SET quantity = 0 WHERE user_id = :u AND quantity > 0"), {"u": user_id})
+        await clan_repo.bump_stats(session, member.clan_id, user_id, garrison_units=units, garrison_power=power)
+        await clan_repo.log(session, member.clan_id, f"⚔️ {await _name(session, user_id)} внёс(ла) в роту всю армию: {units} бойц.")
+        await quest_event(session, user_id, TASK_GARRISON)
+        await session.commit()
+        return units, power
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
+        await redis.delete(lock)
+
+
+async def put_all_cards(session: AsyncSession, redis: Redis, user_id: int) -> tuple[int, int]:
+    """Все копии уников из армии игрока (оба лагеря; на позициях — не трогаем) — в роту. → (копий, мощь)."""
+    from sqlalchemy import text
+
+    member = await require_member(session, user_id)
+    lock = await _lock(redis, user_id)
+    try:
+        rows = (await session.execute(text(
+            "SELECT card_code, SUM(quantity) AS q FROM card_stacks WHERE user_id = :u AND quantity > 0 GROUP BY card_code"
+        ), {"u": user_id})).all()
+        await session.execute(text("SELECT id FROM card_stacks WHERE user_id = :u AND quantity > 0 FOR UPDATE"), {"u": user_id})
+        units = sum(int(r.q) for r in rows)
+        if not units:
+            raise ClanError("not_enough")
+        power = sum(_card_power(r.card_code) * int(r.q) for r in rows)
+        await session.execute(text(
+            "INSERT INTO clan_garrison_cards (clan_id, card_code, quantity) "
+            "SELECT :c, card_code, SUM(quantity) FROM card_stacks WHERE user_id = :u AND quantity > 0 GROUP BY card_code "
+            "ON CONFLICT (clan_id, card_code) DO UPDATE SET quantity = clan_garrison_cards.quantity + EXCLUDED.quantity"
+        ), {"c": member.clan_id, "u": user_id})
+        await session.execute(text("UPDATE card_stacks SET quantity = 0 WHERE user_id = :u AND quantity > 0"), {"u": user_id})
+        await clan_repo.bump_stats(session, member.clan_id, user_id, garrison_units=units, garrison_power=power)
+        await clan_repo.log(session, member.clan_id, f"⚔️ {await _name(session, user_id)} внёс(ла) в роту всех уников: {units} коп.")
+        await quest_event(session, user_id, TASK_GARRISON)
+        await session.commit()
+        return units, power
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
+        await redis.delete(lock)

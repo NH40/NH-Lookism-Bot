@@ -4,7 +4,7 @@ import type { ClanGarrison, ClanInfo } from "../../types";
 import { imgUrl } from "../../api";
 import { Panel, Screen, countdown, fmt } from "../../components/ui";
 import { useAction, useApi } from "../../hooks/useApi";
-import { PickAmountSheet, type PickItem } from "./shared";
+import { ConfirmSheet, PickAmountSheet, type PickItem } from "./shared";
 
 type Mode = "put-statists" | "put-cards" | "take-statists" | "take-cards";
 
@@ -16,6 +16,7 @@ export function GarrisonTab({ clan, onChanged }: { clan: ClanInfo; onChanged: ()
 		await onChanged();
 	});
 	const [mode, setMode] = useState<Mode | null>(null);
+	const [putAll, setPutAll] = useState<"statists" | "cards" | null>(null);
 
 	const items = (g: ClanGarrison, m: Mode): PickItem[] => {
 		const statists = (m === "put-statists" ? g.my_statists : g.statists).map((s) => ({ id: s.key, title: s.title, sub: `мощь ${fmt(s.power)} · ${fmt(s.quantity)} шт.`, max: s.quantity }));
@@ -53,6 +54,10 @@ export function GarrisonTab({ clan, onChanged }: { clan: ClanInfo; onChanged: ()
 							<button className="btn small" type="button" onClick={() => setMode("put-statists")}><PackagePlus size={15} />Бойцов</button>
 							<button className="btn small" type="button" onClick={() => setMode("put-cards")}><PackagePlus size={15} />Уников</button>
 						</div>
+						<div className="grid-2" style={{ marginTop: 6 }}>
+							<button className="btn ghost small" type="button" disabled={busy} onClick={() => setPutAll("statists")}>Всю армию</button>
+							<button className="btn ghost small" type="button" disabled={busy} onClick={() => setPutAll("cards")}>Всех уников</button>
+						</div>
 						{!locked(data) && (
 							<div className="grid-2" style={{ marginTop: 8 }}>
 								<button className="btn ghost small" type="button" disabled={data.statists.length === 0} onClick={() => setMode("take-statists")}><PackageMinus size={15} />Забрать бойцов</button>
@@ -88,6 +93,19 @@ export function GarrisonTab({ clan, onChanged }: { clan: ClanInfo; onChanged: ()
 						</Panel>
 					)}
 
+					{putAll && (
+						<ConfirmSheet
+							title={putAll === "statists" ? "Вся армия в роту" : "Все уники в роту"}
+							text={putAll === "statists"
+								? "Внести в роту ВСЕХ своих статистов из обоих лагерей? Забрать обратно — только по правилам роты."
+								: "Внести в роту ВСЕ копии уников из армии (стоящие на позициях не трогаем)? Забрать обратно — только по правилам роты."}
+							confirmLabel="Внести всё"
+							tone="gold"
+							busy={busy}
+							onConfirm={async () => { await run(`/clan/garrison/put-all-${putAll}`, {}); setPutAll(null); }}
+							onClose={() => setPutAll(null)}
+						/>
+					)}
 					{mode && (
 						<PickAmountSheet
 							title={{ "put-statists": "Внести бойцов", "put-cards": "Внести уников", "take-statists": "Забрать бойцов", "take-cards": "Забрать уников" }[mode]}

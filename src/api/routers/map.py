@@ -56,10 +56,13 @@ def event_art(kind: str, code: str, fallback: dict[str, str | None]) -> str | No
 
 
 # Арт шапки по коду страны (assets/map); у стран без файла шапка рисуется градиентом.
-COUNTRY_ART: dict[str, str] = {
+_COUNTRY_ART_FILES: dict[str, str] = {
     "RU": "map/Russia.png", "US": "map/America.png", "JP": "map/Japan.png",
     "KR": "map/South_Korea.png", "MX": "map/Mexico.png",
+    # Ждут файлы (2026-10-21): положить в assets/map — подхватятся без правок кода.
+    "KZ": "map/Kazakhstan.png", "CN": "map/China.png",
 }
+COUNTRY_ART: dict[str, str] = {code: rel for code, rel in _COUNTRY_ART_FILES.items() if (ASSETS_DIR / rel).is_file()}
 
 
 class CityOut(BaseModel):

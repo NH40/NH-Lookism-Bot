@@ -51,6 +51,7 @@ from bot.services.gang import (
     get_gang,
     request_delete,
 )
+from bot.db.repositories.user import get_by_id
 from bot.handlers.bloodline import prompt_bloodline
 from bot.states.gang import GangStates
 from bot.texts.gang import (
@@ -107,7 +108,13 @@ async def on_gang_name(message: Message, state: FSMContext, session: AsyncSessio
 
     await state.clear()
     await message.answer(NAME_CONFIRMED.format(name=esc(gang.name)))
-    # Следующий шаг онбординга — родословная (выбор навсегда), профиль — после неё.
+    # Следующий шаг онбординга — родословная (выбор навсегда), профиль — после неё. После
+    # удаления банды родословная остаётся (`services/gang/reset`) — повторно её не спрашиваем,
+    # иначе игрок застревал: любой выбор отклонялся как «уже выбрана» (баг 2026-10-21).
+    user = await get_by_id(session, message.from_user.id)
+    if user is not None and user.bloodline is not None:
+        await show_profile(message, session, message.from_user.id)
+        return
     await prompt_bloodline(message)
 
 

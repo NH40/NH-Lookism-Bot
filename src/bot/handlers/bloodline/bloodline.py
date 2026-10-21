@@ -195,8 +195,11 @@ async def cb_bloodline_pick(callback: CallbackQuery, session: AsyncSession) -> N
         await callback.answer()
         return
     except BloodlineAlreadyChosenError:
-        # Popup — без HTML.
+        # Родословная уже есть (выбор навсегда, переживает удаление банды) — не тупик: убираем
+        # старые кнопки и ведём дальше в профиль. Popup — без HTML.
         await callback.answer(ALREADY_CHOSEN_ALERT, show_alert=True)
+        await safe_clear_markup(callback.message)
+        await show_profile(callback.message, session, callback.from_user.id)
         return
     await callback.answer()
     await safe_clear_markup(callback.message)

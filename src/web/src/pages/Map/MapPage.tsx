@@ -156,15 +156,8 @@ function EventCard({ event, onFight, onMeet, busy, bossCd }: {
   // Учитель техник / школы: «Взять задание» (как кнопка под учителем в боте), дальше — куда сдавать.
   const target = event.kind === "school" ? ROUTE_TRAINING : ROUTE_DEVELOPMENT;
   const where = event.kind === "school" ? "Тренировки" : "Развитие";
-  return (
-    <div className="tile">
-      <div className="event-row">
-        <div className="ico-box"><Users size={18} /></div>
-        <div>
-          <b>Учитель: {event.title}</b>
-          <small style={{ display: "block" }}>{event.subtitle} · {countdown(left)}</small>
-        </div>
-      </div>
+  const actions = (
+    <>
       {event.state === "new" && (
         <button className="btn gold block small" type="button" style={{ marginTop: 8 }} disabled={busy} onClick={() => onMeet(event)}>
           Взять задание
@@ -180,6 +173,32 @@ function EventCard({ event, onFight, onMeet, busy, bossCd }: {
           {event.kind === "school" ? "Учитель уже открыт" : "Техника уже изучена"}
         </Link>
       )}
+    </>
+  );
+  // Есть портрет (assets/teacher_ut, assets/teacher_statist) — карточка как у босса.
+  if (event.image) {
+    return (
+      <div className="boss-card teacher-card">
+        <img src={imgUrl(event.image, 480)} alt={event.title} loading="lazy" />
+        <div className="boss-over">
+          <div className="boss-tag">{event.kind === "school" ? "УЧИТЕЛЬ СТАТИСТОВ" : "УЧИТЕЛЬ ТЕХНИКИ"}</div>
+          <div className="disp" style={{ fontSize: 17, fontWeight: 800 }}>{event.title}</div>
+          <div className="boss-desc">{event.subtitle} · исчезнет через {countdown(left)}</div>
+          <div style={{ marginTop: "auto", maxWidth: 220 }}>{actions}</div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="tile">
+      <div className="event-row">
+        <div className="ico-box"><Users size={18} /></div>
+        <div>
+          <b>Учитель: {event.title}</b>
+          <small style={{ display: "block" }}>{event.subtitle} · {countdown(left)}</small>
+        </div>
+      </div>
+      {actions}
     </div>
   );
 }

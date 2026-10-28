@@ -143,3 +143,49 @@ async def strength_power_multiplier(session: AsyncSession, user_id: int) -> int:
     """Множитель мощи армии игрока в процентах (100 = без бонуса): Сила +1% за ранг плюс
     мастерство Силы +10/25/50%."""
     return (await get_combat_profile(session, user_id)).power_percent
+
+
+
+# --- очки потенциала (2026-10-28) ---
+
+class PotentialMaxedError(Exception):
+    pass
+
+
+class NotEnoughPotentialPointsError(Exception):
+    def __init__(self, cost: int, have: int) -> None:
+        self.cost, self.have = cost, have
+
+
+@dataclass(frozen=True, slots=True)
+class PotentialProgress:
+    potential: str
+    points: int
+    next_potential: str | None  # None — уже Легенда
+    cost: int | None
+
+
+async def potential_progress(session: AsyncSession, user_id: int) -> PotentialProgress:
+    from sqlalchemy import select
+
+    from bot.config.characteristic import POTENTIAL_UPGRADE_COST
+    from bot.constant.characteristic import POTENTIAL_ORDER
+    from bot.db.models.user import User
+
+    potential = await ensure_potential(session, user_id)
+    points = int(await session.scalar(select(User.potential_points).where(User.id == user_id)) or 0)
+    idx = POTENTIAL_ORDER.index(potential) if potential in POTENTIAL_ORDER else 0
+    nxt = POTENTIAL_ORDER[idx + 1] if idx + 1 < len(POTENTIAL_ORDER) else None
+    return PotentialProgress(potential, points, nxt, POTENTIAL_UPGRADE_COST.get(potential) if nxt else None)
+
+
+async def upgrade_potential(session: AsyncSession, user_id: int) -> str:
+    """Потенциал на ступень выше за очки потенциала. Коммитит. → новый потенциал."""
+    progress = await potential_progress(session, user_id)
+    if progress.next_potential is None or progress.cost is None:
+        raise PotentialMaxedError
+    if not await char_repo.upgrade_potential(session, user_id, progress.potential, progress.next_potential, progress.cost):
+        fresh = await potential_progress(session, user_id)
+        raise NotEnoughPotentialPointsError(progress.cost, fresh.points)
+    await session.commit()
+    return progress.next_potential

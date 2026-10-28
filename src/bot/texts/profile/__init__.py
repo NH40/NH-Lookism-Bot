@@ -1,6 +1,7 @@
 """Публичное API домена profile (тексты)."""
 from bot.texts.profile.profile import (  # noqa: F401
     BTN_PERSONAL_TRAINING,
+    BTN_POTENTIAL_UP,
     BTN_STATS,
     BTN_STAT_UP_FIVE,
     BTN_STAT_UP_MAX,
@@ -17,6 +18,12 @@ from bot.texts.profile.profile import (  # noqa: F401
     PHASE_LABELS,
     POTENTIAL_LABELS,
     POTENTIAL_LINE,
+    POTENTIAL_POINTS_HINT,
+    POTENTIAL_POINTS_LINE,
+    POTENTIAL_POINTS_MAX,
+    POTENTIAL_UP_DONE,
+    POTENTIAL_UP_MAXED,
+    POTENTIAL_UP_NOT_ENOUGH,
     POTIONS_BLOCK,
     POTION_LINE,
     PROFILE_CARD,

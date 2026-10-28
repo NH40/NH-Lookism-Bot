@@ -117,6 +117,10 @@ class User(Base):
     # Свитки пропуска (награда Battle Pass): мгновенно выполняют активное задание развития.
     skip_scrolls: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     path_point_gates: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
+    # Очки потенциала (2026-10-28): копятся за ту же активность, что очки пути (свои интервалы),
+    # тратятся на повышение потенциала на ступень. Сгорают при удалении банды и пробуждении.
+    potential_points: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
+    potential_point_gates: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
     technique_fragments: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
     genius_fragments: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
     path_stage: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")

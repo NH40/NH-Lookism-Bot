@@ -59,7 +59,22 @@ async def emit(session: AsyncSession, user_id: int, task: str, n: int = 1) -> No
     for t in tasks:
         await quest_repo.emit(session, user_id, t, n)
         await award_path_points(session, user_id, t)
+        await award_potential_points(session, user_id, t)
         await on_event(session, user_id, t, n)
+
+
+async def award_potential_points(session: AsyncSession, user_id: int, source: str) -> int | None:
+    """Очки потенциала за активность — те же источники и интервалы, что у очков пути, но без
+    условия «путь пробуждён» и без ускорения КПД. НЕ коммитит."""
+    from bot.db.repositories import characteristic as char_repo
+
+    spec = PATH_POINT_SOURCES.get(source)
+    if spec is None:
+        return None
+    points, gate = spec
+    return await char_repo.award_potential_points(
+        session, user_id, source, points, gate, int(datetime.now(timezone.utc).timestamp())
+    )
 
 
 async def award_path_points(session: AsyncSession, user_id: int, source: str) -> int | None:

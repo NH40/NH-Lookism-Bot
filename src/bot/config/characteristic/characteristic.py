@@ -202,3 +202,20 @@ def statist_unit_power(rank: str, stars: int, training_level: int, school: str =
 
         power *= 1 + SCHOOL_POWER_PER_LEVEL.get(school, 0.0) * school_level
     return power
+
+
+
+# Очки потенциала (пользователь 2026-10-28): «как очки пути — за время игры копятся, накопив,
+# можно повысить потенциал; за месяц плотной игры — на ~4 ранга, до Легенды — сложно».
+# Источники и интервалы — те же, что у очков пути (≈450 очков в день плотной игры), но без
+# условия «путь пробуждён». Цена — с какого потенциала на следующий; растёт ступенями:
+# первые 4 перехода ≈ 3+5+8+14 = 30 дней, до Легенды всего ≈ 155 дней.
+POTENTIAL_UPGRADE_COST: dict[str, int] = {
+    POT_MEMBER: 1_350,
+    POT_GANG_BOSS: 2_250,
+    POT_WEAK_KING: 3_600,
+    POT_KING: 6_300,
+    POT_STRONG_KING: 11_250,
+    POT_GEN_ZERO: 18_000,
+    POT_PEAK: 27_000,
+}

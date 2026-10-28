@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.constant.characteristic import (
@@ -106,3 +106,34 @@ async def get_combat_row(session: AsyncSession, user_id: int) -> CombatRow:
         return CombatRow(ranks={k: 0 for k in _STAT_COLUMNS}, mastery={k: 0 for k in _MASTERY_COLUMNS})
     values = list(row)
     return CombatRow(ranks=dict(zip(_STAT_COLUMNS, values[:4])), mastery=dict(zip(_MASTERY_COLUMNS, values[4:])))
+
+
+
+# --- очки потенциала (2026-10-28) ---
+
+_AWARD_POTENTIAL_SQL = text(
+    """
+    UPDATE users
+    SET potential_points = potential_points + CAST(:points AS bigint),
+        potential_point_gates = potential_point_gates || jsonb_build_object(CAST(:source AS text), CAST(:now AS bigint))
+    WHERE id = :uid
+      AND COALESCE((potential_point_gates ->> CAST(:source AS text))::bigint, 0) <= CAST(:now AS bigint) - CAST(:gate AS bigint)
+    RETURNING potential_points
+    """
+)
+
+
+async def award_potential_points(session: AsyncSession, user_id: int, source: str, points: int, gate_seconds: int, now: int) -> int | None:
+    """→ новый баланс; None — интервал источника ещё не прошёл. НЕ коммитит."""
+    return await session.scalar(
+        _AWARD_POTENTIAL_SQL, {"uid": user_id, "source": source, "points": points, "gate": gate_seconds, "now": now}
+    )
+
+
+async def upgrade_potential(session: AsyncSession, user_id: int, current: str, nxt: str, cost: int) -> bool:
+    """Потенциал на ступень выше за очки — условный UPDATE (правило 1): двойной клик не спишет дважды."""
+    result = await session.execute(text(
+        "UPDATE users SET potential = :nxt, potential_points = potential_points - :cost "
+        "WHERE id = :uid AND potential = :cur AND potential_points >= :cost"
+    ), {"uid": user_id, "cur": current, "nxt": nxt, "cost": cost})
+    return result.rowcount > 0

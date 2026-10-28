@@ -110,6 +110,9 @@ async def get_my_profile(
         bloodline=DevItem(bl.code, bl.level) if bl and bl.code else None,
     )
     pp = extras.phase_progress
+    from bot.services.characteristic import potential_progress
+
+    pot = await potential_progress(session, user_id)
     development = [
         _dev("bloodline", BLOODLINE_NAMES, extras.bloodline),
         _dev("bloodline", BLOODLINE_NAMES, extras.bloodline2, " (2)"),
@@ -130,6 +133,8 @@ async def get_my_profile(
         phase=profile.phase,
         phase_label=PHASE_LABELS.get(profile.phase, profile.phase),
         potential_label=POTENTIAL_LABELS.get(profile.stats.potential, profile.stats.potential),
+        potential_points=pot.points, potential_cost=pot.cost,
+        potential_next=POTENTIAL_LABELS.get(pot.next_potential) if pot.next_potential else None,
         gang_name=profile.gang_name,
         army_power=profile.army_power,
         attack_power=extras.attack_power,
@@ -215,3 +220,18 @@ async def _is_staff(session: AsyncSession, user_id: int) -> bool:
     from bot.services.admin.roles import role_of
 
     return await role_of(session, user_id) is not None
+
+
+
+@router.post("/potential-up")
+async def post_potential_up(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    """Повысить потенциал за очки потенциала (2026-10-28) — тот же сервис, что кнопка в боте."""
+    from bot.services.characteristic import NotEnoughPotentialPointsError, PotentialMaxedError, upgrade_potential
+
+    try:
+        new = await upgrade_potential(session, user_id)
+    except PotentialMaxedError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Потенциал уже на максимуме.") from None
+    except NotEnoughPotentialPointsError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Не хватает очков потенциала: нужно {exc.cost}, есть {exc.have}.") from None
+    return {"ok": True, "message": f"Потенциал повышен: {POTENTIAL_LABELS.get(new, new)}!"}

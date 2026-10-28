@@ -2781,3 +2781,14 @@ MedetGay, Archangel_17, частично Greenbild). Решения пользо
   проходе мастерства (`check_breakthroughs`).
 - Задания: `TASK_TRAININGS` + новый `TASK_EXTRAS` (`progress_extras`, хук в `services/training`) на
   каждом этапе. Миграция `e5f1c8a2d406`: не начатые этапы 2+ → прорыв; активным новые пункты засчитаны.
+
+
+## Очки потенциала (2026-10-28)
+
+`users.potential_points` + `potential_point_gates` (миграция `f6a2d9b3e517`). Начисляются в
+`dev_quest.emit` → `award_potential_points` по тем же `PATH_POINT_SOURCES` (очки/интервал), но без
+условия пробуждённого пути и без КПД. Повышение — `services/characteristic.upgrade_potential`
+(условный UPDATE `potential = :cur AND potential_points >= :cost`), цены `config/characteristic.
+POTENTIAL_UPGRADE_COST` по текущему потенциалу. Сгорают в `_PROGRESS_COLUMNS` (удаление банды,
+пробуждение). Бот — экран «Характеристики» (кнопка при достатке очков), API `POST /api/potential-up`,
+Mini App — панель «Потенциал» в профиле. Важно: выше потенциал — дольше ожидание заданий мастерства.

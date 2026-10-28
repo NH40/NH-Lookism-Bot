@@ -20,6 +20,9 @@ export interface ProfileData {
   phase: string;
   phase_label: string;
   potential_label: string;
+  potential_points?: number;
+  potential_cost?: number | null;
+  potential_next?: string | null;
   gang_name: string | null;
   army_power: number;
   attack_power: number;

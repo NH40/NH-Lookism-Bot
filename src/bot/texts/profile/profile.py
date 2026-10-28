@@ -119,3 +119,13 @@ BTN_PERSONAL_TRAINING = "🧘 Личная тренировка"
 STAT_INVESTED = "{label}: +{ranks} → {rank} (−{cost} оч.)"
 STAT_MAXED = "Эта характеристика уже на максимуме."
 STAT_NOT_ENOUGH = "Не хватает очков: нужно {cost}, у тебя {points}. Очки даёт личная тренировка."
+
+
+# Очки потенциала (2026-10-28).
+POTENTIAL_POINTS_LINE = "🧬 Очки потенциала: <b>{points}</b> / {cost} → {next}"
+POTENTIAL_POINTS_MAX = "🧬 Потенциал на максимуме — Легенда."
+POTENTIAL_POINTS_HINT = "<i>Очки потенциала копятся за обычную активность (тренировки, бои, боссы, доход…) и сгорают при удалении банды и пробуждении.</i>"
+BTN_POTENTIAL_UP = "🧬 Повысить потенциал → {next}"
+POTENTIAL_UP_DONE = "Потенциал повышен: {potential}!"
+POTENTIAL_UP_NOT_ENOUGH = "Не хватает очков потенциала: нужно {cost}, есть {have}."
+POTENTIAL_UP_MAXED = "Потенциал уже на максимуме."

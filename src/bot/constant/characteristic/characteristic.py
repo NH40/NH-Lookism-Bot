@@ -80,3 +80,5 @@ MASTERY_SPEED = "speed"
 MASTERY_ENDURANCE = "endurance"
 MASTERY_TECHNIQUE = "technique"
 MASTERIES: tuple[str, ...] = (MASTERY_STRENGTH, MASTERY_SPEED, MASTERY_ENDURANCE, MASTERY_TECHNIQUE)
+
+CB_POTENTIAL_UP = "stats:potup"  # повысить потенциал за очки потенциала (2026-10-28)

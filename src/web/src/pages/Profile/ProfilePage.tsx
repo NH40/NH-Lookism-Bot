@@ -5,7 +5,7 @@ import type { ProfileDevItem, ProfileData } from "../../types";
 import { Bar, Chip, Panel, Screen, StatRow, countdown, fmt } from "../../components/ui";
 import { Link } from "react-router-dom";
 import { ROUTE_STATS } from "../../constants";
-import { useApi } from "../../hooks/useApi";
+import { useAction, useApi } from "../../hooks/useApi";
 import { getWebApp } from "../../telegram";
 import "./Profile.css";
 
@@ -24,15 +24,16 @@ const DEV_ICONS: Record<ProfileDevItem["kind"], { icon: ReactNode; label: string
 };
 
 export function ProfilePage() {
-  const { data, status, error } = useApi<ProfileData>("/profile");
+  const { data, status, error, reload } = useApi<ProfileData>("/profile");
+  const { run, busy } = useAction(reload);
   return (
     <Screen status={status} error={error}>
-      {data && <ProfileView p={data} />}
+      {data && <ProfileView p={data} run={run} busy={busy} />}
     </Screen>
   );
 }
 
-function ProfileView({ p }: { p: ProfileData }) {
+function ProfileView({ p, run, busy }: { p: ProfileData; run: (path: string, body?: unknown) => Promise<unknown>; busy: boolean }) {
   const name = p.display_name ?? (p.username ? `@${p.username}` : "Игрок");
   const sub = [p.gang_name ? `Банда «${p.gang_name}»` : null, p.clan_name ? `Клан «${p.clan_name}»` : null, p.city?.name].filter(Boolean).join(" · ");
   // Аватар: карта на позиции «Лидер» → фото Telegram → эмблема с инициалами.
@@ -64,6 +65,23 @@ function ProfileView({ p }: { p: ProfileData }) {
           <small>в сети</small>
         </div>
       </div>
+
+      {p.potential_cost != null && p.potential_next && (
+        <Panel title="ПОТЕНЦИАЛ" tone="gold" badgeMark="🧬">
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 700, marginBottom: 5 }}>
+            <span className="muted">До «{p.potential_next}»</span>
+            <span>{fmt(p.potential_points ?? 0)} / {fmt(p.potential_cost)}</span>
+          </div>
+          <Bar value={p.potential_points ?? 0} max={p.potential_cost} fill="gold" />
+          <div className="muted" style={{ fontSize: 11, fontWeight: 700, margin: "6px 0" }}>
+            Очки потенциала копятся за активность и сгорают при удалении банды и пробуждении.
+          </div>
+          <button className={`btn gold block ${(p.potential_points ?? 0) >= p.potential_cost ? "" : "off"}`} type="button"
+            disabled={busy || (p.potential_points ?? 0) < p.potential_cost} onClick={() => run("/potential-up")}>
+            Повысить потенциал
+          </button>
+        </Panel>
+      )}
 
       <div className="grid-3">
         <Chip variant="gold" icon={<Coins size={18} color="#f5b942" />} value={fmt(p.nh_coins)} label="NHCoin" />

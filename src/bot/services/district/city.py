@@ -10,7 +10,6 @@ raw-notes «Фазы»: «круг уже сражается с другими �
 """
 from __future__ import annotations
 
-import random
 
 from dataclasses import dataclass
 
@@ -221,11 +220,10 @@ async def attack_city_bots(session: AsyncSession, redis: Redis, user: User, city
         LOG_CITY_BOTS.format(city=city.name, outcome=WON if result.attacker_won else LOST, count=captured),
     )
     await session.commit()
-    free_attack = profile.rolls_free_attack()
-    # «Неудержимый» / «Двойной захват» (Военачальник): шанс, что победа над ботами не ставит КД.
-    if not free_attack and result.attacker_won and profile.build.positions is not None:
-        pos = profile.build.positions
-        free_attack = random.random() < min(0.5, pos.get("no_cd_bots") + pos.get("no_cd_on_win"))
+    # Ловкость / «Неудержимый» / «Двойной захват» — бой без КД, шанс тает в цепочке.
+    from bot.services.district.free_attack import roll_free_attack
+
+    free_attack = await roll_free_attack(redis, user.id, profile, won=result.attacker_won, vs_bots=True)
     if free_attack:
         await redis.delete(key)
     else:

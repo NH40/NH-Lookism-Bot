@@ -179,3 +179,39 @@ async def awaken(session: AsyncSession, redis: Redis, user_id: int, rng: random.
     await log_activity(session, user_id, ACT_DEVELOPMENT, LOG_AWAKENING.format(level=new_level))
     await session.commit()
     return AwakenResult(level=new_level, potential=potential, blood=blood, multiplier=awakening_multiplier(new_level))
+
+
+
+# --- смена страны после пробуждения (2026-10-28) ---
+
+class RelocateExpiredError(Exception):
+    pass
+
+
+class RelocateHasDistrictsError(Exception):
+    pass
+
+
+async def allow_relocate(redis: Redis, user_id: int) -> None:
+    from bot.cache.keys import relocate_allowed
+    from bot.config.awakening import RELOCATE_WINDOW_SECONDS
+
+    await redis.set(relocate_allowed(user_id), "1", ex=RELOCATE_WINDOW_SECONDS)
+
+
+async def relocate(session: AsyncSession, redis: Redis, user_id: int) -> None:
+    """Освободить страну/город игрока — дальше обычный онбординг-выбор (банда остаётся).
+    Только в окно после пробуждения и без районов. Коммитит."""
+    from sqlalchemy import update
+
+    from bot.cache.keys import relocate_allowed
+    from bot.db.models.user import User
+    from bot.db.repositories.district import count_owned
+
+    if not await redis.exists(relocate_allowed(user_id)):
+        raise RelocateExpiredError
+    if await count_owned(session, user_id):
+        raise RelocateHasDistrictsError
+    await session.execute(update(User).where(User.id == user_id).values(country_code=None, city_id=None))
+    await session.commit()
+    await redis.delete(relocate_allowed(user_id))

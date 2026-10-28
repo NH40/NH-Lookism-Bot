@@ -12,6 +12,7 @@ from bot.constant.deposit import (
     CB_DEPOSIT_RES_PREFIX,
     CB_DEPOSIT_TERM_PREFIX,
 )
+from bot.config.deposit import DEPOSIT_EXCLUDED
 from bot.constant.resource import NO_MINT_RESOURCES, RESOURCES
 from bot.texts.common import BTN_BACK
 from bot.texts.deposit import BTN_CLAIM_EARLY, BTN_CLAIM_READY, BTN_NEW_DEPOSIT, BTN_TERM
@@ -38,7 +39,7 @@ def deposits_menu(deposits: list, can_open: bool) -> InlineKeyboardMarkup:
 
 
 def resources_menu() -> InlineKeyboardMarkup:
-    buttons = [_btn(resource_label(code), f"{CB_DEPOSIT_RES_PREFIX}{code}") for code in RESOURCES if code not in NO_MINT_RESOURCES]
+    buttons = [_btn(resource_label(code), f"{CB_DEPOSIT_RES_PREFIX}{code}") for code in RESOURCES if code not in NO_MINT_RESOURCES and code not in DEPOSIT_EXCLUDED]
     rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
     rows.append([_btn(BTN_BACK, CB_DEPOSIT_OPEN)])
     return InlineKeyboardMarkup(inline_keyboard=rows)

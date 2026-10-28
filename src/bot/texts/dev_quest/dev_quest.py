@@ -31,7 +31,7 @@ from bot.constant.dev_quest import (
 )
 
 TASK_LABELS: dict[str, str] = {
-    TASK_WIN_PVE: "Победить ботов района или города",
+    TASK_WIN_PVE: "Победить ботов района/города или игрока нападающим",
     TASK_WIN_PVP: "Победить игрока нападающим (вызов)",
     TASK_BOSS_WIN: "Победить босса на карте",
     TASK_PERSONAL_TRAIN: "Личная тренировка",

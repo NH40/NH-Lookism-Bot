@@ -22,6 +22,7 @@ from bot.config.deposit import DEPOSIT_MAX_ACTIVE, DEPOSIT_RATES
 from bot.config.potion import POTION_TIERS
 from bot.config.storage import STORAGE_DEBT_CAP_HOURS, STORAGE_FEE_PER_HOUR
 from bot.constant.potion import POTIONS
+from bot.config.deposit import DEPOSIT_EXCLUDED
 from bot.constant.resource import ITEM_RESOURCE, ITEM_STATIST, NO_MINT_RESOURCES, RESOURCES
 from bot.services import contract as contract_svc
 from bot.services import deposit as deposit_svc
@@ -282,7 +283,7 @@ async def _storage(session: AsyncSession, user_id: int, bal: dict[str, int]) -> 
 async def _deposits(session: AsyncSession, user_id: int, bal: dict[str, int]) -> DepositsOut:
     resources = []
     for code in RESOURCES:
-        if code in NO_MINT_RESOURCES:
+        if code in NO_MINT_RESOURCES or code in DEPOSIT_EXCLUDED:
             continue
         resources.append(DepositResOut(
             code=code, name=RESOURCE_NAMES[code], cap=await deposit_svc.cap_for(session, user_id, code),

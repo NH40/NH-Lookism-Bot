@@ -74,7 +74,7 @@ MASTERY_LABELS: dict[str, str] = {
 # Ступени мастерства (raw-notes «Профиль»: Стена → Трансцендентность → Мастерство).
 MASTERY_TIER_LABELS: dict[int, str] = {0: "—", 1: "Стена", 2: "Трансцендентность", 3: "Мастерство"}
 MASTERY_LINE = "{label}: {tier}"
-MASTERY_LOCKED = "🔒 Задание «Преодоление стены» откроется, когда все характеристики дойдут до EXR."
+MASTERY_LOCKED = "🔒 Задание «Преодоление стены» откроется, когда все характеристики дойдут до CX."
 MASTERY_OPEN_HINT = "🧱 Задания «Преодоление стены» — в 🥋 Мастерстве."
 POTENTIAL_LABELS: dict[str, str] = {
     POT_MEMBER: "Член банды",

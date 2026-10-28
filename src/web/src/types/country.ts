@@ -18,7 +18,7 @@ export interface CountryData {
   cities_mine: number;
   cities: CountryCity[];
   // Бой за трон по кнопке: круг держит все районы, а города страны у императора(ов).
-  throne?: { can_challenge: boolean; missing: number; has_emperor: boolean } | null;
+  throne?: { can_challenge: boolean; missing: number; has_emperor: boolean; queue?: { name: string; throne: boolean; cities: number }[] } | null;
 }
 
 export interface CityOwner {

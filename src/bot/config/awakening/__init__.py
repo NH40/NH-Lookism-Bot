@@ -4,6 +4,7 @@ from bot.config.awakening.awakening import (  # noqa: F401
     AWAKENING_MAX,
     AWAKENING_QUEST_BASE,
     LEVELS,
+    RELOCATE_WINDOW_SECONDS,
     awakening_blood_drops,
     awakening_quest,
     potential_floor_index,

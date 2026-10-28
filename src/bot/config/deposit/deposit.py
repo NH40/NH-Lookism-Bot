@@ -32,5 +32,6 @@ DEPOSIT_CAPS: dict[str, int] = {
     RES_PATH_FRAGMENTS: 1_000,
     RES_TECHNIQUE_FRAGMENTS: 1_000,
     RES_GENIUS_FRAGMENTS: 1_000,
-    RES_BLOOD: 30,
 }
+# Ресурсы, которые нельзя вкладывать (пользователь 2026-10-28: «убрать из инвестиций кровь»).
+DEPOSIT_EXCLUDED: frozenset[str] = frozenset({RES_BLOOD})

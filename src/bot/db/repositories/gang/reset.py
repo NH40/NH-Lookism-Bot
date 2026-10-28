@@ -63,7 +63,7 @@ _PROGRESS_COLUMNS = """
         stat_strength = 0, stat_speed = 0, stat_endurance = 0, stat_agility = 0, dev_points = 0,
         mastery_strength = 0, mastery_speed = 0, mastery_endurance = 0, mastery_technique = 0,
         tickets_count = :tickets, tickets_updated_at = now(),
-        empire_tax_percent = :empire_tax, empire_collected = 0,
+        empire_tax_percent = :empire_tax, empire_collected = 0, influence_banked = 0,
         active_technique = NULL, active_path = NULL, active_path2 = NULL, path_stage = 0, path_points = 0, path_point_gates = '{}'
 """
 _STATEMENTS = _PROGRESS_STATEMENTS + (

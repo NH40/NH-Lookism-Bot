@@ -145,7 +145,7 @@ def _tom_unlocked(quest: MasteryQuest) -> bool:
 
 
 async def check_unlock(session: AsyncSession, user_id: int) -> bool:
-    """Все четыре характеристики ≥ EXR и цепочки ещё нет → назначает этап 1 на случайный
+    """Все четыре характеристики ≥ CX и цепочки ещё нет → назначает этап 1 на случайный
     момент 1–24 ч. Коммитит, если назначила. Вызывается после вложения очков развития."""
     row = await char_repo.get_stats(session, user_id)
     if row is None or min(row.ranks.values()) < MASTERY_UNLOCK_RANK_INDEX:
@@ -198,6 +198,10 @@ class MasteryView:
 async def get_view(session: AsyncSession, user_id: int) -> MasteryView:
     mastery = (await get_combat_profile(session, user_id)).mastery
     quest = await mastery_repo.get(session, user_id)
+    if quest is None and await check_unlock(session, user_id):
+        # Порог открытия снизили (EXR → CX, 2026-10-28) — тем, кто уже дорос, этап назначаем при
+        # заходе на экран, не дожидаясь следующего вложения очков развития.
+        quest = await mastery_repo.get(session, user_id)
     if quest is not None and quest.status == QUEST_PENDING and quest.available_at <= _now():
         # Ленивая активация — не ждём фонового прохода, если игрок сам открыл экран.
         quest = await mastery_repo.get(session, user_id, for_update=True)

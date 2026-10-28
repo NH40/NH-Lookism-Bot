@@ -569,10 +569,12 @@ async def post_awakening_confirm(
     await _guard(session, user_id)
     with _errors(*_AWK_ERRORS):
         result = await awakening_svc.awaken(session, redis, user_id)
+    await awakening_svc.allow_relocate(redis, user_id)
     return {
         "message": (
             f"Пробуждение {result.level}! Множитель ×{result.multiplier:g}, "
-            f"потенциал: {POTENTIAL_LABELS[result.potential]}, капли крови +{result.blood}"
+            f"потенциал: {POTENTIAL_LABELS[result.potential]}, капли крови +{result.blood}. "
+            "Сменить страну можно в боте в течение суток (кнопка под сообщением о пробуждении)."
         ),
         "level": result.level,
     }

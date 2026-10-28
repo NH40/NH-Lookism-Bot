@@ -132,6 +132,10 @@ class User(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_active_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Копилка влияния (2026-10-28): при коронации районы освобождаются — влияние за них переносится
+    # сюда и дальше всегда прибавляется к влиянию (иначе у императора оставалось 10). Обнуляется
+    # только полным сбросом прогресса (удаление банды, пробуждение). Здания (парламенты) — отдельно.
+    influence_banked: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     # Мощь армии для топа/«/players» — снимок `services.extra.get_army_stats` (живой расчёт —
     # 3 запроса на игрока, сортировать по нему всех нельзя). Пересчёт фоном (`services/top`).
     army_power_cache: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0", index=True)

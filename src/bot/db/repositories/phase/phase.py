@@ -13,6 +13,7 @@ from bot.db.models.business import Business
 from bot.db.models.city import City
 from bot.db.models.emperor_tax import EmperorTaxOverride
 from bot.db.models.district import District
+from bot.config.game import INFLUENCE_PER_DISTRICT
 from bot.db.models.user import User
 
 
@@ -61,6 +62,13 @@ async def crown(session: AsyncSession, user_id: int, country_code: str) -> None:
     """Коронация: фаза кулака, все города страны — его; районы освобождаются, здания на них
     уходят во «владения» (`holder_id`) — доход остаётся (пользователь 2026-10-01). НЕ коммитит."""
     await session.execute(update(User).where(User.id == user_id).values(phase=PHASE_FIST))
+    # Влияние за районы — в копилку до их освобождения (+1 за район, `config/game.INFLUENCE_PER_DISTRICT`).
+    await session.execute(
+        update(User).where(User.id == user_id).values(
+            influence_banked=User.influence_banked
+            + select(func.count(District.id)).where(District.owner_id == user_id).scalar_subquery() * INFLUENCE_PER_DISTRICT
+        )
+    )
     await session.execute(update(City).where(City.country_code == country_code).values(emperor_id=user_id))
     await session.execute(
         update(Business)

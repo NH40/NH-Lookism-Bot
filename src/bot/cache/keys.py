@@ -43,6 +43,17 @@ def cooldown_ready_queue() -> str:
     return "queue:cooldown_ready"
 
 
+def relocate_allowed(user_id: int) -> str:
+    """Разрешение сменить страну после пробуждения (`services/awakening.relocate`), с TTL."""
+    return f"relocate:allowed:{user_id}"
+
+
+def free_attack_chain(user_id: int) -> str:
+    """Сколько «свободных атак» (без КД) подряд уже выпало — шанс следующей тает
+    (`services/district/free_attack`). Сбрасывается первой атакой, поставившей обычный КД."""
+    return f"cooldown:free_chain:{user_id}"
+
+
 def battle_cooldown(user_id: int) -> str:
     """КД на сражения (5м/30м/1ч по фазе, raw-notes «Фазы») — тот же приём `SET NX EX`,
     длительность берётся по фазе игрока в момент атаки (`config/game.BATTLE_COOLDOWN_SECONDS`)."""

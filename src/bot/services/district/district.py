@@ -7,11 +7,11 @@ raw-notes «Карта»: игрок в фазе банды не может по
 """
 from __future__ import annotations
 
-import random
 
 from dataclasses import dataclass, replace
 
 from redis.asyncio import Redis
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.services.admin.live_config import battle_cooldown_seconds
@@ -156,9 +156,10 @@ async def get_territory(session: AsyncSession, user_id: int) -> Territory:
     districts = await count_owned(session, user_id)
     positions = (await get_build(session, user_id)).positions
     skill_influence = int(positions.get("influence")) if positions is not None else 0  # «Авторитет» Главы
+    banked = int(await session.scalar(select(User.influence_banked).where(User.id == user_id)) or 0)  # копилка императора
     return Territory(
         districts=districts,
-        influence=_influence_for(districts, await parliament_influence(session, user_id)) + skill_influence,
+        influence=_influence_for(districts, await parliament_influence(session, user_id)) + skill_influence + banked,
     )
 
 
@@ -275,11 +276,10 @@ async def attack_district(session: AsyncSession, redis: Redis, user: User, distr
     )
     await session.commit()
     # Ловкость: «две атаки сразу, игнорируя КД» — с шансом КД после этой атаки снимается.
-    free_attack = profile.rolls_free_attack()
-    # «Неудержимый» / «Двойной захват» (Военачальник): шанс, что победа над ботами не ставит КД.
-    if not free_attack and result.attacker_won and profile.build.positions is not None:
-        pos = profile.build.positions
-        free_attack = random.random() < min(0.5, pos.get("no_cd_bots") + pos.get("no_cd_on_win"))
+    # Ловкость / «Неудержимый» / «Двойной захват» — бой без КД, шанс тает в цепочке.
+    from bot.services.district.free_attack import roll_free_attack
+
+    free_attack = await roll_free_attack(redis, user.id, profile, won=result.attacker_won, vs_bots=True)
     if free_attack:
         await redis.delete(key)
     else:

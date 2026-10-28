@@ -20,7 +20,7 @@ from bot.config.unique_path import PATH_POINT_SOURCES
 from bot.constant.unique_path import PATH_STAGE_OWNED
 from bot.db.repositories import unique_path as path_repo
 
-from bot.constant.dev_quest import QUEST_CONVICTION, QUEST_SCHOOL, QUEST_TEACHER, QUEST_TECH_LEVEL, STATUS_ACTIVE
+from bot.constant.dev_quest import QUEST_CONVICTION, QUEST_SCHOOL, QUEST_TEACHER, QUEST_TECH_LEVEL, STATUS_ACTIVE, TASK_WIN_PVE, TASK_WIN_PVP
 from bot.db.models.dev_quest import DevQuest
 from bot.db.repositories import battle_pass as bp_repo
 from bot.db.repositories import dev_quest as quest_repo
@@ -49,12 +49,17 @@ def view(quest: DevQuest) -> QuestView:
 async def emit(session: AsyncSession, user_id: int, task: str, n: int = 1) -> None:
     """Событие игры → прогресс квестов, ежедневных заданий (`services/quest`) и очки пути (`award_path_points`). НЕ коммитит (шаг
     чужой транзакции)."""
-    if n > 0:
-        await quest_repo.emit(session, user_id, task, n)
-        await award_path_points(session, user_id, task)
-        from bot.services.quest import on_event  # quest → battle_pass → dev_quest: ленивый импорт
+    if n <= 0:
+        return
+    # Победа над игроком нападающим засчитывается и заданиям «победить ботов» (пользователь
+    # 2026-10-28: «нельзя выполнить, если ботов нет — засчитывать бота ИЛИ игрока»).
+    tasks = (task, TASK_WIN_PVE) if task == TASK_WIN_PVP else (task,)
+    from bot.services.quest import on_event  # quest → battle_pass → dev_quest: ленивый импорт
 
-        await on_event(session, user_id, task, n)
+    for t in tasks:
+        await quest_repo.emit(session, user_id, t, n)
+        await award_path_points(session, user_id, t)
+        await on_event(session, user_id, t, n)
 
 
 async def award_path_points(session: AsyncSession, user_id: int, source: str) -> int | None:

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from bot.constant.mastery import TASK_EQUAL_WIN, TASK_PVP_WINS, TASK_TOM, TASK_TRAININGS
 
-MASTERY_UNLOCK_RANK_INDEX = 40  # EXR — все четыре характеристики не ниже
+MASTERY_UNLOCK_RANK_INDEX = 33  # CX — все четыре характеристики не ниже (было EXR/40, снижено 2026-10-28)
 MASTERY_QUEST_DELAY_MIN_SECONDS = 1 * 3600
 MASTERY_QUEST_DELAY_MAX_SECONDS = 24 * 3600
 MASTERY_STAGES = 3  # Стена → Трансцендентность → Мастерство

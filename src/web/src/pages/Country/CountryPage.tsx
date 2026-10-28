@@ -133,10 +133,15 @@ export function CountryPage() {
               {data.throne?.can_challenge && (
                 <Panel title="ТРОН" tone="gold" badgeMark="👑">
                   <p className="ct-note" style={{ marginTop: 0 }}>
-                    Вся страна твоя, но её города держит император. Сначала бои с чужими императорами по очереди, потом — за трон.
+                    Вся страна твоя, но её города держит император. Бои идут по очереди — проиграл один, дальше не идёт:
                   </p>
+                  {(data.throne.queue ?? []).map((o, i) => (
+                    <div key={i} className="ct-note" style={{ margin: "4px 0", fontWeight: 700 }}>
+                      {i + 1}. {o.throne ? `👑 Трон: император «${o.name}»` : `🏴 Освобождение у «${o.name}» — держит городов: ${o.cities}`}
+                    </div>
+                  ))}
                   <button className="btn gold block" type="button" disabled={busy} onClick={() => run("/country/throne")}>
-                    Бой за трон
+                    {data.throne.queue?.length ? `Бой: «${data.throne.queue[0].name}»` : "Бой за трон"}
                   </button>
                 </Panel>
               )}

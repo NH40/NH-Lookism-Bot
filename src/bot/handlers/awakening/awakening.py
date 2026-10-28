@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config.awakening import LEVELS
 from bot.config.development import awakening_multiplier
-from bot.constant.awakening import CB_AWAKEN_ASK, CB_AWAKEN_CONFIRM, CB_AWAKEN_OPEN
+from bot.constant.awakening import CB_AWAKEN_ASK, CB_AWAKEN_CONFIRM, CB_AWAKEN_OPEN, CB_AWAKEN_RELOCATE
 from bot.keyboards.awakening import awakening_menu, confirm_menu
 from bot.services.awakening import (
     AwakeningMaxedError,
@@ -115,9 +115,38 @@ async def cb_awaken_confirm(callback: CallbackQuery, session: AsyncSession, redi
     await state.clear()
     await callback.answer()
     await safe_clear_markup(callback.message)
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    from bot.services.awakening import allow_relocate
+    from bot.texts.awakening import BTN_RELOCATE, RELOCATE_HINT
+
+    await allow_relocate(redis, callback.from_user.id)
+    markup = back_menu(CB_AWAKEN_OPEN)
+    markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=BTN_RELOCATE, callback_data=CB_AWAKEN_RELOCATE)], *markup.inline_keyboard])
     await callback.message.answer(
         AWAKENED.format(
             level=result.level, multiplier=f"{result.multiplier:g}",
             potential=POTENTIAL_LABELS[result.potential], blood=result.blood,
-        )
-    , reply_markup=back_menu(CB_AWAKEN_OPEN))
+        ) + RELOCATE_HINT,
+        reply_markup=markup,
+    )
+
+
+
+@router.callback_query(F.data == CB_AWAKEN_RELOCATE)
+async def cb_awaken_relocate(callback: CallbackQuery, session: AsyncSession, redis: Redis) -> None:
+    from bot.keyboards.start import country_menu
+    from bot.services.awakening import RelocateExpiredError, RelocateHasDistrictsError, relocate
+    from bot.texts.awakening import RELOCATE_EXPIRED_ALERT, RELOCATE_HAS_DISTRICTS_ALERT, RELOCATE_PICK
+
+    try:
+        await relocate(session, redis, callback.from_user.id)
+    except RelocateExpiredError:
+        await callback.answer(RELOCATE_EXPIRED_ALERT, show_alert=True)
+        return
+    except RelocateHasDistrictsError:
+        await callback.answer(RELOCATE_HAS_DISTRICTS_ALERT, show_alert=True)
+        return
+    await callback.answer()
+    await safe_clear_markup(callback.message)
+    await callback.message.answer(RELOCATE_PICK, reply_markup=country_menu())

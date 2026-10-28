@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.cache.keys import action_lock
 from bot.config.deposit import (
     DEPOSIT_CAPS,
+    DEPOSIT_EXCLUDED,
     DEPOSIT_COINS_MIN_CAP,
     DEPOSIT_MAX_ACTIVE,
     DEPOSIT_OTHER_RATE_SHARE,
@@ -81,7 +82,7 @@ class DepositView:
 
 
 def rate_for(resource: str, hours: int) -> float:
-    if hours not in DEPOSIT_RATES or resource not in RESOURCES or resource in NO_MINT_RESOURCES:
+    if hours not in DEPOSIT_RATES or resource not in RESOURCES or resource in NO_MINT_RESOURCES or resource in DEPOSIT_EXCLUDED:
         raise InvalidTermError(hours)
     rate = DEPOSIT_RATES[hours]
     return rate if resource == RES_COINS else rate * DEPOSIT_OTHER_RATE_SHARE

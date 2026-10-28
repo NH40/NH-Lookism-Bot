@@ -69,6 +69,7 @@ class ThroneStatusOut(BaseModel):
     can_challenge: bool  # круг держит все районы страны, а её города у императора(ов)
     missing: int  # сколько районов страны ещё не его
     has_emperor: bool  # у страны есть император / чужие держатели
+    queue: list[dict] = []  # очередь боёв по кнопке: {name, throne, cities}
 
 
 class CountryOut(BaseModel):
@@ -91,7 +92,10 @@ async def get_country(user_id: int = Depends(get_current_user_id), session: Asyn
 
     ts = await throne_status(session, user_id)
     return CountryOut(
-        throne=ThroneStatusOut(can_challenge=ts.can_challenge, missing=ts.missing, has_emperor=bool(ts.incumbent_id or ts.foreign_holders)),
+        throne=ThroneStatusOut(
+            can_challenge=ts.can_challenge, missing=ts.missing, has_emperor=bool(ts.incumbent_id or ts.foreign_holders),
+            queue=[{"name": o.label, "throne": o.is_throne, "cities": o.cities} for o in ts.queue],
+        ),
         available=True, country=clean_label(cm.country_name), emperor=is_emperor(user.phase),
         influence=await get_influence(session, user_id), cities_mine=cm.cities_mine,
         cities=[

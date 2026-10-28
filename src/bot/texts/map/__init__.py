@@ -5,6 +5,7 @@ from bot.texts.map.map import (  # noqa: F401
     BTN_CHALLENGE_OWNER,
     BTN_MY_CITY_DISTRICTS,
     BTN_THRONE,
+    BTN_THRONE_NEXT,
     CITY_BOTS_LINE,
     CITY_BTN,
     CITY_BTN_MINE,
@@ -30,5 +31,8 @@ from bot.texts.map.map import (  # noqa: F401
     THRONE_NOT_CONTENDER,
     THRONE_NOT_CONTENDER_MISSING,
     THRONE_NO_TARGET,
+    THRONE_QUEUE_HEAD,
+    THRONE_QUEUE_HOLDER,
+    THRONE_QUEUE_THRONE,
     THRONE_REPORT,
 )

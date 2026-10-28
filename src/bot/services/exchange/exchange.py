@@ -37,7 +37,7 @@ from bot.config.exchange import (
 )
 from bot.config.game import ACTION_LOCK_MS
 from bot.constant.exchange import LOCK_ACTION_EXCHANGE
-from bot.constant.resource import RESOURCES
+from bot.constant.resource import ITEM_RESOURCE, RES_DONATE, RESOURCES
 from bot.db.models.exchange import ExchangeAuction, ExchangeLot, ExchangeTrade
 from bot.db.repositories.user import find_by_username
 from bot.services.resource import InvalidItemError, check_item, give_item, grant, spend, take_item
@@ -217,6 +217,9 @@ async def get_auction(session: AsyncSession, auction_id: int) -> ExchangeAuction
 async def create_auction(session: AsyncSession, redis: Redis, user_id: int, item_kind: str, item_code: str, amount: int,
                          price_res: str, min_bid: int, hours: int) -> int:
     _check_offer(item_kind, item_code, amount, price_res, min_bid)
+    # Донат-коины на аукционе запрещены — и лотом, и ценой (пользователь 2026-10-28).
+    if price_res == RES_DONATE or (item_kind == ITEM_RESOURCE and item_code == RES_DONATE):
+        raise ExchangeError("no_donate_auction")
     if hours not in EXCHANGE_AUCTION_HOURS:
         raise ExchangeError("bad_hours")
     key = await _lock(redis, user_id)

@@ -490,7 +490,10 @@ async def _resolve(session: AsyncSession, redis: Redis, challenge_id: int, resol
 
     # Правило 10: Redis — только после успешного commit. КД — только нападающему, с
     # мастерством Скорости; Ловкость — с шансом КД не ставится вовсе («вторая атака»).
-    free_attack = attacker_profile.rolls_free_attack()
+    from bot.services.district.free_attack import roll_free_attack
+
+    # PvP: раньше «Неудержимый» тут не действовал — только Ловкость; сохраняем это (won=False).
+    free_attack = await roll_free_attack(redis, challenge.attacker_id, attacker_profile, won=False, vs_bots=False)
     if free_attack:
         await redis.delete(battle_cooldown(challenge.attacker_id))  # снять резерв, поставленный при вызове
     else:

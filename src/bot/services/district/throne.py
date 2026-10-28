@@ -223,11 +223,22 @@ class NoThroneTargetError(Exception):
 
 
 @dataclass(frozen=True, slots=True)
+class ThroneOpponent:
+    user_id: int
+    label: str  # название банды
+    is_throne: bool  # True — бой за трон с местным императором; False — освобождение у чужого
+    cities: int  # сколько городов этой страны держит (для освобождения)
+
+
+@dataclass(frozen=True, slots=True)
 class ThroneStatus:
     can_challenge: bool
     missing: int  # районов страны ещё не у игрока (для подсказки)
     incumbent_id: int | None
     foreign_holders: tuple[int, ...]
+    # Очередь боёв по кнопке — в том же порядке, что `promote_or_throne` (баг 2026-10-28: кнопка
+    # не говорила, с кем бой, игроки дрались с чужим императором, думая, что с местным).
+    queue: tuple[ThroneOpponent, ...] = ()
 
 
 async def throne_status(session: AsyncSession, user_id: int) -> ThroneStatus:
@@ -237,9 +248,18 @@ async def throne_status(session: AsyncSession, user_id: int) -> ThroneStatus:
     if phase != PHASE_CIRCLE or country is None:
         return ThroneStatus(False, 0, None, ())
     missing = int(await phase_repo.count_not_owned_in_country(session, country, user_id) or 0)
-    holders = tuple(uid for uid, _ in await phase_repo.foreign_holders(session, country))
+    holder_rows = await phase_repo.foreign_holders(session, country)
+    holders = tuple(uid for uid, _ in holder_rows)
     incumbent = await phase_repo.country_emperor(session, country, exclude_user_id=user_id)
-    return ThroneStatus(missing == 0 and bool(holders or incumbent), missing, incumbent, holders)
+
+    async def label(uid: int) -> str:
+        gang = await get_gang(session, uid)
+        return gang.name if gang else "—"
+
+    queue = [ThroneOpponent(uid, await label(uid), False, n) for uid, n in holder_rows]
+    if incumbent is not None:
+        queue.append(ThroneOpponent(incumbent, await label(incumbent), True, 0))
+    return ThroneStatus(missing == 0 and bool(holders or incumbent), missing, incumbent, holders, tuple(queue))
 
 
 async def challenge_throne(session: AsyncSession, redis, user_id: int):

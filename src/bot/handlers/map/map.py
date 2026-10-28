@@ -176,12 +176,23 @@ async def show_country_map(message: Message, session: AsyncSession, user: User, 
     from aiogram.types import InlineKeyboardButton
 
     from bot.services.district import throne_status
-    from bot.texts.map import BTN_THRONE, THRONE_HINT_MISSING, THRONE_HINT_READY
+    from bot.texts.map import (
+        BTN_THRONE, BTN_THRONE_NEXT, THRONE_HINT_MISSING, THRONE_HINT_READY, THRONE_QUEUE_HEAD, THRONE_QUEUE_HOLDER,
+        THRONE_QUEUE_THRONE,
+    )
 
     throne = await throne_status(session, user.id)
     if throne.can_challenge:
-        rows = [[InlineKeyboardButton(text=BTN_THRONE, callback_data=CB_MAP_THRONE)], *rows]
+        first = throne.queue[0] if throne.queue else None
+        btn = BTN_THRONE_NEXT.format(name=first.label) if first else BTN_THRONE
+        rows = [[InlineKeyboardButton(text=btn, callback_data=CB_MAP_THRONE)], *rows]
         line += THRONE_HINT_READY
+        if throne.queue:
+            line += THRONE_QUEUE_HEAD + "".join(
+                (THRONE_QUEUE_THRONE.format(n=i, name=esc(o.label)) if o.is_throne
+                 else THRONE_QUEUE_HOLDER.format(n=i, name=esc(o.label), cities=o.cities))
+                for i, o in enumerate(throne.queue, 1)
+            )
     elif throne.missing and (throne.incumbent_id or throne.foreign_holders):
         line += THRONE_HINT_MISSING.format(missing=format_number(throne.missing))
     markup = country_map_menu([(c.city_id, _city_label(c)) for c in country_map.cities], page, top_rows=rows)

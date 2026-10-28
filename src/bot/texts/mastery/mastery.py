@@ -11,7 +11,7 @@ STAGE_NAMES: dict[int, str] = {1: "Стена", 2: "Трансцендентно
 MASTERY_SCREEN = "🥋 <b>Мастерство</b>\n━━━━━━━━━━━━━━━━━━\n{tiers}\n━━━━━━━━━━━━━━━━━━\n{quest_block}"
 TIER_LINE = "{label}: {tier}"
 
-QUEST_LOCKED = "🔒 Задание «Преодоление стены» откроется, когда все характеристики дойдут до EXR."
+QUEST_LOCKED = "🔒 Задание «Преодоление стены» откроется, когда все характеристики дойдут до CX."
 QUEST_PENDING = "🧱 Задание «Преодоление стены» (этап {stage} — {stage_name}) придёт в случайный момент — примерно через {countdown}."
 QUEST_ACTIVE = "🧱 <b>Этап {stage} — {stage_name}</b>\n\n{tasks}"
 QUEST_TRAINER = (

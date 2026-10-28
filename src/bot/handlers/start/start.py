@@ -124,7 +124,10 @@ async def cb_choose_city(callback: CallbackQuery, session: AsyncSession, state: 
     await callback.answer()
     # Страна+город готовы — сразу же дожимаем последний шаг онбординга, отдельным
     # сообщением (edit_text выше — это подтверждение выбора города, не место для нового
-    # вопроса).
+    # вопроса). Банда уже есть (смена страны после пробуждения) — сразу профиль.
+    if await get_gang(session, callback.from_user.id) is not None:
+        await show_profile(callback.message, session, callback.from_user.id)
+        return
     await prompt_gang_name(callback.message, state)
 
 

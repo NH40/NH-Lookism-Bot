@@ -172,7 +172,7 @@ export interface ExtrasResult {
 
 export interface MasteryData {
   tiers: { code: string; label: string; tier: number; tier_label: string; effect: string; can_invest: boolean }[];
-  status: "pending" | "active" | "trainer" | "complete" | null;
+  status: "pending" | "breakthrough" | "active" | "trainer" | "complete" | null;
   stage: number;
   stages: number;
   stage_name: string;
@@ -184,6 +184,8 @@ export interface MasteryData {
   points_per_stage: number;
   price: number | null;
   available_in_seconds: number | null;
+  breakthrough?: { label: string; done: boolean }[];
+  breakthrough_need?: number;
   nh_coins: number;
   battle_cooldown_seconds: number;
 }

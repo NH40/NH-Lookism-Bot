@@ -39,6 +39,7 @@ from bot.services.mastery import (
     invest_point,
 )
 from bot.texts.district import NO_ATTACKERS
+from bot.texts.mastery import BREAKTHROUGH_LABELS
 from bot.texts.mastery import (
     MASTERY_CAPPED_ALERT,
     NO_FREE_POINTS_ALERT,
@@ -83,7 +84,9 @@ class MasteryOut(BaseModel):
     points_free: int
     points_per_stage: int
     price: int | None
-    available_in_seconds: int | None
+    available_in_seconds: int | None  # больше не отдаётся (2026-10-28: «четких границ нет»)
+    breakthrough: list[dict] = []  # статус breakthrough: [{label, done}]
+    breakthrough_need: int = 0
     nh_coins: int
     battle_cooldown_seconds: int
 
@@ -144,7 +147,9 @@ async def get_mastery(
         points_free=view.points_free,
         points_per_stage=MASTERY_POINTS_PER_STAGE,
         price=view.price,
-        available_in_seconds=view.available_in_seconds,
+        available_in_seconds=None,
+        breakthrough=[{"label": BREAKTHROUGH_LABELS[c], "done": d} for c, d in (view.breakthrough or {}).items()],
+        breakthrough_need=view.breakthrough_need,
         nh_coins=wallet.nh_coins if wallet else 0,
         battle_cooldown_seconds=max(0, await redis.ttl(battle_cooldown(user_id))),
     )

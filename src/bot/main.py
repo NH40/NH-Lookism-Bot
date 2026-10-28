@@ -49,7 +49,7 @@ from bot.services.exchange import expire_trades, finish_auctions
 from bot.handlers.exchange import send_deal_pushes
 from bot.services.poker import tick as poker_tick
 from bot.handlers.poker import push_event as push_poker_event
-from bot.services.mastery import activate_due
+from bot.services.mastery import activate_due, check_breakthroughs
 from bot.config.top import TOP_POWER_REFRESH_SECONDS
 from bot.services.top import refresh_powers, sweep_seasons
 from bot.services.cooldown import sweep as sweep_cooldown_pushes
@@ -75,6 +75,7 @@ async def _mastery_sweep_loop(bot: Bot, session_factory) -> None:
     открыв экран) и шлёт пуш. Падение одного прохода не останавливает цикл."""
     while True:
         try:
+            await check_breakthroughs(session_factory)  # прорыв сделан → пошло ожидание задания
             activated = await activate_due(session_factory)
             if activated:
                 async with session_factory() as session:

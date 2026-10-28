@@ -1,5 +1,8 @@
 """Публичное API домена mastery (тексты)."""
 from bot.texts.mastery.mastery import (  # noqa: F401
+    BREAKTHROUGH_DONE,
+    BREAKTHROUGH_LABELS,
+    BREAKTHROUGH_TODO,
     BTN_FIGHT_TOM,
     BTN_INVEST,
     BTN_OPEN_MASTERY,
@@ -12,6 +15,7 @@ from bot.texts.mastery.mastery import (  # noqa: F401
     NO_FREE_POINTS_ALERT,
     PUSH_QUEST,
     QUEST_ACTIVE,
+    QUEST_BREAKTHROUGH,
     QUEST_COMPLETE,
     QUEST_LOCKED,
     QUEST_NOT_ACTIVE_ALERT,

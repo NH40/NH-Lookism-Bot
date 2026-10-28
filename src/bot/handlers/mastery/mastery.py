@@ -18,6 +18,7 @@ from bot.constant.mastery import (
     CB_MASTERY_OPEN,
     CB_MASTERY_TOM_FIGHT,
     QUEST_ACTIVE,
+    QUEST_BREAKTHROUGH,
     QUEST_COMPLETE,
     QUEST_PENDING,
     QUEST_TRAINER,
@@ -84,6 +85,15 @@ def _quest_block(view: MasteryView) -> str:
         )
     if view.status == QUEST_COMPLETE:
         return QUEST_COMPLETE_TEXT
+    if view.status == QUEST_BREAKTHROUGH and view.breakthrough is not None:
+        from bot.texts.mastery import BREAKTHROUGH_DONE, BREAKTHROUGH_LABELS, BREAKTHROUGH_TODO
+        from bot.texts.mastery import QUEST_BREAKTHROUGH as QUEST_BREAKTHROUGH_TEXT
+
+        items = "\n".join(
+            (BREAKTHROUGH_DONE if done else BREAKTHROUGH_TODO).format(label=BREAKTHROUGH_LABELS[code])
+            for code, done in view.breakthrough.items()
+        )
+        return QUEST_BREAKTHROUGH_TEXT.format(stage=view.stage, stage_name=stage_name, need=view.breakthrough_need, items=items)
     if view.status == QUEST_TRAINER:
         text = QUEST_TRAINER_TEXT.format(
             price=format_number(view.price or 0), bought=view.points_bought, free=view.points_free, stage_name=stage_name

@@ -12,6 +12,8 @@ from bot.services.mastery.mastery import (  # noqa: F401
     TomLockedError,
     TrainerLockedError,
     activate_due,
+    breakthrough_state,
+    check_breakthroughs,
     buy_point,
     check_unlock,
     get_view,
@@ -19,5 +21,6 @@ from bot.services.mastery.mastery import (  # noqa: F401
     lock_quest_for_tom,
     mark_tom_defeated,
     record_pvp_win,
+    record_extras_training,
     record_training,
 )

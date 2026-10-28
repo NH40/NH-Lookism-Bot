@@ -71,3 +71,14 @@ async def bump_mastery(session: AsyncSession, user_id: int, mastery: str, *, cap
     col = _MASTERY_COLUMNS[mastery]
     result = await session.execute(update(User).where(User.id == user_id, col < cap).values({col: col + 1}))
     return result.rowcount > 0
+
+
+
+async def list_breakthrough(session: AsyncSession, limit: int) -> list[int]:
+    """Игроки, ждущие прорыва перед следующим этапом (проверяет фоновый проход)."""
+    from bot.constant.mastery import QUEST_BREAKTHROUGH
+
+    rows = await session.scalars(
+        select(MasteryQuest.user_id).where(MasteryQuest.status == QUEST_BREAKTHROUGH).order_by(MasteryQuest.user_id).limit(limit)
+    )
+    return list(rows)

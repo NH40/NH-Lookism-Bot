@@ -18,7 +18,6 @@ export function MasteryPage() {
   const { data, status, error, reload } = useApi<MasteryData>("/mastery");
   const { run, busy } = useAction(reload);
   const cd = useCountdown(data?.battle_cooldown_seconds ?? 0);
-  const wait = useCountdown(data?.available_in_seconds ?? 0);
 
   return (
     <Screen status={status} error={error}>
@@ -56,15 +55,26 @@ export function MasteryPage() {
             <Panel title="Преодоление стены" tone="violet">
               <div className="ms-locked">
                 <Lock size={18} />
-                Откроется, когда все четыре характеристики дойдут до CX. Тогда в случайный момент в течение суток придёт
-                первое задание.
+                Откроется, когда все четыре характеристики дойдут до CX. Тогда в случайный момент придёт первое задание —
+                чем выше потенциал, тем дольше ждать.
               </div>
             </Panel>
           )}
 
           {data.status === "pending" && (
             <Panel title={`Этап ${data.stage} — ${data.stage_name}`} tone="violet">
-              <div className="ms-locked">Задание придёт в случайный момент — примерно через {countdown(wait)}.</div>
+              <div className="ms-locked">Задание придёт в случайный момент. Когда именно — не знает никто: чем выше потенциал, тем дольше ждать.</div>
+            </Panel>
+          )}
+
+          {data.status === "breakthrough" && (
+            <Panel title={`Стена перед этапом ${data.stage} — ${data.stage_name}`} tone="violet">
+              <div className="ms-locked" style={{ marginBottom: 8 }}>
+                Чтобы пробить стену, сделай что-то грандиозное — любые {data.breakthrough_need} из списка. Потом задание этапа придёт в случайный момент.
+              </div>
+              {(data.breakthrough ?? []).map((b) => (
+                <div key={b.label} style={{ fontSize: 13, fontWeight: 700, margin: "4px 0" }}>{b.done ? "✅" : "⬜"} {b.label}</div>
+              ))}
             </Panel>
           )}
 

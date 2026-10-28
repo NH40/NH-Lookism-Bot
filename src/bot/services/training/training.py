@@ -159,6 +159,9 @@ async def train_extras(session: AsyncSession, redis: Redis, user_id: int, phase:
             )
 
     await quest_event(session, user_id, TASK_TRAIN_EXTRAS)
+    from bot.services.mastery import record_extras_training  # мастерство → тренировки: ленивый импорт
+
+    await record_extras_training(session, user_id)
     await bump_training_reps(session, user_id)
     await session.commit()
     return TrainResult(**totals)

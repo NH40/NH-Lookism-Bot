@@ -31,6 +31,7 @@ class MasteryQuest(Base):
     available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True, nullable=False)
     tom_power: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
     progress_trainings: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    progress_extras: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")  # тренировки статистов
     progress_pvp_wins: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     equal_win: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     points_bought: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")

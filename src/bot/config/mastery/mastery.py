@@ -8,11 +8,30 @@
 """
 from __future__ import annotations
 
-from bot.constant.mastery import TASK_EQUAL_WIN, TASK_PVP_WINS, TASK_TOM, TASK_TRAININGS
+from bot.constant.characteristic import POTENTIAL_ORDER
+from bot.constant.mastery import TASK_EQUAL_WIN, TASK_EXTRAS, TASK_PVP_WINS, TASK_TOM, TASK_TRAININGS
 
 MASTERY_UNLOCK_RANK_INDEX = 33  # CX — все четыре характеристики не ниже (было EXR/40, снижено 2026-10-28)
-MASTERY_QUEST_DELAY_MIN_SECONDS = 1 * 3600
-MASTERY_QUEST_DELAY_MAX_SECONDS = 24 * 3600
+# Ожидание задания этапа (пользователь 2026-10-28): случайно в диапазоне, чем выше потенциал —
+# тем дольше; четких границ у игрока нет. Член банды 2–12 ч … Легенда 2–5 дней, линейно по
+# лестнице потенциала; каждый следующий этап ещё × MASTERY_STAGE_DELAY_MULT.
+MASTERY_DELAY_HOURS_LOW: tuple[int, int] = (2, 12)  # самый низкий потенциал
+MASTERY_DELAY_HOURS_HIGH: tuple[int, int] = (48, 120)  # самый высокий потенциал
+MASTERY_STAGE_DELAY_MULT = 1.5
+
+
+def mastery_delay_range_hours(potential: str | None, stage: int) -> tuple[float, float]:
+    """(мин, макс) часов ожидания задания этапа `stage` для потенциала."""
+    idx = POTENTIAL_ORDER.index(potential) if potential in POTENTIAL_ORDER else 0
+    t = idx / max(1, len(POTENTIAL_ORDER) - 1)
+    lo = MASTERY_DELAY_HOURS_LOW[0] + (MASTERY_DELAY_HOURS_HIGH[0] - MASTERY_DELAY_HOURS_LOW[0]) * t
+    hi = MASTERY_DELAY_HOURS_LOW[1] + (MASTERY_DELAY_HOURS_HIGH[1] - MASTERY_DELAY_HOURS_LOW[1]) * t
+    k = MASTERY_STAGE_DELAY_MULT ** (stage - 1)
+    return lo * k, hi * k
+
+
+# Прорыв перед этапом: сколько достижений из `constant/mastery.BREAKTHROUGHS` нужно (любые).
+MASTERY_BREAKTHROUGH_NEED: dict[int, int] = {2: 1, 3: 2}
 MASTERY_STAGES = 3  # Стена → Трансцендентность → Мастерство
 MASTERY_POINTS_PER_STAGE = 4
 
@@ -27,10 +46,11 @@ TOM_POWER_MIN = 1_000  # если лагерь атаки на момент вы
 TOM_COMBAT_UNITS = 1_000
 
 # Задания этапов: (код, цель). Том открывается, когда выполнены все остальные задания этапа.
+# 2026-10-28: «квест должен заключаться в тренировках» — тренировки на каждом этапе, растут.
 STAGE_TASKS: dict[int, tuple[tuple[str, int], ...]] = {
-    1: ((TASK_TOM, 1),),
-    2: ((TASK_TRAININGS, 10), (TASK_TOM, 1)),
-    3: ((TASK_PVP_WINS, 3), (TASK_EQUAL_WIN, 1), (TASK_TOM, 1)),
+    1: ((TASK_TRAININGS, 6), (TASK_EXTRAS, 4), (TASK_TOM, 1)),
+    2: ((TASK_TRAININGS, 12), (TASK_EXTRAS, 8), (TASK_TOM, 1)),
+    3: ((TASK_TRAININGS, 15), (TASK_EXTRAS, 10), (TASK_PVP_WINS, 3), (TASK_EQUAL_WIN, 1), (TASK_TOM, 1)),
 }
 EQUAL_WIN_POWER_PERCENT = 10  # «победить игрока с мощью ±10% от своей»
 

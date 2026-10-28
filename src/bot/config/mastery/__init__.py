@@ -1,11 +1,13 @@
-"""Публичное API mastery-конфига."""
+"""Публичное API домена mastery (конфиг)."""
 from bot.config.mastery.mastery import (  # noqa: F401
     EQUAL_WIN_POWER_PERCENT,
-    MASTERY_POINT_PRICE,
+    MASTERY_BREAKTHROUGH_NEED,
+    MASTERY_DELAY_HOURS_HIGH,
+    MASTERY_DELAY_HOURS_LOW,
     MASTERY_POINTS_PER_STAGE,
-    MASTERY_QUEST_DELAY_MAX_SECONDS,
-    MASTERY_QUEST_DELAY_MIN_SECONDS,
+    MASTERY_POINT_PRICE,
     MASTERY_STAGES,
+    MASTERY_STAGE_DELAY_MULT,
     MASTERY_SWEEP_BATCH,
     MASTERY_SWEEP_INTERVAL_SECONDS,
     MASTERY_UNLOCK_RANK_INDEX,
@@ -13,4 +15,5 @@ from bot.config.mastery.mastery import (  # noqa: F401
     TOM_COMBAT_UNITS,
     TOM_POWER_MIN,
     TOM_POWER_PERCENT,
+    mastery_delay_range_hours,
 )

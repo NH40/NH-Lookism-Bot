@@ -28,22 +28,28 @@ from bot.config.mastery import (
     EQUAL_WIN_POWER_PERCENT,
     MASTERY_POINT_PRICE,
     MASTERY_POINTS_PER_STAGE,
-    MASTERY_QUEST_DELAY_MAX_SECONDS,
-    MASTERY_QUEST_DELAY_MIN_SECONDS,
+    MASTERY_BREAKTHROUGH_NEED,
     MASTERY_STAGES,
     MASTERY_SWEEP_BATCH,
     MASTERY_UNLOCK_RANK_INDEX,
     STAGE_TASKS,
     TOM_POWER_MIN,
     TOM_POWER_PERCENT,
+    mastery_delay_range_hours,
 )
 from bot.constant.characteristic import MASTERIES
 from bot.constant.mastery import (
+    BT_AWAKEN,
+    BT_PATH,
+    BT_PHASE,
+    BT_TECH10,
     QUEST_ACTIVE,
+    QUEST_BREAKTHROUGH,
     QUEST_COMPLETE,
     QUEST_PENDING,
     QUEST_TRAINER,
     TASK_EQUAL_WIN,
+    TASK_EXTRAS,
     TASK_PVP_WINS,
     TASK_TOM,
     TASK_TRAININGS,
@@ -91,11 +97,72 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _random_delay(reduction: float = 0.0) -> timedelta:
-    """Случайный момент этапа 1–24 ч; `reduction` — сокращение от систем развития (Самдак:
-    «быстрее получает доступ к заданиям мастерства»), не больше 70%."""
-    seconds = random.randint(MASTERY_QUEST_DELAY_MIN_SECONDS, MASTERY_QUEST_DELAY_MAX_SECONDS)
+def _random_delay(reduction: float = 0.0, potential: str | None = None, stage: int = 1) -> timedelta:
+    """Случайный момент задания этапа — диапазон по потенциалу и этапу
+    (`config/mastery.mastery_delay_range_hours`); `reduction` — сокращение от систем развития
+    (Самдак: «быстрее получает доступ к заданиям мастерства»), не больше 70%."""
+    lo, hi = mastery_delay_range_hours(potential, stage)
+    seconds = random.uniform(lo * 3600, hi * 3600)
     return timedelta(seconds=seconds * (1 - capped(reduction, 0.7)))
+
+
+async def _delay_for(session: AsyncSession, user_id: int, stage: int) -> timedelta:
+    from sqlalchemy import select
+
+    from bot.db.models.user import User
+
+    potential = await session.scalar(select(User.potential).where(User.id == user_id))
+    return _random_delay(await _delay_reduction(session, user_id), potential, stage)
+
+
+# --- прорывы перед этапами 2 и 3 ---
+
+
+async def breakthrough_state(session: AsyncSession, user_id: int) -> dict[str, bool]:
+    """Какие «грандиозные» достижения уже есть — одним запросом."""
+    from sqlalchemy import text
+
+    from bot.config.development import MAX_LEVEL
+    from bot.constant.phase import PHASE_CIRCLE, PHASE_FIST
+    from bot.constant.unique_path import PATH_STAGE_OWNED
+
+    row = (await session.execute(text(
+        "SELECT u.path_stage, u.awakening_level, u.phase, "
+        "EXISTS(SELECT 1 FROM user_techniques t WHERE t.user_id = u.id AND t.level >= :max) "
+        "FROM users u WHERE u.id = :u"
+    ), {"u": user_id, "max": MAX_LEVEL})).one()
+    return {
+        BT_PATH: row[0] >= PATH_STAGE_OWNED,
+        BT_TECH10: bool(row[3]),
+        BT_AWAKEN: row[1] >= 1,
+        BT_PHASE: row[2] in (PHASE_CIRCLE, PHASE_FIST),
+    }
+
+
+async def _try_breakthrough(session: AsyncSession, user_id: int, quest: MasteryQuest) -> bool:
+    """Прорыв сделан → пошло ожидание задания этапа. НЕ коммитит. → перешёл ли в pending."""
+    if quest.status != QUEST_BREAKTHROUGH:
+        return False
+    state = await breakthrough_state(session, user_id)
+    if sum(state.values()) < MASTERY_BREAKTHROUGH_NEED.get(quest.stage, 1):
+        return False
+    quest.status = QUEST_PENDING
+    quest.available_at = _now() + await _delay_for(session, user_id, quest.stage)
+    return True
+
+
+async def check_breakthroughs(session_factory: async_sessionmaker[AsyncSession]) -> int:
+    """Фоновый проход: у кого прорыв уже сделан — запустить ожидание задания. → сколько."""
+    async with session_factory() as session:
+        ids = await mastery_repo.list_breakthrough(session, MASTERY_SWEEP_BATCH)
+    moved = 0
+    for user_id in ids:
+        async with session_factory() as session:
+            quest = await mastery_repo.get(session, user_id, for_update=True)
+            if quest is not None and await _try_breakthrough(session, user_id, quest):
+                await session.commit()
+                moved += 1
+    return moved
 
 
 async def _delay_reduction(session: AsyncSession, user_id: int) -> float:
@@ -120,6 +187,8 @@ class TaskView:
 def _progress(quest: MasteryQuest, code: str) -> int:
     if code == TASK_TRAININGS:
         return quest.progress_trainings
+    if code == TASK_EXTRAS:
+        return quest.progress_extras
     if code == TASK_PVP_WINS:
         return quest.progress_pvp_wins
     if code == TASK_EQUAL_WIN:
@@ -150,7 +219,7 @@ async def check_unlock(session: AsyncSession, user_id: int) -> bool:
     row = await char_repo.get_stats(session, user_id)
     if row is None or min(row.ranks.values()) < MASTERY_UNLOCK_RANK_INDEX:
         return False
-    if not await mastery_repo.create_pending(session, user_id, _now() + _random_delay(await _delay_reduction(session, user_id))):
+    if not await mastery_repo.create_pending(session, user_id, _now() + await _delay_for(session, user_id, 1)):
         return False
     await session.commit()
     return True
@@ -193,6 +262,8 @@ class MasteryView:
     points_free: int
     price: int | None
     available_in_seconds: int | None
+    breakthrough: dict[str, bool] | None = None  # статус QUEST_BREAKTHROUGH — что уже сделано
+    breakthrough_need: int = 0
 
 
 async def get_view(session: AsyncSession, user_id: int) -> MasteryView:
@@ -201,6 +272,11 @@ async def get_view(session: AsyncSession, user_id: int) -> MasteryView:
     if quest is None and await check_unlock(session, user_id):
         # Порог открытия снизили (EXR → CX, 2026-10-28) — тем, кто уже дорос, этап назначаем при
         # заходе на экран, не дожидаясь следующего вложения очков развития.
+        quest = await mastery_repo.get(session, user_id)
+    if quest is not None and quest.status == QUEST_BREAKTHROUGH:
+        quest = await mastery_repo.get(session, user_id, for_update=True)
+        if await _try_breakthrough(session, user_id, quest):
+            await session.commit()
         quest = await mastery_repo.get(session, user_id)
     if quest is not None and quest.status == QUEST_PENDING and quest.available_at <= _now():
         # Ленивая активация — не ждём фонового прохода, если игрок сам открыл экран.
@@ -224,6 +300,8 @@ async def get_view(session: AsyncSession, user_id: int) -> MasteryView:
         available_in_seconds=(
             max(0, int((quest.available_at - _now()).total_seconds())) if quest.status == QUEST_PENDING else None
         ),
+        breakthrough=await breakthrough_state(session, user_id) if quest.status == QUEST_BREAKTHROUGH else None,
+        breakthrough_need=MASTERY_BREAKTHROUGH_NEED.get(quest.stage, 0) if quest.status == QUEST_BREAKTHROUGH else 0,
     )
 
 
@@ -231,10 +309,17 @@ async def get_view(session: AsyncSession, user_id: int) -> MasteryView:
 
 
 async def record_training(session: AsyncSession, user_id: int) -> None:
-    """Личная тренировка засчитывается в задание этапа 2."""
+    """Личная тренировка засчитывается в задание любого этапа."""
     quest = await mastery_repo.get(session, user_id, for_update=True)
-    if quest is not None and quest.status == QUEST_ACTIVE and quest.stage == 2:
+    if quest is not None and quest.status == QUEST_ACTIVE:
         quest.progress_trainings += 1
+
+
+async def record_extras_training(session: AsyncSession, user_id: int) -> None:
+    """Тренировка статистов засчитывается в задание любого этапа."""
+    quest = await mastery_repo.get(session, user_id, for_update=True)
+    if quest is not None and quest.status == QUEST_ACTIVE:
+        quest.progress_extras += 1
 
 
 async def record_pvp_win(session: AsyncSession, user_id: int, own_power: int, enemy_power: int) -> None:
@@ -322,11 +407,13 @@ async def invest_point(session: AsyncSession, user_id: int, mastery: str) -> Inv
             quest.status = QUEST_COMPLETE
             chain_complete = True
         else:
+            # Перед следующим этапом — «прорыв» (пользователь 2026-10-28): ожидание задания
+            # начнётся, только когда игрок сделает что-то грандиозное (`_try_breakthrough`).
             quest.stage += 1
-            quest.status = QUEST_PENDING
-            quest.available_at = _now() + _random_delay(await _delay_reduction(session, user_id))
+            quest.status = QUEST_BREAKTHROUGH
+            quest.available_at = _now()
             quest.tom_power = 0
-            quest.progress_trainings = quest.progress_pvp_wins = 0
+            quest.progress_trainings = quest.progress_pvp_wins = quest.progress_extras = 0
             quest.equal_win = False
             quest.points_bought = 0
     await session.commit()

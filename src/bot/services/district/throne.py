@@ -29,6 +29,8 @@ from bot.texts.activity import LOG_THRONE_CONTENDER, LOG_THRONE_INCUMBENT, LOST,
 from bot.services.business import accrue_many
 from bot.services.characteristic import get_combat_profile
 from bot.services.combat import simulate_battle
+from bot.constant.dev_quest import TASK_WIN_PVP
+from bot.services.dev_quest import emit as quest_event
 from bot.services.district.army import apply_losses, load_camp
 from bot.services.gang import get_gang
 from bot.constant.phase import PHASE_FIST
@@ -96,6 +98,10 @@ async def resolve_throne(session: AsyncSession, contender_id: int, incumbent_id:
         LOG_THRONE_INCUMBENT.format(contender=contender_gang.name if contender_gang else "—", outcome=LOST if won else WON),
     )
     await remember_opponents(session, contender_id, incumbent_id)
+    if won:
+        # Победа над игроком нападающим — как PvP-вызов (пользователь 2026-10-28: трон и
+        # освобождение засчитываются заданию «Победить игрока нападающим»).
+        await quest_event(session, contender_id, TASK_WIN_PVP)
     return ThroneOutcome(
         journal=journal(result, m.spy) + abs_lines, defender_journal=journal(result, m.spy, viewer_is_attacker=False) + abs_lines,
         contender_id=contender_id,
@@ -174,6 +180,8 @@ async def resolve_liberation(session: AsyncSession, contender_id: int, holder_id
     await log_activity(session, contender_id, ACT_BATTLE, LOG_LIBERATION_CONTENDER.format(holder=labels["holder_label"], outcome=WON if won else LOST))
     await log_activity(session, holder_id, ACT_BATTLE, LOG_LIBERATION_HOLDER.format(contender=labels["contender_label"], outcome=LOST if won else WON))
     await remember_opponents(session, contender_id, holder_id)
+    if won:
+        await quest_event(session, contender_id, TASK_WIN_PVP)
     return LiberationOutcome(
         journal=journal(result, m.spy) + abs_lines, defender_journal=journal(result, m.spy, viewer_is_attacker=False) + abs_lines,
         contender_id=contender_id, holder_id=holder_id, contender_won=won, rounds=result.rounds,

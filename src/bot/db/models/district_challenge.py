@@ -45,12 +45,9 @@ class DistrictChallenge(Base):
             unique=True,
             postgresql_where=text(f"status = '{CHALLENGE_PENDING}' AND scope = '{SCOPE_CITY}'"),
         ),
-        Index(
-            "uq_challenge_pending_attacker",
-            "attacker_id",
-            unique=True,
-            postgresql_where=text(f"status = '{CHALLENGE_PENDING}'"),
-        ),
+        # «Один исходящий у нападающего» снят 2026-10-28: КД — с момента вызова, вызывать можно
+        # раз в КД, не дожидаясь ответа на предыдущий. Обычный индекс — для выборок по нападающему.
+        Index("ix_challenge_attacker", "attacker_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

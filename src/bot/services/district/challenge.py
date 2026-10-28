@@ -31,13 +31,12 @@ from bot.services.position_skill.battle import journal, matchup
 from bot.constant.cooldown import CD_BATTLE
 from bot.services.cooldown import schedule as schedule_ready
 from bot.cache.keys import battle_cooldown
-from bot.config.game import CHALLENGE_ACCEPT_SECONDS, CHALLENGE_CD_RESERVE_PAD_SECONDS, CHALLENGE_SWEEP_BATCH
+from bot.config.game import CHALLENGE_ACCEPT_SECONDS, CHALLENGE_SWEEP_BATCH
 from bot.constant.district import RESOLUTION_ACCEPTED, RESOLUTION_TIMEOUT, RESOLUTION_VOID, SCOPE_CITY, SCOPE_DISTRICT
 from bot.constant.extra import CAMP_ATTACK, CAMP_DEFENSE
 from bot.db.models.user import User
 from bot.db.repositories.district import challenge as challenge_repo
 from bot.db.repositories.district import count_owned_in_city, get_row, transfer_all_in_city, transfer_owner
-from bot.db.repositories.phase import get_phase
 from bot.db.repositories.user import get_by_id
 from bot.constant.activity import ACT_BATTLE, ACT_CAPTURE
 from bot.constant.dev_quest import TASK_PVP_CHALLENGE, TASK_WIN_PVP
@@ -186,12 +185,28 @@ async def _check_cooldown(redis: Redis, user_id: int) -> None:
         raise BattleOnCooldownError(retry_after_seconds=max(1, -(-pttl // 1000)))
 
 
-async def _reserve_cooldown(redis: Redis, user_id: int, window: int) -> None:
-    """Атомарно занять КД атаки на время ожидания ответа (`SET NX`, как у PvE-атак): пока вызов
-    висит, ни ботов, ни босса, ни второго вызова. После боя КД переставляется полным сроком."""
-    if not await redis.set(battle_cooldown(user_id), "1", nx=True, ex=window + CHALLENGE_CD_RESERVE_PAD_SECONDS):
-        pttl = await redis.pttl(battle_cooldown(user_id))
+async def _start_cooldown(session: AsyncSession, redis: Redis, attacker: User) -> int:
+    """КД атаки — с момента нажатия «вызов» (пользователь 2026-10-28, игроки одобрили: «раз в
+    5/30 минут отправлять сражения, а не ждать ответа 40 минут, а потом ещё КД»). Обычная длина
+    по фазе, атомарный `SET NX`, как у PvE. После боя КД больше не ставится. → длина КД."""
+    profile = await get_combat_profile(session, attacker.id)
+    cd = profile.cooldown(battle_cooldown_seconds(attacker.phase), profile.eco.battle_cooldown)
+    if not await redis.set(battle_cooldown(attacker.id), "1", nx=True, ex=cd):
+        pttl = await redis.pttl(battle_cooldown(attacker.id))
         raise BattleOnCooldownError(retry_after_seconds=max(1, -(-max(pttl, 0) // 1000)))
+    return cd
+
+
+async def _after_issue(session: AsyncSession, redis: Redis, attacker_id: int, cd: int) -> None:
+    """Вызов создан и закоммичен: Ловкость — шанс, что вызов не ставит КД (тает в цепочке,
+    `services/district/free_attack`); иначе — пуш «готово» по окончании КД."""
+    from bot.services.district.free_attack import roll_free_attack
+
+    profile = await get_combat_profile(session, attacker_id)
+    if await roll_free_attack(redis, attacker_id, profile, won=False, vs_bots=False):
+        await redis.delete(battle_cooldown(attacker_id))
+    else:
+        await schedule_ready(redis, attacker_id, CD_BATTLE, cd)
 
 
 async def issue_challenge(session: AsyncSession, redis: Redis, attacker: User, district_id: int) -> ChallengeIssued:
@@ -219,19 +234,19 @@ async def issue_challenge(session: AsyncSession, redis: Redis, attacker: User, d
 
     # Дружелюбные проверки ДО вставки — чтобы сказать игроку, что именно не так; сама
     # гарантия всё равно в индексах (вставка ниже вернёт None при гонке).
-    if await challenge_repo.get_pending_for_attacker(session, attacker.id) is not None:
-        raise OutgoingChallengeExistsError
     if await challenge_repo.get_pending_for_district(session, district_id) is not None:
         raise DistrictAlreadyChallengedError
 
     # Скорость нападающего: −1% времени защитнику на принятие за ранг (raw-notes).
     window = await _accept_window(session, attacker.id, row.owner_id)
-    await _reserve_cooldown(redis, attacker.id, window)
+    cd = await _start_cooldown(session, redis, attacker)
     try:
-        return await _create_district_challenge(session, attacker, row, district_id, window)
+        issued = await _create_district_challenge(session, attacker, row, district_id, window)
     except BaseException:
         await redis.delete(battle_cooldown(attacker.id))
         raise
+    await _after_issue(session, redis, attacker.id, cd)
+    return issued
 
 
 async def _create_district_challenge(session: AsyncSession, attacker: User, row, district_id: int, window: int) -> ChallengeIssued:
@@ -248,8 +263,6 @@ async def _create_district_challenge(session: AsyncSession, attacker: User, row,
         # rollback экспайрит ВСЕ ORM-объекты сессии (включая переданный `attacker`) —
         # следующее обращение к `attacker.id` полезло бы в ленивую подгрузку, что в
         # async-режиме падает `MissingGreenlet` (пойман e2e-тестом гонки 2026-09-29).
-        if await challenge_repo.get_pending_for_attacker(session, attacker.id) is not None:
-            raise OutgoingChallengeExistsError
         raise DistrictAlreadyChallengedError
 
     defender_army = await get_army_stats(session, row.owner_id)
@@ -296,18 +309,18 @@ async def issue_city_challenge(
     if not await load_camp(session, attacker.id, CAMP_ATTACK, for_update=False):
         raise NoAttackersError
     await _check_cooldown(redis, attacker.id)
-    if await challenge_repo.get_pending_for_attacker(session, attacker.id) is not None:
-        raise OutgoingChallengeExistsError
     if defender_id in await challenge_repo.list_pending_city_defenders(session, city_id):
         raise CityAlreadyChallengedError
 
     window = await _accept_window(session, attacker.id, defender_id)
-    await _reserve_cooldown(redis, attacker.id, window)
+    cd = await _start_cooldown(session, redis, attacker)
     try:
-        return await _create_city_challenge(session, attacker, city, city_id, defender_id, districts, window)
+        issued = await _create_city_challenge(session, attacker, city, city_id, defender_id, districts, window)
     except BaseException:
         await redis.delete(battle_cooldown(attacker.id))
         raise
+    await _after_issue(session, redis, attacker.id, cd)
+    return issued
 
 
 async def _create_city_challenge(
@@ -323,8 +336,6 @@ async def _create_city_challenge(
     )
     if challenge_id is None:
         # Без rollback — см. комментарий в `issue_challenge`.
-        if await challenge_repo.get_pending_for_attacker(session, attacker.id) is not None:
-            raise OutgoingChallengeExistsError
         raise CityAlreadyChallengedError
 
     defender_army = await get_army_stats(session, defender_id)
@@ -411,16 +422,12 @@ async def _resolve(session: AsyncSession, redis: Redis, challenge_id: int, resol
     if void:
         await challenge_repo.set_outcome(session, challenge_id, resolution=RESOLUTION_VOID, attacker_won=None)
         await session.commit()
-        await redis.delete(battle_cooldown(challenge.attacker_id))  # боя не было — резерв КД снимаем
         return ChallengeOutcome(
             **base, district_number=district_number, resolution=RESOLUTION_VOID, attacker_won=False, captured=False,
             rounds=0, attacker_quantity=0, attacker_power=0, attacker_dead=0, attacker_fled=0,
             defender_quantity=0, defender_power=0, defender_dead=0, defender_fled=0,
         )
 
-    # КД нападающему — по его фазе НА МОМЕНТ боя (как у PvE): повышение этим же боем не
-    # удлиняет КД задним числом.
-    attacker_phase = (await get_phase(session, challenge.attacker_id))[0]
     attacker_profile = await get_combat_profile(session, challenge.attacker_id)
     defender_profile = await get_combat_profile(session, challenge.defender_id)
     defender_camp = CAMP_ATTACK if resolution == RESOLUTION_ACCEPTED else CAMP_DEFENSE
@@ -490,16 +497,8 @@ async def _resolve(session: AsyncSession, redis: Redis, challenge_id: int, resol
 
     # Правило 10: Redis — только после успешного commit. КД — только нападающему, с
     # мастерством Скорости; Ловкость — с шансом КД не ставится вовсе («вторая атака»).
-    from bot.services.district.free_attack import roll_free_attack
-
-    # PvP: раньше «Неудержимый» тут не действовал — только Ловкость; сохраняем это (won=False).
-    free_attack = await roll_free_attack(redis, challenge.attacker_id, attacker_profile, won=False, vs_bots=False)
-    if free_attack:
-        await redis.delete(battle_cooldown(challenge.attacker_id))  # снять резерв, поставленный при вызове
-    else:
-        cd = attacker_profile.cooldown(battle_cooldown_seconds(attacker_phase), attacker_profile.eco.battle_cooldown)
-        await redis.set(battle_cooldown(challenge.attacker_id), "1", ex=cd)
-        await schedule_ready(redis, challenge.attacker_id, CD_BATTLE, cd)
+    # КД атаки уже стоит с момента вызова (`_start_cooldown`), после боя его не трогаем.
+    free_attack = False
 
     return ChallengeOutcome(
         **base,

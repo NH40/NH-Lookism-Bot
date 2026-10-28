@@ -138,7 +138,28 @@ async def check_conviction(session: AsyncSession, user_id: int) -> bool:
     return True
 
 
+async def _sync_bought(session: AsyncSession, user_id: int) -> bool:
+    """Купленные за донат пути — в полученные (с купленным уровнем), если путь уже пробуждён.
+    Баг 2026-10-28: путь, купленный ДО пробуждения (сброса прогресса), после нового пробуждения
+    пути не возвращался — выдавался только выбранный, и второе тело было нечем занять. НЕ коммитит.
+    → добавлено ли что-то."""
+    state = await path_repo.get_state(session, user_id)
+    if state is None or state[0] != PATH_STAGE_OWNED:
+        return False
+    owned = dict(await path_repo.list_owned(session, user_id))
+    added = False
+    for (_, code), level in (await donate_repo.unlocks(session, user_id, KIND_PATH)).items():
+        if code in owned:
+            continue
+        await path_repo.add(session, user_id, code)
+        await donate_repo.raise_owned_level(session, user_id, KIND_PATH, code, level)
+        added = True
+    return added
+
+
 async def get_view(session: AsyncSession, redis: Redis, user_id: int) -> PathView:
+    if await _sync_bought(session, user_id):
+        await session.commit()
     stage, active, fragments, potential, ranks = await path_repo.get_state(session, user_id)
     owned = dict(await path_repo.list_owned(session, user_id))
     quest = None
@@ -196,6 +217,7 @@ async def awaken_path(
         raise NotEnoughFragmentsError(PATH_AWAKEN_FRAGMENTS, fresh[2])
     code = choice or (rng or random).choice(PATHS)
     await grant(session, user_id, code)
+    await _sync_bought(session, user_id)  # остальные купленные пути — тоже в полученные (для второго тела)
     await session.commit()
     return code
 

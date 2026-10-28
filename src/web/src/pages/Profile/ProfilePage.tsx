@@ -66,22 +66,6 @@ function ProfileView({ p, run, busy }: { p: ProfileData; run: (path: string, bod
         </div>
       </div>
 
-      {p.potential_cost != null && p.potential_next && (
-        <Panel title="ПОТЕНЦИАЛ" tone="gold" badgeMark="🧬">
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 700, marginBottom: 5 }}>
-            <span className="muted">До «{p.potential_next}»</span>
-            <span>{fmt(p.potential_points ?? 0)} / {fmt(p.potential_cost)}</span>
-          </div>
-          <Bar value={p.potential_points ?? 0} max={p.potential_cost} fill="gold" />
-          <div className="muted" style={{ fontSize: 11, fontWeight: 700, margin: "6px 0" }}>
-            Очки потенциала копятся за активность и сгорают при удалении банды и пробуждении.
-          </div>
-          <button className={`btn gold block ${(p.potential_points ?? 0) >= p.potential_cost ? "" : "off"}`} type="button"
-            disabled={busy || (p.potential_points ?? 0) < p.potential_cost} onClick={() => run("/potential-up")}>
-            Повысить потенциал
-          </button>
-        </Panel>
-      )}
 
       <div className="grid-3">
         <Chip variant="gold" icon={<Coins size={18} color="#f5b942" />} value={fmt(p.nh_coins)} label="NHCoin" />
@@ -139,6 +123,23 @@ function ProfileView({ p, run, busy }: { p: ProfileData; run: (path: string, bod
         )}
         {p.second_body && <div className="pf-pending" style={{ color: "var(--violet-2)" }}>Второе тело открыто</div>}
       </Panel>
+
+      {p.potential_cost != null && p.potential_next && (
+        <Panel title="ПОТЕНЦИАЛ" tone="gold" badgeMark="🧬">
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 700, marginBottom: 5 }}>
+            <span className="muted">До «{p.potential_next}»</span>
+            <span>{fmt(p.potential_points ?? 0)} / {fmt(p.potential_cost)}</span>
+          </div>
+          <Bar value={p.potential_points ?? 0} max={p.potential_cost} fill="gold" />
+          <div className="muted" style={{ fontSize: 11, fontWeight: 700, margin: "6px 0" }}>
+            Очки потенциала копятся за активность и сгорают при удалении банды и пробуждении.
+          </div>
+          <button className={`btn gold block ${(p.potential_points ?? 0) >= p.potential_cost ? "" : "off"}`} type="button"
+            disabled={busy || (p.potential_points ?? 0) < p.potential_cost} onClick={() => run("/potential-up")}>
+            Повысить потенциал
+          </button>
+        </Panel>
+      )}
 
       {p.absolutes && p.absolutes.items.length > 0 && (
         <Panel title="♾ Абсолюты" tone="gold">

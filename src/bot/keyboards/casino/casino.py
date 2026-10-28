@@ -4,6 +4,7 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.constant.casino import (
+    CASINO_STAKE_RESOURCES,
     CB_BJ_DOUBLE,
     CB_BJ_HIT,
     CB_BJ_STAND,
@@ -18,7 +19,6 @@ from bot.constant.casino import (
 )
 from bot.constant.common import CB_MENU_SHOP
 from bot.constant.poker import CB_POKER_OPEN
-from bot.constant.resource import NO_MINT_RESOURCES, RESOURCES
 from bot.texts.casino import (
     BTN_BJ_AGAIN,
     BTN_BJ_DOUBLE,
@@ -53,7 +53,7 @@ def casino_menu() -> InlineKeyboardMarkup:
 
 
 def stake_menu(game: str) -> InlineKeyboardMarkup:
-    buttons = [_btn(resource_label(code), f"{CB_CASINO_STAKE_PREFIX}{game}:{code}") for code in RESOURCES if code not in NO_MINT_RESOURCES]
+    buttons = [_btn(resource_label(code), f"{CB_CASINO_STAKE_PREFIX}{game}:{code}") for code in CASINO_STAKE_RESOURCES]
     rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
     if game == GAME_BLACKJACK:
         rows.append([_btn(BTN_STAKE_STATISTS, f"{CB_CASINO_STATISTS_PREFIX}{game}")])

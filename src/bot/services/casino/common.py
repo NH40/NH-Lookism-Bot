@@ -8,8 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.cache.keys import casino_bets
 from bot.config.casino import CASINO_HISTORY_TTL_SECONDS, CASINO_X3_RATIO_MAX, CASINO_X3_RATIO_MIN
-from bot.constant.casino import STAKE_RESOURCE, STAKE_STATIST
-from bot.constant.resource import NO_MINT_RESOURCES, RESOURCES
+from bot.constant.casino import CASINO_STAKE_RESOURCES, STAKE_RESOURCE, STAKE_STATIST
 from bot.services.resource import StatistKey, give_statists, grant, spend, take_statists
 
 
@@ -38,7 +37,7 @@ class Stake:
     def validate(self) -> None:
         if self.amount <= 0:
             raise InvalidStakeError
-        if self.kind == STAKE_RESOURCE and (self.code not in RESOURCES or self.code in NO_MINT_RESOURCES):
+        if self.kind == STAKE_RESOURCE and self.code not in CASINO_STAKE_RESOURCES:
             raise InvalidStakeError
         if self.kind == STAKE_STATIST:
             try:

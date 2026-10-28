@@ -31,7 +31,7 @@ from bot.config.poker import (
     POKER_RAKE_PERCENT,
     POKER_WAIT_OPTIONS_SECONDS,
 )
-from bot.constant.casino import STAKE_RESOURCE, STAKE_STATIST
+from bot.constant.casino import CASINO_STAKE_RESOURCES, STAKE_RESOURCE, STAKE_STATIST
 from bot.constant.poker import (
     ACT_CALL,
     ACT_CHECK,
@@ -42,7 +42,6 @@ from bot.constant.poker import (
     TABLE_ACTIVE,
     TABLE_WAITING,
 )
-from bot.constant.resource import NO_MINT_RESOURCES, RESOURCES
 from bot.db.models.gang import Gang
 from bot.services import casino as casino_svc
 from bot.services import poker as poker_svc
@@ -227,7 +226,7 @@ async def get_casino(user_id: int = Depends(get_current_user_id), session: Async
     tables = await poker_svc.lobby(session)
     return CasinoOut(
         resources=[ResourceOpt(code=c, label=RESOURCE_NAMES.get(c, c), balance=bal.get(c, 0))
-                   for c in RESOURCES if c not in NO_MINT_RESOURCES],
+                   for c in CASINO_STAKE_RESOURCES],
         squads=await _squad_opts(session, user_id),
         symbols=[SymbolOut(symbol=s, multiplier=m) for s, (_, m) in SLOTS_SYMBOLS.items()],
         pair_multiplier=SLOTS_PAIR_MULTIPLIER, statists_min=BLACKJACK_STATISTS_MIN,

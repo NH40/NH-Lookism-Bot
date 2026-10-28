@@ -8,6 +8,7 @@ from bot.constant.casino.casino import (  # noqa: F401
     CB_CASINO_SQUAD_PREFIX,
     CB_CASINO_STAKE_PREFIX,
     CB_CASINO_STATISTS_PREFIX,
+    CASINO_STAKE_RESOURCES,
     CB_SLOTS_AGAIN_PREFIX,
     GAME_BLACKJACK,
     GAME_SLOTS,

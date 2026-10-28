@@ -8,6 +8,7 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.constant.casino import (
+    CASINO_STAKE_RESOURCES,
     CB_BJ_DOUBLE,
     CB_BJ_HIT,
     CB_BJ_STAND,
@@ -22,7 +23,6 @@ from bot.constant.casino import (
     STAKE_RESOURCE,
     STAKE_STATIST,
 )
-from bot.constant.resource import RESOURCES
 from bot.keyboards.casino import (
     back_to_game,
     blackjack_done_menu,
@@ -188,7 +188,7 @@ async def _ask_stake(callback: CallbackQuery, state: FSMContext, game: str, kind
 @router.callback_query(F.data.startswith(CB_CASINO_STAKE_PREFIX))
 async def cb_casino_stake(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
     game, _, code = callback.data.removeprefix(CB_CASINO_STAKE_PREFIX).partition(":")
-    if game not in GAME_NAMES or code not in RESOURCES or not await _guard(callback, session):
+    if game not in GAME_NAMES or code not in CASINO_STAKE_RESOURCES or not await _guard(callback, session):
         await callback.answer()
         return
     have = await balance(session, callback.from_user.id, code)
@@ -256,7 +256,7 @@ async def on_casino_stake(message: Message, state: FSMContext, session: AsyncSes
 @router.callback_query(F.data.startswith(CB_SLOTS_AGAIN_PREFIX))
 async def cb_slots_again(callback: CallbackQuery, session: AsyncSession, redis: Redis) -> None:
     code, _, raw = callback.data.removeprefix(CB_SLOTS_AGAIN_PREFIX).rpartition(":")
-    if code not in RESOURCES or not raw.isdigit() or not await _guard(callback, session):
+    if code not in CASINO_STAKE_RESOURCES or not raw.isdigit() or not await _guard(callback, session):
         await callback.answer()
         return
     result = await _play(session, redis, callback.from_user.id, GAME_SLOTS, Stake(STAKE_RESOURCE, code, int(raw)))

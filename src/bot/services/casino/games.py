@@ -1,7 +1,12 @@
 """Казино — слоты и блэкджек (сервис). Правила и числа — из 1.0 (`config/casino`).
 
 Слоты: ставка списывается, три барабана, тройка — множитель символа, пара — ставка
-назад; всё одной транзакцией. Блэкджек: ставка списывается при раздаче, сама раздача (карты
+назад; всё одной транзакцией.
+
+Подкрутка (`SLOTS_RIG_CHANCE`/`BLACKJACK_RIG_CHANCE`, пользователь 2026-10-28: «в казино не
+должны выигрывать») — скрытая: в части игр слоты выкидывают проигрышные барабаны, а в
+блэкджеке игроку не приходит блэкджек с двух карт и дилер при вскрытии подбирает закрытую
+карту и добор, которыми бьёт игрока. Решение о подкрутке раздачи хранится вместе с ней. Блэкджек: ставка списывается при раздаче, сама раздача (карты
 и ставка) живёт в Redis с TTL — брошенная раздача сгорает вместе со ставкой. Итог раздачи
 забирается атомарным `GETDEL` до выплаты: двойной клик «Хватит» не выплатит дважды.
 """
@@ -23,9 +28,12 @@ from bot.config.casino import (
     BLACKJACK_DEALER_STAND,
     BLACKJACK_HAND_TTL_SECONDS,
     BLACKJACK_NATURAL_MULTIPLIER,
+    BLACKJACK_RIG_CHANCE,
+    BLACKJACK_RIG_TRIES,
     BLACKJACK_STATISTS_MIN,
     BLACKJACK_WIN_MULTIPLIER,
     SLOTS_PAIR_MULTIPLIER,
+    SLOTS_RIG_CHANCE,
     SLOTS_SYMBOLS,
 )
 from bot.config.game import ACTION_LOCK_MS
@@ -94,10 +102,18 @@ async def _lock(redis: Redis, user_id: int) -> str:
 
 # --- слоты ---
 
-def spin(rng: random.Random) -> tuple[str, str, str]:
+def spin(rng: random.Random, rigged: bool = False) -> tuple[str, str, str]:
+    """Три барабана; `rigged` — три разных символа (ни пары, ни тройки)."""
     symbols = list(SLOTS_SYMBOLS)
     weights = [SLOTS_SYMBOLS[s][0] for s in symbols]
-    return tuple(rng.choices(symbols, weights=weights, k=3))  # type: ignore[return-value]
+    if not rigged:
+        return tuple(rng.choices(symbols, weights=weights, k=3))  # type: ignore[return-value]
+    reel: list[str] = []
+    while len(reel) < 3:
+        symbol = rng.choices(symbols, weights=weights)[0]
+        if symbol not in reel:
+            reel.append(symbol)
+    return tuple(reel)  # type: ignore[return-value]
 
 
 def slots_payout(reel: tuple[str, str, str], amount: int) -> tuple[str, int]:
@@ -118,7 +134,8 @@ async def play_slots(session: AsyncSession, redis: Redis, user_id: int, stake: S
     try:
         await check_x3(redis, user_id, GAME_SLOTS, stake)
         await take_stake(session, user_id, stake)
-        reel = spin(rng or random.Random())
+        rng = rng or random.Random()
+        reel = spin(rng, rigged=rng.random() < SLOTS_RIG_CHANCE)
         outcome, payout = slots_payout(reel, stake.amount)
         await pay_stake(session, user_id, stake, payout)
         await quest_event(session, user_id, TASK_CASINO)
@@ -157,14 +174,37 @@ def _draw(rng: random.Random) -> list:
     return [rng.choice(RANKS), rng.choice(SUITS)]
 
 
-def _settle(player: list[list], dealer: list[list], stake: Stake, doubled: bool, rng: random.Random) -> tuple[list[list], str, int]:
+def _dealer_draw(dealer: list[list], rng: random.Random) -> list[list]:
+    while hand_value(dealer) < BLACKJACK_DEALER_STAND:
+        dealer = dealer + [_draw(rng)]
+    return dealer
+
+
+def _dealer_play(pv: int, dealer: list[list], rng: random.Random, rigged: bool) -> list[list]:
+    """Добор дилера. В подкрученной раздаче закрытая карта (игрок её не видел) и добор
+    подбираются так, чтобы дилер обыграл игрока; не вышло — хотя бы ничья; иначе как выпало."""
+    honest = _dealer_draw(dealer, rng)
+    if not rigged or pv < hand_value(honest) <= 21:
+        return honest
+    tie = None
+    for _ in range(BLACKJACK_RIG_TRIES):
+        cand = _dealer_draw([dealer[0], _draw(rng)], rng)
+        dv = hand_value(cand)
+        if pv < dv <= 21:
+            return cand
+        if dv == pv and tie is None:
+            tie = cand
+    return tie or honest
+
+
+def _settle(player: list[list], dealer: list[list], stake: Stake, doubled: bool, rng: random.Random,
+            rigged: bool = False) -> tuple[list[list], str, int]:
     """Добор дилера до порога и итог. → (карты дилера, исход, выплата)."""
     bet = stake.amount * (2 if doubled else 1)
     pv = hand_value(player)
     if pv > 21:
         return dealer, BJ_BUST, 0
-    while hand_value(dealer) < BLACKJACK_DEALER_STAND:
-        dealer = dealer + [_draw(rng)]
+    dealer = _dealer_play(pv, dealer, rng, rigged)
     dv = hand_value(dealer)
     if dv > 21 or pv > dv:
         return dealer, BJ_WIN, int(bet * BLACKJACK_WIN_MULTIPLIER)
@@ -173,16 +213,22 @@ def _settle(player: list[list], dealer: list[list], stake: Stake, doubled: bool,
     return dealer, BJ_LOSS, 0
 
 
-def _to_json(player, dealer, stake: Stake, doubled: bool) -> str:
-    return json.dumps({"player": player, "dealer": dealer, "stake": stake.to_dict(), "doubled": doubled})
+def _to_json(player, dealer, stake: Stake, doubled: bool, rigged: bool) -> str:
+    return json.dumps({"player": player, "dealer": dealer, "stake": stake.to_dict(), "doubled": doubled, "rig": rigged})
 
 
-async def current_hand(redis: Redis, user_id: int) -> BlackjackState | None:
+async def _load(redis: Redis, user_id: int) -> tuple[BlackjackState, bool] | None:
     raw = await redis.get(blackjack_hand(user_id))
     if raw is None:
         return None
     data = json.loads(raw)
-    return BlackjackState(data["player"], data["dealer"], Stake.of(data["stake"]), data["doubled"], False)
+    state = BlackjackState(data["player"], data["dealer"], Stake.of(data["stake"]), data["doubled"], False)
+    return state, bool(data.get("rig"))
+
+
+async def current_hand(redis: Redis, user_id: int) -> BlackjackState | None:
+    loaded = await _load(redis, user_id)
+    return loaded[0] if loaded else None
 
 
 async def blackjack_deal(session: AsyncSession, redis: Redis, user_id: int, stake: Stake, rng: random.Random | None = None) -> BlackjackState:
@@ -199,7 +245,10 @@ async def blackjack_deal(session: AsyncSession, redis: Redis, user_id: int, stak
         await check_x3(redis, user_id, GAME_BLACKJACK, stake)
         await take_stake(session, user_id, stake)
         await quest_event(session, user_id, TASK_CASINO)
+        rigged = rng.random() < BLACKJACK_RIG_CHANCE
         player, dealer = [_draw(rng), _draw(rng)], [_draw(rng), _draw(rng)]
+        while rigged and hand_value(player) == 21:  # в подкрученной раздаче блэкджек не приходит
+            player = [_draw(rng), _draw(rng)]
         if hand_value(player) == 21:
             if hand_value(dealer) == 21:
                 outcome, payout = BJ_PUSH, stake.amount
@@ -209,7 +258,7 @@ async def blackjack_deal(session: AsyncSession, redis: Redis, user_id: int, stak
             await session.commit()
             return BlackjackState(player, dealer, stake, False, True, outcome, payout)
         await session.commit()
-        await redis.set(blackjack_hand(user_id), _to_json(player, dealer, stake, False), ex=BLACKJACK_HAND_TTL_SECONDS)
+        await redis.set(blackjack_hand(user_id), _to_json(player, dealer, stake, False, rigged), ex=BLACKJACK_HAND_TTL_SECONDS)
         return BlackjackState(player, dealer, stake, False, False)
     except Exception:
         await session.rollback()
@@ -218,11 +267,12 @@ async def blackjack_deal(session: AsyncSession, redis: Redis, user_id: int, stak
         await redis.delete(key)
 
 
-async def _finish(session: AsyncSession, redis: Redis, user_id: int, player, dealer, stake: Stake, doubled: bool, rng) -> BlackjackState:
+async def _finish(session: AsyncSession, redis: Redis, user_id: int, player, dealer, stake: Stake, doubled: bool, rng,
+                  rigged: bool) -> BlackjackState:
     """Забрать раздачу атомарно (GETDEL) и выплатить — второй вызов найдёт пусто."""
     if await redis.getdel(blackjack_hand(user_id)) is None:
         raise HandNotFoundError
-    dealer, outcome, payout = _settle(player, dealer, stake, doubled, rng)
+    dealer, outcome, payout = _settle(player, dealer, stake, doubled, rng, rigged)
     try:
         await pay_stake(session, user_id, stake, payout)
         await session.commit()
@@ -236,13 +286,14 @@ async def blackjack_hit(session: AsyncSession, redis: Redis, user_id: int, rng: 
     rng = rng or random.Random()
     key = await _lock(redis, user_id)
     try:
-        hand = await current_hand(redis, user_id)
-        if hand is None:
+        loaded = await _load(redis, user_id)
+        if loaded is None:
             raise HandNotFoundError
+        hand, rigged = loaded
         player = hand.player + [_draw(rng)]
         if hand_value(player) >= 21:
-            return await _finish(session, redis, user_id, player, hand.dealer, hand.stake, hand.doubled, rng)
-        await redis.set(blackjack_hand(user_id), _to_json(player, hand.dealer, hand.stake, hand.doubled), ex=BLACKJACK_HAND_TTL_SECONDS)
+            return await _finish(session, redis, user_id, player, hand.dealer, hand.stake, hand.doubled, rng, rigged)
+        await redis.set(blackjack_hand(user_id), _to_json(player, hand.dealer, hand.stake, hand.doubled, rigged), ex=BLACKJACK_HAND_TTL_SECONDS)
         return BlackjackState(player, hand.dealer, hand.stake, hand.doubled, False)
     finally:
         await redis.delete(key)
@@ -252,10 +303,11 @@ async def blackjack_stand(session: AsyncSession, redis: Redis, user_id: int, rng
     rng = rng or random.Random()
     key = await _lock(redis, user_id)
     try:
-        hand = await current_hand(redis, user_id)
-        if hand is None:
+        loaded = await _load(redis, user_id)
+        if loaded is None:
             raise HandNotFoundError
-        return await _finish(session, redis, user_id, hand.player, hand.dealer, hand.stake, hand.doubled, rng)
+        hand, rigged = loaded
+        return await _finish(session, redis, user_id, hand.player, hand.dealer, hand.stake, hand.doubled, rng, rigged)
     finally:
         await redis.delete(key)
 
@@ -265,13 +317,14 @@ async def blackjack_double(session: AsyncSession, redis: Redis, user_id: int, rn
     rng = rng or random.Random()
     key = await _lock(redis, user_id)
     try:
-        hand = await current_hand(redis, user_id)
-        if hand is None or len(hand.player) != 2 or hand.doubled:
+        loaded = await _load(redis, user_id)
+        if loaded is None or len(loaded[0].player) != 2 or loaded[0].doubled:
             raise HandNotFoundError
+        hand, rigged = loaded
         await take_stake(session, user_id, hand.stake)
         await session.commit()
         player = hand.player + [_draw(rng)]
-        return await _finish(session, redis, user_id, player, hand.dealer, hand.stake, True, rng)
+        return await _finish(session, redis, user_id, player, hand.dealer, hand.stake, True, rng, rigged)
     except NotEnoughError:
         await session.rollback()
         raise

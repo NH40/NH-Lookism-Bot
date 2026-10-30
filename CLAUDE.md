@@ -2792,3 +2792,15 @@ MedetGay, Archangel_17, частично Greenbild). Решения пользо
 POTENTIAL_UPGRADE_COST` по текущему потенциалу. Сгорают в `_PROGRESS_COLUMNS` (удаление банды,
 пробуждение). Бот — экран «Характеристики» (кнопка при достатке очков), API `POST /api/potential-up`,
 Mini App — панель «Потенциал» в профиле. Важно: выше потенциал — дольше ожидание заданий мастерства.
+
+## Донат по СБП через API ЮKassa (2026-10-30)
+
+Тот же механизм, что в Universe Anime Planet (подробно — его CLAUDE.md, раздел «Донат по СБП»):
+`services/sbp` (клиент API ЮKassa v3 + зачисление через `services/donate.credit_payment`,
+`payments.telegram_charge_id = "yk:<id>"`), таблица `sbp_payments` (модель — в
+`db/models/donate.py`), вебхук `POST /api/payments/yookassa`
+(https://lbp.universanimeplanet.ru/api/payments/yookassa), фоновая проверка `_sbp_loop`, кнопка
+«Я оплатил». В боте после суммы — выбор «⚡ СБП / 💳 Картой»; в Mini App («Донат») —
+переключатель способа, СБП открывает страницу банка (`WebApp.openLink`) и опрашивает
+`GET /api/donate/sbp/{id}`. Метка `metadata.bot = "lbp"` — при общем с UAP магазине вебхук
+чужие платежи пропускает. Ключи — `YOOKASSA_SHOP_ID`/`YOOKASSA_SECRET_KEY`; пусто — СБП скрыта.

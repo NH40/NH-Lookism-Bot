@@ -5,18 +5,22 @@ from __future__ import annotations
 from aiogram import Bot, F, Router
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, LabeledPrice, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, LabeledPrice, Message
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config.development import MAX_LEVEL
-from bot.config.donate import DONATE_MAX_RUB, DONATE_MIN_RUB, DONATE_PRESETS_RUB
+from bot.cache.keys import action_lock
+from bot.config.donate import DONATE_MAX_RUB, DONATE_MIN_RUB, DONATE_PRESETS_RUB, SBP_PAYMENT_WAIT_MINUTES
 from bot.services.admin.live_config import get as live_get
 from bot.config.settings import get_settings
 from bot.constant.donate import (
+    CB_DONATE_CARD_PREFIX,
     CB_DONATE_CUSTOM,
     CB_DONATE_OPEN,
     CB_DONATE_PRESET_PREFIX,
+    CB_DONATE_SBP_CHECK_PREFIX,
+    CB_DONATE_SBP_PREFIX,
     CB_MARKET_BODY,
     CB_MARKET_BODY_BUY,
     CB_MARKET_ITEM_PREFIX,
@@ -25,10 +29,15 @@ from bot.constant.donate import (
     CB_MARKET_OPEN,
     CB_MARKET_UNLOCK_PREFIX,
     DONATE_KINDS,
+    LOCK_ACTION_DONATE_SBP,
     PAYLOAD_DONATE_PREFIX,
+    SBP_STATUS_CANCELED,
+    SBP_STATUS_SUCCEEDED,
 )
 from bot.db.repositories import donate as donate_repo
-from bot.keyboards.donate import back_to_donate, body_menu, donate_menu, item_menu, kind_menu, market_menu
+from bot.db.repositories import sbp_payment as sbp_repo
+from bot.keyboards.donate import back_to_donate, body_menu, donate_menu, item_menu, kind_menu, market_menu, method_menu, sbp_menu
+from bot.services import sbp as sbp_service
 from bot.services.donate import (
     CATALOG,
     AlreadyBoughtError,
@@ -71,9 +80,18 @@ from bot.texts.donate import (
     KIND_SCREEN_TAIL,
     MARKET_SCREEN,
     MAX_ALERT,
+    METHOD_SCREEN,
     NOT_CONFIGURED_ALERT,
     NOT_ENOUGH_ALERT,
     NOT_UNLOCKED_ALERT,
+    SBP_ALREADY_ALERT,
+    SBP_BUSY_ALERT,
+    SBP_CANCELED_SCREEN,
+    SBP_DONE_ALERT,
+    SBP_FAILED_ALERT,
+    SBP_PAID_SCREEN,
+    SBP_SCREEN,
+    SBP_WAITING_ALERT,
 )
 from bot.texts.genius import GENIUS_NAMES
 from bot.texts.profile import NOT_ONBOARDED
@@ -98,6 +116,19 @@ async def _send_invoice(bot: Bot, chat_id: int, amount_rub: int) -> None:
         currency="RUB",
         prices=[LabeledPrice(label=INVOICE_LABEL.format(amount=amount_rub), amount=amount_rub * _KOPECKS_PER_RUB)],
     )
+
+
+def _methods() -> tuple[bool, bool]:
+    """(СБП доступна, карта через Telegram доступна)."""
+    return sbp_service.enabled(), bool(get_settings().yookassa_provider_token)
+
+
+def _amount(raw: str) -> int | None:
+    return int(raw) if raw.isdigit() and DONATE_MIN_RUB <= int(raw) <= DONATE_MAX_RUB else None
+
+
+def _method_text(amount_rub: int) -> str:
+    return METHOD_SCREEN.format(amount=format_number(amount_rub))
 
 
 async def _donate_text(session: AsyncSession, user_id: int) -> str:
@@ -135,16 +166,94 @@ async def cb_preset(callback: CallbackQuery, bot: Bot) -> None:
     if not raw.isdigit() or int(raw) not in DONATE_PRESETS_RUB:
         await callback.answer()
         return
-    if not get_settings().yookassa_provider_token:
+    sbp, card = _methods()
+    if not (sbp or card):
         await callback.answer(NOT_CONFIGURED_ALERT, show_alert=True)
         return
     await callback.answer()
-    await _send_invoice(bot, callback.message.chat.id, int(raw))
+    if not sbp:  # только карта — как до СБП: сразу инвойс
+        await _send_invoice(bot, callback.message.chat.id, int(raw))
+        return
+    await safe_edit_text(callback.message, _method_text(int(raw)), reply_markup=method_menu(int(raw), sbp, card))
+
+
+@router.callback_query(F.data.startswith(CB_DONATE_CARD_PREFIX))
+async def cb_card(callback: CallbackQuery, bot: Bot) -> None:
+    amount_rub = _amount(callback.data.removeprefix(CB_DONATE_CARD_PREFIX))
+    if not get_settings().yookassa_provider_token or amount_rub is None:
+        await callback.answer(NOT_CONFIGURED_ALERT, show_alert=True)
+        return
+    await callback.answer()
+    await _send_invoice(bot, callback.message.chat.id, amount_rub)
+
+
+@router.callback_query(F.data.startswith(CB_DONATE_SBP_PREFIX))
+async def cb_sbp(callback: CallbackQuery, session: AsyncSession, redis: Redis, bot: Bot) -> None:
+    amount_rub = _amount(callback.data.removeprefix(CB_DONATE_SBP_PREFIX))
+    if not sbp_service.enabled() or amount_rub is None:
+        await callback.answer(NOT_CONFIGURED_ALERT, show_alert=True)
+        return
+    if not await _guard(callback, session):
+        return
+    # Правило 2: двойной тап не должен завести два счёта.
+    key = action_lock(callback.from_user.id, LOCK_ACTION_DONATE_SBP)
+    if not await redis.set(key, "1", nx=True, px=20_000):
+        await callback.answer(SBP_BUSY_ALERT)
+        return
+    try:
+        row = await sbp_service.create(session, bot, callback.from_user.id, amount_rub)
+    except sbp_service.YooKassaError:
+        await callback.answer(SBP_FAILED_ALERT, show_alert=True)
+        return
+    finally:
+        await redis.delete(key)
+    await callback.answer()
+    await safe_edit_text(
+        callback.message,
+        SBP_SCREEN.format(amount=format_number(amount_rub), minutes=SBP_PAYMENT_WAIT_MINUTES),
+        reply_markup=sbp_menu(row.id, amount_rub, row.confirmation_url),
+    )
+    await sbp_service.attach_message(session, row, callback.message.chat.id, callback.message.message_id)
+
+
+@router.callback_query(F.data.startswith(CB_DONATE_SBP_CHECK_PREFIX))
+async def cb_sbp_check(callback: CallbackQuery, session: AsyncSession, redis: Redis, bot: Bot) -> None:
+    raw = callback.data.removeprefix(CB_DONATE_SBP_CHECK_PREFIX)
+    row = await sbp_repo.get(session, int(raw)) if raw.isdigit() else None
+    if row is None or row.user_id != callback.from_user.id:
+        await callback.answer()
+        return
+    key = action_lock(callback.from_user.id, LOCK_ACTION_DONATE_SBP)
+    if not await redis.set(key, "1", nx=True, px=20_000):
+        await callback.answer(SBP_BUSY_ALERT)
+        return
+    try:
+        status, result = await sbp_service.refresh(session, row)
+    except sbp_service.YooKassaError:
+        await callback.answer(SBP_WAITING_ALERT, show_alert=True)
+        return
+    finally:
+        await redis.delete(key)
+    if result is not None:
+        await callback.answer(SBP_DONE_ALERT, show_alert=True)
+        await sbp_service.announce(bot, result)
+    elif status == SBP_STATUS_SUCCEEDED:
+        await callback.answer(SBP_ALREADY_ALERT, show_alert=True)
+        amount = format_number(row.amount_rub)
+        await safe_edit_text(
+            callback.message, SBP_PAID_SCREEN.format(amount=amount, coins=amount),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[]),
+        )
+    elif status == SBP_STATUS_CANCELED:
+        await callback.answer()
+        await safe_edit_text(callback.message, SBP_CANCELED_SCREEN, reply_markup=back_to_donate())
+    else:
+        await callback.answer(SBP_WAITING_ALERT, show_alert=True)
 
 
 @router.callback_query(F.data == CB_DONATE_CUSTOM)
 async def cb_custom(callback: CallbackQuery, state: FSMContext) -> None:
-    if not get_settings().yookassa_provider_token:
+    if not any(_methods()):
         await callback.answer(NOT_CONFIGURED_ALERT, show_alert=True)
         return
     await state.set_state(DonateStates.waiting_amount)
@@ -163,7 +272,12 @@ async def on_custom_amount(message: Message, state: FSMContext, bot: Bot) -> Non
         )
         return
     await state.clear()
-    await _send_invoice(bot, message.chat.id, int(raw))
+    amount_rub = int(raw)
+    sbp, card = _methods()
+    if not sbp:
+        await _send_invoice(bot, message.chat.id, amount_rub)
+        return
+    await message.answer(_method_text(amount_rub), reply_markup=method_menu(amount_rub, sbp, card))
 
 
 # --- чёрный рынок ---

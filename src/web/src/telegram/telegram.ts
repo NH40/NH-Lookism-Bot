@@ -22,6 +22,7 @@ export interface TelegramWebApp {
     notificationOccurred?: (type: "success" | "error" | "warning") => void;
   };
   openTelegramLink?: (url: string) => void;
+  openLink?: (url: string) => void;
   openInvoice?: (url: string, callback?: (status: "paid" | "cancelled" | "failed" | "pending") => void) => void;
   setHeaderColor?: (color: string) => void;
   setBackgroundColor?: (color: string) => void;

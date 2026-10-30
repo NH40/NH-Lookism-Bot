@@ -43,6 +43,8 @@ export interface DonateData {
   min_rub: number;
   max_rub: number;
   payments_enabled: boolean;
+  card_enabled: boolean;
+  sbp_enabled: boolean;
 }
 
 export interface MarketItem {

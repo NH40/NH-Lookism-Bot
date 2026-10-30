@@ -45,6 +45,8 @@ from bot.handlers.potion import send_auto_pushes as send_potion_pushes
 from bot.config.potion import POTION_AUTO_SWEEP_SECONDS
 from bot.config.poker import POKER_TICK_SECONDS
 from bot.config.exchange import EXCHANGE_SWEEP_SECONDS
+from bot.config.donate import SBP_POLL_INTERVAL_SECONDS
+from bot.services import sbp as sbp_service
 from bot.services.exchange import expire_trades, finish_auctions
 from bot.handlers.exchange import send_deal_pushes
 from bot.services.poker import tick as poker_tick
@@ -159,6 +161,17 @@ async def _poker_loop(bot: Bot, session_factory: async_sessionmaker[AsyncSession
         except Exception:
             log.exception("Poker tick failed")
         await asyncio.sleep(POKER_TICK_SECONDS)
+
+
+async def _sbp_loop(bot: Bot, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    """Страховка к вебхуку ЮKassa (СБП): раз в минуту спросить статус незакрытых свежих
+    счетов (services/sbp.sweep)."""
+    while True:
+        try:
+            await sbp_service.sweep(bot, session_factory)
+        except Exception:
+            log.exception("SBP sweep failed")
+        await asyncio.sleep(SBP_POLL_INTERVAL_SECONDS)
 
 
 async def _exchange_loop(bot: Bot, session_factory: async_sessionmaker[AsyncSession]) -> None:
@@ -307,6 +320,8 @@ async def main() -> None:
         asyncio.create_task(_arkhangel_loop(bot, session_factory, redis)),
         asyncio.create_task(refresh_live_config(session_factory)),
     ]
+    if sbp_service.enabled():
+        background.append(asyncio.create_task(_sbp_loop(bot, session_factory)))
 
     try:
         log.info("Starting bot polling")

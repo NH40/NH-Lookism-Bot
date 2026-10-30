@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     redis_url: str
 
     yookassa_provider_token: str = ""
+    # СБП (2026-10-30) — прямое API ЮKassa, отдельно от формы Telegram выше: shopId и
+    # секретный ключ из кабинета ЮKassa (Интеграция → Ключи API). Пусто — кнопки СБП нет.
+    yookassa_shop_id: str = ""
+    yookassa_secret_key: str = ""
     # Адрес БД LBP 1.3 — один раз перенести донат игроков (`services/donate.import_lbp1`).
     lbp1_database_url: str = ""
 

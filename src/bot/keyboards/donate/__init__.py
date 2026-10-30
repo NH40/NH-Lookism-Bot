@@ -6,4 +6,6 @@ from bot.keyboards.donate.donate import (  # noqa: F401
     item_menu,
     kind_menu,
     market_menu,
+    method_menu,
+    sbp_menu,
 )

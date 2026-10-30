@@ -35,7 +35,7 @@ from bot.db.models.exchange import ExchangeAuction, ExchangeLot, ExchangeTrade  
 from bot.db.models.clan import Clan, ClanBuilding, ClanContract, ClanDonatePurchase, ClanGarrisonCard, ClanGarrisonExtra, ClanIncomeShare, ClanJoinRequest, ClanLog, ClanMember, ClanMemberStat, ClanWar  # noqa: F401
 from bot.db.models.quest import DailyQuest, DailyQuestState  # noqa: F401
 from bot.db.models.battle_pass import BattlePass, BattlePassClaim, BpSeason  # noqa: F401
-from bot.db.models.donate import DonateUnlock, Lbp1Donation, Payment  # noqa: F401
+from bot.db.models.donate import DonateUnlock, Lbp1Donation, Payment, SbpPayment  # noqa: F401
 from bot.db.models.admin import AdminAudit, GameSetting  # noqa: F401
 from bot.db.models.promo import PromoCode, PromoRedemption  # noqa: F401
 from bot.db.models.referral import ReferralLink, ReferralVisit  # noqa: F401

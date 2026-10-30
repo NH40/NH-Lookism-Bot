@@ -14,4 +14,7 @@ from bot.config.donate.donate import (  # noqa: F401
     TECHNIQUE_UNLOCK,
     full_price,
     lbp1_circles_cost,
+    SBP_PAYMENT_WAIT_MINUTES,
+    SBP_POLL_INTERVAL_SECONDS,
+    SBP_POLL_MAX_AGE_MINUTES,
 )

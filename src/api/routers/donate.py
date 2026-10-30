@@ -2,10 +2,13 @@
 
 Зачисление платежа делает хендлер `successful_payment` БОТА (тот же путь, что и при оплате из
 чата) — здесь только создаётся ссылка на инвойс, которую Mini App открывает через
-`WebApp.openInvoice`. Покупки рынка — через bot.services.donate (атомарно, с Redis-локом)."""
+`WebApp.openInvoice`. СБП (2026-10-30) — счёт через API ЮKassa (`services/sbp`), Mini App
+открывает ссылку банка и опрашивает статус; зачисляет вебхук / фоновая проверка бота. Покупки рынка — через bot.services.donate (атомарно, с Redis-локом)."""
 from __future__ import annotations
 
 from aiogram import Bot
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
 from aiogram.types import LabeledPrice
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -19,8 +22,11 @@ from api.routers.profile import plain
 from bot.config.development import MAX_LEVEL
 from bot.config.donate import DONATE_MAX_RUB, DONATE_MIN_RUB, DONATE_PRESETS_RUB
 from bot.config.settings import get_settings
-from bot.constant.donate import DONATE_KINDS, PAYLOAD_DONATE_PREFIX
+from bot.cache.keys import action_lock
+from bot.constant.donate import DONATE_KINDS, LOCK_ACTION_DONATE_SBP, PAYLOAD_DONATE_PREFIX
 from bot.db.repositories import donate as donate_repo
+from bot.db.repositories import sbp_payment as sbp_repo
+from bot.services import sbp as sbp_service
 from bot.services import donate as donate_service
 from bot.services.admin.live_config import get as live_get
 from bot.services.battle_pass import get_page as get_battle_pass_page
@@ -63,6 +69,8 @@ class DonateOut(BaseModel):
     min_rub: int
     max_rub: int
     payments_enabled: bool
+    card_enabled: bool
+    sbp_enabled: bool
 
 
 class InvoiceIn(BaseModel):
@@ -78,7 +86,9 @@ async def get_donate(
         presets=list(DONATE_PRESETS_RUB),
         min_rub=DONATE_MIN_RUB,
         max_rub=DONATE_MAX_RUB,
-        payments_enabled=bool(get_settings().yookassa_provider_token),
+        payments_enabled=bool(get_settings().yookassa_provider_token) or sbp_service.enabled(),
+        card_enabled=bool(get_settings().yookassa_provider_token),
+        sbp_enabled=sbp_service.enabled(),
     )
 
 
@@ -102,6 +112,74 @@ async def create_invoice(body: InvoiceIn, user_id: int = Depends(get_current_use
     finally:
         await bot.session.close()
     return {"link": link, "message": ""}
+
+
+class SbpOut(BaseModel):
+    id: int
+    url: str
+    status: str
+
+
+def _check_amount(amount: int) -> None:
+    if not DONATE_MIN_RUB <= amount <= DONATE_MAX_RUB:
+        raise HTTPException(400, f"Сумма — от {DONATE_MIN_RUB} до {format_number(DONATE_MAX_RUB)} ₽.")
+
+
+@router.post("/sbp", response_model=SbpOut)
+async def create_sbp(
+    body: InvoiceIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> SbpOut:
+    if not sbp_service.enabled():
+        raise HTTPException(400, "Оплата по СБП пока не подключена.")
+    _check_amount(body.amount)
+    key = action_lock(user_id, LOCK_ACTION_DONATE_SBP)
+    if not await redis.set(key, "1", nx=True, px=20_000):
+        raise HTTPException(409, BUSY_ALERT)
+    bot = Bot(get_settings().bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    try:
+        row = await sbp_service.create(session, bot, user_id, body.amount)
+    except sbp_service.YooKassaError:
+        raise HTTPException(502, "Не удалось создать платёж по СБП. Попробуй позже или оплати картой.")
+    finally:
+        await bot.session.close()
+        await redis.delete(key)
+    return SbpOut(id=row.id, url=row.confirmation_url, status=row.status)
+
+
+async def _own_sbp(session: AsyncSession, user_id: int, payment_id: int):
+    row = await sbp_repo.get(session, payment_id)
+    if row is None or row.user_id != user_id:
+        raise HTTPException(404, "Платёж не найден.")
+    return row
+
+
+@router.get("/sbp/{payment_id}", response_model=SbpOut)
+async def get_sbp(
+    payment_id: int, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)
+) -> SbpOut:
+    """Статус из нашей БД (его обновляют вебхук и фоновая проверка) — дёшево опрашивать."""
+    row = await _own_sbp(session, user_id, payment_id)
+    return SbpOut(id=row.id, url=row.confirmation_url, status=row.status)
+
+
+@router.post("/sbp/{payment_id}/check", response_model=SbpOut)
+async def check_sbp(
+    payment_id: int, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)
+) -> SbpOut:
+    """«Я оплатил»: спросить ЮKassa сейчас же."""
+    row = await _own_sbp(session, user_id, payment_id)
+    try:
+        status, result = await sbp_service.refresh(session, row)
+    except sbp_service.YooKassaError:
+        status, result = row.status, None
+    if result is not None:
+        bot = Bot(get_settings().bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+        try:
+            await sbp_service.announce(bot, result)
+        finally:
+            await bot.session.close()
+    return SbpOut(id=row.id, url=row.confirmation_url, status=status)
 
 
 # --- чёрный рынок ---

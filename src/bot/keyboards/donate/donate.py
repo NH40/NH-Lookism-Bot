@@ -6,9 +6,12 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from bot.config.donate import DONATE_PRESETS_RUB
 from bot.constant.battle_pass import CB_BP_OPEN
 from bot.constant.donate import (
+    CB_DONATE_CARD_PREFIX,
     CB_DONATE_CUSTOM,
     CB_DONATE_OPEN,
     CB_DONATE_PRESET_PREFIX,
+    CB_DONATE_SBP_CHECK_PREFIX,
+    CB_DONATE_SBP_PREFIX,
     CB_MARKET_BODY,
     CB_MARKET_BODY_BUY,
     CB_MARKET_ITEM_PREFIX,
@@ -30,7 +33,11 @@ from bot.texts.donate import (
     BTN_LEVEL,
     BTN_MARKET,
     BTN_PASS,
+    BTN_PAY_CARD,
+    BTN_PAY_SBP,
     BTN_PRESET,
+    BTN_SBP_CHECK,
+    BTN_SBP_PAY,
     BTN_TO_DONATE,
     BTN_UNLOCK,
 )
@@ -48,6 +55,24 @@ def donate_menu() -> InlineKeyboardMarkup:
     rows.append([_btn(BTN_MARKET, CB_MARKET_OPEN)])
     rows.append([_btn(BTN_BACK_TO_PROFILE, CB_PROFILE_OPEN)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def method_menu(amount_rub: int, sbp: bool, card: bool) -> InlineKeyboardMarkup:
+    rows = []
+    if sbp:
+        rows.append([_btn(BTN_PAY_SBP, f"{CB_DONATE_SBP_PREFIX}{amount_rub}")])
+    if card:
+        rows.append([_btn(BTN_PAY_CARD, f"{CB_DONATE_CARD_PREFIX}{amount_rub}")])
+    rows.append([_btn(BTN_BACK, CB_DONATE_OPEN)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def sbp_menu(payment_id: int, amount_rub: int, url: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=BTN_SBP_PAY.format(amount=format_number(amount_rub)), url=url)],
+        [_btn(BTN_SBP_CHECK, f"{CB_DONATE_SBP_CHECK_PREFIX}{payment_id}")],
+        [_btn(BTN_BACK, CB_DONATE_OPEN)],
+    ])
 
 
 def back_to_donate() -> InlineKeyboardMarkup:

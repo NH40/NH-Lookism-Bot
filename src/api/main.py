@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.db import engine
 from api.push import close_bot
 from api.routers import admin
+from api.routers import payments
 from api.routers import admin_ops
 from api.routers import admin_players
 from api.routers import awakening
@@ -131,6 +132,7 @@ app.include_router(settings_router.router)
 app.include_router(admin_players.router)
 app.include_router(admin_ops.router)
 app.include_router(admin.router)
+app.include_router(payments.router)
 
 
 @app.get("/api/health")

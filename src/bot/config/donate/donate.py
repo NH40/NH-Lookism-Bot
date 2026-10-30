@@ -14,6 +14,12 @@ from bot.constant.unique_technique import TECHNIQUES
 DONATE_PRESETS_RUB: tuple[int, ...] = (100, 300, 500, 1000, 3000, 5000)
 DONATE_MIN_RUB = 50
 DONATE_MAX_RUB = 100_000
+# СБП (2026-10-30): сколько ждать оплату (пишем игроку), как часто бот сам проверяет
+# незакрытые счета у ЮKassa (страховка к вебхуку) и сколько минут счёт проверяется вообще —
+# позже он помечается просроченным, но оплату всё равно зачислит вебхук или «Я оплатил».
+SBP_PAYMENT_WAIT_MINUTES = 30
+SBP_POLL_INTERVAL_SECONDS = 60
+SBP_POLL_MAX_AGE_MINUTES = 120
 
 SECOND_BODY_PRICE = 10_000  # одно на аккаунт
 

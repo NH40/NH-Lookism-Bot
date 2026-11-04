@@ -14,6 +14,8 @@ from bot.constant.bloodline import (
     CB_BLOODLINE_CHANGE_LIST,
     CB_BLOODLINE_CHANGE_PICK_PREFIX,
     CB_BLOODLINE_CHANGE_VIEW_PREFIX,
+    CB_BLOODLINE_KEEP,
+    CB_BLOODLINE_KEEP_CONFIRM,
     CB_BLOODLINE_PICK_PREFIX,
     CB_BLOODLINE_VIEW_PREFIX,
 )
@@ -31,6 +33,8 @@ from bot.texts.bloodline import (
     BTN_BLOODLINE2_LEVEL_UP,
     BTN_CHANGE_PICK,
     BTN_FREE_CHANGE,
+    BTN_KEEP,
+    BTN_KEEP_CONFIRM,
     BTN_LEVEL_UP,
     BTN_PICK,
 )
@@ -52,8 +56,18 @@ def change_menu(current: str) -> InlineKeyboardMarkup:
         for c in BLOODLINES if c != current
     ]
     rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
+    rows.append([_btn(BTN_KEEP.format(name=BLOODLINE_NAMES[current]), CB_BLOODLINE_KEEP)])
     rows.append([_btn(BTN_BACK_TO_BLOODLINE, CB_BLOODLINE_SCREEN)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def keep_menu() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [_btn(BTN_KEEP_CONFIRM, CB_BLOODLINE_KEEP_CONFIRM)],
+            [_btn(BTN_BACK_TO_LIST, CB_BLOODLINE_CHANGE_LIST)],
+        ]
+    )
 
 
 def change_view_menu(code: str) -> InlineKeyboardMarkup:

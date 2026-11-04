@@ -4,6 +4,7 @@ from bot.keyboards.bloodline.bloodline import (  # noqa: F401
     change_view_menu,
     choose2_menu,
     choose_menu,
+    keep_menu,
     detail2_menu,
     detail_menu,
     view_menu,

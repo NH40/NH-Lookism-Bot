@@ -24,11 +24,13 @@ from bot.constant.bloodline import (
     CB_BLOODLINE_CHANGE_LIST,
     CB_BLOODLINE_CHANGE_PICK_PREFIX,
     CB_BLOODLINE_CHANGE_VIEW_PREFIX,
+    CB_BLOODLINE_KEEP,
+    CB_BLOODLINE_KEEP_CONFIRM,
     CB_BLOODLINE_PICK_PREFIX,
     CB_BLOODLINE_SCREEN,
     CB_BLOODLINE_VIEW_PREFIX,
 )
-from bot.keyboards.bloodline import change_menu, change_view_menu, choose2_menu, choose_menu, detail2_menu, detail_menu, view_menu
+from bot.keyboards.bloodline import change_menu, change_view_menu, choose2_menu, choose_menu, detail2_menu, detail_menu, keep_menu, view_menu
 from bot.services.build import get_build
 from bot.services.bloodline import (
     BloodlineAlreadyChosenError,
@@ -43,6 +45,7 @@ from bot.services.bloodline import (
     choose,
     get_state,
     has_free_change,
+    keep_current,
     choose2,
     level_up,
     level_up2,
@@ -56,6 +59,8 @@ from bot.texts.bloodline import (
     CHANGE_SCREEN,
     CHANGE_SAME_ALERT,
     FREE_CHANGE_LINE,
+    KEEP_DONE_ALERT,
+    KEEP_SCREEN,
     BLOODLINE_DESCRIPTIONS,
     BLOODLINE_NAMES,
     BLOODLINE_NO_DESCRIPTION,
@@ -208,6 +213,24 @@ async def cb_bloodline_change_list(callback: CallbackQuery, session: AsyncSessio
         return
     await callback.answer()
     await safe_edit_text(callback.message, CHANGE_SCREEN.format(level=state.level), reply_markup=change_menu(state.code))
+
+
+@router.callback_query(F.data == CB_BLOODLINE_KEEP)
+async def cb_bloodline_keep(callback: CallbackQuery, session: AsyncSession) -> None:
+    state = await get_state(session, callback.from_user.id)
+    if state is None or state.code is None or not await has_free_change(session, callback.from_user.id):
+        await callback.answer(CHANGE_NOT_AVAILABLE_ALERT, show_alert=True)
+        return
+    await callback.answer()
+    await safe_edit_text(callback.message, KEEP_SCREEN.format(name=BLOODLINE_NAMES[state.code]), reply_markup=keep_menu())
+
+
+@router.callback_query(F.data == CB_BLOODLINE_KEEP_CONFIRM)
+async def cb_bloodline_keep_confirm(callback: CallbackQuery, session: AsyncSession) -> None:
+    await keep_current(session, callback.from_user.id)
+    await callback.answer(KEEP_DONE_ALERT, show_alert=True)
+    text, markup = await render_bloodline(session, callback.from_user.id)
+    await safe_edit_text(callback.message, text, reply_markup=markup)
 
 
 @router.callback_query(F.data.startswith(CB_BLOODLINE_CHANGE_VIEW_PREFIX))

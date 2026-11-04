@@ -568,6 +568,7 @@ function UltraPanel({ u, post, busy }: { u: UltraData; post: Post; busy: boolean
 
 function BloodTab({ d, max, post, busy }: { d: BloodData; max: number; post: Post; busy: boolean }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [keepAsk, setKeepAsk] = useState(false);
 
   if (!d.chosen) {
     return (
@@ -612,8 +613,17 @@ function BloodTab({ d, max, post, busy }: { d: BloodData; max: number; post: Pos
       {d.free_change && (
         <Panel title="БЕСПЛАТНАЯ СМЕНА" tone="gold">
           <div className="muted" style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.45, marginBottom: 8 }}>
-            Родословные обновились. Можно один раз бесплатно сменить свою, уровень сохранится.
+            Родословные обновились. Можно один раз бесплатно сменить свою, уровень сохранится. Менять не обязательно: без твоего выбора родословная останется прежней.
           </div>
+          <button
+            type="button"
+            className={`btn block ${keepAsk ? "red" : "ghost"}`}
+            style={{ marginBottom: 8 }}
+            disabled={busy}
+            onClick={() => (keepAsk ? post("/bloodline/keep") : setKeepAsk(true))}
+          >
+            {keepAsk ? "Точно? Смена больше не будет предлагаться" : `Оставить свою: ${d.first?.name ?? ""}`}
+          </button>
           {(d.change_options ?? []).map((o) => (
             <div key={o.code} style={{ borderBottom: "1px dashed var(--line-dash)", padding: "8px 0" }}>
               <button type="button" className="dev-own" style={{ width: "100%" }} onClick={() => setOpen(open === o.code ? null : o.code)} aria-expanded={open === o.code}>

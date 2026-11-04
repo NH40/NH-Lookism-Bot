@@ -3,7 +3,8 @@ from bot.services.bloodline.bloodline import (  # noqa: F401
     NoFreeChangeError,
     SameBloodlineError,
     change_free,
-    has_free_change,  # noqa: F401
+    has_free_change,
+    keep_current,  # noqa: F401
     NoSecondBodyError,
     choose2,
     level_up2,

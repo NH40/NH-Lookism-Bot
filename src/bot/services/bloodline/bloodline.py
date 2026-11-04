@@ -143,6 +143,20 @@ async def change_free(session: AsyncSession, user_id: int, code: str) -> None:
     await session.commit()
 
 
+async def keep_current(session: AsyncSession, user_id: int) -> bool:
+    """Игрок оставляет свою родословную: право на бесплатную смену снимается, больше она не
+    предлагается. Условный UPDATE, повторный клик ничего не меняет. Коммитит. → было ли право."""
+    row = await session.execute(
+        update(User)
+        .where(User.id == user_id, User.free_bloodline_change.is_(True))
+        .values(free_bloodline_change=False)
+        .returning(User.id)
+    )
+    kept = row.first() is not None
+    await session.commit()
+    return kept
+
+
 class NoSecondBodyError(Exception):
     pass
 

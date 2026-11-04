@@ -583,6 +583,13 @@ async def post_bloodline_change(
     return {"message": t_blood.CHANGE_DONE_ALERT.format(name=t_blood.BLOODLINE_NAMES[body.code])}
 
 
+@router.post("/bloodline/keep")
+async def post_bloodline_keep(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    await _guard(session, user_id)
+    await bloodline_svc.keep_current(session, user_id)
+    return {"message": t_blood.KEEP_DONE_ALERT}
+
+
 class UltraLossBody(BaseModel):
     percent: int
 

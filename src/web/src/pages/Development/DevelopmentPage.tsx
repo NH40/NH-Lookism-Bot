@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import type {
   AwakeningData,
   BloodData,
+  UltraData,
   DevItem,
   DevLevel,
   DevQuest,
@@ -363,6 +364,14 @@ function PathTab({ d, max, post, busy }: { d: PathData; max: number; post: Post;
           subtitle={isActive ? "Активный путь · первое тело" : isSecond ? "Второе тело" : "Не активен"}
           onLevelUp={isActive || isSecond ? () => post("/path/level-up", { slot: isSecond ? 2 : 1 }) : undefined}
         >
+          {d.gauges[selected.code] && (
+            <div style={{ margin: "8px 0" }}>
+              <div className="muted dev-note" style={{ marginBottom: 4 }}>
+                {d.gauges[selected.code].name}: {d.gauges[selected.code].value} / {d.gauges[selected.code].cap} (из {d.gauges[selected.code].max})
+              </div>
+              <Bar value={d.gauges[selected.code].value} max={d.gauges[selected.code].max} fill="gold" />
+            </div>
+          )}
           {selected.code === "training" && (isActive || isSecond) && (
             <div className="muted dev-note">
               🏋️ КПД тренировок: +{Math.round(d.training_kpd * 100)}% (потолок уровня +{Math.round(d.training_kpd_cap * 100)}%)
@@ -429,11 +438,23 @@ function TechniquesTab({ d, max, post, busy }: { d: TechniquesData; max: number;
               Сделать активной
             </SwapButton>
           )}
+          {d.slots > 1 && selected.code !== d.active && (
+            <button type="button" className="btn violet block" style={{ marginTop: 8 }} disabled={busy} onClick={() => post("/technique/select", { code: selected.code })}>
+              {d.selected.includes(selected.code) ? "Убрать из активных" : "Использовать вместе с активной"}
+            </button>
+          )}
         </ItemPanel>
       ) : (
         <Panel title="ТЕХНИКА">
           <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.45 }}>
             Техник пока нет. На карте периодически появляются учителя — законнекться и выполни его квест.
+          </div>
+        </Panel>
+      )}
+      {d.slots > 1 && (
+        <Panel title="БЕСКОНЕЧНАЯ ТЕХНИКА" tone="violet">
+          <div className="muted" style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.45 }}>
+            Одновременно техник: {d.slots} (с активной). Выбрано дополнительно: {d.selected.length} из {d.slots - 1}. Не выбрал — работают самые прокачанные.
           </div>
         </Panel>
       )}
@@ -500,6 +521,49 @@ function GeniusTab({ d, max, post, busy }: { d: GeniusData; max: number; post: P
   );
 }
 
+// --- Ультра инстинкт ---
+
+function UltraPanel({ u, post, busy }: { u: UltraData; post: Post; busy: boolean }) {
+  const mark = (on: boolean) => (on ? "✅" : "⬜️");
+  return (
+    <Panel title="УЛЬТРА ИНСТИНКТ" tone="violet">
+      <div className="muted" style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.45, marginBottom: 8 }}>
+        Выбери, что делается само, пока тебя нет в игре.
+      </div>
+      <div className="grid-2">
+        {u.actions.map((a) => (
+          <button key={a.code} type="button" className="dev-own" disabled={busy} onClick={() => post("/ultra/action", { code: a.code })}>
+            {mark(a.enabled)} {a.label}
+          </button>
+        ))}
+      </div>
+      {u.boss_available ? (
+        <>
+          <div className="muted dev-note" style={{ marginTop: 10 }}>
+            Автобой с боссами: бой идёт, только если прогноз обещает победу и потери не выше {u.max_loss}%.
+          </div>
+          <div className="grid-2" style={{ marginTop: 6 }}>
+            {u.bosses.map((b) => (
+              <button key={b.code} type="button" className="dev-own" disabled={busy} onClick={() => post("/ultra/boss", { code: b.code })}>
+                {mark(b.enabled)} {b.name}
+              </button>
+            ))}
+          </div>
+          <div className="grid-2" style={{ marginTop: 6 }}>
+            {u.loss_options.map((p) => (
+              <button key={p} type="button" className={`dev-own ${p === u.max_loss ? "second" : ""}`} disabled={busy} onClick={() => post("/ultra/loss", { percent: p })}>
+                Потери до {p}%
+              </button>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="muted dev-note" style={{ marginTop: 10 }}>Автобой с боссами откроется на 10 уровне родословной.</div>
+      )}
+    </Panel>
+  );
+}
+
 // --- Родословная ---
 
 function BloodTab({ d, max, post, busy }: { d: BloodData; max: number; post: Post; busy: boolean }) {
@@ -543,6 +607,31 @@ function BloodTab({ d, max, post, busy }: { d: BloodData; max: number; post: Pos
     <>
       {d.first && (
         <ItemPanel title="РОДОСЛОВНАЯ" item={d.first} max={max} resource="Капли крови" have={drops} busy={busy} subtitle="Первое тело" onLevelUp={() => post("/bloodline/level-up")} />
+      )}
+      {d.ultra && <UltraPanel u={d.ultra} post={post} busy={busy} />}
+      {d.free_change && (
+        <Panel title="БЕСПЛАТНАЯ СМЕНА" tone="gold">
+          <div className="muted" style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.45, marginBottom: 8 }}>
+            Родословные обновились. Можно один раз бесплатно сменить свою, уровень сохранится.
+          </div>
+          {(d.change_options ?? []).map((o) => (
+            <div key={o.code} style={{ borderBottom: "1px dashed var(--line-dash)", padding: "8px 0" }}>
+              <button type="button" className="dev-own" style={{ width: "100%" }} onClick={() => setOpen(open === o.code ? null : o.code)} aria-expanded={open === o.code}>
+                {o.name}
+                <ChevronRight size={16} className="lv" />
+              </button>
+              {open === o.code && (
+                <div style={{ padding: "8px 2px 0" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.45 }}>{o.description}</div>
+                  <div className="muted dev-note">Уровень 1: {o.first || "—"}</div>
+                  <button type="button" className="btn gold block" style={{ marginTop: 10 }} disabled={busy} onClick={() => post("/bloodline/change", { code: o.code })}>
+                    Сменить на {o.name}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </Panel>
       )}
       {d.second_body && (
         d.second ? (

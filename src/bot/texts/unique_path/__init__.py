@@ -40,6 +40,8 @@ from bot.texts.unique_path.unique_path import (  # noqa: F401
     STAGE_CONVICTION,
     STAGE_NONE,
     SWAP_COOLDOWN_ALERT,
+    GAUGE_NAMES,
     TRAINING_KPD_LINE,
+    gauge_line,
     WRONG_STAGE_ALERT,
 )

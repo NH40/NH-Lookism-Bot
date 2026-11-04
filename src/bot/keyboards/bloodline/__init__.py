@@ -1,5 +1,7 @@
 """Публичное API домена bloodline (клавиатуры)."""
 from bot.keyboards.bloodline.bloodline import (  # noqa: F401
+    change_menu,
+    change_view_menu,
     choose2_menu,
     choose_menu,
     detail2_menu,

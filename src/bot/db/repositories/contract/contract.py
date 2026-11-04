@@ -25,8 +25,21 @@ async def list_active(
     return (await session.scalars(stmt.order_by(StatistContract.expires_at, StatistContract.id))).all()
 
 
-async def create(session: AsyncSession, user_id: int, rank: str, quantity: int, expires_at: datetime, camp: str = "attack") -> None:
-    session.add(StatistContract(user_id=user_id, rank=rank, quantity=quantity, expires_at=expires_at, camp=camp))
+async def create(
+    session: AsyncSession, user_id: int, rank: str, quantity: int, expires_at: datetime, camp: str = "attack", *, retain: float = 0.0
+) -> None:
+    session.add(StatistContract(user_id=user_id, rank=rank, quantity=quantity, expires_at=expires_at, camp=camp, retain=retain))
+
+
+async def lock_expired_with_retain(session: AsyncSession) -> Sequence[StatistContract]:
+    """Истёкшие контракты с выжившими и правом остаться (Джинчоль) — под блокировкой, перед удалением."""
+    return (
+        await session.scalars(
+            select(StatistContract)
+            .where(StatistContract.expires_at <= func.now(), StatistContract.quantity > 0, StatistContract.retain > 0)
+            .with_for_update(skip_locked=True)
+        )
+    ).all()
 
 
 async def move(session: AsyncSession, row: StatistContract, to_camp: str, count: int) -> None:
@@ -36,7 +49,7 @@ async def move(session: AsyncSession, row: StatistContract, to_camp: str, count:
         row.camp = to_camp
         return
     row.quantity -= count
-    session.add(StatistContract(user_id=row.user_id, rank=row.rank, quantity=count, expires_at=row.expires_at, camp=to_camp))
+    session.add(StatistContract(user_id=row.user_id, rank=row.rank, quantity=count, expires_at=row.expires_at, camp=to_camp, retain=row.retain))
 
 
 async def lose(session: AsyncSession, contract_id: int, count: int) -> None:

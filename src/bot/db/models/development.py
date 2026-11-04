@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -24,6 +24,8 @@ class UserPath(Base):
     code: Mapped[str] = mapped_column(String(32), primary_key=True)
     level: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     obtained_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Шкала пути (`config/path_gauge`): хранится между боями, сбрасывается вместе с путём.
+    gauge: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
 
 
 class UserTechnique(Base):
@@ -33,6 +35,8 @@ class UserTechnique(Base):
     code: Mapped[str] = mapped_column(String(32), primary_key=True)
     level: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     obtained_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Путь Бесконечной техники: игрок выбрал эту технику в дополнение к активной.
+    selected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
 
 
 class UserGenius(Base):

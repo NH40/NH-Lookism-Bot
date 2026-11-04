@@ -21,20 +21,28 @@ from bot.constant.bloodline import (
     CB_BLOODLINE2_LIST,
     CB_BLOODLINE_LEVEL_UP,
     CB_BLOODLINE_LIST,
+    CB_BLOODLINE_CHANGE_LIST,
+    CB_BLOODLINE_CHANGE_PICK_PREFIX,
+    CB_BLOODLINE_CHANGE_VIEW_PREFIX,
     CB_BLOODLINE_PICK_PREFIX,
     CB_BLOODLINE_SCREEN,
     CB_BLOODLINE_VIEW_PREFIX,
 )
-from bot.keyboards.bloodline import choose2_menu, choose_menu, detail2_menu, detail_menu, view_menu
+from bot.keyboards.bloodline import change_menu, change_view_menu, choose2_menu, choose_menu, detail2_menu, detail_menu, view_menu
+from bot.services.build import get_build
 from bot.services.bloodline import (
     BloodlineAlreadyChosenError,
     BloodlineMaxLevelError,
     NoBloodlineError,
+    NoFreeChangeError,
     NoSecondBodyError,
     NotEnoughBloodError,
+    SameBloodlineError,
     UnknownBloodlineError,
+    change_free,
     choose,
     get_state,
+    has_free_change,
     choose2,
     level_up,
     level_up2,
@@ -43,6 +51,11 @@ from bot.texts.development import describe_level
 from bot.utils.formatting import format_number
 from bot.texts.bloodline import (
     ALREADY_CHOSEN_ALERT,
+    CHANGE_DONE_ALERT,
+    CHANGE_NOT_AVAILABLE_ALERT,
+    CHANGE_SCREEN,
+    CHANGE_SAME_ALERT,
+    FREE_CHANGE_LINE,
     BLOODLINE_DESCRIPTIONS,
     BLOODLINE_NAMES,
     BLOODLINE_NO_DESCRIPTION,
@@ -113,14 +126,19 @@ async def render_bloodline(session: AsyncSession, user_id: int):
         drops=format_number(state.blood_drops),
         next_line=NEXT_LEVEL_LINE.format(cost=cost) if cost else MAX_LEVEL_LINE,
     )
+    eco = (await get_build(session, user_id)).eco
+    free_change = await has_free_change(session, user_id)
+    if free_change:
+        text += FREE_CHANGE_LINE
+    extras = dict(free_change=free_change, ultra=eco.auto_recruit or eco.auto_train or eco.auto_school or eco.auto_roll)
     body = await donate_repo.body_state(session, user_id)
     if body is None or not body[0]:
-        return text, detail_menu(cost)
+        return text, detail_menu(cost, **extras)
     _second_body, _path2, _first, code2, level2, _drops = body
     if code2 is None:
-        return text, detail_menu(cost, choose2=True)
+        return text, detail_menu(cost, choose2=True, **extras)
     text += SECOND_LINE.format(name=BLOODLINE_NAMES[code2], level=level2, max_level=MAX_LEVEL)
-    return text, detail_menu(cost, second_label=BTN_BLOODLINE2_OPEN.format(name=BLOODLINE_NAMES[code2], level=level2))
+    return text, detail_menu(cost, second_label=BTN_BLOODLINE2_OPEN.format(name=BLOODLINE_NAMES[code2], level=level2), **extras)
 
 
 async def render_bloodline2(session: AsyncSession, user_id: int):
@@ -178,6 +196,53 @@ async def cb_bloodline_level_up(callback: CallbackQuery, session: AsyncSession) 
         await callback.answer(NOT_ENOUGH_BLOOD_ALERT.format(cost=exc.cost, have=exc.have), show_alert=True)
         return
     await callback.answer(LEVEL_UP_ALERT.format(level=level))
+    text, markup = await render_bloodline(session, callback.from_user.id)
+    await safe_edit_text(callback.message, text, reply_markup=markup)
+
+
+@router.callback_query(F.data == CB_BLOODLINE_CHANGE_LIST)
+async def cb_bloodline_change_list(callback: CallbackQuery, session: AsyncSession) -> None:
+    state = await get_state(session, callback.from_user.id)
+    if state is None or state.code is None or not await has_free_change(session, callback.from_user.id):
+        await callback.answer(CHANGE_NOT_AVAILABLE_ALERT, show_alert=True)
+        return
+    await callback.answer()
+    await safe_edit_text(callback.message, CHANGE_SCREEN.format(level=state.level), reply_markup=change_menu(state.code))
+
+
+@router.callback_query(F.data.startswith(CB_BLOODLINE_CHANGE_VIEW_PREFIX))
+async def cb_bloodline_change_view(callback: CallbackQuery) -> None:
+    code = callback.data.removeprefix(CB_BLOODLINE_CHANGE_VIEW_PREFIX)
+    if code not in BLOODLINES:
+        await callback.answer()
+        return
+    await callback.answer()
+    await safe_edit_text(
+        callback.message,
+        VIEW_SCREEN.format(
+            name=BLOODLINE_NAMES[code],
+            description=BLOODLINE_DESCRIPTIONS.get(code, BLOODLINE_NO_DESCRIPTION),
+            first=describe_level(LEVELS[code][0], SPECIAL_EFFECTS),
+        ),
+        reply_markup=change_view_menu(code),
+    )
+
+
+@router.callback_query(F.data.startswith(CB_BLOODLINE_CHANGE_PICK_PREFIX))
+async def cb_bloodline_change_pick(callback: CallbackQuery, session: AsyncSession) -> None:
+    code = callback.data.removeprefix(CB_BLOODLINE_CHANGE_PICK_PREFIX)
+    try:
+        await change_free(session, callback.from_user.id, code)
+    except UnknownBloodlineError:
+        await callback.answer()
+        return
+    except SameBloodlineError:
+        await callback.answer(CHANGE_SAME_ALERT, show_alert=True)
+        return
+    except NoFreeChangeError:
+        await callback.answer(CHANGE_NOT_AVAILABLE_ALERT, show_alert=True)
+        return
+    await callback.answer(CHANGE_DONE_ALERT.format(name=BLOODLINE_NAMES[code]), show_alert=True)
     text, markup = await render_bloodline(session, callback.from_user.id)
     await safe_edit_text(callback.message, text, reply_markup=markup)
 

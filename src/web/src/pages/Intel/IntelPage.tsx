@@ -111,6 +111,11 @@ export function IntelPage() {
                       {report.marked ? "Снять метку" : "Поставить метку"}
                     </button>
                   )}
+                  {report.can_neutralize && (
+                    <button className="btn violet block" type="button" style={{ marginTop: 8 }} disabled={busy} onClick={() => run("/intel/neutralize", { target_id: report.target_id })}>
+                      Снять безопасность цели
+                    </button>
+                  )}
                   {report.can_sabotage && (
                     <>
                       <div className="intel-sub">Саботаж помеченного</div>

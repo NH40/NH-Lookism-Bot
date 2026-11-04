@@ -20,6 +20,7 @@ TECHNIQUES: tuple[str, ...] = (
 CB_TECH_OPEN = "tech:open"
 CB_TECH_VIEW_PREFIX = "tech:view:"
 CB_TECH_ACTIVATE_PREFIX = "tech:act:"
+CB_TECH_SELECT_PREFIX = "tech:sel:"  # путь Бесконечной техники: выбрать/снять дополнительную
 CB_TECH_LEVEL_UP_PREFIX = "tech:up:"
 CB_TECH_CLAIM_PREFIX = "tech:claim:"
 """f"{CB_TECH_CLAIM_PREFIX}{code}" — забрать технику за выполненный квест учителя."""

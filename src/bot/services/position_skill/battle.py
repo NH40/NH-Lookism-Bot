@@ -25,6 +25,8 @@ from bot.texts.position_skill import (
     JOURNAL_FIRST_STRIKE_FOE,
     JOURNAL_FIRST_STRIKE_MINE,
     JOURNAL_PRE,
+    JOURNAL_PRE_STRIKE_FOE,
+    JOURNAL_PRE_STRIKE_MINE,
     JOURNAL_RESULT_LOSS,
     JOURNAL_RESULT_WIN,
     JOURNAL_ROUND,
@@ -54,7 +56,11 @@ def matchup(attacker, defender=None, *, vs: tuple[str, ...], defender_chances: C
     бьётся лагерем атаки (навыки «в защите» тогда не работают)."""
     rng = rng or Random()
     target = (defender.build.positions or NO_EFFECTS) if defender is not None else NO_EFFECTS
-    spy = resolve_spy(attacker.build.positions or NO_EFFECTS, target, rng)
+    resist = 0.0 if defender is None or defender.build.security_off else defender.eco.spy_resist
+    spy = resolve_spy(
+        attacker.build.positions or NO_EFFECTS, target, rng, bonus=attacker.eco.spy_chance, resist=resist,
+        anti_off=defender is not None and defender.build.security_off,
+    )
     a = attacker.chances(role=ROLE_ATTACK, vs=vs, spy_cast=spy, **(attacker_kw or {}))
     arian = defender is not None and ABS_ARIAN in attacker.build.absolutes and bool(defender.build.absolutes)
     if defender is not None:
@@ -129,6 +135,14 @@ def journal(result: BattleResult, spy: SpyOutcome = NO_SPY, *, viewer_is_attacke
         pre.append(JOURNAL_FIRST_STRIKE_MINE.format(count=format_number(me_first)))
     if foe_first:
         pre.append(JOURNAL_FIRST_STRIKE_FOE.format(count=format_number(foe_first)))
+    me_pre, foe_pre = (
+        (result.attacker_pre_strike, result.defender_pre_strike) if viewer_is_attacker
+        else (result.defender_pre_strike, result.attacker_pre_strike)
+    )
+    if me_pre:
+        pre.append(JOURNAL_PRE_STRIKE_MINE.format(count=format_number(me_pre)))
+    if foe_pre:
+        pre.append(JOURNAL_PRE_STRIKE_FOE.format(count=format_number(foe_pre)))
     if pre:
         lines.append(JOURNAL_PRE)
         lines.extend(pre if viewer_is_attacker else [p for p in pre if not p.startswith("🕵️")])

@@ -14,9 +14,14 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from bot.cache.keys import neutralize_cooldown
+from bot.config.activity import NEUTRALIZE_COOLDOWN_SECONDS, NEUTRALIZE_SECONDS
+from bot.db.models.user import User
 
 from bot.config.activity import LOG_ENTRIES_BY_LEVEL, LOG_KINDS_BY_LEVEL, MARK_FEED_ENTRIES
 from bot.constant.activity import ACT_BATTLE, ACT_BUSINESS, ACT_CAPTURE, ACT_DEVELOPMENT
@@ -72,6 +77,7 @@ class IntelReport:
     marked: bool = False
     can_mark: bool = False
     can_sabotage: bool = False  # путь Сенсорики: саботаж помеченного
+    can_neutralize: bool = False  # путь Сенсорики: снять безопасность помеченного
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,6 +136,7 @@ async def get_report(session: AsyncSession, viewer_id: int, username: str) -> In
         stealth_hidden=hidden, scout=access.scout, logs=access.logs,
         marked=target.id in marks, can_mark=access.marks > 0,
         can_sabotage=target.id in marks and "sabotage_marked" in (await get_build(session, viewer_id)).flags,
+        can_neutralize=target.id in marks and "neutralize_security" in (await get_build(session, viewer_id)).flags,
     )
     if hidden:
         return IntelReport(**report)
@@ -161,6 +168,32 @@ async def toggle_mark(session: AsyncSession, viewer_id: int, target_id: int) -> 
     await activity_repo.add_mark(session, viewer_id, target_id)
     await session.commit()
     return True
+
+
+class NeutralizeUnavailableError(Exception):
+    """Нет способности или цель без метки."""
+
+
+class NeutralizeOnCooldownError(Exception):
+    def __init__(self, retry_after_seconds: int) -> None:
+        super().__init__(retry_after_seconds)
+        self.retry_after_seconds = retry_after_seconds
+
+
+async def neutralize_security(session: AsyncSession, redis, viewer_id: int, target_id: int) -> int:
+    """Сенсорика: снять безопасность помеченного игрока на время: сокрытие, ложные данные и контрразведка
+    не работают. Redis-ключ — сам КД (`SET NX EX`). Коммитит. → на сколько секунд снята."""
+    if "neutralize_security" not in (await get_build(session, viewer_id)).flags:
+        raise NeutralizeUnavailableError
+    if target_id not in await activity_repo.list_marks(session, viewer_id):
+        raise NeutralizeUnavailableError
+    key = neutralize_cooldown(viewer_id)
+    if not await redis.set(key, "1", nx=True, ex=NEUTRALIZE_COOLDOWN_SECONDS):
+        raise NeutralizeOnCooldownError(max(0, await redis.ttl(key)))
+    until = datetime.now(timezone.utc) + timedelta(seconds=NEUTRALIZE_SECONDS)
+    await session.execute(update(User).where(User.id == target_id).values(security_off_until=until))
+    await session.commit()
+    return NEUTRALIZE_SECONDS
 
 
 @dataclass(frozen=True, slots=True)

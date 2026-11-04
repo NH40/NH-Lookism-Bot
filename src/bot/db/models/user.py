@@ -140,6 +140,14 @@ class User(Base):
     # сюда и дальше всегда прибавляется к влиянию (иначе у императора оставалось 10). Обнуляется
     # только полным сбросом прогресса (удаление банды, пробуждение). Здания (парламенты) — отдельно.
     influence_banked: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # Разовая бесплатная смена родословной (пользователь 2026-11-04, переделка родословных).
+    free_bloodline_change: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    # Ультра инстинкт (Ямадзаки): какие действия автоматические, какие боссы, потолок потерь.
+    ultra_settings: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
+    # Самдак: ранги, на которых статистам запрещено переходить на следующий ранг.
+    rank_locks: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
+    # Сенсорика «Снять безопасность»: до этого времени безопасность игрока не работает.
+    security_off_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Мощь армии для топа/«/players» — снимок `services.extra.get_army_stats` (живой расчёт —
     # 3 запроса на игрока, сортировать по нему всех нельзя). Пересчёт фоном (`services/top`).
     army_power_cache: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0", index=True)

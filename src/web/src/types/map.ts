@@ -129,6 +129,9 @@ export interface GangData {
   move_percents: number[];
   recruit_cooldown_seconds: number;
   recruit_ceiling_rank: string;
+  recruit_crowd: number;
+  recruit_select: number;
+  influence: number;
   tickets: { count: number; cap: number; next_in_seconds: number | null };
 }
 

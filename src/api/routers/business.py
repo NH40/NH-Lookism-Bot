@@ -17,6 +17,7 @@ from api.routers._common import bad
 from api.routers.profile import plain
 from bot.cache.keys import action_lock
 from bot.config.game import ACTION_LOCK_MS, BUSINESS_MAX_UPGRADE
+from bot.services.build import get_build
 from bot.constant.business import BUSINESS_TYPES, LOCK_ACTION_BUSINESS, UPGRADE_CAPACITY, UPGRADE_LEVEL
 from bot.services.business import (
     MaxUpgradeError,
@@ -142,7 +143,7 @@ async def get_business(
         ],
         gym_bonus_percent=overview.gym_bonus_percent,
         parliament_influence=overview.parliament_influence,
-        max_upgrade=BUSINESS_MAX_UPGRADE,
+        max_upgrade=BUSINESS_MAX_UPGRADE + (await get_build(session, user_id)).eco.business_cap,
         district_list=district_list,
         catalog=[
             CatalogItemOut(

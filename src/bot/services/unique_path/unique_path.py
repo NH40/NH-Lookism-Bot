@@ -45,6 +45,7 @@ from bot.constant.unique_path import (
     PATH_STAGE_OWNED,
     PATHS,
 )
+from bot.db.repositories import build as build_repo
 from bot.db.repositories import unique_path as path_repo
 from bot.services.activity import log as log_activity
 from bot.services.dev_quest import QuestView, award_path_points, claim, list_active, start
@@ -108,6 +109,8 @@ class PathView:
     second_body: bool = False
     active2: str | None = None
     next_cost2: int | None = None
+    gauge: float = 0.0  # шкала активного пути
+    gauge2: float = 0.0  # шкала второго пути
 
 
 def _threshold(potential: str | None) -> int:
@@ -170,7 +173,10 @@ async def get_view(session: AsyncSession, redis: Redis, user_id: int) -> PathVie
     second_body, active2 = (bool(body[0]), body[1]) if body else (False, None)
     level2 = owned.get(active2, 0) if second_body and active2 else 0
     bought = tuple(code for (_, code) in await donate_repo.unlocks(session, user_id, KIND_PATH))
+    row = await build_repo.get_row(session, user_id)
     return PathView(
+        gauge=row.path_gauge if row else 0.0,
+        gauge2=row.path2_gauge if row else 0.0,
         stage=stage,
         rank_sum=sum(ranks.values()),
         rank_needed=_threshold(potential),

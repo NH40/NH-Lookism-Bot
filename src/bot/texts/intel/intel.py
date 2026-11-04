@@ -4,6 +4,10 @@ from __future__ import annotations
 BTN_INTEL = "🔍 Разведка"
 BTN_MARKS = "📍 Метки"
 BTN_MARK = "📍 Поставить метку"
+BTN_NEUTRALIZE = "🔓 Снять безопасность цели"
+NEUTRALIZE_DONE_ALERT = "Безопасность цели снята на {hours} ч: сокрытие и ложные данные не работают."
+NEUTRALIZE_COOLDOWN_ALERT = "Снимать безопасность можно будет через {countdown}."
+NEUTRALIZE_UNAVAILABLE_ALERT = "Нужен путь Сенсорики 7 уровня и метка на цели."
 BTN_UNMARK = "✖️ Снять метку"
 
 PROMPT = (

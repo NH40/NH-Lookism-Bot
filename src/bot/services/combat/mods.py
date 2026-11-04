@@ -14,6 +14,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field, fields, replace
 
 
+# Поля, где из нескольких источников берётся самое раннее срабатывание (порог, период).
+_MIN_FIELDS = frozenset({"reflect_every", "adapt_threshold", "reflect_burst_at"})
+_UNSCALED_FIELDS = _MIN_FIELDS | frozenset({"rush_rounds"})
+
+
 @dataclass(frozen=True, slots=True)
 class CombatMods:
     # --- статичные ---
@@ -54,6 +59,43 @@ class CombatMods:
     grow_on_kill: float = 0.0  # атака растёт от доли убитых единиц противника (Ким Гапрен)
     heal_vs_weak: float = 0.0  # лечится, когда бьют слабые (Джинен)
     no_dodge: bool = False  # противник не может уклоняться (Элита)
+    # --- до боя и первый удар ---
+    pre_strike_share: float = 0.0  # доля армии, которая бьёт до первого раунда (Муджин)…
+    pre_strike_power: float = 0.0  # …этой долей своей мощи, без реакций противника
+    first_hit_ward: float = 0.0  # доля первого удара по армии, которая не проходит (Ямадзаки)
+    # --- несколько атак ---
+    multi_hit: float = 0.0  # удар проходит ещё по целям: сила дополнительного удара, 1.0 — ещё одна цель целиком (Тхэквондо)
+    spill: float = 0.0  # доля лишнего урона по убитым переходит на следующих бойцов (Тхэквондо)
+    rapid_step: float = 0.0  # +атак одним бойцом с каждым раундом (Полуночный меч)…
+    rapid_cap: float = 0.0  # …не больше стольких дополнительных атак
+    # --- накопление по ходу боя ---
+    phantom_chance: float = 0.0  # шанс невидимого удара в раунд (растёт с раундами)…
+    phantom_power: float = 0.0  # …удар на эту долю своей мощи, без реакций…
+    phantom_growth: float = 0.0  # …каждый следующий сильнее на эту долю (стаки)
+    bleed_linger: float = 0.0  # доля кровотечения, которая остаётся ещё на раунд (Ниндзюцу)
+    endure_attack: float = 0.0  # +атака за каждый прожитый раунд (Александровы)
+    endure_guard: float = 0.0  # +гашение урона за каждый прожитый раунд
+    endure_unique: float = 0.0  # +мощь уников в армии за каждый прожитый раунд
+    counter_power: float = 0.0  # контратака сильнее на эту долю
+    # --- от соперника ---
+    vs_stronger: float = 0.0  # +атака против более сильной армии, за каждое её удвоение (Киокушинкай)
+    dominate: float = 0.0  # атака и прочность против более слабой армии, полная при перевесе ×4 (путь Отчаяния)
+    overcome_gap: float = 0.0  # доля разрыва с более сильной армией, закрываемая за раунд (путь Преодоления)…
+    overcome_gap_cap: float = 0.0  # …не больше стольких прибавок к мощи
+    influence_power: float = 0.0  # +атака и прочность за каждые 100 своего влияния (Преодоление)
+    influence_gap: float = 0.0  # +атака и прочность за каждые 100 влияния сверх влияния противника
+    win_loss_save: float = 0.0  # при победе ещё эта доля погибших выживает
+    revive_strike: float = 0.0  # доля павших за раунд встаёт и сразу бьёт ещё раз своей мощью (Преодоление)
+    # --- отражение и поглощение ---
+    reflect_burst_at: float = 0.0  # шкала отражения: выброс, когда получено столько от своей мощи…
+    reflect_burst_power: float = 0.0  # …и выброс сильнее на эту долю
+    reflect_loss_burst: float = 0.0  # выбито 50% и 75% армии: ответ на эту долю стартовой мощи
+    absorb_power: float = 0.0  # +атака от поглощённого (полная при поглощении своей мощи)
+    # --- уклонение ---
+    dodge_counter: float = 0.0  # эта доля уклонившихся бьёт в ответ своей мощью
+    dodge_surge: float = 0.0  # +атака от числа уклонений за бой (полная, когда уклонилась вся армия)
+    dodge_true: float = 0.0  # эта доля уклонения работает, даже когда от удара «не увернуться» или реакции подавлены
+    dodge_cap: float = 0.0  # выше потолок шанса уклонения
 
     def __add__(self, other: "CombatMods") -> "CombatMods":
         values = {}
@@ -61,9 +103,9 @@ class CombatMods:
             a, b = getattr(self, f.name), getattr(other, f.name)
             if isinstance(a, bool):
                 values[f.name] = a or b
-            elif f.name in ("reflect_every", "adapt_threshold"):
+            elif f.name in _MIN_FIELDS:
                 # Самый частый выброс отражения и самый ранний порог «терпения» из источников
-                # (путь Адаптации + родословная Софии не складывают порог до 60%).
+                # (путь Адаптации + родословная Александровых не складывают порог до 60%).
                 values[f.name] = min(x for x in (a, b) if x) if (a or b) else 0
             elif isinstance(a, int) and not isinstance(a, bool) and f.name.endswith("rounds"):
                 values[f.name] = max(a, b)
@@ -79,7 +121,7 @@ class CombatMods:
         values = {}
         for f in fields(self):
             v = getattr(self, f.name)
-            if isinstance(v, bool) or f.name in ("reflect_every", "rush_rounds", "adapt_threshold"):
+            if isinstance(v, bool) or f.name in _UNSCALED_FIELDS:
                 values[f.name] = v
             else:
                 values[f.name] = v * k

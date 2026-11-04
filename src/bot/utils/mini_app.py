@@ -12,7 +12,7 @@ from aiogram.enums import ChatType
 # Cache-Control — один и тот же URL после редеплоя может продолжать открывать СТАРЫЙ
 # index.html/JS, закэшированный клиентом раньше, чем на Caddy появился `no-cache`).
 # Приклеенный `?v=N` делает URL кнопки формально НОВЫМ при каждом бампе.
-MINI_APP_ASSET_VERSION = 1
+MINI_APP_ASSET_VERSION = 2
 
 
 def mini_app_url(base_url: str, *, view: str | None = None) -> str:

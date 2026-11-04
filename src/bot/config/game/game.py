@@ -46,9 +46,25 @@ INFLUENCE_PER_DISTRICT = 1
 INFLUENCE_PER_RANK = 2
 
 
-def influence_rank_index(influence: int) -> int:
-    """Индекс ступени в RANK_LADDER, который открывает влияние (без учёта фазы и бонусов)."""
-    return max(0, influence) // INFLUENCE_PER_RANK
+# Вербовка (пользователь 2026-11-04): сколько бойцов приходит за одно нажатие. У обычного игрока
+# максимум 10–15, Ким Гапрен и Преодоление снимают потолок и режут требование к влиянию.
+RECRUIT_INFLUENCE_PER_UNIT = 20  # столько влияния на одного бойца сверх первого
+RECRUIT_BASE_CAP = 15  # потолок бойцов за нажатие без бафов
+RECRUIT_INFLUENCE_CUT_MAX = 0.9
+RECRUIT_SELECT_DIVISOR = 4  # отбор: бойцов вчетверо меньше…
+RECRUIT_SELECT_FLOOR = 0.5  # …зато ранг только из верхней половины доступных
+
+
+def influence_rank_index(influence: int, cut: float = 0.0) -> int:
+    """Индекс ступени в RANK_LADDER, который открывает влияние (без учёта фазы и бонусов). `cut` —
+    на сколько системы развития режут требование (Ким Гапрен, Преодоление)."""
+    return int(max(0, influence) / max(0.1, INFLUENCE_PER_RANK * (1 - min(0.9, cut))))
+
+
+def recruit_quantity(influence: int, *, cut: float = 0.0, quantity: float = 0.0, cap: int = 0) -> int:
+    """Сколько бойцов приходит за одно нажатие вербовки."""
+    per_unit = RECRUIT_INFLUENCE_PER_UNIT * (1 - min(RECRUIT_INFLUENCE_CUT_MAX, cut))
+    return max(1, min(RECRUIT_BASE_CAP + cap, int((1 + max(0, influence) / per_unit) * (1 + quantity))))
 
 # Карта города (домен `map`) — районов на странице списка.
 DISTRICT_PAGE_SIZE = 8
@@ -108,6 +124,12 @@ BATTLE_LOSS_SAVE_MAX = 0.8
 BATTLE_REACTION_MAX = 0.5  # одна реакция с бафами систем (характеристики сами режутся раньше — 0.4)
 BATTLE_REACTIONS_TOTAL_MAX = 0.85
 BATTLE_FIRST_STRIKE_MAX = 0.4
+BATTLE_PRE_STRIKE_MAX = 0.4  # удар до боя (Муджин) выбивает не больше этой доли мощи противника
+BATTLE_PHANTOM_ROUND_CHANCE = 0.05  # невидимый удар: +к шансу за каждый раунд боя
+BATTLE_REVIVE_STRIKE_MAX = 0.5  # не больше этой доли павших за раунд встаёт и бьёт снова
+BATTLE_VS_STRONGER_CAP = 4.0  # Киокушинкай: учитывается до 4 удвоений мощи противника
+BATTLE_INFLUENCE_GAP_CAP = 1.5  # влияние в бою: прибавка к атаке и прочности не больше
+BATTLE_ABSORB_POWER_CAP = 2.0  # поглощение: учитывается до 2× своей стартовой мощи
 
 # КД на сражения по фазе — числа даны в raw-notes явно ("банда - 5минут, круг - 30
 # минут, кулак - 1 час"). Мастерство скорости будет их сокращать — ещё не реализовано.

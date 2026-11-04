@@ -26,12 +26,14 @@ from bot.config.contract import (
     CONTRACT_DISCOUNT_CAP,
     CONTRACT_HOURS,
     CONTRACT_MAX_QUANTITY,
+    CONTRACT_RETAIN_CAP,
 )
 from bot.config.game import ACTION_LOCK_MS, influence_rank_index
 from bot.constant.characteristic import RANK_INDEX, RANK_LADDER
 from bot.constant.shop import LOCK_ACTION_SHOP
 from bot.db.repositories import business as business_repo
 from bot.db.repositories import contract as contract_repo
+from bot.db.repositories.extra import add_to_stack
 from bot.db.repositories.phase import get_phase
 from bot.services.build import capped, get_build
 from bot.services.district import get_influence
@@ -63,6 +65,8 @@ class Terms:
     ceiling: str
     discount: float
     hours: float
+    bonus: float = 0.0  # Джинчоль: бесплатные бойцы сверху (доля)
+    retain: float = 0.0  # Джинчоль: доля выживших остаётся навсегда
 
     def unit_price(self, rank: str) -> int:
         return max(1, int(extra_power_for_rank(rank) * CONTRACT_COINS_PER_POWER * (1 - self.discount)))
@@ -81,6 +85,8 @@ class Quote:
     total: int
     hours: float
     power: int  # мощь одного бойца
+    free: int = 0  # бесплатные бойцы сверху (Джинчоль)
+    retain: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,11 +100,14 @@ async def terms(session: AsyncSession, user_id: int) -> Terms:
     phase = (await get_phase(session, user_id))[0]
     eco = (await get_build(session, user_id)).eco
     bonus = eco.recruit_rank_bonus
-    ceiling = min(PHASE_RANK_CAP_INDEX[phase] + bonus, influence_rank_index(await get_influence(session, user_id)) + bonus, len(RANK_LADDER) - 1)
+    cut = eco.recruit_influence_cut + eco.influence_rank_cut
+    ceiling = min(PHASE_RANK_CAP_INDEX[phase] + bonus, influence_rank_index(await get_influence(session, user_id), cut) + bonus, len(RANK_LADDER) - 1)
     return Terms(
         ceiling=RANK_LADDER[max(0, ceiling)],
         discount=capped(eco.contract_discount, CONTRACT_DISCOUNT_CAP),
         hours=CONTRACT_HOURS * (1 + eco.contract_duration),
+        bonus=eco.contract_bonus,
+        retain=min(CONTRACT_RETAIN_CAP, eco.contract_retain),
     )
 
 
@@ -110,7 +119,10 @@ async def quote(session: AsyncSession, user_id: int, rank: str, quantity: int) -
     if rank not in RANK_INDEX or RANK_INDEX[rank] > RANK_INDEX[current.ceiling]:
         raise RankNotAvailableError(rank)
     unit = current.unit_price(rank)
-    return Quote(rank, quantity, unit, unit * quantity, current.hours, extra_power_for_rank(rank))
+    return Quote(
+        rank, quantity, unit, unit * quantity, current.hours, extra_power_for_rank(rank),
+        free=int(quantity * current.bonus), retain=current.retain,
+    )
 
 
 async def active(session: AsyncSession, user_id: int) -> list[ActiveContract]:
@@ -132,7 +144,7 @@ async def buy(session: AsyncSession, redis: Redis, user_id: int, rank: str, quan
         if not await business_repo.spend_coins(session, user_id, offer.total):
             raise NotEnoughCoinsError(offer.total)
         expires = datetime.now(timezone.utc) + timedelta(hours=offer.hours)
-        await contract_repo.create(session, user_id, offer.rank, offer.quantity, expires)
+        await contract_repo.create(session, user_id, offer.rank, offer.quantity + offer.free, expires, retain=offer.retain)
         await quest_event(session, user_id, TASK_CONTRACT)
         await session.commit()
         return offer
@@ -142,5 +154,10 @@ async def buy(session: AsyncSession, redis: Redis, user_id: int, rank: str, quan
 
 async def purge(session_factory: async_sessionmaker[AsyncSession]) -> None:
     async with session_factory() as session:
+        # Джинчоль: часть выживших остаётся навсегда («им понравилось работать с тобой») — до удаления.
+        for c in await contract_repo.lock_expired_with_retain(session):
+            stayed = int(c.quantity * c.retain)
+            if stayed:
+                await add_to_stack(session, user_id=c.user_id, camp=c.camp, rank=c.rank, stars=0, training_level=0, quantity=stayed)
         await contract_repo.purge(session)
         await session.commit()

@@ -11,7 +11,6 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from redis.asyncio import Redis
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.services.admin.live_config import battle_cooldown_seconds
@@ -43,7 +42,7 @@ from bot.services.stealth import is_hidden
 from bot.texts.stealth import STEALTH_LABEL
 from bot.texts.activity import LOG_CAPTURED, LOG_PVE, LOST, WON
 from bot.services.characteristic import get_combat_profile
-from bot.services.business import accrue, parliament_influence
+from bot.services.business import accrue
 from bot.services.city import get_city
 from bot.services.district.army import apply_losses, load_camp
 from bot.services.combat import CombatStack, base_chances, simulate_battle
@@ -153,14 +152,8 @@ def _influence_for(districts: int, parliament_bonus: int) -> int:
 
 
 async def get_territory(session: AsyncSession, user_id: int) -> Territory:
-    districts = await count_owned(session, user_id)
-    positions = (await get_build(session, user_id)).positions
-    skill_influence = int(positions.get("influence")) if positions is not None else 0  # «Авторитет» Главы
-    banked = int(await session.scalar(select(User.influence_banked).where(User.id == user_id)) or 0)  # копилка императора
-    return Territory(
-        districts=districts,
-        influence=_influence_for(districts, await parliament_influence(session, user_id)) + skill_influence + banked,
-    )
+    # Формула влияния — одна на всю игру, в `services/build` (там и бонусы систем развития).
+    return Territory(districts=await count_owned(session, user_id), influence=(await get_build(session, user_id)).influence)
 
 
 async def get_influence(session: AsyncSession, user_id: int) -> int:

@@ -41,10 +41,15 @@ from bot.config.development import (
 from bot.config.genius import LEVELS as GENIUS_LEVELS
 from bot.config.unique_path import LEVELS as PATH_LEVELS
 from bot.config.unique_technique import LEVELS as TECHNIQUE_LEVELS
+from bot.config.game import BUSINESS_PARLIAMENT_INFLUENCE, INFLUENCE_PER_DISTRICT, INFLUENCE_STARTING
 from bot.constant.bloodline import BLOODLINE_GAPRYONG
+from bot.constant.business import BIZ_PARLIAMENT
+from bot.constant.genius import GENIUS_MEDICINE
+from bot.db.repositories import business as business_repo
+from bot.db.repositories import district as district_repo
 from bot.constant.build import SOURCE_BLOODLINE, SOURCE_BLOODLINE2, SOURCE_PATH2, SOURCE_GENIUS, SOURCE_PATH, SOURCE_TECHNIQUE
-from bot.constant.unique_path import COPYING_PATHS, PATH_OVERCOME
-from bot.constant.unique_technique import TECH_OVERCOME
+from bot.constant.unique_path import COPYING_PATHS, PATH_ADAPTATION, PATH_INFINITE, PATH_OVERCOME
+from bot.constant.unique_technique import TECH_KYOKUSHIN, TECH_NINJUTSU, TECH_OVERCOME
 from bot.db.repositories import build as build_repo
 from bot.db.repositories.build import BuildRow
 from bot.services.build.mods import NO_ECO, EconomyMods
@@ -76,9 +81,36 @@ def level_effect(table: dict[str, tuple[dict, ...]], code: str | None, level: in
     return LevelEffect(combat=combat, eco=eco, special=special)
 
 
-async def _potion_mods(session: AsyncSession, user_id: int, power: float) -> tuple[CombatMods, EconomyMods]:
+# Родословные, усиливающие конкретную технику: поле `special` → код техники.
+_TECH_BOOSTS = {"boost_kyokushin": TECH_KYOKUSHIN, "boost_ninjutsu": TECH_NINJUTSU}
+
+
+def _merge_special(target: dict, extra: dict) -> None:
+    for key, value in extra.items():
+        target[key] = target.get(key, 0) + value if isinstance(value, (int, float)) and not isinstance(value, bool) else value
+
+
+def _technique_power(code: str | None, special: dict) -> float:
+    """Во сколько сильнее техника `code` от родословной: все техники (Хансу) и своя (Ямадзаки, Курода)."""
+    power = 1 + special.get("boost_all_techniques", 0.0)
+    for key, target in _TECH_BOOSTS.items():
+        if code == target:
+            power += special.get(key, 0.0)
+    return power
+
+
+def _scaled(effect: LevelEffect, k: float) -> LevelEffect:
+    if k == 1:
+        return effect
+    return LevelEffect(combat=effect.combat.scale(k), eco=effect.eco.scale(k), special=effect.special)
+
+
+async def _potion_mods(session: AsyncSession, user_id: int, power: float, heal: float = 0.0) -> tuple[CombatMods, EconomyMods]:
     combat, eco = NO_MODS, NO_ECO
-    for kind, tier in await potion_repo.active_for_user(session, user_id):
+    active = await potion_repo.active_for_user(session, user_id)
+    if heal and active:  # Джинен: каждое действующее зелье ещё и лечит
+        combat = combat + CombatMods(heal=heal * len(active))
+    for kind, tier in active:
         if kind == POTION_WEALTH or kind not in POTION_EFFECTS or not 0 < tier <= POTION_TIERS:
             continue
         spec = POTION_EFFECTS[kind][1][tier - 1]
@@ -119,8 +151,14 @@ class Build:
     potion_combat: CombatMods = NO_MODS
     # Действующие абсолютные карты (`services/absolute.active`) — перки за обладание.
     absolutes: frozenset[str] = frozenset()
-    # КПД Пути тренировок (0…0.5): тренировки быстрее и результативнее, очки пути — быстрее.
+    # КПД Пути тренировок: тренировки быстрее и результативнее, очки пути — быстрее.
     training_kpd: float = 0.0
+    # Влияние игрока со всеми бонусами (вербовка, контракты, бафы в бою).
+    influence: int = 0
+    # Активные пути (первый и второго тела): куда идёт шкала и что умеет игрок.
+    paths: tuple[str, ...] = ()
+    # Безопасность снята «Нейтрализацией» Сенсорики.
+    security_off: bool = False
 
 
 EMPTY_BUILD = Build()
@@ -158,22 +196,53 @@ async def get_build(session: AsyncSession, user_id: int) -> Build:
         effects[SOURCE_BLOODLINE2] = level_effect(BLOODLINE_LEVELS, row.bloodline2, row.bloodline2_level)
     special: dict = {}
     for effect in effects.values():
-        for key, value in effect.special.items():
-            special[key] = special.get(key, 0) + value if isinstance(value, (int, float)) and not isinstance(value, bool) else value
+        _merge_special(special, effect.special)
 
-    # Путь Бесконечной техники: ещё N изученных техник (самые прокачанные) вполсилы.
-    extra_n = None if special.get("all_techniques") else int(special.get("extra_techniques", 0))
-    if (extra_n is None or extra_n) and row.technique:
-        from bot.config.unique_path import INFINITE_EXTRA_TECHNIQUE_POWER
+    # Шкалы путей (`config/path_gauge`). Александровы усиливают шкалу Адаптации.
+    from bot.services.path_gauge.path_gauge import gauge_effect
+
+    for source, code, gauge in ((SOURCE_PATH, row.path, row.path_gauge), (SOURCE_PATH2, row.path2, row.path2_gauge)):
+        if not code or not gauge:
+            continue
+        power = 1 + special.get("adaptation_gauge_boost", 0.0) if code == PATH_ADAPTATION else 1.0
+        g_combat, g_eco, g_special = gauge_effect(code, gauge, power)
+        base = effects[source]
+        effects[source] = LevelEffect(combat=base.combat + g_combat, eco=base.eco + g_eco, special=base.special)
+        _merge_special(special, g_special)
+
+    # Гений медицины сильнее (Джинен).
+    if row.genius == GENIUS_MEDICINE and special.get("medicine_power"):
+        effects[SOURCE_GENIUS] = _scaled(effects[SOURCE_GENIUS], 1 + special["medicine_power"])
+
+    # Усиление активной техники родословной.
+    effects[SOURCE_TECHNIQUE] = _scaled(effects[SOURCE_TECHNIQUE], _technique_power(row.technique, special))
+
+    # Путь Бесконечной техники: сколько техник сразу, решает шкала копирования; какие — игрок (не
+    # выбрал — самые прокачанные). Остальные изученные работают слабее.
+    if special.get("infinite_techniques") and row.technique:
+        from bot.config.unique_path import (
+            INFINITE_EXTRA_TECHNIQUE_POWER,
+            INFINITE_GAUGE_PER_TECHNIQUE,
+            INFINITE_MAX_TECHNIQUES,
+            INFINITE_MIN_TECHNIQUES,
+        )
         from bot.db.repositories import unique_technique as tech_repo
 
-        others = sorted(((c, lv) for c, lv in await tech_repo.list_owned(session, user_id) if c != row.technique), key=lambda x: -x[1])
-        extra_combat_t, extra_eco_t = NO_MODS, NO_ECO
-        for code, level in others[:extra_n]:
-            e = level_effect(TECHNIQUE_LEVELS, code, level)
-            extra_combat_t = extra_combat_t + e.combat.scale(INFINITE_EXTRA_TECHNIQUE_POWER)
-            extra_eco_t = extra_eco_t + e.eco.scale(INFINITE_EXTRA_TECHNIQUE_POWER)
+        gauge = row.path_gauge if row.path == PATH_INFINITE else row.path2_gauge
+        slots = min(INFINITE_MAX_TECHNIQUES, INFINITE_MIN_TECHNIQUES + int(gauge // INFINITE_GAUGE_PER_TECHNIQUE)) - 1
+        owned = [t for t in await tech_repo.list_owned_full(session, user_id) if t[0] != row.technique]
+        owned.sort(key=lambda t: (not t[2], -t[1]))  # сначала выбранные, потом прокачанные
+        extra_power = INFINITE_EXTRA_TECHNIQUE_POWER + special.get("infinite_power", 0.0)
+        rest_power = special.get("infinite_rest", 0.0)
         base_t = effects[SOURCE_TECHNIQUE]
+        extra_combat_t, extra_eco_t = NO_MODS, NO_ECO
+        for i, (code, level, _) in enumerate(owned):
+            k = (extra_power if i < slots else rest_power) * _technique_power(code, special)
+            if k <= 0:
+                continue
+            e = level_effect(TECHNIQUE_LEVELS, code, level)
+            extra_combat_t = extra_combat_t + e.combat.scale(k)
+            extra_eco_t = extra_eco_t + e.eco.scale(k)
         effects[SOURCE_TECHNIQUE] = LevelEffect(combat=base_t.combat + extra_combat_t, eco=base_t.eco + extra_eco_t, special=base_t.special)
 
     combat_parts = {source: e.combat for source, e in effects.items()}
@@ -226,7 +295,7 @@ async def get_build(session: AsyncSession, user_id: int) -> Build:
     eco = eco + own.eco
     # Зелья (магазин): действующие эффекты, усиленные гением медицины. Зелье богатства сюда
     # не входит — доход ленивый, оно считается по пересечению окон (`services/potion`).
-    potion_combat, potion_eco = await _potion_mods(session, user_id, eco.potion_power)
+    potion_combat, potion_eco = await _potion_mods(session, user_id, eco.potion_power, eco.potion_heal)
     if potion_combat != NO_MODS:
         battle = battle.with_total(battle.total + potion_combat)
     eco = eco + potion_eco
@@ -235,7 +304,7 @@ async def get_build(session: AsyncSession, user_id: int) -> Build:
     eco = eco + await _clan_eco(session, user_id)
     positions = await _positions(session, user_id)
     eco = eco + positions.eco
-    training_kpd = await _training_kpd(session, user_id, row)
+    training_kpd = await _training_kpd(session, user_id, row) * (1 + special.get("training_kpd_boost", 0.0))
     if training_kpd:
         from bot.config.unique_path import TRAINING_KPD_EXTRAS_PP
 
@@ -249,10 +318,26 @@ async def get_build(session: AsyncSession, user_id: int) -> Build:
     if ABS_HASBULLA in absolutes:  # Хасбула: скидка в магазине (контракты, зелья; ячейки — в `services/storage`)
         eco = eco + EconomyMods(contract_discount=HASBULLA_SHOP_DISCOUNT, potion_discount=HASBULLA_SHOP_DISCOUNT)
     flags = frozenset(key for key, value in special.items() if value is True)
+    from datetime import datetime, timezone
+
+    security_off = row.security_off_until is not None and row.security_off_until > datetime.now(timezone.utc)
     return Build(
         battle=battle, eco=eco, awakening=multiplier, resonance=resonance, flags=flags, positions=positions,
         potion_combat=potion_combat, absolutes=absolutes, training_kpd=training_kpd,
+        influence=await _influence(session, user_id, row, positions, eco),
+        paths=tuple(filter(None, (row.path, row.path2))),
+        security_off=security_off,
     )
+
+
+async def _influence(session: AsyncSession, user_id: int, row: BuildRow, positions, eco: EconomyMods) -> int:
+    """Влияние: старт + районы + парламенты + навык «Авторитет» + копилка императора, всё × бонус
+    систем развития (Ким Гапрен, Преодоление)."""
+    districts = await district_repo.count_owned(session, user_id)
+    parliaments = (await business_repo.count_by_type(session, user_id)).get(BIZ_PARLIAMENT, 0)
+    base = INFLUENCE_STARTING + INFLUENCE_PER_DISTRICT * districts + BUSINESS_PARLIAMENT_INFLUENCE * parliaments
+    base += int(positions.get("influence")) + row.influence_banked
+    return int(base * (1 + eco.influence_bonus))
 
 
 async def _training_kpd(session: AsyncSession, user_id: int, row: BuildRow) -> float:

@@ -35,6 +35,8 @@ from bot.texts.training import (
 )
 from bot.utils.formatting import format_countdown, format_number
 
+from bot.services.build import get_build  # noqa: E402
+
 router = Router(name="training")
 
 
@@ -58,7 +60,8 @@ async def show_train_menu(message: Message, session: AsyncSession, user_id: int,
         else PERSONAL_READY.format(potential=POTENTIAL_LABELS[view.potential], points=format_number(view.dev_points))
     )
     await message.answer(
-        TRAIN_MENU_HEADER.format(personal_line=personal_line, army_block=army_block), reply_markup=train_menu()
+        TRAIN_MENU_HEADER.format(personal_line=personal_line, army_block=army_block),
+        reply_markup=train_menu(ranks=(await get_build(session, user_id)).eco.rank_hold),
     )
 
 

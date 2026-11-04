@@ -133,6 +133,11 @@ def gang_delete_confirm(user_id: int) -> str:
     return f"confirm:gang_delete:{user_id}"
 
 
+def neutralize_cooldown(user_id: int) -> str:
+    """КД «Снять безопасность» пути Сенсорики — `SET NX EX`, ключ и есть КД."""
+    return f"cooldown:neutralize:{user_id}"
+
+
 def swap_cooldown(user_id: int, system: str) -> str:
     """КД переключения активной гениальности / уникальной техники / пути (не менять бафы
     перед каждым боем) — `SET NX EX`, ключ и есть КД."""

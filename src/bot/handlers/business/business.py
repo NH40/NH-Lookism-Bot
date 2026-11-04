@@ -13,7 +13,8 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.cache.keys import action_lock
-from bot.config.game import ACTION_LOCK_MS, BUSINESS_LEVEL_INCOME_BONUS_PERCENT
+from bot.config.game import ACTION_LOCK_MS, BUSINESS_LEVEL_INCOME_BONUS_PERCENT, BUSINESS_MAX_UPGRADE
+from bot.services.build import get_build
 from bot.constant.business import (
     BUSINESS_TYPES,
     CB_BUSINESS_BUILD_PREFIX,
@@ -149,6 +150,7 @@ async def _render_overview(session: AsyncSession, user_id: int, page: int):
         bonus_line=BONUS_LINE.format(bonuses=" · ".join(bonuses)) if bonuses else "",
         level=wallet.level,
         level_bonus=wallet.level * BUSINESS_LEVEL_INCOME_BONUS_PERCENT,
+        max_upgrade=BUSINESS_MAX_UPGRADE + (await get_build(session, user_id)).eco.business_cap,
         capacity=wallet.capacity,
         slots=overview.capacity_per_district,
         districts_line=DISTRICTS_PICK if overview.districts else NO_DISTRICTS,

@@ -10,16 +10,16 @@ from aiogram.types import CallbackQuery, Message
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.constant.recruit import CB_RECRUIT_EXTRA, CB_RECRUIT_OPEN
+from bot.constant.recruit import CB_RECRUIT_EXTRA, CB_RECRUIT_OPEN, CB_RECRUIT_SELECT
 from bot.db.repositories.user import get_by_id
 from bot.keyboards.recruit import recruit_menu
 from bot.services.extra import get_army_stats
-from bot.services.recruit import RecruitOnCooldownError, recruit_extra
+from bot.services.recruit import RecruitOnCooldownError, get_offer, recruit_extra
 from bot.services.ticket import get_status as get_ticket_status
 from bot.texts.common import render_army_block
 from bot.texts.gacha import tickets_line
 from bot.texts.profile import NOT_ONBOARDED
-from bot.texts.recruit import RECRUIT_COOLDOWN, RECRUIT_MENU_HEADER, RECRUIT_RESULT
+from bot.texts.recruit import RECRUIT_COOLDOWN, RECRUIT_MENU_HEADER, RECRUIT_RANK_ITEM, RECRUIT_RESULT
 from bot.utils.formatting import format_countdown, format_number
 
 router = Router(name="recruit")
@@ -38,12 +38,18 @@ async def show_recruit_menu(message: Message, session: AsyncSession, user_id: in
         cards_quantity=stats.cards_quantity,
     )
     tickets = await get_ticket_status(session, user_id)
+    user = await get_by_id(session, user_id)
+    offer = await get_offer(session, user_id, user.phase)
     await message.answer(
         RECRUIT_MENU_HEADER.format(
             army_block=army_block,
+            influence=format_number(offer.influence),
+            crowd=format_number(offer.crowd),
+            select=format_number(offer.select),
+            ceiling=offer.ceiling,
             tickets_line=tickets_line(tickets.count, tickets.cap, tickets.next_in_seconds),
         ),
-        reply_markup=recruit_menu(tickets=tickets.count, cap=tickets.cap),
+        reply_markup=recruit_menu(tickets=tickets.count, cap=tickets.cap, crowd=offer.crowd, select=offer.select),
     )
 
 
@@ -66,7 +72,7 @@ async def cb_recruit_open(callback: CallbackQuery, session: AsyncSession) -> Non
     await show_recruit_menu(callback.message, session, user.id)
 
 
-@router.callback_query(F.data == CB_RECRUIT_EXTRA)
+@router.callback_query(F.data.in_((CB_RECRUIT_EXTRA, CB_RECRUIT_SELECT)))
 async def cb_recruit_extra(callback: CallbackQuery, session: AsyncSession, redis: Redis) -> None:
     user = await get_by_id(session, callback.from_user.id)
     if user is None:
@@ -74,7 +80,7 @@ async def cb_recruit_extra(callback: CallbackQuery, session: AsyncSession, redis
         return
 
     try:
-        result = await recruit_extra(session, redis, user.id, user.phase)
+        result = await recruit_extra(session, redis, user.id, user.phase, select=callback.data == CB_RECRUIT_SELECT)
     except RecruitOnCooldownError as exc:
         # Popup-алерт не поддерживает HTML (см. CLAUDE.md UAP) — этот текст без тегов.
         await callback.answer(
@@ -84,5 +90,8 @@ async def cb_recruit_extra(callback: CallbackQuery, session: AsyncSession, redis
         return
 
     await callback.answer()
-    await callback.message.answer(RECRUIT_RESULT.format(rank=result.rank, power=format_number(result.power)))
+    ranks = ", ".join(RECRUIT_RANK_ITEM.format(rank=r, count=format_number(c)) for r, c in result.by_rank[:8])
+    await callback.message.answer(
+        RECRUIT_RESULT.format(count=format_number(result.count), rank=result.rank, power=format_number(result.power), ranks=ranks)
+    )
     await show_recruit_menu(callback.message, session, user.id)

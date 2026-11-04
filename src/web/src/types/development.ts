@@ -61,6 +61,7 @@ export interface PathData {
   bought: { code: string; name: string }[];
   training_kpd: number;
   training_kpd_cap: number;
+  gauges: Record<string, { name: string; value: number; cap: number; max: number }>;
 }
 
 export interface TechniquesData {
@@ -69,6 +70,8 @@ export interface TechniquesData {
   swap_cooldown: number;
   owned: DevItem[];
   quests: (DevQuest & { code: string })[];
+  slots: number;
+  selected: string[];
 }
 
 export interface GeniusData {
@@ -97,6 +100,31 @@ export interface BloodData {
   second_body?: boolean;
   second?: DevItem | null;
   options2?: { code: string; name: string }[];
+  free_change?: boolean;
+  change_options?: BloodOption[];
+  ultra?: UltraData | null;
+}
+
+export interface UltraData {
+  actions: { code: string; label: string; enabled: boolean }[];
+  boss_available: boolean;
+  bosses: { code: string; name: string; enabled: boolean }[];
+  max_loss: number;
+  loss_options: number[];
+}
+
+export interface RankRow {
+  rank: string;
+  quantity: number;
+  locked: boolean;
+  cap: number;
+  ready: number;
+  next_rank: string | null;
+}
+
+export interface RanksResponse {
+  available: boolean;
+  rows: RankRow[];
 }
 
 export interface AwakeningLevel {

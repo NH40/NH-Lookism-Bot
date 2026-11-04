@@ -18,8 +18,10 @@ from bot.services.dev_quest import emit as quest_event
 
 from dataclasses import dataclass
 
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.db.models.user import User
 from bot.config.bloodline import BLOODLINE_START_LEVEL, LEVELS, bloodline_level_cost
 from bot.config.development import MAX_LEVEL
 from bot.constant.activity import ACT_DEVELOPMENT
@@ -100,6 +102,43 @@ async def choose(session: AsyncSession, user_id: int, code: str) -> None:
     if not await bloodline_repo.choose(session, user_id, code):
         raise BloodlineAlreadyChosenError
     await bloodline_repo.set_level_if_zero(session, user_id, BLOODLINE_START_LEVEL)
+    await apply_effects(session, user_id)
+    await session.commit()
+
+
+class NoFreeChangeError(Exception):
+    pass
+
+
+class SameBloodlineError(Exception):
+    pass
+
+
+async def has_free_change(session: AsyncSession, user_id: int) -> bool:
+    return bool(await session.scalar(select(User.free_bloodline_change).where(User.id == user_id)))
+
+
+async def change_free(session: AsyncSession, user_id: int, code: str) -> None:
+    """Разовая бесплатная смена родословной (пользователь 2026-11-04): условный UPDATE снимает право
+    и меняет родословную одним запросом, двойной клик второй раз не сработает. Уровень сохраняется,
+    второй родословной стать нельзя. Коммитит."""
+    if code not in BLOODLINES:
+        raise UnknownBloodlineError(code)
+    row = await session.execute(
+        update(User)
+        .where(
+            User.id == user_id, User.free_bloodline_change.is_(True), User.bloodline.is_not(None),
+            User.bloodline != code, or_(User.bloodline2.is_(None), User.bloodline2 != code),
+        )
+        .values(bloodline=code, free_bloodline_change=False)
+        .returning(User.id)
+    )
+    if row.first() is None:
+        await session.rollback()
+        state = await get_state(session, user_id)
+        if state is not None and state.code == code:
+            raise SameBloodlineError
+        raise NoFreeChangeError
     await apply_effects(session, user_id)
     await session.commit()
 

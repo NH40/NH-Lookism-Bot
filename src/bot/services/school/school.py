@@ -221,7 +221,7 @@ async def lesson(session: AsyncSession, redis: Redis, user_id: int, school: str,
         raise NoStudentsError
     profile = await get_combat_profile(session, user_id)
     key = school_lesson_cooldown(user_id, school)
-    if not await redis.set(key, "1", nx=True, ex=profile.cooldown(cooldown_seconds(KEY_CD_SCHOOL), profile.eco.extras_training_cooldown)):
+    if not await redis.set(key, "1", nx=True, ex=profile.cooldown(cooldown_seconds(KEY_CD_SCHOOL), profile.eco.extras_training_cooldown + profile.eco.school_cooldown)):
         raise LessonOnCooldownError(max(0, await redis.ttl(key)))
     try:
         if not await business_repo.spend_coins(session, user_id, SCHOOL_LESSON_PRICE):

@@ -31,6 +31,8 @@ from bot.config.empire import (
     SABOTAGE_TREASURY_CAP,
     SABOTAGE_TREASURY_PERCENT,
 )
+from bot.config.path_gauge import GAUGE_SENSORY_SABOTAGE
+from bot.constant.unique_path import PATH_SENSORY
 from bot.constant.empire import SABOTAGE_ACTIONS, SABOTAGE_STATISTS, SABOTAGE_TREASURY, SABOTAGE_UNIQUE
 from bot.constant.extra import CAMP_ATTACK
 from bot.db.repositories import card as card_repo
@@ -200,6 +202,9 @@ async def sabotage(
             result = SabotageResult(action, False, emperor.emperor_id)
         if eco.silent_sabotage:
             result = replace(result, silent=True)
+        from bot.services.path_gauge import add_for_paths
+
+        await add_for_paths(session, user_id, {PATH_SENSORY}, GAUGE_SENSORY_SABOTAGE)
         await empire_repo.add_sabotage_log(
             session, emperor_id=emperor.emperor_id, saboteur_id=user_id, action=action,
             success=result.success, amount=result.amount, card_code=result.card_code,

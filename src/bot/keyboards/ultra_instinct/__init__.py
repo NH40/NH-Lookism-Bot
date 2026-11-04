@@ -1,1 +1,2 @@
-"""Публичное API домена ultra_instinct (клавиатуры). Пока пусто — наполняется по мере переноса."""
+"""Публичное API домена ultra_instinct (клавиатуры)."""
+from bot.keyboards.ultra_instinct.ultra_instinct import ultra_menu  # noqa: F401

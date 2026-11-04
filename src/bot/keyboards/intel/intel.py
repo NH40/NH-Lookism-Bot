@@ -5,11 +5,11 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.constant.common import CB_MENU_DEVELOPMENT
 from bot.constant.empire import CB_SABOTAGE_MARKED_PREFIX, SABOTAGE_ACTIONS
-from bot.constant.intel import CB_INTEL_MARK_PREFIX, CB_INTEL_MARKS, CB_INTEL_OPEN, CB_INTEL_REPORTS
+from bot.constant.intel import CB_INTEL_MARK_PREFIX, CB_INTEL_MARKS, CB_INTEL_NEUTRALIZE_PREFIX, CB_INTEL_OPEN, CB_INTEL_REPORTS
 from bot.constant.position_skill import CB_SCOUT_PREFIX, CB_SCOUT_REPORT_PREFIX
 from bot.texts.empire import SABOTAGE_LABELS
 from bot.texts.development import BTN_BACK_TO_DEVELOPMENT
-from bot.texts.intel import BTN_INTEL, BTN_MARK, BTN_MARKS, BTN_REPORTS, BTN_RESCOUT, BTN_UNMARK
+from bot.texts.intel import BTN_INTEL, BTN_MARK, BTN_MARKS, BTN_NEUTRALIZE, BTN_REPORTS, BTN_RESCOUT, BTN_UNMARK
 
 
 def _btn(text: str, callback_data: str) -> InlineKeyboardButton:
@@ -40,10 +40,14 @@ def reports_menu(rows: list[tuple[int, str]]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
 
-def report_menu(target_id: int, *, can_mark: bool, marked: bool, can_sabotage: bool = False) -> InlineKeyboardMarkup:
+def report_menu(
+    target_id: int, *, can_mark: bool, marked: bool, can_sabotage: bool = False, can_neutralize: bool = False
+) -> InlineKeyboardMarkup:
     rows = [[_btn(BTN_RESCOUT, f"{CB_SCOUT_PREFIX}{target_id}")]]
     if can_mark:
         rows.append([_btn(BTN_UNMARK if marked else BTN_MARK, f"{CB_INTEL_MARK_PREFIX}{target_id}")])
+    if can_neutralize:
+        rows.append([InlineKeyboardButton(text=BTN_NEUTRALIZE, callback_data=f"{CB_INTEL_NEUTRALIZE_PREFIX}{target_id}")])
     if can_sabotage:
         rows.extend(
             [_btn(SABOTAGE_LABELS[action], f"{CB_SABOTAGE_MARKED_PREFIX}{action}:{target_id}")] for action in SABOTAGE_ACTIONS

@@ -324,7 +324,10 @@ class SpyOutcome:
 NO_SPY = SpyOutcome()
 
 
-def resolve_spy(attacker: PositionEffects, defender: PositionEffects, rng: Random | None = None) -> SpyOutcome:
+def resolve_spy(
+    attacker: PositionEffects, defender: PositionEffects, rng: Random | None = None, *,
+    bonus: float = 0.0, resist: float = 0.0, anti_off: bool = False,
+) -> SpyOutcome:
     """Шпионские навыки нападающего: бросок шанса каждого (+«Агентурная сеть»/«Связной»),
     контрразведка цели снижает шанс; «Тень короля» — контрразведка ниже по уровню не мешает.
     «Двойная игра» — шанс повторить сработавший навык (эффект ещё раз)."""
@@ -332,8 +335,8 @@ def resolve_spy(attacker: PositionEffects, defender: PositionEffects, rng: Rando
     if not spies:
         return NO_SPY
     rng = rng or Random()
-    bonus = attacker.get("spy_chance")
-    anti = defender.get("anti_spy")
+    bonus += attacker.get("spy_chance")  # + шпионаж систем развития (Курода, Ниндзюцу, Предвидение)
+    anti = (0.0 if anti_off else defender.get("anti_spy")) + resist  # контрразведка снята «Нейтрализацией»
     pierce = attacker.get("pierce_counterintel")
     repeat = attacker.get("repeat")
     guard_disable = defender.get("anti_disable")

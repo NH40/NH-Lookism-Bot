@@ -53,7 +53,12 @@ def training_level_cap(rank: str) -> int:
     return EXTRA_TRAINING_LEVEL_CAP_BASE + RANK_INDEX[rank] * EXTRA_TRAINING_LEVEL_CAP_STEP
 
 
-def extra_unit_power(rank: str, stars: int, training_level: int) -> int:
+def training_cap_with(rank: str, cap_mult: float = 0.0) -> int:
+    """Кап уровня с бонусом Самдака: `cap_mult` 1.0 — вдвое выше обычного."""
+    return int(training_level_cap(rank) * (1 + max(0.0, cap_mult)))
+
+
+def extra_unit_power(rank: str, stars: int, training_level: int, cap_mult: float = 0.0) -> int:
     """Мощь ОДНОЙ единицы статиста в стопке (см. `db/models/extra.py` — статисты
     хранятся стопками, мощь никогда не хранится поштучно, всегда считается по этой
     формуле). `training_level` — сколько раз статист прошёл этап 1 тренировки (мощь
@@ -62,7 +67,7 @@ def extra_unit_power(rank: str, stars: int, training_level: int) -> int:
     раз прошёл этап 2 (+50% каждая звезда) — оба множителя берутся из `config/game`
     (см. `services/training`), чтобы не дублировать числа в двух местах."""
     base = extra_power_for_rank(rank)
-    power = base * (EXTRA_TRAINING_STAGE1_POWER_MULTIPLIER ** min(training_level, training_level_cap(rank)))
+    power = base * (EXTRA_TRAINING_STAGE1_POWER_MULTIPLIER ** min(training_level, training_cap_with(rank, cap_mult)))
     power *= (1 + EXTRA_TRAINING_STAGE2_POWER_BONUS_PERCENT / 100) ** stars
     return round(power)
 
@@ -204,10 +209,10 @@ REACTION_MAX = 0.40  # потолок одной реакции (уклонен�
 REACTIONS_TOTAL_MAX = 0.80  # потолок суммы всех реакций
 
 
-def statist_unit_power(rank: str, stars: int, training_level: int, school: str = "", school_level: int = 0) -> float:
+def statist_unit_power(rank: str, stars: int, training_level: int, school: str = "", school_level: int = 0, cap_mult: float = 0.0) -> float:
     """Мощь статиста с учётом школы учителя: школа Силы (и немного Скорости) прибавляет к
     мощи бойца за каждый уровень (`config/school`). Без школы — ровно `extra_unit_power`."""
-    power = extra_unit_power(rank, stars, training_level)
+    power = extra_unit_power(rank, stars, training_level, cap_mult)
     if school and school_level:
         from bot.config.school import SCHOOL_POWER_PER_LEVEL
 

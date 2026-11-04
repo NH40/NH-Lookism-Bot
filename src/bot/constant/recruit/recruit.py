@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 CB_RECRUIT_EXTRA = "recruit:extra"
+CB_RECRUIT_SELECT = "recruit:select"  # отбор: меньше бойцов, ранг из верхней половины
 CB_RECRUIT_OPEN = "recruit:open"
 """Открыть экран вербовки (см. `keyboards/profile.profile_menu` — кнопка "Вербовка" в
 главном меню профиля) — отдельно от `CB_RECRUIT_EXTRA` (само действие вербовки), чтобы

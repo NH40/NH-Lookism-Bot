@@ -21,6 +21,7 @@ export interface ScoutReport {
   marked: boolean;
   can_mark: boolean;
   can_sabotage: boolean;
+  can_neutralize?: boolean;
   sabotage_actions: [string, string, number][];
 }
 

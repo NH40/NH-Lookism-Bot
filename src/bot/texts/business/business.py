@@ -10,7 +10,6 @@ from bot.config.game import (
     BUSINESS_CAFE_INCOME,
     BUSINESS_GYM_INCOME,
     BUSINESS_GYM_TRAINING_BONUS_PERCENT,
-    BUSINESS_MAX_UPGRADE,
     BUSINESS_PARLIAMENT_INCOME,
     BUSINESS_PARLIAMENT_INFLUENCE,
     BUSINESS_SHOP_BASE,
@@ -47,8 +46,8 @@ OVERVIEW_HEADER = (
     "{tax_line}\n━━━━━━━━━━━━━━━━━━\n"
     "🏗 Здания: {buildings}\n"
     "{bonus_line}"
-    f"⬆️ Уровень: <b>{{level}}/{BUSINESS_MAX_UPGRADE}</b> (+{{level_bonus}}% к доходу)\n"
-    f"📦 Вместимость: <b>{{capacity}}/{BUSINESS_MAX_UPGRADE}</b> ({{slots}} зд. на район)\n━━━━━━━━━━━━━━━━━━\n"
+    f"⬆️ Уровень: <b>{{level}}/{{max_upgrade}}</b> (+{{level_bonus}}% к доходу)\n"
+    f"📦 Вместимость: <b>{{capacity}}/{{max_upgrade}}</b> ({{slots}} зд. на район)\n━━━━━━━━━━━━━━━━━━\n"
     "{districts_line}"
 )
 STORAGE_FILLS_IN = "⏳ Хранилище заполнится через <b>{countdown}</b> — <i>забирай хотя бы раз в сутки</i>\n"

@@ -1,6 +1,7 @@
 """Публичное API домена unique_technique (константы)."""
 from bot.constant.unique_technique.unique_technique import (  # noqa: F401
     CB_TECH_ACTIVATE_PREFIX,
+    CB_TECH_SELECT_PREFIX,
     CB_TECH_CLAIM_PREFIX,
     CB_TECH_LEVEL_UP_PREFIX,
     CB_TECH_OPEN,

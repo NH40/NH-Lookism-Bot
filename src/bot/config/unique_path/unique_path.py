@@ -70,59 +70,64 @@ def _s(combat: dict | None = None, eco: dict | None = None, **special) -> dict:
 
 
 LEVELS: dict[str, tuple[dict, ...]] = {
-    # Преодоление: чем больше урона впитал, тем сильнее — против толпы слабых.
+    # Преодоление: путь слабого против сильного. Чем сильнее противник, тем сильнее ты: разрыв мощи
+    # закрывается по ходу боя, влияние усиливает армию, разница влияния — ещё раз. Шкала — за бои.
     PATH_OVERCOME: (
-        _c(overcome=0.20),
-        _c(durability=0.05),
-        _c(overcome=0.15),
-        _c(loss_save=0.04),
-        _c(overcome=0.20),
-        _c(reduction=0.04),
-        _c(overcome=0.20, durability=0.05),
-        _c(counter=0.03),
-        _c(overcome=0.20),
-        _c(overcome=0.30, attack=0.05),
+        _c(overcome=0.20, overcome_gap=0.10, overcome_gap_cap=0.75),
+        _e(recruit_influence_cut=0.15, influence_bonus=0.05),
+        _c(influence_power=0.03, durability=0.05),
+        _c(overcome=0.20, loss_save=0.04),
+        _c(influence_gap=0.05, overcome_gap=0.05, overcome_gap_cap=0.75),
+        _e(recruit_cap=50, influence_rank_cut=0.10),
+        _c(overcome=0.25, reduction=0.04),
+        _c(influence_power=0.03, influence_gap=0.05),
+        _c(overcome_gap=0.10, overcome_gap_cap=1.5, durability=0.05),
+        _s({"overcome": 0.35, "attack": 0.05, "influence_power": 0.04}, {"recruit_cap": 100, "recruit_influence_cut": 0.15, "influence_bonus": 0.10}),
     ),
-    # Отчаяние: шкала отчаяния против сильных — бафы и меньше потерь; путь боевой.
+    # Отчаяние: противоположность Преодоления. Побеждать слабых и сохранять себя: бафы против более
+    # слабой армии, при победе выживает больше своих, ресурсы защищены. Шкала — за победы и убитых.
     PATH_DESPAIR: (
-        _c(despair=0.20),
-        _c(loss_save=0.03),
-        _c(despair=0.15),
-        _c(durability=0.05),
-        _c(despair=0.20),
-        _c(reduction=0.05),
-        _c(despair=0.20, attack=0.03),
-        _c(loss_save=0.05),
-        _c(despair=0.20),
-        _c(despair=0.30, durability=0.10),
+        _c(despair=0.20, dominate=0.10),
+        _c(win_loss_save=0.08),
+        _c(despair=0.15, durability=0.05),
+        _c(dominate=0.10, win_loss_save=0.06),
+        _s({"loss_save": 0.05}, {"coin_protect": 0.25}),
+        _c(despair=0.20, reduction=0.05),
+        _c(dominate=0.15, attack=0.03),
+        _s({"win_loss_save": 0.10}, {"coin_protect": 0.25}),
+        _c(despair=0.20, dominate=0.10),
+        _c(despair=0.30, dominate=0.20, win_loss_save=0.16, durability=0.15, attack=0.10),
     ),
-    # Отражение: шкала копит полученный урон и возвращает его врагу.
+    # Отражение: шкала копится прямо в бою. Дошла до доли своей мощи — выброс; выбили половину и три
+    # четверти армии — отдельный ответ. Между боями не хранится.
     PATH_REFLECTION: (
-        _c(reflect=0.10),
-        _c(block=0.03),
-        _c(reflect=0.10, reflect_every=3),
-        _c(durability=0.05),
-        _c(reflect=0.10),
-        _c(reduction=0.04),
-        _c(reflect=0.10),
-        _c(counter=0.04),
-        _c(reflect=0.15),
-        _c(reflect=0.20, reflect_every=2),
+        _c(reflect=0.04),
+        _c(block=0.03, reflect_burst_at=0.40, reflect_burst_power=0.25),
+        _c(reflect=0.04),
+        _c(durability=0.05, reflect_loss_burst=0.03),
+        _c(reflect=0.04, reflect_burst_power=0.25),
+        _c(reduction=0.04, reflect_burst_at=0.35),
+        _c(reflect=0.04, reflect_loss_burst=0.03),
+        _c(counter=0.04, reflect_burst_power=0.25),
+        _c(reflect=0.05, reflect_burst_at=0.30),
+        _c(reflect=0.07, reflect_burst_power=0.50, reflect_loss_burst=0.07),
     ),
-    # Поглощение: чем сильнее бьют, тем больше запас и тем сильнее возврат.
+    # Поглощение: часть удара уходит в запас, запас возвращается врагу и растит атаку прямо в бою.
+    # Шкала — за поглощённое, между боями хранится.
     PATH_ABSORPTION: (
-        _c(absorb_store=0.08, absorb_return=1.2),
-        _c(durability=0.04),
-        _c(absorb_store=0.06, absorb_return=0.2),
-        _c(block=0.03),
-        _c(absorb_store=0.06),
-        _c(absorb_return=0.3),
-        _c(reduction=0.04),
-        _c(absorb_store=0.06),
-        _c(absorb_return=0.3),
-        _c(absorb_store=0.10, absorb_return=0.5),
+        _c(absorb_store=0.04, absorb_return=0.20),
+        _c(durability=0.04, absorb_power=0.05),
+        _c(absorb_store=0.03, absorb_return=0.05),
+        _c(block=0.03, absorb_power=0.05),
+        _c(absorb_store=0.03),
+        _c(absorb_return=0.05, absorb_power=0.08),
+        _c(reduction=0.03, durability=0.04),
+        _c(absorb_store=0.03, absorb_power=0.08),
+        _c(absorb_return=0.05),
+        _c(absorb_store=0.05, absorb_return=0.10, absorb_power=0.14),
     ),
-    # Копирование: слияние способностей путей 5 последних противников в одну копию.
+    # Копирование: слияние способностей путей 5 последних противников. Шкала копирования — за бои с
+    # другими игроками. Родословная Джинена усиливает и путь, и шкалу.
     PATH_COPY: (
         _s(memory_copy=0.15),
         _c(attack=0.03),
@@ -135,111 +140,116 @@ LEVELS: dict[str, tuple[dict, ...]] = {
         _s(memory_copy=0.10),
         _s(memory_copy=0.20),
     ),
-    # Бесконечная техника (пользователь 2026-10-16): несколько уникальных техник одновременно —
-    # активная в полную силу, дополнительные вполсилы (`INFINITE_EXTRA_TECHNIQUE_POWER`). Уровни
-    # 1/4/7 — +1 техника (`extra_techniques` копится по уровням), 10 — все изученные (`all_techniques`).
+    # Бесконечная техника: несколько уникальных техник сразу. Сколько — решает шкала копирования
+    # (2, 3, 4, 5 техник, игрок выбирает сам), остальные изученные работают слабее.
     PATH_INFINITE: (
-        _s(extra_techniques=1),
+        _s(infinite_techniques=True),
         _c(dodge=0.02),
         _c(attack=0.03),
-        _s(extra_techniques=1),
+        _s(infinite_power=0.05),
         _c(counter=0.03),
-        _c(dodge=0.02),
-        _s(extra_techniques=1),
+        _s(infinite_rest=0.10),
+        _c(dodge=0.02, attack=0.03),
+        _s(infinite_rest=0.05, infinite_power=0.05),
         _c(suppress=0.05),
-        _c(attack=0.03),
-        _s(all_techniques=True),
+        _s(infinite_rest=0.05, infinite_power=0.10),
     ),
-    # Предвидение: прогноз боя до боя и уклонение — сколько уклонится, сколько продолжит.
+    # Предвидение: в бою уклонение, контратаки и побег, вне боя — разведка, шпионаж и безопасность.
+    # Шкала открывает новые ступени разведки и прибавляет к боевым реакциям.
     PATH_FORESIGHT: (
-        _e(foresight=1),
-        _c(dodge=0.03),
-        _c(flee=0.03),
-        _e(foresight=2),
-        _c(dodge=0.03),
-        _c(loss_save=0.04),
-        _c(counter=0.04),
-        _e(foresight=3),
-        _c(dodge=0.04),
-        _c(dodge=0.05, suppress=0.05),
+        _s({"dodge": 0.03}, {"foresight": 1}),
+        _c(counter=0.04, flee=0.02),
+        _e(scout=1, security=1),
+        _s({"dodge": 0.03}, {"foresight": 2}),
+        _c(loss_save=0.05, counter=0.03),
+        _e(spy_chance=0.05, spy_resist=0.05),
+        _c(dodge=0.04, flee=0.02),
+        _s({"counter": 0.04}, {"foresight": 3, "logs": 1}),
+        _e(scout=2, security=1),
+        _s({"dodge": 0.05, "suppress": 0.10, "counter": 0.06, "attack": 0.10}, {"spy_chance": 0.10, "spy_resist": 0.10, "logs": 2}),
     ),
-    # Сенсорика: метки на игроков, слежка за развитием, саботаж помеченных.
+    # Сенсорика (менеджер Ким): война вне сражения. Метки, слежка, снятие чужой безопасности, личные
+    # саботажи. В самом бою почти не помогает.
     PATH_SENSORY: (
-        _e(marks=1),
-        _e(logs=1),
-        _e(marks=1),
+        _e(marks=1, sabotage_chance=0.05),
+        _e(logs=1, security_pierce=1),
+        _e(marks=1, sabotage_cooldown=0.15),
         _s(sabotage_marked=True),
-        _e(scout=1),
-        _e(marks=1),
-        _e(sabotage_chance=0.05),
-        _e(logs=2),
-        _e(marks=2),
-        _e(scout=2, sabotage_loot=0.20),
+        _e(scout=1, spy_chance=0.05),
+        _e(marks=1, sabotage_loot=0.20),
+        _s(neutralize_security=True),
+        _e(logs=2, security_pierce=1, sabotage_chance=0.05),
+        _e(marks=2, sabotage_cooldown=0.15),
+        _e(scout=3, logs=3, sabotage_loot=0.30, security_pierce=2, spy_chance=0.10),
     ),
-    # Гарантированный удар: урон проходит даже сквозь уклонение.
+    # Гарантированный удар: самый военный путь. Урон проходит сквозь уклонение и броню, атака растёт,
+    # оборона держит. Шкала войны — за победы и убитых.
     PATH_SURE_HIT: (
-        _c(sure_hit=0.08),
-        _c(crit_chance=0.03),
-        _c(sure_hit=0.07),
-        _c(pierce=0.05),
-        _c(sure_hit=0.08),
-        _c(attack=0.03),
-        _c(sure_hit=0.08),
-        _c(pierce=0.05),
-        _c(sure_hit=0.09),
-        _c(sure_hit=0.10, no_dodge=True),
+        _c(sure_hit=0.10, attack=0.04),
+        _c(crit_chance=0.04, pierce=0.05),
+        _c(sure_hit=0.08, durability=0.05),
+        _c(pierce=0.08, attack=0.05),
+        _c(sure_hit=0.10, block=0.03),
+        _c(attack=0.07, crit_power=0.25),
+        _c(sure_hit=0.10, reduction=0.05),
+        _c(pierce=0.10, attack=0.07),
+        _c(sure_hit=0.12, crit_chance=0.06),
+        _c(sure_hit=0.15, no_dodge=True, attack=0.12, pierce=0.12),
     ),
-    # Адаптация: терпишь, терпишь — потом огромный импакт (как родословная Софии).
+    # Адаптация (путь Александровых): чем дольше бой, тем сильнее. Шкала хранится между боями и даёт
+    # бафы и статистам, и уникам. С родословной Александровых шкала растёт быстрее и бьёт сильнее.
     PATH_ADAPTATION: (
-        _c(adapt_threshold=0.30, adapt_bonus=0.20),
-        _c(adapt_guard=0.05),
-        _c(adapt_bonus=0.15),
-        _c(durability=0.05),
-        _c(adapt_bonus=0.20),
-        _c(adapt_guard=0.05),
-        _c(adapt_threshold=0.25),
-        _c(adapt_bonus=0.20),
-        _c(adapt_guard=0.05),
-        _c(adapt_bonus=0.35),
+        _c(adapt_threshold=0.30, adapt_bonus=0.20, endure_attack=0.02),
+        _c(adapt_guard=0.05, endure_guard=0.01),
+        _c(adapt_bonus=0.15, endure_unique=0.03),
+        _c(durability=0.08, endure_attack=0.02),
+        _c(adapt_bonus=0.20, endure_guard=0.01),
+        _c(adapt_guard=0.05, durability=0.07),
+        _c(adapt_threshold=0.25, endure_attack=0.03),
+        _c(adapt_bonus=0.20, endure_unique=0.04),
+        _c(adapt_guard=0.05, endure_guard=0.02),
+        _c(adapt_bonus=0.35, endure_attack=0.05, endure_unique=0.05, durability=0.10),
     ),
-    # Бесконечная тренировка: статист учится у нескольких учителей сразу.
+    # Бесконечная тренировка: всё про тренировки, своя шкала — КПД. Лучше всего с родословными Самдака
+    # и Ямадзаки.
     PATH_TRAINING: (
-        _e(extras_training=3),
-        _e(extras_extra_roll=0.10),
-        _e(extras_training_cooldown=0.10),
-        _e(extras_training=3),
-        _e(extras_extra_roll=0.10),
-        _e(dev_points=0.10),
-        _e(extras_training_cooldown=0.10),
-        _e(extras_extra_roll=0.15),
-        _e(extras_training=4),
-        _e(extras_extra_roll=0.20, extras_training=5),
+        _e(extras_training=3, dev_points=0.05),
+        _e(extras_extra_roll=0.10, extras_coverage=3),
+        _e(extras_training_cooldown=0.10, personal_cooldown=0.05),
+        _e(extras_training=3, dev_points=0.05),
+        _e(extras_extra_roll=0.10, extras_coverage=3),
+        _e(dev_points=0.15, personal_cooldown=0.05),
+        _e(extras_training_cooldown=0.10, extras_coverage=4),
+        _e(extras_extra_roll=0.15, dev_points=0.10),
+        _e(extras_training=4, personal_cooldown=0.10),
+        _e(extras_extra_roll=0.25, extras_training=5, extras_coverage=5, dev_points=0.20),
     ),
-    # Уклонение: автоуклонения, уклонение в «невозможных» ситуациях.
+    # Уклонение: уклонение выше обычного потолка и работает там, где от удара «не увернуться»;
+    # уклонившиеся бьют в ответ, армия разгоняется от каждого уклонения. Шкала — за уклонения.
     PATH_EVASION: (
-        _c(dodge=0.04),
-        _c(flee=0.02),
-        _c(dodge=0.04),
-        _c(counter=0.03),
-        _c(dodge=0.05),
-        _c(reduction=0.03),
-        _c(dodge=0.05),
-        _c(dodge=0.05),
-        _c(loss_save=0.04),
-        _c(dodge=0.08, counter=0.04),
+        _c(dodge=0.05, dodge_counter=0.08),
+        _c(flee=0.02, dodge_surge=0.10),
+        _c(dodge=0.05, dodge_cap=0.03),
+        _c(counter=0.03, dodge_true=0.25),
+        _c(dodge=0.05, dodge_counter=0.08),
+        _c(reduction=0.03, dodge_surge=0.15),
+        _c(dodge=0.05, dodge_cap=0.05),
+        _c(dodge=0.05, dodge_true=0.25),
+        _c(loss_save=0.05, dodge_counter=0.10),
+        _c(dodge=0.06, counter=0.03, dodge_cap=0.05, dodge_surge=0.15, dodge_true=0.25, dodge_counter=0.10),
     ),
-    # Бизнесмена: бизнес — больше заработок.
+    # Бизнесмена: огромный доход, пассивные деньги и фрагменты. Шкала — от заработанных денег.
     PATH_BUSINESS: (
-        _e(income=0.05),
-        _e(storage_hours=4),
-        _e(upgrade_discount=0.10),
-        _e(income=0.05),
-        _e(build_discount=0.10),
-        _e(tax_relief=0.10),
-        _e(income=0.06),
-        _e(storage_hours=8),
-        _e(upgrade_discount=0.10, build_discount=0.10),
-        _e(income=0.12),
+        _e(income=0.10, passive_income=300),
+        _e(storage_hours=4, fragment_bonus=0.10),
+        _e(upgrade_discount=0.10, passive_income=300),
+        _e(income=0.10, tax_relief=0.05),
+        _e(build_discount=0.10, fragment_bonus=0.15),
+        _e(tax_relief=0.10, passive_income=500),
+        _e(income=0.12, storage_hours=4),
+        _e(storage_hours=8, fragment_bonus=0.15),
+        _e(upgrade_discount=0.10, build_discount=0.10, passive_income=900),
+        _e(income=0.20, fragment_bonus=0.20, passive_income=1500),
     ),
 }
 
@@ -296,11 +306,15 @@ def path_level_cost(next_level: int) -> int:
 # дешевле тренировка техник, быстрее очки пути.
 TRAINING_KPD_PER_DAY = 0.02
 TRAINING_KPD_PER_REP = 0.005
-TRAINING_KPD_CAP_PER_LEVEL = 0.05  # 10-й уровень — до +50%
+TRAINING_KPD_CAP_PER_LEVEL = 0.06  # 10-й уровень — до +60%
 TRAINING_KPD_EXTRAS_PP = 20  # КПД 1.0 = +20 п.п. к шансам тренировки статистов и занятий школ
 
-# Сила дополнительных техник пути Бесконечной техники (активная — 100%).
+# Путь Бесконечной техники (пользователь 2026-11-04): сколько техник активно одновременно решает
+# шкала копирования. Выбранные работают с этой силой (активная — 100%), уровни пути её поднимают.
 INFINITE_EXTRA_TECHNIQUE_POWER = 0.5
+INFINITE_MIN_TECHNIQUES = 2
+INFINITE_MAX_TECHNIQUES = 5
+INFINITE_GAUGE_PER_TECHNIQUE = 33  # каждые 33 шкалы — ещё одна техника
 
 PATH_SWAP_COOLDOWN_SECONDS = 15 * 60
 # Предвидение: сколько симуляций для прогноза по уровням (точность растёт с уровнем).

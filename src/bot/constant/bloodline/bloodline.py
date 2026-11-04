@@ -26,6 +26,9 @@ BLOODLINES: tuple[str, ...] = (
 )
 
 CB_BLOODLINE_LIST = "bloodline:list"
+CB_BLOODLINE_CHANGE_LIST = "bloodline:change"  # разовая бесплатная смена: список
+CB_BLOODLINE_CHANGE_VIEW_PREFIX = "bloodline:chview:"
+CB_BLOODLINE_CHANGE_PICK_PREFIX = "bloodline:chpick:"
 CB_BLOODLINE_VIEW_PREFIX = "bloodline:view:"
 """f"{CB_BLOODLINE_VIEW_PREFIX}{code}" — описание перед выбором."""
 CB_BLOODLINE_PICK_PREFIX = "bloodline:pick:"

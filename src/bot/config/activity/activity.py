@@ -11,4 +11,7 @@ LOG_KINDS_BY_LEVEL: dict[int, tuple[str, ...]] = {
     3: (ACT_BATTLE, ACT_CAPTURE, ACT_BUSINESS, ACT_DEVELOPMENT),
 }
 LOG_ENTRIES_BY_LEVEL: dict[int, int] = {1: 5, 2: 10, 3: 20}
+# Сенсорика: снятие безопасности помеченного игрока.
+NEUTRALIZE_SECONDS = 6 * 60 * 60
+NEUTRALIZE_COOLDOWN_SECONDS = 12 * 60 * 60
 MARK_FEED_ENTRIES = 3  # последних событий каждого помеченного игрока на экране меток

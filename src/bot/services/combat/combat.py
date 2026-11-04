@@ -50,8 +50,14 @@ from bot.config.game import (
     BATTLE_DAMAGE_FRACTION,
     BATTLE_DAMAGE_VARIANCE,
     BATTLE_DESPAIR_RATIO_FOR_FULL,
+    BATTLE_ABSORB_POWER_CAP,
     BATTLE_FIRST_STRIKE_MAX,
     BATTLE_GROW_ON_KILL_CAP,
+    BATTLE_INFLUENCE_GAP_CAP,
+    BATTLE_PHANTOM_ROUND_CHANCE,
+    BATTLE_PRE_STRIKE_MAX,
+    BATTLE_REVIVE_STRIKE_MAX,
+    BATTLE_VS_STRONGER_CAP,
     BATTLE_HEAL_MAX,
     BATTLE_LOSS_SAVE_MAX,
     BATTLE_MAX_ROUNDS,
@@ -79,6 +85,7 @@ class CombatStack:
     block: float = 0.0
     counter: float = 0.0
     flee: float = 0.0
+    unique: bool = False  # уникальный персонаж (`endure_unique`)
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +112,8 @@ class CombatChances:
     # Никита (абсолют): каждый свой павший — +1 мощи в шкалу; проиграл — шкала бьёт по армии
     # противника в конце боя (пока не кончится мощь шкалы).
     despair_strike: bool = False
+    # Влияние стороны: `influence_gap` считает разницу с влиянием противника.
+    influence: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,6 +163,11 @@ class SideOutcome:
     remaining_power: int  # живые, оставшиеся на поле к концу боя (без сбежавших)
     dead: dict[Hashable, int]  # БЕЗВОЗВРАТНЫЕ потери по стопкам (уже за вычетом loss_save)
     fled: int
+    # Для шкал путей (`services/path_gauge`).
+    taken: float = 0.0  # дошедший урон за бой
+    absorbed: float = 0.0  # поглощённый урон
+    dodged: int = 0  # сколько раз бойцы уклонились
+    kills: int = 0  # убито бойцов противника
 
     @property
     def total_dead(self) -> int:
@@ -169,6 +183,8 @@ class BattleResult:
     log: tuple[RoundLog, ...] = ()
     attacker_first_strike: int = 0  # выбито до боя (внезапность, ловушки, шпион)
     defender_first_strike: int = 0
+    attacker_pre_strike: int = 0  # выбито ударом до боя (Муджин)
+    defender_pre_strike: int = 0
     attacker_after: tuple[str, ...] = ()  # навыки, сработавшие после боя
     defender_after: tuple[str, ...] = ()
 
@@ -178,6 +194,7 @@ class _Side:
         live = [s for s in stacks if s.quantity > 0 and s.unit_power > 0]
         self.power = {s.key: s.unit_power for s in live}
         self.bonus = {s.key: (s.dodge, s.block, s.counter, s.flee) for s in live if s.dodge or s.block or s.counter or s.flee}
+        self.unique_keys = [s.key for s in live if s.unique]
         # Не вышедшие на бой (подкуп/паника) — не бьются и не гибнут, после боя на месте.
         withheld = min(0.9, max(0.0, chances.withheld))
         self.alive = {s.key: s.quantity - int(s.quantity * withheld) for s in live}
@@ -199,6 +216,15 @@ class _Side:
         self.absorb_store = 0.0
         self.pending_bleed = 0.0  # урон кровотечения этой стороны по противнику в следующем раунде
         self.round_dead: dict[Hashable, int] = {}
+        self.absorbed = 0.0  # поглощено за бой
+        self.dodged = 0  # уклонений за бой
+        self.warded = False  # первый удар по армии уже был
+        self.phantom_stacks = 0  # сколько невидимых ударов уже прошло
+        self.reflect_gauge = 0.0  # получено с прошлого выброса отражения
+        self.loss_bursts = 0  # сработавшие ответы на потери (50%, 75%)
+        self.hp_bonus = 0.0  # прочность от динамики боя (разрыв, перевес, влияние)
+        self.guard_bonus = 0.0  # гашение от динамики боя
+        self.events: list[str] = []  # что сработало в этом раунде (журнал)
 
     def total_power(self) -> int:
         return round(sum(q * self.power[k] for k, q in self.alive.items()))
@@ -246,8 +272,55 @@ def _despair_gauge(side: _Side, opponent: _Side, m: CombatMods) -> float:
     return min(1.0, max(0.0, gauge) + side.lost_fraction() * 0.5)
 
 
+def _power_ratio(side: _Side, opponent: _Side) -> float:
+    """Во сколько раз стартовая мощь противника больше своей."""
+    return opponent.initial_power / side.initial_power if side.initial_power else 1.0
+
+
+def _gap_boost(side: _Side, opponent: _Side, m: CombatMods, round_number: int) -> float:
+    """Путь Преодоления: с каждым раундом закрывает разрыв с более сильной армией."""
+    if not m.overcome_gap:
+        return 0.0
+    gap = max(0.0, _power_ratio(side, opponent) - 1)
+    return min(m.overcome_gap_cap, gap * min(1.0, m.overcome_gap * round_number))
+
+
+def _dominance(side: _Side, opponent: _Side, m: CombatMods) -> float:
+    """Путь Отчаяния: бонус против более слабой армии, полный при перевесе ×4."""
+    if not m.dominate or not opponent.initial_power:
+        return 0.0
+    ratio = side.initial_power / opponent.initial_power
+    return m.dominate * min(1.0, max(0.0, math.log2(ratio) / 2)) if ratio > 1 else 0.0
+
+
+def _influence_edge(side: _Side, opponent: _Side, m: CombatMods) -> float:
+    """Влияние в бою: своё и перевес над противником, за каждые 100 единиц, под потолком."""
+    if not m.influence_gap and not m.influence_power:
+        return 0.0
+    own = side.chances.influence
+    diff = max(0, own - opponent.chances.influence)
+    return min(BATTLE_INFLUENCE_GAP_CAP, (m.influence_power * own + m.influence_gap * diff) / 100)
+
+
+def _refresh_dynamics(side: _Side, opponent: _Side, m: CombatMods, round_number: int) -> None:
+    """Прочность и гашение, которые зависят от соперника и номера раунда."""
+    side.hp_bonus = _gap_boost(side, opponent, m, round_number) + _dominance(side, opponent, m) + _influence_edge(side, opponent, m)
+    side.guard_bonus = m.endure_guard * (round_number - 1)
+    if m.endure_unique and round_number > 1:
+        for key in side.unique_keys:
+            side.power[key] *= 1 + m.endure_unique
+
+
 def _attack_multiplier(side: _Side, opponent: _Side, m: CombatMods, round_number: int, rng: Random) -> float:
-    mult = 1.0 + m.attack + m.cleave
+    mult = 1.0 + m.attack + m.cleave + side.hp_bonus
+    if m.endure_attack:
+        mult += m.endure_attack * (round_number - 1)
+    if m.vs_stronger and _power_ratio(side, opponent) > 1:
+        mult += m.vs_stronger * min(BATTLE_VS_STRONGER_CAP, math.log2(_power_ratio(side, opponent)))
+    if m.absorb_power and side.initial_power:
+        mult += m.absorb_power * min(BATTLE_ABSORB_POWER_CAP, side.absorbed / side.initial_power)
+    if m.dodge_surge and side.initial_quantity:
+        mult += m.dodge_surge * min(1.0, side.dodged / side.initial_quantity)
     if m.overcome:
         taken = min(BATTLE_OVERCOME_TAKEN_CAP, side.taken / side.initial_power) if side.initial_power else 0.0
         crowd = (opponent.initial_quantity / side.initial_quantity) ** 0.5 if side.initial_quantity else 1.0
@@ -277,11 +350,15 @@ def _reactions(defender: _Side, attacker_mods: CombatMods, chaos: bool) -> Comba
     c, m = defender.chances, defender.mods
     dodge, block, counter, flee = c.dodge + m.dodge, c.block + m.block, c.counter + m.counter, c.flee + m.flee
     suppress = min(1.0, attacker_mods.suppress + (BATTLE_CHAOS_SUPPRESS if chaos else 0.0))
+    raw_dodge = dodge
     if suppress:
         dodge, block, counter, flee = (x * (1 - suppress) for x in (dodge, block, counter, flee))
     if attacker_mods.no_dodge:
         dodge = 0.0
-    values = [min(BATTLE_REACTION_MAX, max(0.0, x)) for x in (dodge, block, counter, flee)]
+    if m.dodge_true:  # путь Уклонения: часть уклонения не сбить ничем
+        dodge = max(dodge, raw_dodge * min(1.0, m.dodge_true))
+    caps = (BATTLE_REACTION_MAX + m.dodge_cap, BATTLE_REACTION_MAX, BATTLE_REACTION_MAX, BATTLE_REACTION_MAX)
+    values = [min(cap, max(0.0, x)) for cap, x in zip(caps, (dodge, block, counter, flee))]
     total = sum(values)
     if total > BATTLE_REACTIONS_TOTAL_MAX:
         values = [x * BATTLE_REACTIONS_TOTAL_MAX / total for x in values]
@@ -295,9 +372,10 @@ def _armor(defender: _Side, attacker_mods: CombatMods) -> tuple[float, float]:
     reduction = defender.chances.absorb + m.reduction
     if m.adapt_guard and defender.lost_fraction() < m.adapt_threshold:
         reduction += m.adapt_guard
+    reduction += defender.guard_bonus
     pierce = min(1.0, attacker_mods.pierce)
     reduction = min(BATTLE_REDUCTION_MAX, reduction) * (1 - pierce)
-    hp_mult = 1 + m.durability * (1 - pierce)
+    hp_mult = 1 + (m.durability + defender.hp_bonus) * (1 - pierce)
     return reduction, hp_mult
 
 
@@ -317,14 +395,15 @@ def _with_stack_bonus(chances: CombatChances, bonus: tuple[float, float, float, 
 
 
 def _resolve_incoming(
-    side: _Side, damage: float, chances: CombatChances, rng: Random, hp_mult: float = 1.0
+    side: _Side, damage: float, chances: CombatChances, rng: Random, hp_mult: float = 1.0, spill: float = 0.0
 ) -> tuple[float, float, int]:
     """Урон с реакциями. → (урон контратак в ответ, дошедший урон, погибших)."""
     total = side.total_power()
     if total == 0 or damage <= 0:
         return 0.0, 0.0, 0
-    counter_damage = reached = 0.0
+    counter_damage = reached = overkill = 0.0
     deaths_total = 0
+    m = side.mods
     for key, quantity in list(side.alive.items()):
         if quantity == 0:
             continue
@@ -348,9 +427,16 @@ def _resolve_incoming(
         side.dead[key] += deaths
         side.round_dead[key] = side.round_dead.get(key, 0) + deaths
         side.fled += fled
-        counter_damage += countered * unit_power
+        side.dodged += dodged
+        counter_damage += countered * unit_power * (1 + m.counter_power) + dodged * unit_power * m.dodge_counter
         reached += effective
         deaths_total += deaths
+        if spill:
+            overkill += max(0.0, effective - deaths * unit_power * hp_mult)
+    if overkill:
+        spilled, spill_deaths = _apply_plain_damage(side, overkill * spill, rng, hp_mult)
+        reached += spilled
+        deaths_total += spill_deaths
     return counter_damage, reached, deaths_total
 
 
@@ -408,14 +494,19 @@ def _heal(side: _Side, opponent: _Side, rng: Random) -> None:
 def _hit(attacker: _Side, defender: _Side, damage: float, am: CombatMods, chaos: bool, rng: Random) -> float:
     """Одна сторона бьёт другую за раунд. → урон контратак обратно атакующему."""
     dm = defender.mods
+    if dm.first_hit_ward and not defender.warded:
+        defender.warded = True
+        damage *= 1 - min(1.0, dm.first_hit_ward)
+        defender.events.append(EVENT_WARD)
     if dm.absorb_store:
         stored = damage * min(0.9, dm.absorb_store)
         defender.absorb_store += stored
+        defender.absorbed += stored
         damage -= stored
     reduction, hp_mult = _armor(defender, am)
     sure = damage * min(BATTLE_SURE_HIT_MAX, am.sure_hit) if am.sure_hit else 0.0
     counter, reached, deaths = _resolve_incoming(
-        defender, (damage - sure) * (1 - reduction), _reactions(defender, am, chaos), rng, hp_mult
+        defender, (damage - sure) * (1 - reduction), _reactions(defender, am, chaos), rng, hp_mult, min(1.0, am.spill)
     )
     if sure:
         sure_reached, sure_deaths = _apply_plain_damage(defender, sure * (1 - reduction), rng, hp_mult)
@@ -424,6 +515,7 @@ def _hit(attacker: _Side, defender: _Side, damage: float, am: CombatMods, chaos:
     defender.taken += reached
     if dm.reflect:
         defender.reflect_store += reached * dm.reflect
+        defender.reflect_gauge += reached
     if am.bleed:
         attacker.pending_bleed += reached * am.bleed
     attacker.kills += deaths
@@ -434,14 +526,94 @@ def _releases(side: _Side, opponent: _Side, m: CombatMods, round_number: int, rn
     """Выброс накопленного в конце раунда: отражение (раз в N раундов) и возврат
     поглощённого — урон без реакций по противнику."""
     _, hp_mult = _armor(opponent, m)
-    if m.reflect and side.reflect_store and (not m.reflect_every or round_number % m.reflect_every == 0):
-        _, kills = _apply_plain_damage(opponent, side.reflect_store, rng, hp_mult)
+    gauge_full = bool(m.reflect_burst_at) and side.initial_power and side.reflect_gauge >= m.reflect_burst_at * side.initial_power
+    if m.reflect and side.reflect_store and (gauge_full or not m.reflect_every or round_number % m.reflect_every == 0):
+        burst = 1 + m.reflect_burst_power if gauge_full else 1.0
+        _, kills = _apply_plain_damage(opponent, side.reflect_store * burst, rng, hp_mult)
         side.kills += kills
         side.reflect_store = 0.0
+        if gauge_full:
+            side.reflect_gauge = 0.0
+            side.events.append(EVENT_REFLECT_BURST)
+    if m.reflect_loss_burst:
+        lost = side.lost_fraction()
+        for step, threshold in enumerate((0.5, 0.75), 1):
+            if side.loss_bursts < step and lost >= threshold:
+                side.loss_bursts = step
+                _, kills = _apply_plain_damage(opponent, side.initial_power * m.reflect_loss_burst, rng, hp_mult)
+                side.kills += kills
+                side.events.append(EVENT_REFLECT_LOSS)
     if m.absorb_return and side.absorb_store:
         _, kills = _apply_plain_damage(opponent, side.absorb_store * m.absorb_return, rng, hp_mult)
         side.kills += kills
         side.absorb_store = 0.0
+
+
+def _pre_strike(side: _Side, target: _Side, m: CombatMods, rng: Random) -> int:
+    """Удар до боя (Муджин): доля армии бьёт долей своей мощи, без реакций противника."""
+    damage = side.total_power() * min(1.0, m.pre_strike_share) * m.pre_strike_power
+    damage = min(damage, target.total_power() * BATTLE_PRE_STRIKE_MAX)
+    reduction, hp_mult = _armor(target, m)
+    _, kills = _apply_plain_damage(target, damage * (1 - reduction), rng, hp_mult)
+    side.kills += kills
+    return kills
+
+
+def _extra_attacks(attacker: _Side, defender: _Side, damage: float, m: CombatMods, chaos: bool, round_number: int, rng: Random) -> float:
+    """Дополнительные атаки раунда. Полуночный меч: с каждым раундом бойцы успевают больше атак;
+    Тхэквондо: удар проходит ещё по целям. → урон контратак обратно."""
+    counter = 0.0
+    if m.rapid_step:
+        extra = min(m.rapid_cap, m.rapid_step * (round_number - 1))
+        whole = int(extra) + (1 if rng.random() < extra - int(extra) else 0)
+        for _ in range(whole):
+            counter += _hit(attacker, defender, damage, m, chaos, rng)
+        if whole:
+            attacker.events.append(EVENT_RAPID.format(n=whole + 1))
+    if m.multi_hit:
+        rest, targets = m.multi_hit, 1
+        while rest > 0:
+            counter += _hit(attacker, defender, damage * min(1.0, rest), m, chaos, rng)
+            rest -= 1.0
+            targets += 1
+        attacker.events.append(EVENT_MULTI.format(n=targets))
+    return counter
+
+
+def _phantom(side: _Side, opponent: _Side, m: CombatMods, round_number: int, rng: Random) -> None:
+    """Невидимые атаки: в случайный момент бьёт долей своей мощи, без реакций; чем больше ударов
+    уже прошло, тем сильнее следующий, и чем длиннее бой, тем выше шанс."""
+    if not m.phantom_chance or not m.phantom_power:
+        return
+    chance = m.phantom_chance + BATTLE_PHANTOM_ROUND_CHANCE * (round_number - 1)
+    if rng.random() >= chance:
+        return
+    damage = side.total_power() * m.phantom_power * (1 + m.phantom_growth * side.phantom_stacks)
+    side.phantom_stacks += 1
+    _, kills = _apply_plain_damage(opponent, damage, rng, _armor(opponent, m)[1])
+    side.kills += kills
+    side.events.append(EVENT_PHANTOM.format(n=side.phantom_stacks, kills=kills))
+
+
+def _revive_strike(side: _Side, opponent: _Side, m: CombatMods, rng: Random) -> None:
+    """Техника Преодоления: часть павших за раунд встаёт и сразу бьёт ещё раз."""
+    share = min(BATTLE_REVIVE_STRIKE_MAX, m.revive_strike)
+    if share <= 0:
+        return
+    damage = revived_total = 0
+    for key, count in side.round_dead.items():
+        if count <= 0:
+            continue
+        revived = rng.binomialvariate(count, share)
+        if revived:
+            side.alive[key] += revived
+            side.dead[key] -= revived
+            damage += revived * side.power[key]
+            revived_total += revived
+    if revived_total:
+        _, kills = _apply_plain_damage(opponent, damage, rng, _armor(opponent, m)[1])
+        side.kills += kills
+        side.events.append(EVENT_REVIVE.format(n=revived_total))
 
 
 def _outcome(side: _Side, loss_save: float, remaining_power: int, rng: Random) -> SideOutcome:
@@ -461,6 +633,10 @@ def _outcome(side: _Side, loss_save: float, remaining_power: int, rng: Random) -
         remaining_power=remaining_power,
         dead=dead,
         fled=side.fled,
+        taken=side.taken,
+        absorbed=side.absorbed,
+        dodged=side.dodged,
+        kills=side.kills,
     )
 
 
@@ -559,6 +735,14 @@ def _after_battle(side: _Side, opponent: _Side, won: bool, rng: Random) -> tuple
 
 
 DESPAIR_LOG = "Шкала отчаяния (Никита)"
+# Журнал боя: что сработало за раунд.
+EVENT_WARD = "первый удар не прошёл"
+EVENT_REFLECT_BURST = "выброс шкалы отражения"
+EVENT_REFLECT_LOSS = "ответ на потери"
+EVENT_RAPID = "{n} атаки за ход"
+EVENT_MULTI = "удар по {n} целям"
+EVENT_PHANTOM = "невидимый удар №{n}: убито {kills}"
+EVENT_REVIVE = "павшие встали и ударили: {n}"
 
 
 def _despair(side: _Side, opponent: _Side, won: bool, rng: Random) -> tuple[str, ...]:
@@ -575,6 +759,8 @@ def _despair(side: _Side, opponent: _Side, won: bool, rng: Random) -> tuple[str,
 
 def _loss_save_after(side: _Side, opponent: _Side, won: bool) -> float:
     extra = sum(t.loss_save for t in side.chances.triggers if t.when == ps.WHEN_ON_LOSS) if not won else 0.0
+    if won:
+        extra += side.mods.win_loss_save
     return min(BATTLE_LOSS_SAVE_MAX, _loss_save(side, opponent) + extra)
 
 
@@ -599,6 +785,11 @@ def simulate_battle(
     if d.mods.first_strike:
         d_first = _first_strike(a, d.mods.first_strike, rng)
         d.kills += d_first
+    a_pre = d_pre = 0
+    if a.mods.pre_strike_share and a.mods.pre_strike_power:
+        a_pre = _pre_strike(a, d, a.mods, rng)
+    if d.mods.pre_strike_share and d.mods.pre_strike_power:
+        d_pre = _pre_strike(d, a, d.mods, rng)
 
     log: list[RoundLog] = []
     rounds = 0
@@ -614,13 +805,16 @@ def simulate_battle(
         a_dead_before, d_dead_before = sum(a.dead.values()), sum(d.dead.values())
         am, dm = _round_mods(a, round_number), _round_mods(d, round_number)
         a.round_dead, d.round_dead = {}, {}
+        a.events, d.events = [], []
+        _refresh_dynamics(a, d, am, round_number)
+        _refresh_dynamics(d, a, dm, round_number)
 
         # Кровотечение прошлого раунда — до обмена ударами.
         for side, opponent, m in ((a, d, am), (d, a, dm)):
             if side.pending_bleed:
                 _, kills = _apply_plain_damage(opponent, side.pending_bleed, rng, _armor(opponent, m)[1])
                 side.kills += kills
-                side.pending_bleed = 0.0
+                side.pending_bleed *= min(1.0, m.bleed_linger)
 
         damage_to_d = a_power * BATTLE_DAMAGE_FRACTION * rng.uniform(1 - BATTLE_DAMAGE_VARIANCE, 1 + BATTLE_DAMAGE_VARIANCE)
         damage_to_a = d_power * BATTLE_DAMAGE_FRACTION * rng.uniform(1 - BATTLE_DAMAGE_VARIANCE, 1 + BATTLE_DAMAGE_VARIANCE)
@@ -636,11 +830,19 @@ def simulate_battle(
 
         counter_to_a = _hit(a, d, damage_to_d, am, a_chaos, rng)
         counter_to_d = _hit(d, a, damage_to_a, dm, d_chaos, rng)
+        if am.rapid_step or am.multi_hit:
+            counter_to_a += _extra_attacks(a, d, damage_to_d, am, a_chaos, round_number, rng)
+        if dm.rapid_step or dm.multi_hit:
+            counter_to_d += _extra_attacks(d, a, damage_to_a, dm, d_chaos, round_number, rng)
         _apply_plain_damage(a, counter_to_a, rng, _armor(a, dm)[1])
         _apply_plain_damage(d, counter_to_d, rng, _armor(d, am)[1])
 
         _releases(a, d, am, round_number, rng)
         _releases(d, a, dm, round_number, rng)
+        _phantom(a, d, am, round_number, rng)
+        _phantom(d, a, dm, round_number, rng)
+        _revive_strike(a, d, am, rng)
+        _revive_strike(d, a, dm, rng)
         _heal(a, d, rng)
         _heal(d, a, rng)
         a_lost, d_lost = sum(a.dead.values()) - a_dead_before, sum(d.dead.values()) - d_dead_before
@@ -649,7 +851,7 @@ def simulate_battle(
         log.append(RoundLog(
             number=round_number, attacker_damage=round(damage_to_d), defender_damage=round(damage_to_a),
             attacker_kills=max(0, d_lost), defender_kills=max(0, a_lost), attacker_chaos=a_chaos, defender_chaos=d_chaos,
-            attacker_fired=tuple(a_fired), defender_fired=tuple(d_fired),
+            attacker_fired=tuple(a_fired + a.events), defender_fired=tuple(d_fired + d.events),
         ))
 
     a.mods, d.mods = a.base_mods, d.base_mods
@@ -666,6 +868,8 @@ def simulate_battle(
         log=tuple(log),
         attacker_first_strike=a_first,
         defender_first_strike=d_first,
+        attacker_pre_strike=a_pre,
+        defender_pre_strike=d_pre,
         attacker_after=a_after,
         defender_after=d_after,
     )

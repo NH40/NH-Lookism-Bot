@@ -9,6 +9,7 @@ from bot.constant.event import CB_EVENT_CONNECT_PREFIX
 from bot.constant.map import CB_MAP_OPEN
 from bot.constant.unique_technique import (
     CB_TECH_ACTIVATE_PREFIX,
+    CB_TECH_SELECT_PREFIX,
     CB_TECH_CLAIM_PREFIX,
     CB_TECH_OPEN,
     CB_TECH_VIEW_PREFIX,
@@ -22,7 +23,9 @@ from bot.texts.unique_technique import (
     BTN_CLAIM_QUEST,
     BTN_CONNECT,
     BTN_LEVEL_UP,
+    BTN_SELECT,
     BTN_TECH_ITEM,
+    BTN_UNSELECT,
     MARK_ACTIVE,
     MARK_OWNED,
     TECHNIQUE_NAMES,
@@ -58,11 +61,15 @@ def techniques_menu(owned: dict[str, int], active: str | None, claimable: list[s
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def technique_detail_menu(code: str, *, cost: int | None, is_active: bool) -> InlineKeyboardMarkup:
+def technique_detail_menu(
+    code: str, *, cost: int | None, is_active: bool, can_select: bool = False, selected: bool = False
+) -> InlineKeyboardMarkup:
     rows = []
     if cost is not None:
         rows.append([_btn(BTN_LEVEL_UP.format(cost=format_number(cost)), f"{CB_TRAIN_TECH_VIEW_PREFIX}{code}")])
     if not is_active:
         rows.append([_btn(BTN_ACTIVATE, f"{CB_TECH_ACTIVATE_PREFIX}{code}")])
+    if can_select and not is_active:
+        rows.append([_btn(BTN_UNSELECT if selected else BTN_SELECT, f"{CB_TECH_SELECT_PREFIX}{code}")])
     rows.append([_btn(BTN_BACK_TO_TECHNIQUES, CB_TECH_OPEN)])
     return InlineKeyboardMarkup(inline_keyboard=rows)

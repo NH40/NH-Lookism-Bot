@@ -6,7 +6,8 @@
 """
 from __future__ import annotations
 
-from bot.services.unique_technique import TrainingRequiredError
+from bot.services.unique_technique import NoInfinitePathError, TechniqueSlotsFullError, TrainingRequiredError, toggle_selected
+from bot.texts.unique_technique import INFINITE_AUTO, INFINITE_LINE, SLOTS_FULL_ALERT
 from bot.texts.training import TECH_NEED_TRAINING_ALERT
 from bot.keyboards.common import back_menu
 
@@ -19,6 +20,7 @@ from bot.config.unique_technique import LEVELS, TEACHER_QUESTS
 from bot.constant.event import CB_EVENT_CONNECT_PREFIX, EVENT_TEACHER
 from bot.constant.unique_technique import (
     CB_TECH_ACTIVATE_PREFIX,
+    CB_TECH_SELECT_PREFIX,
     CB_TECH_CLAIM_PREFIX,
     CB_TECH_LEVEL_UP_PREFIX,
     CB_TECH_OPEN,
@@ -140,6 +142,9 @@ async def render_techniques(session: AsyncSession, redis: Redis, user_id: int):
     text = TECHNIQUES_SCREEN.format(
         active=TECHNIQUE_NAMES.get(view.active, "—"), fragments=format_number(view.fragments), owned=owned, quests=quests
     )
+    if view.slots > 1:
+        names = ", ".join(TECHNIQUE_NAMES[c] for c in view.selected) or INFINITE_AUTO
+        text += INFINITE_LINE.format(slots=view.slots, selected=names)
     claimable = [q.ref for q in view.quests if q.complete]
     return text, techniques_menu(view.owned, view.active, claimable)
 
@@ -160,7 +165,9 @@ async def _render_detail(session: AsyncSession, redis: Redis, user_id: int, code
         levels=levels,
         next_line=NEXT_LEVEL_LINE.format(cost=format_number(cost), have=format_number(view.fragments)) if cost else MAX_LEVEL_LINE,
     )
-    return text, technique_detail_menu(code, cost=cost, is_active=code == view.active)
+    return text, technique_detail_menu(
+        code, cost=cost, is_active=code == view.active, can_select=view.slots > 1, selected=code in view.selected
+    )
 
 
 async def _guard(callback: CallbackQuery, session: AsyncSession) -> bool:
@@ -249,6 +256,22 @@ async def cb_technique_activate(callback: CallbackQuery, session: AsyncSession, 
         await callback.answer(SWAP_COOLDOWN_ALERT.format(countdown=format_countdown(exc.retry_after_seconds)), show_alert=True)
         return
     await callback.answer(ACTIVATED_ALERT.format(name=TECHNIQUE_NAMES[code]))
+    text, markup = await _render_detail(session, redis, callback.from_user.id, code)
+    await safe_edit_text(callback.message, text, reply_markup=markup)
+
+
+@router.callback_query(F.data.startswith(CB_TECH_SELECT_PREFIX))
+async def cb_technique_select(callback: CallbackQuery, session: AsyncSession, redis: Redis) -> None:
+    code = callback.data.removeprefix(CB_TECH_SELECT_PREFIX)
+    try:
+        await toggle_selected(session, callback.from_user.id, code)
+    except TechniqueSlotsFullError as exc:
+        await callback.answer(SLOTS_FULL_ALERT.format(limit=exc.limit), show_alert=True)
+        return
+    except (NoInfinitePathError, TechniqueNotOwnedError):
+        await callback.answer()
+        return
+    await callback.answer()
     text, markup = await _render_detail(session, redis, callback.from_user.id, code)
     await safe_edit_text(callback.message, text, reply_markup=markup)
 

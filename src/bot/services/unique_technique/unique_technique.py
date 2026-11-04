@@ -28,7 +28,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.cache.keys import swap_cooldown
 from bot.config.development import MAX_LEVEL
-from bot.config.unique_technique import TEACHER_QUESTS, technique_level_cost
+from bot.config.path_gauge import GAUGE_COPY_TECH_LEVEL
+from bot.config.unique_path import INFINITE_GAUGE_PER_TECHNIQUE, INFINITE_MAX_TECHNIQUES, INFINITE_MIN_TECHNIQUES
+from bot.config.unique_technique import TEACHER_QUESTS, eased_quest, technique_level_cost
+from bot.constant.unique_path import COPYING_PATHS
+from bot.services.build import get_build
 from bot.constant.activity import ACT_DEVELOPMENT
 from bot.constant.dev_quest import QUEST_TECH_LEVEL, QUEST_TEACHER, TASK_DEV_LEVEL
 from bot.constant.event import EVENT_TEACHER
@@ -94,6 +98,9 @@ class TechniqueView:
     swap_cooldown: int
     next_costs: dict[str, int | None]
     quests: list[QuestView]
+    # Путь Бесконечной техники: сколько техник можно держать активными и какие выбраны.
+    slots: int = 1
+    selected: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,14 +123,61 @@ async def _swap_cd(session: AsyncSession, user_id: int, seconds: int) -> int:
 async def get_view(session: AsyncSession, redis: Redis, user_id: int) -> TechniqueView:
     owned = dict(await tech_repo.list_owned(session, user_id))
     active, fragments = await tech_repo.get_state(session, user_id)
+    build = await get_build(session, user_id)
+    discount = build.eco.tech_fragment_discount
     return TechniqueView(
         active=active,
         owned=owned,
         fragments=fragments,
         swap_cooldown=max(0, await redis.ttl(swap_cooldown(user_id, "technique"))),
-        next_costs={c: technique_level_cost(lv + 1) if lv < MAX_LEVEL else None for c, lv in owned.items()},
+        next_costs={c: technique_level_cost(lv + 1, discount) if lv < MAX_LEVEL else None for c, lv in owned.items()},
         quests=await list_active(session, user_id, QUEST_TEACHER),
+        slots=await infinite_slots(session, user_id, build),
+        selected=tuple(c for c, _, chosen in await tech_repo.list_owned_full(session, user_id) if chosen and c != active),
     )
+
+
+async def infinite_slots(session: AsyncSession, user_id: int, build=None) -> int:
+    """Сколько техник активно одновременно: 1, а на пути Бесконечной техники — по шкале копирования."""
+    from bot.db.repositories import build as build_repo
+    from bot.constant.unique_path import PATH_INFINITE
+
+    build = build or await get_build(session, user_id)
+    if "infinite_techniques" not in build.flags:
+        return 1
+    row = await build_repo.get_row(session, user_id)
+    gauge = row.path_gauge if row.path == PATH_INFINITE else row.path2_gauge
+    return min(INFINITE_MAX_TECHNIQUES, INFINITE_MIN_TECHNIQUES + int(gauge // INFINITE_GAUGE_PER_TECHNIQUE))
+
+
+class TechniqueSlotsFullError(Exception):
+    def __init__(self, limit: int) -> None:
+        super().__init__(limit)
+        self.limit = limit
+
+
+class NoInfinitePathError(Exception):
+    pass
+
+
+async def toggle_selected(session: AsyncSession, user_id: int, code: str) -> bool:
+    """Выбрать/снять дополнительную технику на пути Бесконечной техники. Коммитит. → выбрана ли."""
+    slots = await infinite_slots(session, user_id)
+    if slots <= 1:
+        raise NoInfinitePathError
+    active, _ = await tech_repo.get_state(session, user_id)
+    owned = {c: chosen for c, _, chosen in await tech_repo.list_owned_full(session, user_id)}
+    if code not in owned or code == active:
+        raise TechniqueNotOwnedError
+    if owned[code]:
+        await tech_repo.set_selected(session, user_id, code, False)
+        await session.commit()
+        return False
+    if sum(chosen for c, chosen in owned.items() if c != active) >= slots - 1:
+        raise TechniqueSlotsFullError(slots)
+    await tech_repo.set_selected(session, user_id, code, True)
+    await session.commit()
+    return True
 
 
 async def get_teacher(session: AsyncSession, user_id: int, event_id: int) -> TeacherView:
@@ -150,7 +204,10 @@ async def connect(session: AsyncSession, user_id: int, event_id: int) -> QuestVi
     owned = dict(await tech_repo.list_owned(session, user_id))
     if event.code in owned:
         raise TechniqueOwnedError
-    if not await start(session, user_id, QUEST_TEACHER, event.code, TEACHER_QUESTS[event.code]):
+    from bot.services.unique_technique.training import quest_ease
+
+    speed, skip = quest_ease(await get_build(session, user_id))
+    if not await start(session, user_id, QUEST_TEACHER, event.code, eased_quest(TEACHER_QUESTS[event.code], speed=speed, skip=skip)):
         raise QuestAlreadyActiveError
     entry.connected = True
     await session.commit()
@@ -199,7 +256,7 @@ async def level_up(session: AsyncSession, user_id: int, code: str) -> int:
     current = owned[code]
     if current >= MAX_LEVEL:
         raise TechniqueMaxLevelError
-    cost = technique_level_cost(current + 1)
+    cost = technique_level_cost(current + 1, (await get_build(session, user_id)).eco.tech_fragment_discount)
     # Уровень открывает только выполненная тренировка у учителя техники (2026-10-12):
     # квест закрывается под `FOR UPDATE` в той же транзакции, что списание фрагментов.
     if await claim(session, user_id, QUEST_TECH_LEVEL, f"{code}:{current + 1}") is None:
@@ -212,6 +269,9 @@ async def level_up(session: AsyncSession, user_id: int, code: str) -> int:
         await session.rollback()
         raise TechniqueMaxLevelError
     await log_activity(session, user_id, ACT_DEVELOPMENT, LOG_TECHNIQUE_LEVEL.format(name=TECHNIQUE_NAMES[code], level=current + 1))
+    from bot.services.path_gauge import add_for_paths
+
+    await add_for_paths(session, user_id, COPYING_PATHS, GAUGE_COPY_TECH_LEVEL)  # шкала копирования
     await quest_event(session, user_id, TASK_DEV_LEVEL)
     await session.commit()
     return current + 1

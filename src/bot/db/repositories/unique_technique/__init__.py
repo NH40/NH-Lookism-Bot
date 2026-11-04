@@ -5,6 +5,8 @@ from bot.db.repositories.unique_technique.unique_technique import (  # noqa: F40
     delete_all,
     get_state,
     list_owned,
+    list_owned_full,
+    set_selected,
     set_active,
     set_active_if_missing,
     spend_fragments,

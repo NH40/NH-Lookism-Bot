@@ -82,9 +82,10 @@ def squad_title(rank: str, stars: int, training_level: int, school: str = "", sc
     if stars:
         title += f" ⭐{stars}"
     if training_level:
-        from bot.config.characteristic import training_level_cap
+        from bot.config.characteristic import training_cap_with
 
-        title += f" ур.{min(training_level, training_level_cap(rank))}"
+        # Самдак растит статистов до ×2 капа, поэтому и показываем до этого предела.
+        title += f" ур.{min(training_level, training_cap_with(rank, 1.0))}"
     if school:
         title += SCHOOL_TAG.format(name=SCHOOL_NAMES.get(school, school), level=school_level)
     return title

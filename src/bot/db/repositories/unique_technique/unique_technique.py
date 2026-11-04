@@ -9,6 +9,22 @@ from bot.db.models.development import UserTechnique
 from bot.db.models.user import User
 
 
+async def list_owned_full(session: AsyncSession, user_id: int) -> list[tuple[str, int, bool]]:
+    """Техники игрока: код, уровень, выбрана ли для пути Бесконечной техники."""
+    rows = await session.execute(
+        select(UserTechnique.code, UserTechnique.level, UserTechnique.selected)
+        .where(UserTechnique.user_id == user_id)
+        .order_by(UserTechnique.obtained_at)
+    )
+    return [(r[0], r[1], r[2]) for r in rows.all()]
+
+
+async def set_selected(session: AsyncSession, user_id: int, code: str, selected: bool) -> None:
+    await session.execute(
+        update(UserTechnique).where(UserTechnique.user_id == user_id, UserTechnique.code == code).values(selected=selected)
+    )
+
+
 async def list_owned(session: AsyncSession, user_id: int) -> list[tuple[str, int]]:
     rows = await session.execute(
         select(UserTechnique.code, UserTechnique.level)

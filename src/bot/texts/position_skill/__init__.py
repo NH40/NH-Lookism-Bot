@@ -7,6 +7,8 @@ from bot.texts.position_skill.position_skill import (  # noqa: F401
     JOURNAL_DISABLED,
     JOURNAL_FIRED,
     JOURNAL_FIRST_STRIKE_FOE,
+    JOURNAL_PRE_STRIKE_FOE,
+    JOURNAL_PRE_STRIKE_MINE,
     JOURNAL_FIRST_STRIKE_MINE,
     JOURNAL_PRE,
     JOURNAL_RESULT_LOSS,

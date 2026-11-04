@@ -52,6 +52,7 @@ export function GangPage() {
     if (result) setReveal(result as never);
   };
   const recruit = () => run("/recruit/extra");
+  const recruitSelect = () => run("/recruit/extra", { select: true });
   // Массовое открытие тикетов вводом количества (2026-10-21).
   const [manyCount, setManyCount] = useState("10");
   const [many, setMany] = useState<RollManyResult | null>(null);
@@ -124,10 +125,13 @@ export function GangPage() {
               <div className="grid-2">
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   <button className={`btn block ${cd > 0 ? "off" : ""}`} type="button" disabled={busy || cd > 0} onClick={recruit}>
-                    <UserPlus size={16} />Статисты
+                    <UserPlus size={16} />Статисты: {fmt(data.recruit_crowd)}
+                  </button>
+                  <button className={`btn violet block ${cd > 0 ? "off" : ""}`} type="button" disabled={busy || cd > 0} onClick={recruitSelect}>
+                    Отбор: {fmt(data.recruit_select)}, сильные ранги
                   </button>
                   <div className="muted" style={{ fontSize: 11, fontWeight: 700, textAlign: "center" }}>
-                    {cd > 0 ? `через ${countdown(cd)}` : `до ранга ${data.recruit_ceiling_rank}`}
+                    {cd > 0 ? `через ${countdown(cd)}` : `влияние ${fmt(data.influence)} · до ранга ${data.recruit_ceiling_rank}`}
                   </div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

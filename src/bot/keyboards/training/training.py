@@ -6,8 +6,16 @@ from bot.texts.common import BTN_BACK_TO_PROFILE
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from bot.constant.training import CB_TRAIN_EXTRAS_RUN, CB_TRAIN_PERSONAL
-from bot.texts.training import BTN_PERSONAL_TRAINING
+from bot.constant.training import (
+    CB_RANKS_LOCK_PREFIX,
+    CB_RANKS_OPEN,
+    CB_RANKS_PROMOTE_PREFIX,
+    CB_TRAIN_EXTRAS_OPEN,
+    CB_TRAIN_EXTRAS_RUN,
+    CB_TRAIN_PERSONAL,
+)
+from bot.texts.training import BTN_BACK_TO_TRAINING, BTN_PERSONAL_TRAINING, BTN_RANK_LOCK, BTN_RANK_PROMOTE, BTN_RANKS
+from bot.utils.formatting import format_number
 
 BTN_TRAIN_EXTRAS_RUN = "🏋️ Тренировать статистов"
 
@@ -15,18 +23,36 @@ BTN_TRAIN_EXTRAS_RUN = "🏋️ Тренировать статистов"
 from bot.constant.training import CB_TRAIN_SCHOOLS_OPEN, CB_TRAIN_TECH_OPEN  # noqa: E402
 from bot.texts.training import BTN_SCHOOLS, BTN_TECH_TRAINING  # noqa: E402
 
-def train_menu() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text=BTN_PERSONAL_TRAINING, callback_data=CB_TRAIN_PERSONAL)],
-            [InlineKeyboardButton(text=BTN_TRAIN_EXTRAS_RUN, callback_data=CB_TRAIN_EXTRAS_RUN)],
-            [
-                InlineKeyboardButton(text=BTN_TECH_TRAINING, callback_data=CB_TRAIN_TECH_OPEN),
-                InlineKeyboardButton(text=BTN_SCHOOLS, callback_data=CB_TRAIN_SCHOOLS_OPEN),
-            ],
-            [InlineKeyboardButton(text=BTN_BACK_TO_PROFILE, callback_data=CB_PROFILE_OPEN)],
-        ]
-    )
+def train_menu(*, ranks: bool = False) -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(text=BTN_PERSONAL_TRAINING, callback_data=CB_TRAIN_PERSONAL)],
+        [InlineKeyboardButton(text=BTN_TRAIN_EXTRAS_RUN, callback_data=CB_TRAIN_EXTRAS_RUN)],
+        [
+            InlineKeyboardButton(text=BTN_TECH_TRAINING, callback_data=CB_TRAIN_TECH_OPEN),
+            InlineKeyboardButton(text=BTN_SCHOOLS, callback_data=CB_TRAIN_SCHOOLS_OPEN),
+        ],
+    ]
+    if ranks:  # родословная Самдака
+        rows.append([InlineKeyboardButton(text=BTN_RANKS, callback_data=CB_RANKS_OPEN)])
+    rows.append([InlineKeyboardButton(text=BTN_BACK_TO_PROFILE, callback_data=CB_PROFILE_OPEN)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def ranks_menu(rows) -> InlineKeyboardMarkup:
+    """Строка на ранг: запрет перехода и перевод вручную тех, кто дошёл до обычного капа."""
+    keyboard = []
+    for r in rows:
+        row = [InlineKeyboardButton(
+            text=BTN_RANK_LOCK.format(mark="🔒" if r.locked else "🔓", rank=r.rank), callback_data=f"{CB_RANKS_LOCK_PREFIX}{r.rank}"
+        )]
+        if r.ready and r.next_rank:
+            row.append(InlineKeyboardButton(
+                text=BTN_RANK_PROMOTE.format(next_rank=r.next_rank, count=format_number(r.ready)),
+                callback_data=f"{CB_RANKS_PROMOTE_PREFIX}{r.rank}",
+            ))
+        keyboard.append(row)
+    keyboard.append([InlineKeyboardButton(text=BTN_BACK_TO_TRAINING, callback_data=CB_TRAIN_EXTRAS_OPEN)])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def personal_result_menu() -> InlineKeyboardMarkup:

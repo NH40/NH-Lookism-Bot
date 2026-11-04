@@ -19,20 +19,26 @@ class RecruitOut(BaseModel):
     message: str
     rank: str
     power: int
+    count: int = 1
+
+
+class RecruitIn(BaseModel):
+    select: bool = False  # отбор: меньше бойцов, ранг из верхней половины
 
 
 @router.post("/extra", response_model=RecruitOut)
 async def recruit(
+    body: RecruitIn | None = None,
     user_id: int = Depends(get_current_user_id),
     session: AsyncSession = Depends(get_session),
     redis: Redis = Depends(get_redis),
 ) -> RecruitOut:
     user = await require_user(session, user_id, need_city=False)
     try:
-        result = await recruit_extra(session, redis, user.id, user.phase)
+        result = await recruit_extra(session, redis, user.id, user.phase, select=bool(body and body.select))
     except RecruitOnCooldownError as exc:
         raise bad(cooldown_text("Вербовка", exc.retry_after_seconds))
     return RecruitOut(
-        message=f"Завербован статист ранга {result.rank} (мощь {result.power:,})".replace(",", " "),
-        rank=result.rank, power=result.power,
+        message=f"Завербовано бойцов: {result.count:,}. Лучший ранг: {result.rank} (мощь {result.power:,})".replace(",", " "),
+        rank=result.rank, power=result.power, count=result.count,
     )

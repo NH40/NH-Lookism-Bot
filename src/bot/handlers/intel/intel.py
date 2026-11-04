@@ -13,9 +13,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from redis.asyncio import Redis
 
-from bot.services.intel import UnmarkableError
-from bot.texts.intel import UNMARKABLE_ALERT
-from bot.constant.intel import CB_INTEL_REPORTS
+from bot.services.intel import NeutralizeOnCooldownError, NeutralizeUnavailableError, UnmarkableError, neutralize_security
+from bot.texts.intel import (
+    NEUTRALIZE_COOLDOWN_ALERT,
+    NEUTRALIZE_DONE_ALERT,
+    NEUTRALIZE_UNAVAILABLE_ALERT,
+    UNMARKABLE_ALERT,
+)
+from bot.utils.formatting import format_countdown
+from bot.constant.intel import CB_INTEL_NEUTRALIZE_PREFIX, CB_INTEL_REPORTS
 from bot.constant.position_skill import CB_SCOUT_PREFIX, CB_SCOUT_REPORT_PREFIX
 from bot.constant.settings import NOTIFY_SABOTAGE
 from bot.db.repositories.activity import list_marks
@@ -169,7 +175,10 @@ async def _render_scout(session: AsyncSession, viewer_id: int, target_id: int, p
     marks = await list_marks(session, viewer_id)
     flags = (await get_build(session, viewer_id)).flags
     marked = target_id in marks
-    return text, report_menu(target_id, can_mark=access.marks > 0, marked=marked, can_sabotage=marked and "sabotage_marked" in flags)
+    return text, report_menu(
+        target_id, can_mark=access.marks > 0, marked=marked, can_sabotage=marked and "sabotage_marked" in flags,
+        can_neutralize=marked and "neutralize_security" in flags,
+    )
 
 
 async def _notify_scouted(bot, session: AsyncSession, result, viewer_id: int) -> None:
@@ -246,6 +255,20 @@ async def cb_intel_mark(callback: CallbackQuery, session: AsyncSession) -> None:
         return
     await callback.answer(MARKED_ALERT if marked else UNMARKED_ALERT)
     await callback.message.edit_reply_markup(reply_markup=report_menu(target_id, can_mark=True, marked=marked))
+
+
+@router.callback_query(F.data.startswith(CB_INTEL_NEUTRALIZE_PREFIX))
+async def cb_intel_neutralize(callback: CallbackQuery, session: AsyncSession, redis: Redis) -> None:
+    raw = callback.data.removeprefix(CB_INTEL_NEUTRALIZE_PREFIX)
+    try:
+        seconds = await neutralize_security(session, redis, callback.from_user.id, int(raw))
+    except (ValueError, NeutralizeUnavailableError):
+        await callback.answer(NEUTRALIZE_UNAVAILABLE_ALERT, show_alert=True)
+        return
+    except NeutralizeOnCooldownError as exc:
+        await callback.answer(NEUTRALIZE_COOLDOWN_ALERT.format(countdown=format_countdown(exc.retry_after_seconds)), show_alert=True)
+        return
+    await callback.answer(NEUTRALIZE_DONE_ALERT.format(hours=seconds // 3600), show_alert=True)
 
 
 @router.callback_query(F.data == CB_INTEL_MARKS)

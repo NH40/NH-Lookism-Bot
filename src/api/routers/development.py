@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import get_current_user_id
 from api.db import get_session
 from api.deps import get_redis
+from api.routers._common import clean_label
 from api.routers.training import TrainingStatusOut, training_status
 from bot.config import awakening as awakening_cfg
 from bot.config import bloodline as bloodline_cfg
@@ -24,6 +25,9 @@ from bot.config import genius as genius_cfg
 from bot.config import unique_path as path_cfg
 from bot.config import unique_technique as tech_cfg
 from bot.config.development import MAX_LEVEL, awakening_multiplier
+from bot.config.path_gauge import GAUGE_MAX, gauge_cap
+from bot.constant.event import BOSSES
+from bot.constant.ultra_instinct import ACTIONS
 from bot.constant.bloodline import BLOODLINES
 from bot.constant.donate import KIND_GENIUS, KIND_PATH, KIND_TECHNIQUE
 from bot.constant.genius import GENIUSES
@@ -34,6 +38,7 @@ from bot.services.build import get_build
 from bot.services import bloodline as bloodline_svc
 from bot.services import genius as genius_svc
 from bot.services import unique_path as path_svc
+from bot.services import ultra_instinct as ultra_svc
 from bot.services import unique_technique as tech_svc
 from bot.services.dev_quest import QuestView
 from bot.services.gang import get_gang
@@ -41,7 +46,9 @@ from bot.texts import awakening as t_awk
 from bot.texts import bloodline as t_blood
 from bot.texts import genius as t_gen
 from bot.texts import unique_path as t_path
+from bot.texts import ultra_instinct as t_ultra
 from bot.texts import unique_technique as t_tech
+from bot.texts.event import BOSS_NAMES
 from bot.texts.dev_quest import TASK_LABELS
 from bot.texts.development import describe_level
 from bot.texts.profile import POTENTIAL_LABELS
@@ -173,6 +180,17 @@ async def get_development(
     return DevelopmentOut(tab=tab, training=await training_status(redis, user_id), max_level=MAX_LEVEL, data=data)
 
 
+def _gauges(view) -> dict[str, dict]:
+    out = {}
+    for code, value in ((view.active, view.gauge), (view.active2, view.gauge2)):
+        if code in t_path.GAUGE_NAMES:
+            out[code] = {
+                "name": t_path.GAUGE_NAMES[code], "value": round(value, 1),
+                "cap": gauge_cap(view.owned.get(code, 0)), "max": GAUGE_MAX,
+            }
+    return out
+
+
 async def _path_tab(session: AsyncSession, redis: Redis, user_id: int) -> dict:
     await path_svc.check_conviction(session, user_id)
     view = await path_svc.get_view(session, redis, user_id)
@@ -202,7 +220,9 @@ async def _path_tab(session: AsyncSession, redis: Redis, user_id: int) -> dict:
         "next_cost2": view.next_cost2,
         "owned": [item(c) for c in view.owned],
         "bought": [{"code": c, "name": t_path.PATH_NAMES[c]} for c in view.bought],
-        # Путь тренировок: текущий КПД и потолок уровня (доли, 0…0.5).
+        # Шкалы активных путей (`config/path_gauge`).
+        "gauges": _gauges(view),
+        # Путь тренировок: текущий КПД и потолок уровня (доли).
         "training_kpd": (await get_build(session, user_id)).training_kpd,
         "training_kpd_cap": view.owned.get(PATH_TRAINING, 0) * path_cfg.TRAINING_KPD_CAP_PER_LEVEL,
     }
@@ -224,7 +244,7 @@ async def _techniques_tab(session: AsyncSession, redis: Redis, user_id: int) -> 
     ]
     return {
         "active": view.active, "fragments": view.fragments, "swap_cooldown": view.swap_cooldown,
-        "owned": owned, "quests": quests,
+        "owned": owned, "quests": quests, "slots": view.slots, "selected": list(view.selected),
     }
 
 
@@ -280,9 +300,37 @@ async def _blood_tab(session: AsyncSession, redis: Redis, user_id: int) -> dict:
             )
         else:
             options2 = [{"code": c, "name": t_blood.BLOODLINE_NAMES[c]} for c in BLOODLINES if c != state.code]
+    free_change = await bloodline_svc.has_free_change(session, user_id)
     return {
         "chosen": True, "blood_drops": state.blood_drops, "first": first,
         "second_body": second_body, "second": second, "options2": options2,
+        "free_change": free_change,
+        "change_options": [
+            {
+                "code": c, "name": t_blood.BLOODLINE_NAMES[c], "description": t_blood.BLOODLINE_DESCRIPTIONS.get(c, ""),
+                "first": describe_level(bloodline_cfg.LEVELS[c][0], t_blood.SPECIAL_EFFECTS),
+            }
+            for c in BLOODLINES if c != state.code
+        ] if free_change else [],
+        "ultra": await _ultra_block(session, user_id),
+    }
+
+
+async def _ultra_block(session: AsyncSession, user_id: int) -> dict | None:
+    """Настройки Ультра инстинкта (Ямадзаки). None — способности нет."""
+    try:
+        view = await ultra_svc.get_view(session, user_id)
+    except ultra_svc.UltraUnavailableError:
+        return None
+    return {
+        "actions": [
+            {"code": a, "label": clean_label(t_ultra.ACTION_LABELS[a]), "enabled": view.enabled[a]}
+            for a in ACTIONS if view.available[a]
+        ],
+        "boss_available": view.boss_available,
+        "bosses": [{"code": c, "name": BOSS_NAMES[c], "enabled": c in view.bosses} for c in BOSSES],
+        "max_loss": view.max_loss,
+        "loss_options": list(ultra_svc.ULTRA_LOSS_OPTIONS),
     }
 
 
@@ -408,6 +456,21 @@ async def post_technique_activate(
     return {"message": t_tech.ACTIVATED_ALERT.format(name=t_tech.TECHNIQUE_NAMES.get(body.code, body.code))}
 
 
+@router.post("/technique/select")
+async def post_technique_select(
+    body: CodeBody, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)
+) -> dict:
+    await _guard(session, user_id)
+    with _errors(
+        (tech_svc.TechniqueSlotsFullError, lambda e: t_tech.SLOTS_FULL_ALERT.format(limit=e.limit)),
+        (tech_svc.NoInfinitePathError, "Несколько техник сразу даёт только путь Бесконечной техники."),
+        (tech_svc.TechniqueNotOwnedError, "Эта техника недоступна."),
+    ):
+        selected = await tech_svc.toggle_selected(session, user_id, body.code)
+    name = t_tech.TECHNIQUE_NAMES.get(body.code, body.code)
+    return {"message": f"{name}: {'используется вместе с активной' if selected else 'убрана из активных'}"}
+
+
 @router.post("/technique/level-up")
 async def post_technique_level_up(
     body: CodeBody, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)
@@ -504,6 +567,60 @@ async def post_bloodline_choose(
     with _errors(*_BLOOD_ERRORS):
         await bloodline_svc.choose(session, user_id, body.code)
     return {"message": f"Родословная выбрана: {t_blood.BLOODLINE_NAMES[body.code]}"}
+
+
+@router.post("/bloodline/change")
+async def post_bloodline_change(
+    body: CodeBody, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)
+) -> dict:
+    await _guard(session, user_id)
+    with _errors(
+        (bloodline_svc.NoFreeChangeError, t_blood.CHANGE_NOT_AVAILABLE_ALERT),
+        (bloodline_svc.SameBloodlineError, t_blood.CHANGE_SAME_ALERT),
+        (bloodline_svc.UnknownBloodlineError, "Такой родословной нет."),
+    ):
+        await bloodline_svc.change_free(session, user_id, body.code)
+    return {"message": t_blood.CHANGE_DONE_ALERT.format(name=t_blood.BLOODLINE_NAMES[body.code])}
+
+
+class UltraLossBody(BaseModel):
+    percent: int
+
+
+_ULTRA_ERRORS = (
+    (ultra_svc.UltraUnavailableError, t_ultra.NOT_AVAILABLE_ALERT),
+    (ultra_svc.MaxLossError, t_ultra.NOT_AVAILABLE_ALERT),
+)
+
+
+@router.post("/ultra/action")
+async def post_ultra_action(
+    body: CodeBody, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)
+) -> dict:
+    await _guard(session, user_id)
+    with _errors(*_ULTRA_ERRORS):
+        enabled = await ultra_svc.toggle_action(session, user_id, body.code)
+    return {"message": "Включено" if enabled else "Выключено"}
+
+
+@router.post("/ultra/boss")
+async def post_ultra_boss(
+    body: CodeBody, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)
+) -> dict:
+    await _guard(session, user_id)
+    with _errors(*_ULTRA_ERRORS):
+        selected = await ultra_svc.toggle_boss(session, user_id, body.code)
+    return {"message": "Босс в автобое" if selected else "Босс убран из автобоя"}
+
+
+@router.post("/ultra/loss")
+async def post_ultra_loss(
+    body: UltraLossBody, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)
+) -> dict:
+    await _guard(session, user_id)
+    with _errors(*_ULTRA_ERRORS):
+        await ultra_svc.set_max_loss(session, user_id, body.percent)
+    return {"message": f"Потолок потерь: {body.percent}%"}
 
 
 @router.post("/bloodline/level-up")

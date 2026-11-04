@@ -41,6 +41,23 @@ PERSONAL_RESULT = (
 PERSONAL_GAINED = "✅ Получено очков развития: <b>+{gained}</b>"
 PERSONAL_NOTHING = "😓 В этот раз не вышло — очков не получено."
 BTN_PERSONAL_TRAINING = "🧘 Личная тренировка"
+# Управление рангами (родословная Самдака).
+BTN_RANKS = "🔒 Ранги статистов"
+BTN_RANK_LOCK = "{mark} {rank}"
+BTN_RANK_PROMOTE = "⬆️ на {next_rank}: {count}"
+RANKS_SCREEN = (
+    "🔒 <b>Ранги статистов</b>\n"
+    "━━━━━━━━━━━━━━━━━━\n"
+    "Родословная Самдака решает, когда статисту идти на следующий ранг.\n"
+    "🔒 — переход запрещён: боец останется на этом ранге и будет расти до капа.\n"
+    "⬆️ — перевести вручную всех, кто дошёл до обычного капа.\n\n"
+    "{rows}"
+)
+RANKS_ROW = "{mark} <b>{rank}</b> · бойцов {quantity} · кап ур. {cap} · готовы к переходу {ready}"
+RANKS_NO_ARMY = "В армии пока нет статистов."
+RANKS_NOT_AVAILABLE_ALERT = "Это умеет только родословная Самдака со 2 уровня."
+RANKS_NOTHING_TO_PROMOTE_ALERT = "На этом ранге ещё никто не дошёл до капа."
+RANKS_PROMOTED_ALERT = "Переведено бойцов: {count}"
 BTN_TO_STATS = "📊 Характеристики"
 # popup (без HTML)
 PERSONAL_COOLDOWN = "⏳ Личная тренировка ещё на кулдауне — через {countdown}."

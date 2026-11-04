@@ -4,14 +4,20 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from redis.asyncio import Redis
 
-from bot.services.intel import UnmarkableError
-from bot.texts.intel import UNMARKABLE_ALERT
+from bot.services.intel import NeutralizeOnCooldownError, NeutralizeUnavailableError, UnmarkableError, neutralize_security
+from bot.texts.intel import (
+    NEUTRALIZE_COOLDOWN_ALERT,
+    NEUTRALIZE_DONE_ALERT,
+    NEUTRALIZE_UNAVAILABLE_ALERT,
+    UNMARKABLE_ALERT,
+)
+from bot.utils.formatting import format_countdown
 from api.deps import get_redis
 from api.push import push
 from bot.constant.settings import NOTIFY_SABOTAGE
@@ -164,6 +170,7 @@ class ScoutReportOut(BaseModel):
     can_mark: bool
     can_sabotage: bool
     sabotage_actions: list[tuple[str, str, int]]
+    can_neutralize: bool = False
 
 
 class ScoutIn(BaseModel):
@@ -184,11 +191,34 @@ async def _scout_out(session: AsyncSession, viewer_id: int, target_id: int, payl
     marked = target_id in marks
     can_sabotage = marked and "sabotage_marked" in flags
     return ScoutReportOut(
+        can_neutralize=marked and "neutralize_security" in flags,
         target_id=target_id, name=payload.get("_target", "—"), ago=scout_ago(created_at),
         fields=[ScoutFieldOut(field=f, label=label, value=value, seen=payload[f]["seen"]) for f, label, value in scout_report_lines(payload)],
         trap_lost=trap, marked=marked, can_mark=access.marks > 0, can_sabotage=can_sabotage,
         sabotage_actions=[(a, clean_label(SABOTAGE_LABELS[a]), SABOTAGE_CHANCE_PERCENT[a]) for a in SABOTAGE_ACTIONS] if can_sabotage else [],
     )
+
+
+class NeutralizeIn(BaseModel):
+    target_id: int
+
+
+@router.post("/neutralize")
+async def post_neutralize(
+    body: NeutralizeIn,
+    user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    """Сенсорика: снять безопасность помеченного игрока."""
+    await require_user(session, user_id)
+    try:
+        seconds = await neutralize_security(session, redis, user_id, body.target_id)
+    except NeutralizeUnavailableError:
+        raise HTTPException(400, NEUTRALIZE_UNAVAILABLE_ALERT)
+    except NeutralizeOnCooldownError as exc:
+        raise HTTPException(400, NEUTRALIZE_COOLDOWN_ALERT.format(countdown=format_countdown(exc.retry_after_seconds)))
+    return {"message": NEUTRALIZE_DONE_ALERT.format(hours=seconds // 3600)}
 
 
 @router.post("/scout", response_model=ScoutReportOut)

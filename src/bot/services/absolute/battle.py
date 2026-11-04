@@ -14,7 +14,7 @@ from bot.constant.extra import CAMP_ATTACK
 from bot.db.models.user import User
 from bot.db.repositories.extra import add_to_stack
 from bot.services.absolute.absolute import active
-from bot.texts.absolute import JOURNAL_ARIAN, JOURNAL_MANAGER, JOURNAL_MARISE
+from bot.texts.absolute import JOURNAL_ARIAN, JOURNAL_LOOT, JOURNAL_MANAGER, JOURNAL_MARISE
 from bot.utils.formatting import format_number
 
 _KIND_EXTRA = "x"  # ключ стопки статистов в бою (`services/district/army`)
@@ -53,4 +53,33 @@ async def after_battle(session: AsyncSession, m, result, *, attacker_id: int, at
             cloned += extra
         if cloned:
             lines.append(JOURNAL_MARISE.format(count=format_number(cloned)))
+    from bot.services.path_gauge import after_battle as gauges_after_battle
+
+    pvp = defender_id is not None
+    await gauges_after_battle(session, attacker_id, result.attacker, result.defender, result.attacker_won, pvp)
+    if pvp:
+        await gauges_after_battle(session, defender_id, result.defender, result.attacker, not result.attacker_won, pvp)
+        winner, loser = (attacker_id, defender_id) if result.attacker_won else (defender_id, attacker_id)
+        looted = await _battle_loot(session, winner, loser)
+        if looted:
+            lines.append(JOURNAL_LOOT.format(amount=format_number(looted)))
     return tuple(lines)
+
+
+async def _battle_loot(session: AsyncSession, winner_id: int, loser_id: int) -> int:
+    """Родословная Элиты: победитель забирает долю NHCoin проигравшего, путь Отчаяния её защищает.
+    Списание и зачисление — под блокировкой строк в одном порядке (правило 1). НЕ коммитит."""
+    from bot.services.build import get_build
+
+    share = (await get_build(session, winner_id)).eco.battle_loot
+    if share <= 0:
+        return 0
+    share *= 1 - min(1.0, (await get_build(session, loser_id)).eco.coin_protect)
+    rows = await session.execute(
+        select(User.id, User.nh_coins).where(User.id.in_((winner_id, loser_id))).order_by(User.id).with_for_update()
+    )
+    amount = int(max(dict(rows.all()).get(loser_id, 0), 0) * share)
+    if amount:
+        await session.execute(update(User).where(User.id == loser_id).values(nh_coins=User.nh_coins - amount))
+        await session.execute(update(User).where(User.id == winner_id).values(nh_coins=User.nh_coins + amount))
+    return amount

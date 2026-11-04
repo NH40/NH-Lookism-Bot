@@ -14,3 +14,7 @@ CB_TRAIN_TECH_LEVEL_PREFIX = "training:tl:"  # f"{...}{код техники}" �
 # Школы статистов (2026-10-13: занятия переехали из магазина в тренировки).
 CB_TRAIN_SCHOOLS_OPEN = "training:schools"
 CB_TRAIN_SCHOOL_LESSON_PREFIX = "training:sl:"  # f"{...}{школа}" — занятие у купленного учителя
+
+CB_RANKS_OPEN = "ranks:open"  # управление рангами (родословная Самдака)
+CB_RANKS_LOCK_PREFIX = "ranks:lock:"
+CB_RANKS_PROMOTE_PREFIX = "ranks:up:"

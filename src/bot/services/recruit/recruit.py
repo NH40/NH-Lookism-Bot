@@ -23,12 +23,11 @@ from bot.services.admin.live_config import cooldown_seconds
 from bot.constant.admin.live_config import KEY_CD_RECRUIT
 from bot.cache.keys import recruit_extra_cooldown
 from bot.config.characteristic import extra_power_for_rank
-from bot.config.game import influence_rank_index
+from bot.config.game import RECRUIT_SELECT_DIVISOR, RECRUIT_SELECT_FLOOR, influence_rank_index, recruit_quantity
 from bot.constant.characteristic import RANK_INDEX, RANK_LADDER
 from bot.constant.phase import PHASE_CIRCLE, PHASE_FIST, PHASE_GANG
 from bot.constant.dev_quest import TASK_RECRUIT
 from bot.services.dev_quest import emit as quest_event
-from bot.services.district import get_influence
 from bot.services.extra import recruit_into_stack
 from bot.services.characteristic import get_combat_profile
 
@@ -49,30 +48,68 @@ class RecruitOnCooldownError(Exception):
 
 @dataclass(frozen=True, slots=True)
 class RecruitResult:
-    rank: str
+    rank: str  # лучший ранг партии
     power: int
+    count: int = 1
+    by_rank: tuple[tuple[str, int], ...] = ()
 
 
-def recruit_ceiling_rank(phase: str, influence: int) -> str:
+@dataclass(frozen=True, slots=True)
+class RecruitOffer:
+    """Что даст вербовка сейчас: бойцов за нажатие в обычном режиме и в отборе, потолок ранга."""
+
+    crowd: int
+    select: int
+    ceiling: str
+    influence: int
+
+
+def recruit_ceiling_rank(phase: str, influence: int, cut: float = 0.0) -> str:
     """Лучший ранг, который вообще может выпасть при вербовке: min(потолок фазы, влияние)."""
-    return RANK_LADDER[min(PHASE_RANK_CAP_INDEX[phase], influence_rank_index(influence))]
+    return RANK_LADDER[min(PHASE_RANK_CAP_INDEX[phase], influence_rank_index(influence, cut))]
 
 
-def roll_extra_rank(phase: str, influence: int, rank_bonus: int = 0) -> str:
+def roll_extra_rank(phase: str, influence: int, rank_bonus: int = 0, cut: float = 0.0, floor: float = 0.0) -> str:
     """Влияние считается от захваченных районов (`services/district.get_influence`, +1 за
     район) — каждый захваченный район поднимает потолок вербовки на одну ступень.
     `rank_bonus` — ступени сверх потолка от систем развития (Джинчоль, гений войны):
     поднимает и потолок влияния, и потолок фазы — «военные вербуют лучше»."""
-    ceiling_index = min(PHASE_RANK_CAP_INDEX[phase] + rank_bonus, influence_rank_index(influence) + rank_bonus, len(RANK_LADDER) - 1)
-    return RANK_LADDER[randint(0, ceiling_index)]
+    ceiling_index = min(PHASE_RANK_CAP_INDEX[phase] + rank_bonus, influence_rank_index(influence, cut) + rank_bonus, len(RANK_LADDER) - 1)
+    return RANK_LADDER[randint(int(ceiling_index * floor), ceiling_index)]
 
 
-async def recruit_extra(session: AsyncSession, redis: Redis, user_id: int, phase: str) -> RecruitResult:
+def _crowd_size(eco, influence: int) -> int:
+    return recruit_quantity(
+        influence, cut=eco.recruit_influence_cut, quantity=eco.recruit_quantity, cap=eco.recruit_cap
+    )
+
+
+def _rank_cut(eco) -> float:
+    return eco.recruit_influence_cut + eco.influence_rank_cut
+
+
+async def get_offer(session: AsyncSession, user_id: int, phase: str) -> RecruitOffer:
+    profile = await get_combat_profile(session, user_id)
+    eco, influence = profile.eco, profile.build.influence
+    crowd = _crowd_size(eco, influence)
+    ceiling = min(
+        PHASE_RANK_CAP_INDEX[phase] + eco.recruit_rank_bonus,
+        influence_rank_index(influence, _rank_cut(eco)) + eco.recruit_rank_bonus,
+        len(RANK_LADDER) - 1,
+    )
+    return RecruitOffer(crowd=crowd, select=max(1, crowd // RECRUIT_SELECT_DIVISOR), ceiling=RANK_LADDER[ceiling], influence=influence)
+
+
+async def recruit_extra(session: AsyncSession, redis: Redis, user_id: int, phase: str, *, select: bool = False) -> RecruitResult:
     """Атомарный `SET NX EX` — сам ключ и есть КД (правило 4, см. `cache/keys.
     recruit_extra_cooldown`): если он не взят, вербовка недоступна ещё
     `retry_after_seconds`. Единственный шаг после — +1 к стопке (ранг, 0, 0),
     коммитит здесь один раз (правило 10 — это top-level операция, не композируется
-    ни с чем ещё)."""
+    ни с чем ещё).
+
+    Бойцов за нажатие решает влияние (`config/game.recruit_quantity`), у каждого свой случайный ранг —
+    одним биномиальным проходом, а не циклом по бойцам: партия у Ким Гапрена — сотни. `select` — отбор:
+    вчетверо меньше бойцов, зато ранг только из верхней половины доступных."""
     key = recruit_extra_cooldown(user_id)
     profile = await get_combat_profile(session, user_id)
     acquired = await redis.set(key, "1", nx=True, ex=profile.cooldown(cooldown_seconds(KEY_CD_RECRUIT), profile.eco.recruit_cooldown))
@@ -81,11 +118,22 @@ async def recruit_extra(session: AsyncSession, redis: Redis, user_id: int, phase
         raise RecruitOnCooldownError(retry_after_seconds=max(0, ttl))
 
     eco = profile.eco
-    rank = roll_extra_rank(phase, await get_influence(session, user_id), eco.recruit_rank_bonus)
-    # Шанс завербовать сразу двоих (Джинчоль, гений харизмы) — второй того же ранга.
-    count = 2 if eco.recruit_double and random() < min(0.9, eco.recruit_double) else 1
+    influence = profile.build.influence
+    count = _crowd_size(eco, influence)
+    if select:
+        count = max(1, count // RECRUIT_SELECT_DIVISOR)
+    # Шанс завербовать вдвое больше (гений харизмы).
+    if eco.recruit_double and random() < min(0.9, eco.recruit_double):
+        count *= 2
+    floor = RECRUIT_SELECT_FLOOR if select else 0.0
+    ranks: dict[str, int] = {}
     for _ in range(count):
-        await recruit_into_stack(session, user_id, rank)
+        rank = roll_extra_rank(phase, influence, eco.recruit_rank_bonus, _rank_cut(eco), floor)
+        ranks[rank] = ranks.get(rank, 0) + 1
+    for rank in sorted(ranks, key=RANK_INDEX.__getitem__):  # один порядок блокировок стопок
+        await recruit_into_stack(session, user_id, rank, ranks[rank])
     await quest_event(session, user_id, TASK_RECRUIT, count)
     await session.commit()
-    return RecruitResult(rank=rank, power=extra_power_for_rank(rank))
+    best = max(ranks, key=RANK_INDEX.__getitem__)
+    by_rank = tuple(sorted(ranks.items(), key=lambda kv: -RANK_INDEX[kv[0]]))
+    return RecruitResult(rank=best, power=extra_power_for_rank(best), count=count, by_rank=by_rank)

@@ -2,6 +2,7 @@
 from bot.texts.absolute.absolute import (  # noqa: F401
     BTN_STYLIST_PICK,
     JOURNAL_ARIAN,
+    JOURNAL_LOOT,
     JOURNAL_MANAGER,
     JOURNAL_MARISE,
     PERKS,

@@ -31,7 +31,18 @@ from bot.services.business import gym_training_bonus_percent
 from bot.services.characteristic import get_combat_profile, get_stats_view
 from bot.services.extra import get_army_stats
 from bot.services.gang import get_gang
-from bot.services.training import TrainingOnCooldownError, personal_cooldown_left, train_extras, train_personal
+from bot.services.training import (
+    NothingToPromoteError,
+    RankHoldUnavailableError,
+    TrainingOnCooldownError,
+    personal_cooldown_left,
+    promote_rank,
+    rank_control,
+    toggle_rank_lock,
+    train_extras,
+    train_personal,
+)
+from bot.texts.training import RANKS_NOT_AVAILABLE_ALERT, RANKS_NOTHING_TO_PROMOTE_ALERT, RANKS_PROMOTED_ALERT
 from bot.texts.profile import POTENTIAL_LABELS
 from bot.utils.formatting import format_countdown, format_number
 
@@ -251,7 +262,7 @@ async def get_training(
         extras=ExtrasOut(
             left=status.extras_left,
             total=profile.cooldown(cooldown_seconds(KEY_CD_EXTRAS), profile.eco.extras_training_cooldown),
-            coverage_percent=EXTRA_TRAINING_COVERAGE_PERCENT,
+            coverage_percent=int(EXTRA_TRAINING_COVERAGE_PERCENT + profile.eco.extras_coverage),
             stages=stages,
             gym_bonus=int(gym),
             has_extras=army.total_quantity > 0,
@@ -366,6 +377,49 @@ async def post_personal(
         raise HTTPException(400, f"Личная тренировка ещё на кулдауне — через {format_countdown(exc.retry_after_seconds)}.")
     message = f"Получено очков развития: +{result.points}" if result.points else "В этот раз не вышло — очков не получено."
     return {"message": message, "points": result.points, "dev_points": result.dev_points}
+
+
+class RankBody(BaseModel):
+    rank: str
+
+
+@router.get("/ranks")
+async def get_ranks(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    """Управление рангами (родословная Самдака). `available=false` — способности нет."""
+    user = await _user(session, user_id)
+    try:
+        rows = await rank_control(session, user_id, user.phase)
+    except RankHoldUnavailableError:
+        return {"available": False, "rows": []}
+    return {
+        "available": True,
+        "rows": [
+            {"rank": r.rank, "quantity": r.quantity, "locked": r.locked, "cap": r.cap, "ready": r.ready, "next_rank": r.next_rank}
+            for r in rows
+        ],
+    }
+
+
+@router.post("/ranks/lock")
+async def post_rank_lock(body: RankBody, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    await _user(session, user_id)
+    try:
+        locked = await toggle_rank_lock(session, user_id, body.rank)
+    except RankHoldUnavailableError:
+        raise HTTPException(400, RANKS_NOT_AVAILABLE_ALERT)
+    return {"message": f"Ранг {body.rank}: переход {'запрещён' if locked else 'разрешён'}"}
+
+
+@router.post("/ranks/promote")
+async def post_rank_promote(body: RankBody, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    user = await _user(session, user_id)
+    try:
+        moved = await promote_rank(session, user_id, body.rank, user.phase)
+    except RankHoldUnavailableError:
+        raise HTTPException(400, RANKS_NOT_AVAILABLE_ALERT)
+    except NothingToPromoteError:
+        raise HTTPException(400, RANKS_NOTHING_TO_PROMOTE_ALERT)
+    return {"message": RANKS_PROMOTED_ALERT.format(count=format_number(moved))}
 
 
 @router.post("/extras")

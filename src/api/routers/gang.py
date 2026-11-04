@@ -18,11 +18,10 @@ from api.routers._common import bad, clean_label, require_user, ttl_seconds
 from bot.cache.keys import recruit_extra_cooldown
 from bot.config.game import GANG_CAMP_MOVE_PERCENTS
 from bot.constant.extra import CAMP_ATTACK, CAMP_DEFENSE
-from bot.services.district import get_influence
 from bot.constant.extra import CONTRACT_SQUAD
 from bot.services.extra import InvalidCampMoveError, get_army_stats, list_army_squads, move_between_camps
 from bot.services.gang import get_gang
-from bot.services.recruit import recruit_ceiling_rank
+from bot.services.recruit import get_offer
 from bot.services.ticket import get_status
 from bot.texts.gang import CAMP_NOTHING_TO_MOVE
 from bot.texts.school import SCHOOL_NAMES
@@ -63,6 +62,9 @@ class GangOut(BaseModel):
     move_percents: list[int]
     recruit_cooldown_seconds: int
     recruit_ceiling_rank: str
+    recruit_crowd: int = 1
+    recruit_select: int = 1
+    influence: int = 0
     tickets: TicketsOut
 
 
@@ -89,7 +91,7 @@ async def get_my_gang(
     army = await get_army_stats(session, user.id)
     squads = await list_army_squads(session, user.id)
     tickets = await get_status(session, user.id)
-    influence = await get_influence(session, user.id)
+    offer = await get_offer(session, user.id, user.phase)
     return GangOut(
         name=gang.name,
         phase=user.phase,
@@ -107,7 +109,10 @@ async def get_my_gang(
         ],
         move_percents=list(GANG_CAMP_MOVE_PERCENTS),
         recruit_cooldown_seconds=await ttl_seconds(redis, recruit_extra_cooldown(user.id)),
-        recruit_ceiling_rank=recruit_ceiling_rank(user.phase, influence),
+        recruit_ceiling_rank=offer.ceiling,
+        recruit_crowd=offer.crowd,
+        recruit_select=offer.select,
+        influence=offer.influence,
         tickets=TicketsOut(count=tickets.count, cap=tickets.cap, next_in_seconds=tickets.next_in_seconds),
     )
 

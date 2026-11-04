@@ -1,5 +1,9 @@
 """Публичное API домена unique_technique (сервис)."""
 from bot.services.unique_technique.unique_technique import (  # noqa: F401
+    NoInfinitePathError,
+    TechniqueSlotsFullError,
+    infinite_slots,
+    toggle_selected,  # noqa: F401
     NotEnoughFragmentsError,
     QuestAlreadyActiveError,
     QuestNotCompleteError,

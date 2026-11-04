@@ -1,5 +1,8 @@
 """Публичное API домена training (константы)."""
 from bot.constant.training.training import (  # noqa: F401
+    CB_RANKS_LOCK_PREFIX,
+    CB_RANKS_OPEN,
+    CB_RANKS_PROMOTE_PREFIX,
     CB_TRAIN_EXTRAS_OPEN,
     CB_TRAIN_EXTRAS_RUN,
     CB_TRAIN_PERSONAL,

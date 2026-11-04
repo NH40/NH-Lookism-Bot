@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.config.unique_path import TRAINING_KPD_CAP_PER_LEVEL
 from bot.constant.unique_path import PATH_TRAINING
 from bot.services.build import get_build
-from bot.texts.unique_path import TRAINING_KPD_LINE
+from bot.texts.unique_path import TRAINING_KPD_LINE, gauge_line
 from bot.config.unique_path import LEVELS, PATH_AWAKEN_FRAGMENTS
 from bot.constant.unique_path import (
     CB_PATH_ACTIVATE2_PREFIX,
@@ -123,6 +123,7 @@ async def render_path(session: AsyncSession, redis: Redis, user_id: int):
         next_line=NEXT_LEVEL_LINE.format(cost=format_number(view.next_cost)) if view.next_cost else MAX_LEVEL_LINE,
         owned_line=OWNED_LINE.format(paths=", ".join(PATH_NAMES[c] for c in others)) if others else "",
     )
+    text += gauge_line(view.active, view.gauge, level)
     if PATH_TRAINING in (view.active, view.active2):
         kpd = (await get_build(session, user_id)).training_kpd
         text += TRAINING_KPD_LINE.format(p=round(kpd * 100), cap=round(view.owned.get(PATH_TRAINING, 0) * TRAINING_KPD_CAP_PER_LEVEL * 100))
@@ -130,6 +131,7 @@ async def render_path(session: AsyncSession, redis: Redis, user_id: int):
     if view.second_body:
         if view.active2:
             text += SECOND_PATH_LINE.format(name=PATH_NAMES[view.active2], level=view.owned.get(view.active2, 0))
+            text += gauge_line(view.active2, view.gauge2, view.owned.get(view.active2, 0))
         else:
             text += SECOND_PATH_NONE
         others2 = [c for c in others if c != view.active2]

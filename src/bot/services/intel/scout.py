@@ -23,7 +23,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.cache.keys import battle_cooldown
 from bot.config.activity import LOG_ENTRIES_BY_LEVEL, LOG_KINDS_BY_LEVEL
 from bot.config.card import CARD_BY_CODE
+from bot.config.path_gauge import GAUGE_FORESIGHT_SCOUT, GAUGE_SENSORY_SCOUT
 from bot.config.position_skill import SKILLS
+from bot.constant.bloodline import BLOODLINES
+from bot.constant.unique_path import PATH_FORESIGHT, PATHS, PATH_SENSORY
+from bot.constant.unique_technique import TECHNIQUES
 from bot.constant.activity import ACT_BATTLE
 from bot.constant.extra import CAMP_ATTACK, CAMP_DEFENSE
 from bot.constant.position_skill import (
@@ -68,6 +72,9 @@ _LEGACY_LEVEL = 3
 _LEGACY_SCOUT = {1: (F_ATTACK_POWER, F_DEFENSE_POWER), 2: (F_HEADCOUNT, F_TOP_SQUADS, F_RANKS),
                  3: (F_BLOODLINE, F_PATH, F_TECHNIQUE, F_GENIUS)}
 _RANGE_SPREAD = 0.15
+# Ложные данные (Курода): с этого уровня разведка видит чужой билд неверно.
+FALSE_BUILD_THRESHOLD = 0.30
+_FALSE_BUILD = {F_BLOODLINE: tuple(BLOODLINES), F_PATH: tuple(PATHS), F_TECHNIQUE: tuple(TECHNIQUES)}
 REPORTS_SHOWN = 10
 
 
@@ -101,6 +108,14 @@ def _levels(build) -> dict[str, int]:
     if build.eco.foresight:
         levels[F_FORECAST] = max(levels.get(F_FORECAST, 0), _LEGACY_LEVEL)
     return levels
+
+
+def _fake_build(viewer_id: int, target_id: int, field: str, value: list) -> list:
+    """Курода: разведка видит не тот билд — код из того же списка, одинаковый для пары на сутки."""
+    day = datetime.now(timezone.utc).date().isoformat()
+    h = int(hashlib.md5(f"build:{viewer_id}:{target_id}:{field}:{day}".encode()).hexdigest()[:6], 16)
+    pool = _FALSE_BUILD[field]
+    return [pool[h % len(pool)], value[1]]
 
 
 def _fake(viewer_id: int, target_id: int, field: str, spread: float) -> float:
@@ -207,16 +222,23 @@ async def scout(session: AsyncSession, redis: Redis, viewer_id: int, *, target_i
     target_build = await get_build(session, target.id)
     tpos = target_build.positions or NO_EFFECTS
     vpos = viewer_build.positions or NO_EFFECTS
-    hide = tpos.hide
+    # Безопасность цели: навыки сокрытия + ступени систем развития минус разведка, которая их не
+    # замечает. «Нейтрализация» Сенсорики снимает всё разом.
+    security = max(0, target_build.eco.security - viewer_build.eco.security_pierce)
+    if target_build.security_off:
+        hide_level = lambda field: 0  # noqa: E731
+    else:
+        hide_level = lambda field: tpos.hide.get(field, 0) + security  # noqa: E731
     see_fakes = bool(vpos.get("see_through_fakes"))
     exact_ranges = bool(vpos.get("range_as_exact"))
-    fake = 0.0 if see_fakes else tpos.get("fake_numbers")
+    false_intel = 0.0 if target_build.security_off else target_build.eco.false_intel
+    fake = 0.0 if see_fakes else tpos.get("fake_numbers") + false_intel
 
-    visible = {f for f, lv in levels.items() if lv >= hide.get(f, 0)}
+    visible = {f for f, lv in levels.items() if lv >= hide_level(f)}
     values = await _values(session, redis, target.id, visible - {F_FORECAST}, logs=viewer_build.eco.logs)
     payload: dict = {}
     for field, lv in levels.items():
-        h = hide.get(field, 0)
+        h = hide_level(field)
         seen = SEEN_EXACT if lv > h else SEEN_RANGE if lv == h else SEEN_HIDDEN
         if seen == SEEN_RANGE and exact_ranges:
             seen = SEEN_EXACT
@@ -229,6 +251,8 @@ async def scout(session: AsyncSession, redis: Redis, viewer_id: int, *, target_i
         value = values.get(field)
         if fake and isinstance(value, (int, float)) and not isinstance(value, bool):
             value = int(value * _fake(viewer_id, target.id, field, fake))
+        if not see_fakes and false_intel >= FALSE_BUILD_THRESHOLD and field in _FALSE_BUILD and isinstance(value, list):
+            value = _fake_build(viewer_id, target.id, field, value)
         payload[field] = {"seen": seen, "value": _blur(field, value) if seen == SEEN_RANGE else value}
     label = target.display_name or (f"@{target.username}" if target.username else str(target.id))
     payload["_target"] = label
@@ -237,6 +261,10 @@ async def scout(session: AsyncSession, redis: Redis, viewer_id: int, *, target_i
     if tpos.get("scout_trap"):
         trap_lost = await _trap(session, viewer_id, tpos.get("scout_trap"))
     created = await scout_repo.save(session, viewer_id, target.id, payload)
+    from bot.services.path_gauge import add_for_paths
+
+    await add_for_paths(session, viewer_id, {PATH_SENSORY}, GAUGE_SENSORY_SCOUT)
+    await add_for_paths(session, viewer_id, {PATH_FORESIGHT}, GAUGE_FORESIGHT_SCOUT)
     await session.commit()
     notify = "double_agent" if tpos.get("reveal_scout") else "alarm" if tpos.get("scout_alert") else None
     return ScoutResult(target.id, label, created, payload, notify_target=notify, trap_lost=trap_lost)

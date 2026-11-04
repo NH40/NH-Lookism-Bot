@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.db.repositories.unique_path import bump_training_reps
 from bot.services.build import get_build
 from bot.config.development import MAX_LEVEL
-from bot.config.unique_technique import tech_training_price, tech_training_quest, technique_level_cost
+from bot.config.unique_technique import eased_quest, tech_training_price, tech_training_quest, technique_level_cost
 from bot.constant.dev_quest import QUEST_TECH_LEVEL
 from bot.db.repositories import business as business_repo
 from bot.db.repositories import unique_technique as tech_repo
@@ -63,6 +63,15 @@ class TechTraining:
         return "level" if self.quest.complete else "quest"
 
 
+def quest_ease(build) -> tuple[float, int]:
+    """Бафы обучения: доля меньше заданий и сколько заданий засчитано сразу. Джинен сокращает задания
+    только с путём Бесконечной техники (пользователь: «не три, а два задания»)."""
+    skip = build.eco.auto_tech_task
+    if "infinite_techniques" in build.flags:
+        skip += build.eco.teacher_quest_cut
+    return build.eco.technique_quest_speed, skip
+
+
 def _ref(code: str, level: int) -> str:
     return f"{code}:{level}"
 
@@ -73,7 +82,10 @@ async def list_trainings(session: AsyncSession, user_id: int) -> tuple[list[Tech
     _, fragments = await tech_repo.get_state(session, user_id)
     quests = {q.ref: q for q in await list_active(session, user_id, QUEST_TECH_LEVEL)}
     wallet = await business_repo.get_wallet(session, user_id)
-    kpd = (await get_build(session, user_id)).training_kpd  # Путь тренировок
+    build = await get_build(session, user_id)
+    kpd = build.training_kpd  # Путь тренировок
+    speed, skip = quest_ease(build)
+    fragment_discount = build.eco.tech_fragment_discount
     rows = []
     for code, level in sorted(owned.items(), key=lambda kv: (-kv[1], kv[0])):
         nxt = level + 1 if level < MAX_LEVEL else None
@@ -81,9 +93,9 @@ async def list_trainings(session: AsyncSession, user_id: int) -> tuple[list[Tech
             TechTraining(
                 code=code, level=level, next_level=nxt,
                 price=int(tech_training_price(nxt) * (1 - kpd)) if nxt else 0,
-                fragments_cost=technique_level_cost(nxt) if nxt else 0,
+                fragments_cost=technique_level_cost(nxt, fragment_discount) if nxt else 0,
                 quest=quests.get(_ref(code, nxt)) if nxt else None,
-                tasks={t: max(1, round(n * (1 - kpd / 2))) for t, n in tech_training_quest(code, nxt).items()} if nxt else {},
+                tasks=eased_quest(tech_training_quest(code, nxt), speed=speed + kpd / 2, skip=skip) if nxt else {},
             )
         )
     return rows, fragments, wallet.nh_coins if wallet else 0

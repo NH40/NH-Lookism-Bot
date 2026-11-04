@@ -38,6 +38,8 @@ from bot.db.repositories import potion as potion_repo
 from bot.db.repositories import clan as clan_repo
 from bot.config.clan import CLAN_DEPUTY_SHARE, CLAN_OWNER_SHARE
 
+from bot.config.path_gauge import GAUGE_BUSINESS_COINS
+from bot.constant.unique_path import PATH_BUSINESS
 from bot.config.game import (
     BUSINESS_ACCRUAL_CAP_MINUTES,
     BUSINESS_BASE_CAPACITY,
@@ -219,10 +221,10 @@ async def _wealth_potion_bonus(session: AsyncSession, user_id: int, start: datet
     return value * overlap / (end - start).total_seconds()
 
 
-def upgrade_cost(kind: str, current: int, discount: float = 0.0) -> int | None:
+def upgrade_cost(kind: str, current: int, discount: float = 0.0, extra_cap: int = 0) -> int | None:
     """Цена следующего уровня прокачки; None — уже максимум. `discount` — скидка систем
     развития (Элита, гений бизнеса), режется потолком."""
-    if current >= BUSINESS_MAX_UPGRADE:
+    if current >= BUSINESS_MAX_UPGRADE + extra_cap:
         return None
     base = BUSINESS_LEVEL_UPGRADE_BASE_COST if kind == UPGRADE_LEVEL else BUSINESS_CAPACITY_UPGRADE_BASE_COST
     return max(1, int(base * 2**current * (1 - capped(discount, 0.6))))
@@ -288,7 +290,7 @@ async def get_wallet(session: AsyncSession, user_id: int, *, now: datetime | Non
     potion = await _wealth_potion_bonus(session, user_id, wallet.coins_accrued_at, now, eco.potion_power)
     gross = _with_income(
         income_for(counts, wallet.business_level, minutes, _rng(user_id, wallet.coins_accrued_at, minutes)), eco, potion
-    )
+    ) + int(eco.passive_income * minutes / 60)
     keep = 1 - tax.percent / 100 * (1 - capped(eco.tax_relief, 0.8)) if tax else 1
     # Скорость «сейчас»: с активным зельем богатства и множителем админа — иначе экран
     # показывал бы доход без зелья, хотя начисление его учитывает (жалоба 2026-10-13).
@@ -299,7 +301,7 @@ async def get_wallet(session: AsyncSession, user_id: int, *, now: datetime | Non
     return WalletView(
         nh_coins=wallet.nh_coins,
         pending=_split(gross, tax, eco.tax_relief)[0],
-        per_minute=rate * (1 + eco.income + potion_now) * keep,
+        per_minute=(rate * (1 + eco.income + potion_now) + eco.passive_income / 60) * keep,
         storage_full_in_seconds=_storage_full_in(wallet.coins_accrued_at, now, cap),
         level=wallet.business_level,
         capacity=wallet.business_capacity,
@@ -325,7 +327,7 @@ async def accrue(session: AsyncSession, user_id: int, *, now: datetime | None = 
     potion = await _wealth_potion_bonus(session, user_id, wallet.coins_accrued_at, now, eco.potion_power)
     gross = _with_income(
         income_for(counts, wallet.business_level, minutes, _rng(user_id, wallet.coins_accrued_at, minutes)), eco, potion
-    )
+    ) + int(eco.passive_income * minutes / 60)
     # Налог императору города игрока — в той же транзакции, что зачисление (правило 10).
     tax = await empire_repo.get_tax_context(session, user_id)
     # «Резервный фонд» (Бизнесмен): хранилище было полным — сбор больше.
@@ -336,6 +338,10 @@ async def accrue(session: AsyncSession, user_id: int, *, now: datetime | None = 
     # если игрок сам владелец/зам — забирает накопленную долю вместе со своим доходом.
     share = await clan_repo.settle_income_share(session, user_id, amount, CLAN_OWNER_SHARE, CLAN_DEPUTY_SHARE)
     await business_repo.credit_accrual(session, user_id, amount=amount + share, accrued_at=new_accrued_at)
+    if PATH_BUSINESS in build_.paths:  # шкала Бизнесмена растёт от заработанных денег
+        from bot.services.path_gauge import add as add_gauge
+
+        await add_gauge(session, user_id, PATH_BUSINESS, amount / GAUGE_BUSINESS_COINS)
     if to_emperor:
         await empire_repo.credit_emperor(session, tax.emperor_id, to_emperor)
     return amount + share
@@ -401,8 +407,8 @@ async def get_overview(session: AsyncSession, user_id: int) -> BusinessOverview 
         capacity_per_district=_capacity_per_district(wallet.capacity),
         gym_bonus_percent=wallet.counts.get(BIZ_GYM, 0) * BUSINESS_GYM_TRAINING_BONUS_PERCENT,
         parliament_influence=wallet.counts.get(BIZ_PARLIAMENT, 0) * BUSINESS_PARLIAMENT_INFLUENCE,
-        level_cost=upgrade_cost(UPGRADE_LEVEL, wallet.level, eco.upgrade_discount),
-        capacity_cost=upgrade_cost(UPGRADE_CAPACITY, wallet.capacity, eco.upgrade_discount),
+        level_cost=upgrade_cost(UPGRADE_LEVEL, wallet.level, eco.upgrade_discount, eco.business_cap),
+        capacity_cost=upgrade_cost(UPGRADE_CAPACITY, wallet.capacity, eco.upgrade_discount, eco.business_cap),
     )
 
 
@@ -609,7 +615,8 @@ async def upgrade(session: AsyncSession, user_id: int, kind: str) -> UpgradeResu
     collected = await accrue(session, user_id)
     wallet = await business_repo.get_wallet(session, user_id, for_update=True)
     current = wallet.business_level if kind == UPGRADE_LEVEL else wallet.business_capacity
-    cost = upgrade_cost(kind, current, (await get_build(session, user_id)).eco.upgrade_discount)
+    upgrade_eco = (await get_build(session, user_id)).eco
+    cost = upgrade_cost(kind, current, upgrade_eco.upgrade_discount, upgrade_eco.business_cap)
     if cost is None:
         raise MaxUpgradeError
     if not await business_repo.bump_upgrade(session, user_id, kind=kind, current=current, cost=cost):

@@ -11,6 +11,7 @@ from bot.constant.extra import CAMP_ATTACK, CAMP_DEFENSE, CAMPS, CONTRACT_SQUAD
 from bot.db.repositories import card as card_repo
 from bot.db.repositories import contract as contract_repo
 from bot.db.repositories.extra import add_to_stack, get_stack_for_update, list_stacks
+from bot.services.build import get_build
 from bot.services.card import card_power
 from bot.services.characteristic import strength_power_multiplier
 
@@ -40,11 +41,11 @@ class Squad:
         return self.attack + self.defense
 
 
-async def recruit_into_stack(session: AsyncSession, user_id: int, rank: str) -> None:
+async def recruit_into_stack(session: AsyncSession, user_id: int, rank: str, quantity: int = 1) -> None:
     """Новый статист = +1 к стопке (атака, ранг, 0 звёзд, 0 уровень тренировки) —
     новички сразу в лагере атаки (подтверждено пользователем 2026-09-29). НЕ коммитит
     сама (правило 10, вызывается из `services/recruit`, тот коммитит один раз)."""
-    await add_to_stack(session, user_id=user_id, camp=CAMP_ATTACK, rank=rank, quantity=1)
+    await add_to_stack(session, user_id=user_id, camp=CAMP_ATTACK, rank=rank, quantity=quantity)
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,12 +69,13 @@ async def get_army_stats(session: AsyncSession, user_id: int) -> ArmyStats:
     тренировки), а не размером армии — даже при "сотнях миллиардов" статистов
     агрегация здесь работает над МАЛЫМ числом строк-стопок, не над единицами (правило 3)."""
     stacks = await list_stacks(session, user_id)
+    cap_mult = (await get_build(session, user_id)).eco.training_cap_mult
 
     by_rank_totals: dict[str, int] = {}
     camp_qty = {camp: 0 for camp in CAMPS}
     camp_power = {camp: 0 for camp in CAMPS}
     for s in stacks:
-        unit_power = statist_unit_power(s.rank, s.stars, s.training_level, s.school, s.school_level)
+        unit_power = statist_unit_power(s.rank, s.stars, s.training_level, s.school, s.school_level, cap_mult)
         by_rank_totals[s.rank] = by_rank_totals.get(s.rank, 0) + s.quantity
         camp_qty[s.camp] += s.quantity
         camp_power[s.camp] += s.quantity * unit_power
@@ -110,6 +112,7 @@ async def list_squads(session: AsyncSession, user_id: int) -> list[Squad]:
     """Сильнейшие отряды — первыми (по мощи одного бойца). Число отрядов ограничено
     комбинаторикой ранг×звёзды×уровень тренировки, не размером армии."""
     by_key: dict[tuple[str, int, int, str, int], dict[str, int]] = {}
+    cap_mult = (await get_build(session, user_id)).eco.training_cap_mult
     for s in await list_stacks(session, user_id):
         key = (s.rank, s.stars, s.training_level, s.school, s.school_level)
         camps = by_key.setdefault(key, {camp: 0 for camp in CAMPS})
@@ -117,7 +120,7 @@ async def list_squads(session: AsyncSession, user_id: int) -> list[Squad]:
     squads = [
         Squad(
             rank=rank, stars=stars, training_level=level,
-            unit_power=round(statist_unit_power(rank, stars, level, school, school_level)),
+            unit_power=round(statist_unit_power(rank, stars, level, school, school_level, cap_mult)),
             attack=camps[CAMP_ATTACK], defense=camps[CAMP_DEFENSE], school=school, school_level=school_level,
         )
         for (rank, stars, level, school, school_level), camps in by_key.items()

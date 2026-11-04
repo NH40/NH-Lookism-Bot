@@ -47,5 +47,6 @@ BTN_STYLIST_PICK = "{mark}{name}"
 
 JOURNAL_ARIAN = "♾ Ариан: абсолюты противника заблокированы на 1 ч"
 JOURNAL_MANAGER = "♾ Менеджер: у напавшего сгорело {amount} NHCoin"
+JOURNAL_LOOT = "💰 Победитель из рода Элиты забрал {amount} NHCoin проигравшего"
 JOURNAL_MARISE = "♾ Marise: клонировано статистов — {count}"
 PUSH_ARKHANGEL = "♾ Архангел принёс {amount} NHCoin — {share} часового дохода."

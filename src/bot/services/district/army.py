@@ -23,7 +23,7 @@ from bot.db.repositories import card as card_repo
 from bot.db.repositories import contract as contract_repo
 from bot.db.repositories.extra import add_to_stack, list_stacks
 from bot.services.card import card_power
-from bot.services.characteristic import strength_power_multiplier
+from bot.services.characteristic import get_combat_profile
 from bot.services.combat import CombatStack
 
 
@@ -34,7 +34,7 @@ _KIND_CARD = "u"
 _KIND_CONTRACT = "c"  # наёмники по контракту (магазин, родословная Джинчоля)
 
 
-def combat_stacks(stacks: Sequence[Extra]) -> list[CombatStack]:
+def combat_stacks(stacks: Sequence[Extra], cap_mult: float = 0.0) -> list[CombatStack]:
     """Стопки статистов одного лагеря → армия для боевого движка. Ключ — (вид, ранг,
     звёзды, уровень тренировки, школа, уровень школы): лагерь у всех стопок одной стороны
     один и тот же. Школа учителя даёт стопке свою мощь и реакции (`config/school`)."""
@@ -44,7 +44,7 @@ def combat_stacks(stacks: Sequence[Extra]) -> list[CombatStack]:
         result.append(
             CombatStack(
                 key=(_KIND_EXTRA, s.rank, s.stars, s.training_level, s.school, s.school_level),
-                unit_power=statist_unit_power(s.rank, s.stars, s.training_level, s.school, s.school_level),
+                unit_power=statist_unit_power(s.rank, s.stars, s.training_level, s.school, s.school_level, cap_mult),
                 quantity=s.quantity,
                 dodge=SCHOOL_DODGE_PER_LEVEL.get(s.school, 0.0) * level,
                 block=SCHOOL_BLOCK_PER_LEVEL.get(s.school, 0.0) * level,
@@ -60,18 +60,19 @@ async def load_camp(session: AsyncSession, user_id: int, camp: str, *, for_updat
     копии уников вне отряда бьются и гибнут как статисты; уники на позициях отряда в бою не
     участвуют — их в `card_stacks` нет). Порядок блокировок у одного игрока всегда один:
     стопки статистов → стопки уников."""
-    stacks = combat_stacks(await list_stacks(session, user_id, camp=camp, for_update=for_update))
+    profile = await get_combat_profile(session, user_id)
+    stacks = combat_stacks(await list_stacks(session, user_id, camp=camp, for_update=for_update), profile.eco.training_cap_mult)
     for c in await card_repo.list_stacks(session, user_id, camp=camp, for_update=for_update):
         if c.card_code in ABSOLUTES:  # абсолюты не воюют и не гибнут — пассивка за обладание
             continue
-        stacks.append(CombatStack(key=(_KIND_CARD, c.card_code), unit_power=card_power(c.card_code), quantity=c.quantity))
+        stacks.append(CombatStack(key=(_KIND_CARD, c.card_code), unit_power=card_power(c.card_code), quantity=c.quantity, unique=True))
     # Наёмники по контракту воюют в своём лагере, пока контракт действует.
     for contract in await contract_repo.list_active(session, user_id, camp=camp, for_update=for_update):
         stacks.append(
             CombatStack(key=(_KIND_CONTRACT, contract.id), unit_power=extra_unit_power(contract.rank, 0, 0), quantity=contract.quantity)
         )
     # Сила игрока: +1% к мощи армии за ранг (raw-notes «Профиль») — на всех бойцах лагеря.
-    multiplier = await strength_power_multiplier(session, user_id) / 100
+    multiplier = profile.power_percent / 100
     if multiplier != 1:
         stacks = [replace(s, unit_power=s.unit_power * multiplier) for s in stacks]
     return stacks

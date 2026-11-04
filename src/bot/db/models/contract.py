@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -29,3 +29,5 @@ class StatistContract(Base):
     # Лагерь (пользователь 2026-10-12: контрактники — обычные отряды, их можно переводить между
     # атакой и защитой; в роту клана, ячейки и на биржу — нельзя, они живут только здесь).
     camp: Mapped[str] = mapped_column(String(8), nullable=False, default="attack", server_default="attack")
+    # Джинчоль: доля выживших, которая остаётся навсегда, когда контракт кончится (снимок при покупке).
+    retain: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")

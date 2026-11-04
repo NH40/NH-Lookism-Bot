@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ExtrasResult, TrainingResponse } from "../../types";
+import type { ExtrasResult, RanksResponse, TrainingResponse } from "../../types";
 import { BackHeader, Bar, Panel, Screen, countdown, fmt } from "../../components/ui";
 import { ROUTE_DEVELOPMENT } from "../../constants/constants";
 import { useAction, useApi } from "../../hooks/useApi";
@@ -7,7 +7,11 @@ import "../../styles/development.css";
 
 export function TrainingPage() {
   const { data, status, error, reload } = useApi<TrainingResponse>("/training");
-  const { run, busy } = useAction(reload);
+  const ranks = useApi<RanksResponse>("/training/ranks");
+  const { run, busy } = useAction(() => {
+    reload();
+    ranks.reload();
+  });
   const [fresh, setLast] = useState<ExtrasResult | null>(null);
   const last = fresh ?? data?.last_extras ?? null;
 
@@ -21,6 +25,33 @@ export function TrainingPage() {
       {data && (
         <div className="page">
           <BackHeader title="Тренировки" backLabel="Развитие" to={ROUTE_DEVELOPMENT} />
+
+          {ranks.data?.available && (
+            <Panel title="РАНГИ СТАТИСТОВ" tone="violet">
+              <div className="muted" style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.45, marginBottom: 8 }}>
+                Родословная Самдака: запрети переход на следующий ранг или переведи вручную тех, кто дошёл до обычного капа.
+              </div>
+              {ranks.data.rows.length === 0 && <div className="muted dev-note">В армии пока нет статистов.</div>}
+              {ranks.data.rows.map((r) => (
+                <div key={r.rank} className="row" style={{ borderBottom: "1px dashed var(--line-dash)", padding: "6px 0", gap: 6 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>
+                    {r.rank} · {fmt(r.quantity)}
+                    <div className="muted" style={{ fontSize: 11 }}>кап ур. {r.cap} · готовы {fmt(r.ready)}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button type="button" className={`btn small ${r.locked ? "violet" : "ghost"}`} disabled={busy} onClick={() => run("/training/ranks/lock", { rank: r.rank })}>
+                      {r.locked ? "Заперт" : "Запереть"}
+                    </button>
+                    {r.ready > 0 && r.next_rank && (
+                      <button type="button" className="btn small gold" disabled={busy} onClick={() => run("/training/ranks/promote", { rank: r.rank })}>
+                        На {r.next_rank}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </Panel>
+          )}
 
           <Panel title="ЛИЧНАЯ" tone="green">
             <div className="row" style={{ marginBottom: 10 }}>

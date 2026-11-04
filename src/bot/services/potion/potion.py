@@ -25,7 +25,7 @@ from bot.config.potion import (
     POTION_PRICES,
     POTION_TIERS,
 )
-from bot.constant.potion import LOCK_ACTION_POTION, POTION_WEALTH, POTIONS
+from bot.constant.potion import LOCK_ACTION_POTION, POTIONS
 from bot.db.repositories import business as business_repo
 from bot.db.repositories import potion as potion_repo
 from bot.services.build import EconomyMods, capped, get_build
@@ -135,11 +135,12 @@ async def _drink(session: AsyncSession, user_id: int, kind: str, tier: int, eco:
     top = _max_tier(eco)
     if tier > top:
         raise TierLockedError(top)
-    if kind == POTION_WEALTH:
-        # Доход до сих пор — по старому окну зелья: зачислить его ДО смены окна.
-        from bot.services.business import accrue
+    # Доход до сих пор зачисляем ДО покупки: для зелья богатства — по старому окну зелья, а для всех —
+    # потому что доход бизнеса ленивый. Без этого авто-продление видело только зачисленные NHCoin, решало
+    # «не хватает» и выключало авто-зелье (жалоба 2026-11-03: «не покупает все 3 зелья»).
+    from bot.services.business import accrue
 
-        await accrue(session, user_id)
+    await accrue(session, user_id)
     price, minutes = _price(tier, eco), _minutes(kind, eco)
     if not await business_repo.spend_coins(session, user_id, price):
         raise NotEnoughCoinsError(price)

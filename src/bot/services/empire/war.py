@@ -33,7 +33,9 @@ from bot.services.position_skill.battle import journal, matchup
 from bot.cache.keys import empire_war_cooldown, empire_war_shield
 from bot.config.empire import (
     EMPIRE_WAR_ACCEPT_SECONDS,
+    EMPIRE_WAR_ATTACKER_SHIELD_SECONDS,
     EMPIRE_WAR_SHIELD_SECONDS,
+    EMPIRE_WAR_SHIELD_WIN_SECONDS,
     EMPIRE_WAR_SWEEP_BATCH,
     EMPIRE_WAR_HISTORY_SHOWN,
     EMPIRE_WAR_TARGETS_PAGE_SIZE,
@@ -305,7 +307,7 @@ async def _resolve(session: AsyncSession, redis: Redis, war, resolution: str, *,
     # Казна проигравшего — под FOR UPDATE, доля от перевеса.
     percent = war_treasury_percent(ratio)
     loser_coins = await empire_repo.emperor_coins(session, loser, for_update=True)
-    treasury = loser_coins * percent // 100
+    treasury = max(loser_coins, 0) * percent // 100
     if treasury:
         await empire_repo.move_coins(session, loser, winner, treasury)
 
@@ -348,17 +350,23 @@ async def _resolve(session: AsyncSession, redis: Redis, war, resolution: str, *,
         await remember_opponents(session, attacker_id, defender_id)
     # Квест кулака на пробуждение: победа в войне императоров.
     await quest_event(session, winner, TASK_WAR_WIN)
-    if attacker_won and resolution == WAR_ACCEPTED:
+    if attacker_won:
         # Аналог для императора (пользователь 2026-10-12): районов для PvP-вызова у него нет, поэтому
         # победа нападающим в войне императоров засчитывается заданиям «победить игрока нападающим»
-        # и этапу 3 мастерства (в т.ч. «победа над равным» по мощи лагерей).
+        # и этапу 3 мастерства (в т.ч. «победа над равным» по мощи лагерей). Автобой против лагеря
+        # защиты (защитник не принял) — такой же бой: раньше он не считался, и задание кулака
+        # «работало через раз» (жалоба 2026-10-28: война 2/2, а нападающим 0/4).
         await quest_event(session, attacker_id, TASK_WIN_PVP)
         from bot.services.mastery import record_pvp_win
 
         await record_pvp_win(session, attacker_id, attacker_power, defender_power)
     await session.commit()
     # Щит защитнику — только после commit (правило 10: Redis не опережает Postgres).
-    await redis.set(empire_war_shield(defender_id), "1", ex=EMPIRE_WAR_SHIELD_SECONDS)
+    defender_shield = EMPIRE_WAR_SHIELD_SECONDS if attacker_won else EMPIRE_WAR_SHIELD_WIN_SECONDS
+    if defender_shield > 0:
+        await redis.set(empire_war_shield(defender_id), "1", ex=defender_shield)
+    if EMPIRE_WAR_ATTACKER_SHIELD_SECONDS > 0:
+        await redis.set(empire_war_shield(attacker_id), "1", ex=EMPIRE_WAR_ATTACKER_SHIELD_SECONDS)
     return WarOutcome(
         war.id, attacker_id, defender_id, resolution=resolution, attacker_won=attacker_won, rounds=rounds,
         journal=war_journal, defender_journal=war_journal_def,

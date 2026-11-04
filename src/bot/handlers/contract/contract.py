@@ -31,6 +31,7 @@ from bot.texts.contract import (
     BUSY_ALERT,
     CONTRACT_ACTIVE_HEAD,
     CONTRACT_ACTIVE_LINE,
+    CONTRACT_ACTIVE_MORE,
     CONTRACT_DISCOUNT_LINE,
     CONTRACT_SCREEN,
     NOT_ENOUGH_ALERT,
@@ -55,6 +56,9 @@ async def _coins(session: AsyncSession, user_id: int) -> int:
     return wallet.nh_coins if wallet else 0
 
 
+CONTRACT_ACTIVE_SHOWN = 20
+
+
 async def render_contracts(session: AsyncSession, user_id: int, page: int = 0):
     current = await terms(session, user_id)
     ranks = current.ranks
@@ -62,12 +66,14 @@ async def render_contracts(session: AsyncSession, user_id: int, page: int = 0):
     page = min(max(page, 0), pages - 1)
     chunk = ranks[page * CONTRACT_RANKS_PER_PAGE:(page + 1) * CONTRACT_RANKS_PER_PAGE]
     running = await active(session, user_id)
+    # Показываем ближайшие: контрактов бывают сотни, а у сообщения потолок 4096 символов.
     lines = (
         CONTRACT_ACTIVE_HEAD
         + "".join(
             CONTRACT_ACTIVE_LINE.format(quantity=format_number(c.quantity), rank=c.rank, countdown=format_countdown(c.expires_in_seconds))
-            for c in running
+            for c in sorted(running, key=lambda c: c.expires_in_seconds)[:CONTRACT_ACTIVE_SHOWN]
         )
+        + (CONTRACT_ACTIVE_MORE.format(count=len(running) - CONTRACT_ACTIVE_SHOWN) if len(running) > CONTRACT_ACTIVE_SHOWN else "")
         if running
         else ""
     )

@@ -4,4 +4,5 @@ from bot.config.storage.storage import (  # noqa: F401
     STORAGE_FEE_PER_HOUR,
     STORAGE_OPEN_COSTS,
     STORAGE_SLOTS,
+    SQUADS_PAGE_SIZE,
 )

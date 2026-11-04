@@ -6,6 +6,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -192,3 +193,5 @@ class ClanMemberStat(Base):
     wars_won: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     lands_won: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")  # земель взято в атаках
     exchanges: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")  # передач через обменник
+    # Счётчики на момент последнего патча (2026-11-04): за этот патч = счётчик − снимок.
+    patch_base: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")

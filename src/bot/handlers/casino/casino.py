@@ -14,14 +14,11 @@ from bot.constant.casino import (
     CB_BJ_STAND,
     CB_CASINO_GAME_PREFIX,
     CB_CASINO_OPEN,
-    CB_CASINO_SQUAD_PREFIX,
     CB_CASINO_STAKE_PREFIX,
-    CB_CASINO_STATISTS_PREFIX,
     CB_SLOTS_AGAIN_PREFIX,
     GAME_BLACKJACK,
     GAME_SLOTS,
     STAKE_RESOURCE,
-    STAKE_STATIST,
 )
 from bot.keyboards.casino import (
     back_to_game,
@@ -29,7 +26,6 @@ from bot.keyboards.casino import (
     blackjack_menu,
     casino_menu,
     slots_result_menu,
-    squads_menu,
     stake_menu,
 )
 from bot.services.casino import (
@@ -52,7 +48,6 @@ from bot.services.casino import (
     hand_value,
     play_slots,
 )
-from bot.services.extra import list_squads
 from bot.services.gang import get_gang
 from bot.services.resource import StatistKey, balance
 from bot.states.casino import CasinoStates
@@ -68,8 +63,6 @@ from bot.texts.casino import (
     HAND_GONE_ALERT,
     HAND_IN_PROGRESS_ALERT,
     NOT_ENOUGH_ALERT,
-    PICK_SQUAD,
-    PICK_SQUAD_NONE,
     PICK_STAKE,
     SLOTS_LOSS,
     SLOTS_PAIR,
@@ -77,7 +70,6 @@ from bot.texts.casino import (
     SLOTS_TRIPLE,
     STAKE_INVALID,
     STAKE_PROMPT,
-    STATISTS_MIN_ALERT,
     X3_ALERT,
 )
 from bot.texts.gang import squad_title
@@ -135,18 +127,6 @@ async def _guard(callback: CallbackQuery, session: AsyncSession) -> bool:
     return True
 
 
-async def _squads(session: AsyncSession, user_id: int) -> list[tuple[str, str, int]]:
-    return [
-        (
-            StatistKey(sq.rank, sq.stars, sq.training_level, sq.school, sq.school_level).encode(),
-            squad_title(sq.rank, sq.stars, sq.training_level, sq.school, sq.school_level),
-            sq.attack + sq.defense,
-        )
-        for sq in await list_squads(session, user_id)
-        if sq.attack + sq.defense > 0
-    ]
-
-
 @router.callback_query(F.data == CB_CASINO_OPEN)
 async def cb_casino_open(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
     await state.clear()
@@ -195,30 +175,6 @@ async def cb_casino_stake(callback: CallbackQuery, state: FSMContext, session: A
     await _ask_stake(callback, state, game, STAKE_RESOURCE, code, resource_label(code), have)
 
 
-@router.callback_query(F.data.startswith(CB_CASINO_STATISTS_PREFIX))
-async def cb_casino_statists(callback: CallbackQuery, session: AsyncSession) -> None:
-    game = callback.data.removeprefix(CB_CASINO_STATISTS_PREFIX)
-    if game != GAME_BLACKJACK or not await _guard(callback, session):
-        await callback.answer()
-        return
-    squads = await _squads(session, callback.from_user.id)
-    if not squads:
-        await callback.answer(PICK_SQUAD_NONE, show_alert=True)
-        return
-    await callback.answer()
-    await safe_edit_text(callback.message, PICK_SQUAD.format(game=GAME_NAMES[game]), reply_markup=squads_menu(game, squads))
-
-
-@router.callback_query(F.data.startswith(CB_CASINO_SQUAD_PREFIX))
-async def cb_casino_squad(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
-    game, _, code = callback.data.removeprefix(CB_CASINO_SQUAD_PREFIX).partition(":")
-    squad = next((s for s in await _squads(session, callback.from_user.id) if s[0] == code), None)
-    if game != GAME_BLACKJACK or squad is None:
-        await callback.answer()
-        return
-    await _ask_stake(callback, state, game, STAKE_STATIST, code, "👥 " + squad[1], squad[2])
-
-
 async def _play(session: AsyncSession, redis: Redis, user_id: int, game: str, stake: Stake):
     """→ (текст, клавиатура) или popup-ошибка (строка)."""
     try:
@@ -234,7 +190,7 @@ async def _play(session: AsyncSession, redis: Redis, user_id: int, game: str, st
     except HandInProgressError:
         return HAND_IN_PROGRESS_ALERT
     except InvalidStakeError:
-        return STATISTS_MIN_ALERT if stake.kind == STAKE_STATIST else NOT_ENOUGH_ALERT
+        return NOT_ENOUGH_ALERT
 
 
 @router.message(CasinoStates.waiting_stake)

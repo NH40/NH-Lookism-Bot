@@ -31,7 +31,7 @@ async def after_battle(session: AsyncSession, m, result, *, attacker_id: int, at
         lines.append(JOURNAL_ARIAN)
     if ABS_MANAGER in defender_abs:
         coins = await session.scalar(select(User.nh_coins).where(User.id == attacker_id).with_for_update()) or 0
-        burned = int(coins * MANAGER_COINS_BURN)
+        burned = int(max(coins, 0) * MANAGER_COINS_BURN)
         if burned:
             await session.execute(update(User).where(User.id == attacker_id).values(nh_coins=User.nh_coins - burned))
         lines.append(JOURNAL_MANAGER.format(amount=format_number(burned)))

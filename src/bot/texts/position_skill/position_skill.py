@@ -43,7 +43,7 @@ FIELD_LABELS: dict[str, str] = {
     F_HEADCOUNT: "Статистов", F_ATTACK_POWER: "Мощь атаки", F_DEFENSE_POWER: "Мощь защиты", F_RANKS: "Ранги",
     F_TOP_SQUADS: "Сильнейшие отряды", F_LINEUP: "На позициях", F_EMPTY_SLOTS: "Пустые позиции", F_SKILLS: "Навыки позиций",
     F_BLOODLINE: "Родословная", F_PATH: "Путь", F_TECHNIQUE: "Техника", F_GENIUS: "Гениальность", F_POTIONS: "Зелья",
-    F_WALLET: "Кошелёк", F_BUSINESS: "Бизнесы", F_BATTLES: "Последние бои", F_COOLDOWNS: "Сможет атаковать",
+    F_WALLET: "Кошелёк", F_BUSINESS: "Бизнесы", F_BATTLES: "Журнал действий", F_COOLDOWNS: "Сможет атаковать",
     F_CLAN: "Клан", F_CHALLENGES: "Висящие вызовы", F_FORECAST: "Прогноз боя",
 }
 HIDDEN_VALUE = "скрыто"

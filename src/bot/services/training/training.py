@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from random import binomialvariate, choices
+from random import binomialvariate, choices, shuffle
 
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +35,7 @@ from bot.config.game import (
     EXTRA_TRAINING_STAGE2_SUCCESS_PERCENT,
     EXTRA_TRAINING_STAGE3_SUCCESS_PERCENT,
 )
+from bot.config.characteristic import training_level_cap
 from bot.constant.characteristic import RANK_INDEX, RANK_LADDER
 from bot.db.repositories.extra import add_to_stack, list_stacks
 from bot.constant.dev_quest import TASK_TRAIN_EXTRAS
@@ -60,8 +61,44 @@ class TrainResult:
 def _next_rank(rank: str, phase: str) -> str:
     """Следующая ступень `RANK_LADDER`, не выше потолка фазы (та же граница, что у
     вербовки, см. `services/recruit`) — если статист уже на потолке, остаётся на месте."""
-    index = min(RANK_INDEX[rank] + 1, PHASE_RANK_CAP_INDEX[phase])
+    index = max(RANK_INDEX[rank], min(RANK_INDEX[rank] + 1, PHASE_RANK_CAP_INDEX[phase]))
     return RANK_LADDER[index]
+
+
+def _is_maxed(rank: str, level: int, phase: str) -> bool:
+    """На капе и идти некуда (Infinity или потолок фазы): больше не растёт и не тренируется."""
+    return level >= training_level_cap(rank) and _next_rank(rank, phase) == rank
+
+
+def _after_level_up(rank: str, level: int, phase: str) -> tuple[str, int]:
+    """Куда попадает боец с новым уровнем `level` (пользователь 2026-11-04): дошёл до капа ранга —
+    обязательно следующий ранг с уровнем 0 (звёзды остаются); следующего нет — стоит на капе."""
+    cap = training_level_cap(rank)
+    if level < cap:
+        return rank, level
+    target = _next_rank(rank, phase)
+    return (target, 0) if target != rank else (rank, cap)
+
+
+def _coverage(stacks, phase: str, fraction: float) -> list[int]:
+    """Сколько бойцов каждой стопки попало в тренировку. Выпавшие бойцы на максимуме не тренируются —
+    вместо них берутся другие случайные статисты (пользователь 2026-11-04), поэтому их доля
+    раздаётся по остальным стопкам пропорционально числу ещё не попавших бойцов."""
+    covered = [binomialvariate(s.quantity, fraction) for s in stacks]
+    free = [i for i, s in enumerate(stacks) if not _is_maxed(s.rank, s.training_level, phase)]
+    spare = sum(c for i, c in enumerate(covered) if i not in free)
+    covered = [c if i in free else 0 for i, c in enumerate(covered)]
+    shuffle(free)
+    left = sum(stacks[i].quantity - covered[i] for i in free)
+    for i in free:
+        if spare <= 0 or left <= 0:
+            break
+        room = stacks[i].quantity - covered[i]
+        extra = min(room, binomialvariate(spare, room / left))
+        covered[i] += extra
+        spare -= extra
+        left -= room
+    return covered
 
 
 async def train_extras(session: AsyncSession, redis: Redis, user_id: int, phase: str) -> TrainResult:
@@ -84,6 +121,11 @@ async def train_extras(session: AsyncSession, redis: Redis, user_id: int, phase:
     if not stacks:
         return TrainResult(attempted=0, stage1=0, stage2=0, stage3=0)
 
+    trainable = [s for s in stacks if not _is_maxed(s.rank, s.training_level, phase)]
+    if not trainable:
+        # Все на максимуме — тренировать некого, КД не тратим (как и при пустой армии).
+        return TrainResult(attempted=0, stage1=0, stage2=0, stage3=0)
+
     profile = await get_combat_profile(session, user_id)
     cd = profile.cooldown(cooldown_seconds(KEY_CD_EXTRAS), profile.eco.extras_training_cooldown)
     acquired = await redis.set(key, "1", nx=True, ex=cd)
@@ -104,13 +146,13 @@ async def train_extras(session: AsyncSession, redis: Redis, user_id: int, phase:
 
     totals = {"attempted": 0, "stage1": 0, "stage2": 0, "stage3": 0}
 
-    covered_by_stack = [binomialvariate(s.quantity, coverage_fraction) for s in stacks]
+    covered_by_stack = _coverage(stacks, phase, coverage_fraction)
     if not any(covered_by_stack):
         # Мало статистов, разбросанных по отрядам: охват 20% мог не задеть никого — тогда игрок
         # видел «нечего тренировать», а КД уже потрачен (баг 2026-10-13). Хотя бы один боец —
         # случайный, с весом по численности отряда — тренируется всегда.
-        pick = choices(range(len(stacks)), weights=[s.quantity for s in stacks])[0]
-        covered_by_stack[pick] = 1
+        pick = choices(trainable, weights=[s.quantity for s in trainable])[0]
+        covered_by_stack[next(i for i, s in enumerate(stacks) if s is pick)] = 1
 
     for stack, covered in zip(stacks, covered_by_stack):
         if covered == 0:
@@ -126,7 +168,9 @@ async def train_extras(session: AsyncSession, redis: Redis, user_id: int, phase:
         totals["stage1"] += s1
         # Лагерь при тренировке не меняется — стопка-назначение в том же лагере.
         common = {"user_id": user_id, "camp": stack.camp, "school": stack.school, "school_level": stack.school_level}
-        next_level = stack.training_level + 1
+        # Новый уровень: на капе — следующий ранг с нуля. Стопки старше правила (уровень уже выше капа)
+        # переходят при первом же успехе.
+        next_rank, next_level = _after_level_up(stack.rank, stack.training_level + 1, phase)
         await add_to_stack(
             session, **common, rank=stack.rank, stars=stack.stars, training_level=stack.training_level, quantity=-s1
         )
@@ -135,13 +179,13 @@ async def train_extras(session: AsyncSession, redis: Redis, user_id: int, phase:
             # Уже максимум звёзд — этап 2 пропускается целиком (raw-notes), весь s1
             # просто поднимает уровень тренировки без звезды.
             await add_to_stack(
-                session, **common, rank=stack.rank, stars=stack.stars, training_level=next_level, quantity=s1
+                session, **common, rank=next_rank, stars=stack.stars, training_level=next_level, quantity=s1
             )
             continue
 
         s2 = binomialvariate(s1, stage2_p)
         await add_to_stack(
-            session, **common, rank=stack.rank, stars=stack.stars, training_level=next_level, quantity=s1 - s2
+            session, **common, rank=next_rank, stars=stack.stars, training_level=next_level, quantity=s1 - s2
         )
         if s2 == 0:
             continue
@@ -149,13 +193,16 @@ async def train_extras(session: AsyncSession, redis: Redis, user_id: int, phase:
 
         s3 = binomialvariate(s2, stage3_p)
         await add_to_stack(
-            session, **common, rank=stack.rank, stars=stack.stars + 1, training_level=next_level, quantity=s2 - s3
+            session, **common, rank=next_rank, stars=stack.stars + 1, training_level=next_level, quantity=s2 - s3
         )
         if s3:
             totals["stage3"] += s3
+            # Удачный ранг этапа 3 — тот же переход, что по капу: следующий ранг и уровень с нуля. Если
+            # боец и так только что перешёл по капу — ещё один ранг сверху; выше потолка фазы — остаётся.
+            lucky_rank = _next_rank(next_rank, phase)
             await add_to_stack(
-                session, **common, rank=_next_rank(stack.rank, phase), stars=stack.stars + 1,
-                training_level=next_level, quantity=s3,
+                session, **common, rank=lucky_rank, stars=stack.stars + 1,
+                training_level=0 if lucky_rank != next_rank else next_level, quantity=s3,
             )
 
     await quest_event(session, user_id, TASK_TRAIN_EXTRAS)

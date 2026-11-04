@@ -209,7 +209,16 @@ TICKET_STARTING = TICKET_CAP
 EXTRA_TRAINING_COOLDOWN_SECONDS = 30 * 60
 EXTRA_TRAINING_COVERAGE_PERCENT = 20  # доля статистов, случайно попадающих в тренировку
 EXTRA_TRAINING_STAGE1_SUCCESS_PERCENT = 10  # шанс поднять мощь ×1.2
-EXTRA_TRAINING_STAGE1_POWER_MULTIPLIER = 1.2
+# Переработка меты тренировок (пользователь 2026-11-04): было ×1.2 без потолка — топы дошли до
+# 125 трлн мощи на бойца. ×1.08 и кап уровня по рангу дают потолок ≈ 2.9 млрд (Infinity на капе без
+# звёзд), с тремя звёздами ≈ 10 млрд.
+EXTRA_TRAINING_STAGE1_POWER_MULTIPLIER = 1.08
+# Кап уровня тренировки: у самого низкого ранга (F-) — BASE, каждый следующий ранг — на STEP больше
+# (F- 3, F 6, … ZZZ 156, Infinity 159). Дошёл до капа — обязательно переходит на следующий ранг, уровень
+# с нуля, звёзды остаются. Выше Infinity и потолка фазы идти некуда: статист на капе больше не растёт
+# и не тренируется — его место в тренировке занимает другой случайный статист.
+EXTRA_TRAINING_LEVEL_CAP_BASE = 3
+EXTRA_TRAINING_LEVEL_CAP_STEP = 3
 EXTRA_TRAINING_STAGE2_SUCCESS_PERCENT = 10  # шанс получить звезду пробуждения (только прошедшим этап 1)
 EXTRA_TRAINING_STAGE2_POWER_BONUS_PERCENT = 50  # за каждую звезду
 EXTRA_TRAINING_MAX_STARS = 3

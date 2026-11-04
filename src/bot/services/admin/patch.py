@@ -7,7 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bot.cache.keys import patch_running_flag
 from bot.constant.admin.live_config import CONFIRM_TTL_SECONDS, PATCH_BATCH_SIZE, PATCH_RUNNING_TTL_SECONDS, WIPE_KEEP_TABLES
+from bot.config.clan import CLAN_START_LANDS
 from bot.db.base import Base
+from bot.db.repositories.clan import reset_for_patch as reset_clans_for_patch
 from bot.db.repositories.gang import reset_player
 from bot.db.repositories.top import reset_powers
 from bot.services.bloodline import apply_effects as apply_bloodline_effects
@@ -62,6 +64,7 @@ async def run_patch(session_factory: async_sessionmaker[AsyncSession], progress=
             await progress(done)
     async with session_factory() as session:
         await reset_powers(session)  # снимок мощи для топа — армии обнулены
+        await reset_clans_for_patch(session, CLAN_START_LANDS)  # земли, постройки, рота, казна, войны
         await session.commit()
     return done
 

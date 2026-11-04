@@ -10,9 +10,7 @@ from bot.constant.casino import (
     CB_BJ_STAND,
     CB_CASINO_GAME_PREFIX,
     CB_CASINO_OPEN,
-    CB_CASINO_SQUAD_PREFIX,
     CB_CASINO_STAKE_PREFIX,
-    CB_CASINO_STATISTS_PREFIX,
     CB_SLOTS_AGAIN_PREFIX,
     GAME_BLACKJACK,
     GAME_SLOTS,
@@ -26,13 +24,10 @@ from bot.texts.casino import (
     BTN_BJ_STAND,
     BTN_POKER,
     BTN_SLOTS_AGAIN,
-    BTN_SQUAD,
-    BTN_STAKE_STATISTS,
     GAME_NAMES,
 )
 from bot.texts.common import BTN_BACK
 from bot.texts.resource import amount_label, resource_label
-from bot.utils.formatting import format_number
 
 
 def _btn(text: str, callback_data: str) -> InlineKeyboardButton:
@@ -55,18 +50,7 @@ def casino_menu() -> InlineKeyboardMarkup:
 def stake_menu(game: str) -> InlineKeyboardMarkup:
     buttons = [_btn(resource_label(code), f"{CB_CASINO_STAKE_PREFIX}{game}:{code}") for code in CASINO_STAKE_RESOURCES]
     rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
-    if game == GAME_BLACKJACK:
-        rows.append([_btn(BTN_STAKE_STATISTS, f"{CB_CASINO_STATISTS_PREFIX}{game}")])
     rows.append([_btn(BTN_BACK, CB_CASINO_OPEN)])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
-
-
-def squads_menu(game: str, squads: list[tuple[str, str, int]]) -> InlineKeyboardMarkup:
-    rows = [
-        [_btn(BTN_SQUAD.format(title=title, total=format_number(total)), f"{CB_CASINO_SQUAD_PREFIX}{game}:{key}")]
-        for key, title, total in squads
-    ]
-    rows.append([_btn(BTN_BACK, f"{CB_CASINO_GAME_PREFIX}{game}")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

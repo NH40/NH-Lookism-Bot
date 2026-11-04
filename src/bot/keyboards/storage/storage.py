@@ -5,6 +5,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.constant.common import CB_MENU_SHOP
 from bot.constant.resource import RESOURCES
+from bot.config.storage import SQUADS_PAGE_SIZE
 from bot.constant.storage import (
     CB_STORAGE_CELL_PREFIX,
     CB_STORAGE_OPEN,
@@ -67,12 +68,24 @@ def filled_cell_menu(slot: int) -> InlineKeyboardMarkup:
     )
 
 
-def squads_menu(slot: int, squads: list[tuple[str, str, int]]) -> InlineKeyboardMarkup:
-    """(ключ отряда, подпись, сколько бойцов)."""
+def squads_menu(slot: int, squads: list[tuple[str, str, int]], page: int = 0) -> InlineKeyboardMarkup:
+    """(ключ отряда, подпись, сколько бойцов) — постранично: отрядов бывают сотни, а у клавиатуры
+    Telegram есть предел размера (в боте выбор падал, в Mini App работал)."""
+    pages = max(1, -(-len(squads) // SQUADS_PAGE_SIZE))
+    page = min(max(page, 0), pages - 1)
+    chunk = squads[page * SQUADS_PAGE_SIZE:(page + 1) * SQUADS_PAGE_SIZE]
     rows = [
         [_btn(BTN_SQUAD.format(title=title, total=format_number(total)), f"{CB_STORAGE_PUT_SQUAD_PREFIX}{slot}:{key}")]
-        for key, title, total in squads
+        for key, title, total in chunk
     ]
+    if pages > 1:
+        nav = []
+        if page > 0:
+            nav.append(_btn("◀️", f"{CB_STORAGE_PUT_STATISTS_PREFIX}{slot}:{page - 1}"))
+        nav.append(_btn(f"{page + 1}/{pages}", f"{CB_STORAGE_PUT_STATISTS_PREFIX}{slot}:{page}"))
+        if page < pages - 1:
+            nav.append(_btn("▶️", f"{CB_STORAGE_PUT_STATISTS_PREFIX}{slot}:{page + 1}"))
+        rows.append(nav)
     rows.append([_btn(BTN_BACK, f"{CB_STORAGE_CELL_PREFIX}{slot}")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

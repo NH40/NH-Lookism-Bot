@@ -30,7 +30,7 @@ from bot.config.clan import (
     building_price,
     clan_donate_price,
 )
-from bot.constant.clan import BUILDINGS, KICK_RANKS, MANAGER_RANKS, RANK_CAPTAIN, RANK_DEPUTY, RANK_LEVEL, RANK_MEMBER, RANK_OWNER
+from bot.constant.clan import BUILDINGS, GARRISON_ACCESS_RANKS, KICK_RANKS, MANAGER_RANKS, RANK_CAPTAIN, RANK_DEPUTY, RANK_LEVEL, RANK_MEMBER, RANK_OWNER
 from bot.db.repositories import card as card_repo
 from bot.db.repositories import clan as clan_repo
 from bot.services import clan as clan_service
@@ -132,7 +132,7 @@ class MemberOut(BaseModel):
     can_kick: bool
     can_rank: bool
     garrison_access: bool = False  # может забирать из роты (владелец — всегда)
-    can_access: bool = False  # смотрящий (владелец) может выдать/отнять право
+    can_access: bool = False  # смотрящий (владелец или зам) может выдать/отнять право
 
 
 class PersonOut(BaseModel):
@@ -229,7 +229,7 @@ async def get_my_clan(
     buyers = await clan_repo.donate_buyers(session, clan.id)
     manage = me.rank in MANAGER_RANKS
     requests = list(await clan_repo.list_requests(session, clan.id, False)) if manage else []
-    access = await clan_service.access_requests(session, user_id) if me.rank == RANK_OWNER else []
+    access = await clan_service.access_requests(session, user_id) if me.rank in GARRISON_ACCESS_RANKS else []
     ids = list({m.user_id for m in members} | {u for u, _ in buyers} | {r.user_id for r in requests})
     labels = await clan_repo.member_labels(session, ids)
     members = sorted(members, key=lambda m: (-RANK_LEVEL[m.rank], m.joined_at))
@@ -244,7 +244,7 @@ async def get_my_clan(
                     can_kick=can_kick_any and RANK_LEVEL[m.rank] < RANK_LEVEL[me.rank],
                     can_rank=me.rank == RANK_OWNER and m.rank != RANK_OWNER,
                     garrison_access=m.rank == RANK_OWNER or m.garrison_approved,
-                    can_access=me.rank == RANK_OWNER and m.rank != RANK_OWNER,
+                    can_access=me.rank in GARRISON_ACCESS_RANKS and m.rank != RANK_OWNER and m.user_id != user_id,
                 )
                 for m in members
             ],
@@ -975,14 +975,14 @@ async def post_shop_contracts(
 
 
 @router.get("/stats")
-async def get_stats(sort: str = "treasury", user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+async def get_stats(sort: str = "treasury", period: str = "patch", user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
     """Вклад участников клана (2026-10-21) — те же счётчики, что экран «📊 Вклад» в боте."""
     await require_user(session, user_id)
     try:
-        rows = await clan_service.member_stats(session, user_id, sort)
+        rows = await clan_service.member_stats(session, user_id, sort, period)
     except ClanError as exc:
         raise _err(exc) from None
-    return {"sort": sort, "rows": [
+    return {"sort": sort, "period": period, "rows": [
         {"user_id": r["user_id"], "name": r["name"], "rank": r["rank"], "is_me": r["user_id"] == user_id,
          "joined_at": r["joined_at"].isoformat() if r["joined_at"] else None,
          "last_active": r["last_active_at"].isoformat() if r["last_active_at"] else None,

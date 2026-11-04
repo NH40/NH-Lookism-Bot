@@ -5,6 +5,5 @@ from bot.keyboards.casino.casino import (  # noqa: F401
     blackjack_menu,
     casino_menu,
     slots_result_menu,
-    squads_menu,
     stake_menu,
 )

@@ -1,7 +1,9 @@
 """Промокоды (сервис): создание админом, активация игроком.
 
-Награда — словарь {код ресурса из `RESOURCES`: количество}; отрицательное — штраф (баланс
-не уходит ниже 0). Активация атомарна: запись активации + инкремент с проверкой лимита в
+Награда — словарь {код ресурса из `RESOURCES`: количество}; отрицательное — штраф, баланс может
+уйти в минус (пользователь 2026-11-04: «выдал −100 000 тикетов при 3 000 — будет −97 000, дальше
+набирает обычным способом»). Тратить в минусе нельзя: все списания — `WHERE баланс >= цена`.
+Активация атомарна: запись активации + инкремент с проверкой лимита в
 самом UPDATE, при провале инкремента — rollback (правила 1, 10).
 """
 from __future__ import annotations
@@ -10,7 +12,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, update
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.constant.promo import (
@@ -165,17 +167,15 @@ async def delete(session: AsyncSession, admin_id: int, promo_id: int) -> bool:
 
 
 async def _apply_delta(session: AsyncSession, user_id: int, code: str, delta: int) -> None:
-    """Начислить или снять (не ниже 0). НЕ коммитит."""
+    """Начислить или снять (можно уйти в минус). НЕ коммитит."""
     if delta > 0:
         await resource_service.grant(session, user_id, code, delta)
     elif code == RES_TICKETS:
-        have = await resource_service.balance(session, user_id, code)
-        take = min(have, -delta)
-        if take > 0:
-            await ticket_service.spend(session, user_id, take)
+        await ticket_service.spend(session, user_id, 0)  # зафиксировать реген до штрафа
+        await ticket_service.refund(session, user_id, delta)
     else:
         column = _COLUMNS[code]
-        await session.execute(update(User).where(User.id == user_id).values({column: func.greatest(column + delta, 0)}))
+        await session.execute(update(User).where(User.id == user_id).values({column: column + delta}))
 
 
 async def redeem(session: AsyncSession, user: User, raw_code: str) -> dict[str, int]:

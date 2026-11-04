@@ -40,4 +40,6 @@ from bot.config.clan.clan import (  # noqa: F401
     clan_tickets_price,
     land_price,
     war_lands,
+    CLAN_WAR_ATTACKER_SHIELD_HOURS,
+    CLAN_WAR_SHIELD_WIN_HOURS,
 )

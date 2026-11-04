@@ -32,8 +32,6 @@ BLACKJACK_DEALER_STAND = 17
 BLACKJACK_WIN_MULTIPLIER = 2.0
 BLACKJACK_NATURAL_MULTIPLIER = 2.5
 BLACKJACK_HAND_TTL_SECONDS = 60 * 60  # брошенная раздача сгорает вместе со ставкой
-# Статистами в блэкджеке — не меньше (1.0).
-BLACKJACK_STATISTS_MIN = 5
 
 # ── Детектор стратегии x3 (1.0): три ставки подряд, каждая ≈ ×3 от прошлой, — казино просит
 # остановиться и отклоняет ставку.

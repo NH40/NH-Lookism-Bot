@@ -163,8 +163,21 @@ def item_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def squads_menu(squads: list[tuple[str, str, int]]) -> InlineKeyboardMarkup:
-    rows = [[_btn(BTN_SQUAD.format(title=title, total=format_number(total)), f"{CB_EXCHANGE_ITEM_SQUAD_PREFIX}{key}")] for key, title, total in squads]
+SQUADS_PAGE_SIZE = 10
+
+
+def squads_menu(squads: list[tuple[str, str, int]], page: int = 0) -> InlineKeyboardMarkup:
+    """Постранично — отрядов бывают сотни, а у клавиатуры Telegram есть предел размера."""
+    pages = max(1, -(-len(squads) // SQUADS_PAGE_SIZE))
+    page = min(max(page, 0), pages - 1)
+    chunk = squads[page * SQUADS_PAGE_SIZE:(page + 1) * SQUADS_PAGE_SIZE]
+    rows = [[_btn(BTN_SQUAD.format(title=title, total=format_number(total)), f"{CB_EXCHANGE_ITEM_SQUAD_PREFIX}{key}")] for key, title, total in chunk]
+    if pages > 1:
+        nav = [_btn("◀️", f"{CB_EXCHANGE_ITEM_STATISTS}:{page - 1}")] if page > 0 else []
+        nav.append(_btn(f"{page + 1}/{pages}", f"{CB_EXCHANGE_ITEM_STATISTS}:{page}"))
+        if page < pages - 1:
+            nav.append(_btn("▶️", f"{CB_EXCHANGE_ITEM_STATISTS}:{page + 1}"))
+        rows.append(nav)
     rows.append(_back())
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

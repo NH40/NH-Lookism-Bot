@@ -99,7 +99,9 @@ CLAN_GARRISON_TENURE_HOURS = 24  # забирать из роты — через
 
 # --- Война ---
 CLAN_WAR_COOLDOWN_HOURS = 24  # клан нападает раз в сутки (пользователь)
-CLAN_WAR_SHIELD_HOURS = 6  # после нападения защитник под щитом
+CLAN_WAR_SHIELD_HOURS = 6  # защитник под щитом после проигрыша
+CLAN_WAR_SHIELD_WIN_HOURS = 6  # защитник под щитом, если отбился
+CLAN_WAR_ATTACKER_SHIELD_HOURS = 0  # нападавший клан под щитом после войны (0 — без щита)
 CLAN_WAR_TREASURY_PERCENT = 10  # победитель-нападающий забирает долю казны
 
 

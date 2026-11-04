@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config.clan import CLAN_CREATE_COST, CLAN_MAX_MEMBERS, CLAN_START_LANDS, CLAN_TOP_IMAGE
+from bot.constant.clan import STATS_PERIOD_ALL, STATS_PERIOD_PATCH
 from bot.constant.clan import KICK_RANKS, MANAGER_RANKS, RANK_LEVEL, RANK_MEMBER, RANK_OWNER, RANKS
 from bot.db.models.clan import Clan, ClanMember
 from bot.db.repositories import business as business_repo
@@ -278,8 +279,14 @@ def _stats_key(sort: str):
     }.get(sort, lambda r: r["treasury"])
 
 
-async def member_stats(session: AsyncSession, user_id: int, sort: str) -> list:
-    """Вклад всех текущих участников клана игрока, отсортированный по `sort` (по убыванию)."""
+async def member_stats(session: AsyncSession, user_id: int, sort: str, period: str = STATS_PERIOD_PATCH) -> list:
+    """Вклад всех текущих участников клана игрока, отсортированный по `sort` (по убыванию).
+    `period`: за этот патч (счётчик − снимок при патче) или за всё время."""
     member = await require_member(session, user_id)
     rows = await clan_repo.member_stats(session, member.clan_id)
+    if period != STATS_PERIOD_ALL:
+        rows = [
+            {**row, **{c: max(int(row[c]) - int((row["patch_base"] or {}).get(c, 0)), 0) for c in clan_repo.STAT_COUNTERS}}
+            for row in rows
+        ]
     return sorted(rows, key=_stats_key(sort), reverse=True)

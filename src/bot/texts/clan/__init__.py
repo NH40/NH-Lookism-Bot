@@ -164,6 +164,7 @@ from bot.texts.clan.clan import (  # noqa: F401
     STATS_SCREEN,
     STATS_SEEN_AGO,
     STATS_SEEN_NOW,
+    STATS_PERIOD_LABELS,
     STATS_SORT_LABELS,
     STATS_TAKEN,
     TOP_HEADER,

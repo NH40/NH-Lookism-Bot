@@ -177,7 +177,7 @@ export function TrainingPage() {
             <div>
               <div className="section-title" style={{ margin: "0 2px 8px" }}>Прошлая тренировка</div>
               <div className="tr-res">
-                <div><b>{fmt(last.stage1)}</b>мощь ×1,2</div>
+                <div><b>{fmt(last.stage1)}</b>подняли уровень</div>
                 <div><b style={{ color: "var(--gold-2)" }}>{fmt(last.stage2)}</b>новых звёзд</div>
                 <div><b style={{ color: "var(--violet-2)" }}>{fmt(last.stage3)}</b>повысили ранг</div>
               </div>

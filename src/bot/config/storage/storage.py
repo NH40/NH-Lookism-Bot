@@ -14,3 +14,5 @@ STORAGE_OPEN_COSTS: tuple[int, ...] = (20_000, 60_000, 150_000, 400_000, 1_000_0
 STORAGE_FEE_PER_HOUR = 300
 # Долг не растёт больше чем за неделю — вещи не «тонут» навсегда.
 STORAGE_DEBT_CAP_HOURS = 7 * 24
+
+SQUADS_PAGE_SIZE = 10  # отрядов на странице выбора

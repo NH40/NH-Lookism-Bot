@@ -27,4 +27,6 @@ from bot.config.empire.empire import (  # noqa: F401
     SABOTAGE_TREASURY_PERCENT,
     war_cities,
     war_treasury_percent,
+    EMPIRE_WAR_ATTACKER_SHIELD_SECONDS,
+    EMPIRE_WAR_SHIELD_WIN_SECONDS,
 )

@@ -30,14 +30,13 @@ from bot.config.casino import (
     BLACKJACK_NATURAL_MULTIPLIER,
     BLACKJACK_RIG_CHANCE,
     BLACKJACK_RIG_TRIES,
-    BLACKJACK_STATISTS_MIN,
     BLACKJACK_WIN_MULTIPLIER,
     SLOTS_PAIR_MULTIPLIER,
     SLOTS_RIG_CHANCE,
     SLOTS_SYMBOLS,
 )
 from bot.config.game import ACTION_LOCK_MS
-from bot.constant.casino import GAME_BLACKJACK, GAME_SLOTS, LOCK_ACTION_CASINO, STAKE_RESOURCE, STAKE_STATIST
+from bot.constant.casino import GAME_BLACKJACK, GAME_SLOTS, LOCK_ACTION_CASINO, STAKE_RESOURCE
 from bot.services.casino.common import (
     CasinoBusyError,
     InvalidStakeError,
@@ -235,7 +234,7 @@ async def blackjack_deal(session: AsyncSession, redis: Redis, user_id: int, stak
     """Раздача: ставка списывается (commit), две карты игроку, две дилеру (одна скрыта). Блэкджек
     с двух карт — сразу выплата ×2.5 (если у дилера не тоже 21)."""
     stake.validate()
-    if stake.kind == STAKE_STATIST and stake.amount < BLACKJACK_STATISTS_MIN:
+    if stake.kind != STAKE_RESOURCE:  # статистов убрали из ставок (2026-11-04)
         raise InvalidStakeError
     rng = rng or random.Random()
     key = await _lock(redis, user_id)

@@ -24,6 +24,7 @@ from bot.config.characteristic.characteristic import (  # noqa: F401
     stat_rank_up_cost,
     stat_ranks_affordable,
     statist_unit_power,
+    training_level_cap,
     strength_mastery_power_percent,
     strength_power_percent,
     technique_mastery_multiplier,

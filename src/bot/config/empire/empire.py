@@ -38,7 +38,10 @@ SABOTAGE_RECENT_HOURS = 24  # «диверсий за сутки» на экра
 # доверен автору кода). ---
 EMPIRE_WAR_ACCEPT_SECONDS = 60 * 60  # окно принятия (Скорость нападающего сокращает)
 EMPIRE_WAR_COOLDOWN_SECONDS = 24 * 60 * 60  # нападающему — после объявления
-EMPIRE_WAR_SHIELD_SECONDS = 12 * 60 * 60  # защитнику — после итога войны на него не напасть
+# Щиты (пользователь 2026-11-04: «вынеси про щиты как можно больше переменных»; все — в настройках админки).
+EMPIRE_WAR_SHIELD_SECONDS = 12 * 60 * 60  # защитнику, проигравшему войну: на него не напасть
+EMPIRE_WAR_SHIELD_WIN_SECONDS = 12 * 60 * 60  # защитнику, отбившему войну
+EMPIRE_WAR_ATTACKER_SHIELD_SECONDS = 0  # нападавшему после войны (0 — без щита)
 EMPIRE_WAR_TREASURY_MAX_PERCENT = 50  # равные силы
 EMPIRE_WAR_TREASURY_MIN_PERCENT = 10  # большой перевес
 EMPIRE_WAR_BIG_GAP_RATIO = 3.0  # перевес (мощь победителя / проигравшего), с которого доля — минимум

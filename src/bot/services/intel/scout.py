@@ -21,6 +21,7 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.cache.keys import battle_cooldown
+from bot.config.activity import LOG_ENTRIES_BY_LEVEL, LOG_KINDS_BY_LEVEL
 from bot.config.card import CARD_BY_CODE
 from bot.config.position_skill import SKILLS
 from bot.constant.activity import ACT_BATTLE
@@ -109,7 +110,7 @@ def _fake(viewer_id: int, target_id: int, field: str, spread: float) -> float:
     return 1 + (h * 2 - 1) * min(0.5, spread)
 
 
-async def _values(session: AsyncSession, redis: Redis, target_id: int, fields: set[str]) -> dict:
+async def _values(session: AsyncSession, redis: Redis, target_id: int, fields: set[str], logs: int = 0) -> dict:
     """Настоящие значения нужных полей цели (JSON-совместимые, без подписей)."""
     out: dict = {}
     camps = {}
@@ -161,7 +162,9 @@ async def _values(session: AsyncSession, redis: Redis, target_id: int, fields: s
     if F_BUSINESS in fields:
         out[F_BUSINESS] = sorted((await business_repo.count_by_type(session, target_id)).items(), key=lambda kv: -kv[1])
     if F_BATTLES in fields:
-        out[F_BATTLES] = [[t.isoformat(), x] for t, x in await activity_repo.recent(session, target_id, (ACT_BATTLE,), 5)]
+        # Уровень журнала — от гения наблюдения; навык «Хроника» без него — последние бои.
+        kinds, count = (LOG_KINDS_BY_LEVEL[min(logs, 3)], LOG_ENTRIES_BY_LEVEL[min(logs, 3)]) if logs else ((ACT_BATTLE,), 5)
+        out[F_BATTLES] = [[t.isoformat(), x] for t, x in await activity_repo.recent(session, target_id, kinds, count)]
     if F_COOLDOWNS in fields:
         out[F_COOLDOWNS] = max(0, int(await redis.ttl(battle_cooldown(target_id))))
     if F_CLAN in fields:
@@ -210,7 +213,7 @@ async def scout(session: AsyncSession, redis: Redis, viewer_id: int, *, target_i
     fake = 0.0 if see_fakes else tpos.get("fake_numbers")
 
     visible = {f for f, lv in levels.items() if lv >= hide.get(f, 0)}
-    values = await _values(session, redis, target.id, visible - {F_FORECAST})
+    values = await _values(session, redis, target.id, visible - {F_FORECAST}, logs=viewer_build.eco.logs)
     payload: dict = {}
     for field, lv in levels.items():
         h = hide.get(field, 0)

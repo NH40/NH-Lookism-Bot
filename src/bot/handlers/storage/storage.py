@@ -200,7 +200,9 @@ async def cb_storage_put_resource(callback: CallbackQuery, state: FSMContext, se
 
 @router.callback_query(F.data.startswith(CB_STORAGE_PUT_STATISTS_PREFIX))
 async def cb_storage_put_statists(callback: CallbackQuery, session: AsyncSession) -> None:
-    slot = _slot(callback.data.removeprefix(CB_STORAGE_PUT_STATISTS_PREFIX))
+    raw_slot, _, raw_page = callback.data.removeprefix(CB_STORAGE_PUT_STATISTS_PREFIX).partition(":")
+    slot = _slot(raw_slot)
+    page = int(raw_page) if raw_page.isdigit() else 0
     if slot is None or not await _guard(callback, session):
         await callback.answer()
         return
@@ -217,7 +219,7 @@ async def cb_storage_put_statists(callback: CallbackQuery, session: AsyncSession
         await callback.answer(PICK_SQUAD_NONE, show_alert=True)
         return
     await callback.answer()
-    await safe_edit_text(callback.message, PICK_SQUAD.format(n=slot), reply_markup=squads_menu(slot, squads))
+    await safe_edit_text(callback.message, PICK_SQUAD.format(n=slot), reply_markup=squads_menu(slot, squads, page))
 
 
 @router.callback_query(F.data.startswith(CB_STORAGE_PUT_SQUAD_PREFIX))

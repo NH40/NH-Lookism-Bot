@@ -72,6 +72,7 @@ from bot.constant.clan import (
     CB_CLAN_WAR_ATTACK_PREFIX,
     CB_CLAN_WAR_TARGETS_PREFIX,
     KICK_RANKS,
+    GARRISON_ACCESS_RANKS,
     MANAGER_RANKS,
     RANK_CAPTAIN,
     RANK_DEPUTY,
@@ -189,7 +190,7 @@ def clan_menu(rank: str, requests: int, access_requests: int = 0) -> InlineKeybo
     ]
     if rank in MANAGER_RANKS:
         rows.append([_btn(BTN_REQUESTS.format(count=requests), CB_CLAN_REQUESTS), _btn(BTN_INVITE, CB_CLAN_INVITE)])
-    if rank == RANK_OWNER:
+    if rank in GARRISON_ACCESS_RANKS:
         label = BTN_GAR_ACCESS.format(count=access_requests) if access_requests else BTN_GAR_ACCESS_PLAIN
         rows.append([_btn(label, CB_CLAN_GAR_ACCESS)])
     if rank in MANAGER_RANKS:
@@ -371,16 +372,33 @@ def garrison_put_menu() -> InlineKeyboardMarkup:
     ])
 
 
-def items_menu(items: list[tuple[str, str, int]], prefix: str, back: str = CB_CLAN_GARRISON) -> InlineKeyboardMarkup:
-    """(код для callback, подпись, количество)."""
-    rows = [[_btn(BTN_ITEM.format(name=name, quantity=format_number(q)), f"{prefix}{code}")] for code, name, q in items]
+ITEMS_PAGE_SIZE = 10
+TAKE_MENU_MAX = 30
+
+
+def items_menu(
+    items: list[tuple[str, str, int]], prefix: str, back: str = CB_CLAN_GARRISON, page: int = 0, page_prefix: str = ""
+) -> InlineKeyboardMarkup:
+    """(код для callback, подпись, количество). С `page_prefix` — постранично (`{page_prefix}{номер}`):
+    отрядов бывают сотни, а у клавиатуры Telegram есть предел размера."""
+    pages = max(1, -(-len(items) // ITEMS_PAGE_SIZE)) if page_prefix else 1
+    page = min(max(page, 0), pages - 1)
+    chunk = items[page * ITEMS_PAGE_SIZE:(page + 1) * ITEMS_PAGE_SIZE] if page_prefix else items
+    rows = [[_btn(BTN_ITEM.format(name=name, quantity=format_number(q)), f"{prefix}{code}")] for code, name, q in chunk]
+    if pages > 1:
+        nav = [_btn("◀️", f"{page_prefix}{page - 1}")] if page > 0 else []
+        nav.append(_btn(f"{page + 1}/{pages}", f"{page_prefix}{page}"))
+        if page < pages - 1:
+            nav.append(_btn("▶️", f"{page_prefix}{page + 1}"))
+        rows.append(nav)
     rows.append(_back(back))
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def take_menu(statists: list[tuple[str, str, int]], cards: list[tuple[str, str, int]]) -> InlineKeyboardMarkup:
-    rows = [[_btn(BTN_ITEM.format(name=n, quantity=format_number(q)), f"{CB_CLAN_GAR_TAKE_SQUAD_PREFIX}{c}")] for c, n, q in statists]
-    rows += [[_btn(BTN_ITEM.format(name=n, quantity=format_number(q)), f"{CB_CLAN_GAR_TAKE_CARD_PREFIX}{c}")] for c, n, q in cards]
+    # Предел кнопок Telegram: сильнейшие отряды роты первыми, остальное — через Mini App.
+    rows = [[_btn(BTN_ITEM.format(name=n, quantity=format_number(q)), f"{CB_CLAN_GAR_TAKE_SQUAD_PREFIX}{c}")] for c, n, q in statists[:TAKE_MENU_MAX]]
+    rows += [[_btn(BTN_ITEM.format(name=n, quantity=format_number(q)), f"{CB_CLAN_GAR_TAKE_CARD_PREFIX}{c}")] for c, n, q in cards[:TAKE_MENU_MAX]]
     rows.append(_back(CB_CLAN_GARRISON))
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -420,12 +438,16 @@ def exchange_members_menu(members: list[tuple[int, str]]) -> InlineKeyboardMarku
     return members_pick_menu(members, CB_CLAN_EXCHANGE_MEMBER_PREFIX)
 
 
-def stats_menu(current: str) -> InlineKeyboardMarkup:
-    from bot.constant.clan import STATS_SORTS
-    from bot.texts.clan import STATS_SORT_LABELS
+def stats_menu(current: str, period: str) -> InlineKeyboardMarkup:
+    from bot.constant.clan import STATS_PERIOD_ALL, STATS_PERIOD_PATCH, STATS_SORTS
+    from bot.texts.clan import STATS_PERIOD_LABELS, STATS_SORT_LABELS
 
-    buttons = [_btn(("• " if s == current else "") + STATS_SORT_LABELS[s], f"{CB_CLAN_STATS_PREFIX}{s}") for s in STATS_SORTS]
-    return InlineKeyboardMarkup(inline_keyboard=[buttons[:3], buttons[3:], _back()])
+    buttons = [_btn(("• " if s == current else "") + STATS_SORT_LABELS[s], f"{CB_CLAN_STATS_PREFIX}{s}:{period}") for s in STATS_SORTS]
+    periods = [
+        _btn(("• " if p == period else "") + STATS_PERIOD_LABELS[p], f"{CB_CLAN_STATS_PREFIX}{current}:{p}")
+        for p in (STATS_PERIOD_PATCH, STATS_PERIOD_ALL)
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=[periods, buttons[:3], buttons[3:], _back()])
 
 
 def put_all_confirm_menu(ok_data: str) -> InlineKeyboardMarkup:

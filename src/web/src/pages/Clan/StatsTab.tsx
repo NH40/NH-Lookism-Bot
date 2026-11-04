@@ -42,9 +42,14 @@ function ago(iso: string | null): string {
 /** Вкладка «Вклад» — эффективность участников для клана (те же счётчики, что в боте). */
 export function StatsTab() {
 	const [sort, setSort] = useState("treasury");
-	const { data, status, error } = useApi<{ sort: string; rows: StatRowData[] }>(`/clan/stats?sort=${sort}`);
+	const [period, setPeriod] = useState<"patch" | "all">("patch");
+	const { data, status, error } = useApi<{ sort: string; rows: StatRowData[] }>(`/clan/stats?sort=${sort}&period=${period}`);
 	return (
 		<Screen status={data ? "ready" : status} error={error}>
+			<div className="seg" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 8 }}>
+				<button type="button" className={`pill ${period === "patch" ? "on" : ""}`} onClick={() => setPeriod("patch")}>🗓 Этот патч</button>
+				<button type="button" className={`pill ${period === "all" ? "on" : ""}`} onClick={() => setPeriod("all")}>♾ За всё время</button>
+			</div>
 			<div className="chips-row" style={{ marginTop: 8 }}>
 				{SORTS.map(([code, label]) => (
 					<button key={code} type="button" className={`pill ${sort === code ? "on" : ""}`} onClick={() => setSort(code)}>

@@ -97,7 +97,8 @@ CB_CLAN_GAR_APPROVE_PREFIX = "clan:gok:"  # f"{...}{user_id}"
 CB_CLAN_GAR_DENY_PREFIX = "clan:gno:"  # f"{...}{user_id}"
 CB_CLAN_GAR_REVOKE_PREFIX = "clan:grv:"  # f"{...}{user_id}" — владелец отнимает право
 # Без одобрения забирают из роты эти ранги; рядовым — с одобрения владельца/зама (один раз).
-GARRISON_FREE_RANKS: tuple[str, ...] = ("owner",)  # остальным — право от владельца (2026-10-12)
+GARRISON_FREE_RANKS: tuple[str, ...] = ("owner",)  # остальным — право от владельца или зама (2026-10-12)
+GARRISON_ACCESS_RANKS: tuple[str, ...] = (RANK_OWNER, RANK_DEPUTY)  # кто выдаёт и отнимает это право (зам — с 2026-11-04)
 CB_CLAN_WAR = "clan:war"
 CB_CLAN_WAR_TARGETS_PREFIX = "clan:wt:"  # f"{...}{page}"
 CB_CLAN_WAR_ATTACK_PREFIX = "clan:wa:"  # f"{...}{clan_id}" | f"{...}{clan_id}:ok"
@@ -116,6 +117,8 @@ STATS_SORT_GARRISON = "garrison"
 STATS_SORT_SPENT = "spent"
 STATS_SORT_WARS = "wars"
 STATS_SORT_ACTIVITY = "activity"
+STATS_PERIOD_PATCH = "patch"
+STATS_PERIOD_ALL = "all"
 STATS_SORTS = (STATS_SORT_TREASURY, STATS_SORT_GARRISON, STATS_SORT_SPENT, STATS_SORT_WARS, STATS_SORT_ACTIVITY)
 
 # «Внести всех» в роту (2026-10-21): сначала экран подтверждения, потом исполнение.

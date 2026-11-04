@@ -466,9 +466,37 @@ async def member_stats(session: AsyncSession, clan_id: int) -> list:
         "COALESCE(s.treasury,0) AS treasury, COALESCE(s.garrison_units,0) AS garrison_units, "
         "COALESCE(s.garrison_power,0) AS garrison_power, COALESCE(s.garrison_taken,0) AS garrison_taken, "
         "COALESCE(s.shop_spent,0) AS shop_spent, COALESCE(s.build_spent,0) AS build_spent, COALESCE(s.wars,0) AS wars, "
-        "COALESCE(s.wars_won,0) AS wars_won, COALESCE(s.lands_won,0) AS lands_won, COALESCE(s.exchanges,0) AS exchanges "
+        "COALESCE(s.wars_won,0) AS wars_won, COALESCE(s.lands_won,0) AS lands_won, COALESCE(s.exchanges,0) AS exchanges, "
+        "COALESCE(s.patch_base,'{}'::jsonb) AS patch_base "
         "FROM clan_members m JOIN users u ON u.id = m.user_id "
         "LEFT JOIN clan_member_stats s ON s.clan_id = m.clan_id AND s.user_id = m.user_id "
         "WHERE m.clan_id = :c"
     ), {"c": clan_id})
     return list(rows.mappings().all())
+
+
+STAT_COUNTERS = ("treasury", "garrison_units", "garrison_power", "garrison_taken", "shop_spent", "build_spent", "wars", "wars_won", "lands_won", "exchanges")
+
+
+async def reset_for_patch(session: AsyncSession, start_lands: int) -> None:
+    """Патч (пользователь 2026-11-04): земли и постройки, рота, казна и магазин, войны — с нуля. Сами
+    кланы, участники, ранги, право на роту и донат-уровень остаются. Вклад участников не стирается:
+    снимок счётчиков в `patch_base` делит его на «этот патч» и «за всё время». Одним набором запросов
+    на все кланы (правило 3). НЕ коммитит."""
+    pairs = ", ".join(f"'{c}', {c}" for c in STAT_COUNTERS)
+    for sql in (
+        "DELETE FROM clan_buildings",
+        "DELETE FROM clan_garrison_extras",
+        "DELETE FROM clan_garrison_cards",
+        "DELETE FROM clan_contracts",
+        "DELETE FROM clan_wars",
+        f"UPDATE clan_member_stats SET patch_base = jsonb_build_object({pairs})",
+    ):
+        await session.execute(text(sql))
+    await session.execute(
+        text(
+            "UPDATE clans SET lands = :lands, treasury = 0, shop_tickets_day = NULL, shop_tickets_bought = 0, "
+            "last_attack_at = NULL, shield_until = NULL"
+        ),
+        {"lands": start_lands},
+    )

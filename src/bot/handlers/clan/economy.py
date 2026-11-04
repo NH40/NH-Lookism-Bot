@@ -501,16 +501,18 @@ def _ago(dt) -> str:
 
 @router.callback_query(F.data.startswith(CB_CLAN_STATS_PREFIX))
 async def cb_stats(callback: CallbackQuery, session: AsyncSession) -> None:
-    from bot.constant.clan import STATS_SORT_TREASURY, STATS_SORTS
+    from bot.constant.clan import STATS_PERIOD_ALL, STATS_PERIOD_PATCH, STATS_SORT_TREASURY, STATS_SORTS
     from bot.keyboards.clan import stats_menu
-    from bot.texts.clan import RANK_EMOJI, STATS_HINT, STATS_ROW, STATS_SCREEN, STATS_SORT_LABELS, STATS_TAKEN
+    from bot.texts.clan import RANK_EMOJI, STATS_HINT, STATS_PERIOD_LABELS, STATS_ROW, STATS_SCREEN, STATS_SORT_LABELS, STATS_TAKEN
 
-    sort = callback.data.removeprefix(CB_CLAN_STATS_PREFIX)
+    sort, _, period = callback.data.removeprefix(CB_CLAN_STATS_PREFIX).partition(":")
     if sort not in STATS_SORTS:
         sort = STATS_SORT_TREASURY
+    if period != STATS_PERIOD_ALL:
+        period = STATS_PERIOD_PATCH
     if await _member(callback, session) is None:
         return
-    rows = await clan_service.member_stats(session, callback.from_user.id, sort)
+    rows = await clan_service.member_stats(session, callback.from_user.id, sort, period)
     n = format_number
     lines = "".join(
         STATS_ROW.format(
@@ -522,8 +524,8 @@ async def cb_stats(callback: CallbackQuery, session: AsyncSession) -> None:
         )
         for i, r in enumerate(rows)
     )
-    text = STATS_SCREEN.format(sort=STATS_SORT_LABELS[sort], rows=lines)
+    text = STATS_SCREEN.format(sort=f"{STATS_PERIOD_LABELS[period]} · {STATS_SORT_LABELS[sort]}", rows=lines)
     if len(text) + len(STATS_HINT) < 4000:
         text += STATS_HINT
     await callback.answer()
-    await send_screen(callback.bot, callback.message.chat.id, callback.message, text[:4090], stats_menu(sort))
+    await send_screen(callback.bot, callback.message.chat.id, callback.message, text[:4090], stats_menu(sort, period))

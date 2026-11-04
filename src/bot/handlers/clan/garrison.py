@@ -11,7 +11,7 @@ from bot.config.card import CARD_BY_CODE
 from bot.config.clan import CLAN_WAR_SHIELD_HOURS, CLAN_WAR_TREASURY_PERCENT
 from bot.constant.clan import (
     CB_CLAN_GAR_REVOKE_PREFIX,
-    GARRISON_FREE_RANKS,
+    GARRISON_ACCESS_RANKS,
     CB_CLAN_GAR_ACCESS,
     CB_CLAN_GAR_APPROVE_PREFIX,
     CB_CLAN_GAR_DENY_PREFIX,
@@ -100,7 +100,7 @@ from bot.texts.clan import (
     WAR_VERDICT_WIN,
 )
 from bot.texts.gang import squad_title
-from bot.utils.formatting import esc, format_countdown, format_number
+from bot.utils.formatting import clip_rows, esc, format_countdown, format_number
 
 router = Router(name="clan_garrison")
 
@@ -126,14 +126,18 @@ async def _member(callback: CallbackQuery, session: AsyncSession, ranks=None):
 
 # --- рота ---
 
+PAGE_MARK = "p"  # код callback выбора отряда: `p<номер>` — страница, иначе ключ отряда
+GARRISON_ROWS_SHOWN = 25  # отрядов роты на экране (потолок сообщения — 4096 символов)
+
+
 async def render_garrison(session: AsyncSession, user_id: int):
     gv = await clan_service.garrison_view(session, user_id)
-    statists = GARRISON_STATISTS.format(rows="".join(
+    statists = GARRISON_STATISTS.format(rows=clip_rows([
         GARRISON_ROW.format(name=esc(_title(k)), quantity=format_number(q), power=format_number(round(p))) for k, q, p in gv.statists
-    )) if gv.statists else ""
-    cards = GARRISON_CARDS.format(rows="".join(
+    ], GARRISON_ROWS_SHOWN)) if gv.statists else ""
+    cards = GARRISON_CARDS.format(rows=clip_rows([
         GARRISON_ROW.format(name=esc(_card_name(c)), quantity=format_number(q), power=format_number(p)) for c, q, p in gv.cards
-    )) if gv.cards else ""
+    ], GARRISON_ROWS_SHOWN)) if gv.cards else ""
     contracts = GARRISON_CONTRACTS.format(rows="".join(
         GARRISON_CONTRACT_ROW.format(rank=r, quantity=format_number(q), power=format_number(round(p)), countdown=format_countdown(left))
         for r, q, p, left in gv.contracts
@@ -179,6 +183,9 @@ async def cb_gar_put_squad(callback: CallbackQuery, state: FSMContext, session: 
     code = callback.data.removeprefix(CB_CLAN_GAR_PUT_SQUAD_PREFIX)
     if await _member(callback, session) is None:
         return
+    page = int(code.removeprefix(PAGE_MARK)) if code.startswith(PAGE_MARK) and code[len(PAGE_MARK):].isdigit() else None
+    if page is not None:
+        code = ""
     squads = [sq for sq in await list_squads(session, callback.from_user.id) if sq.attack + sq.defense > 0]
     if not code:
         items = [
@@ -190,7 +197,8 @@ async def cb_gar_put_squad(callback: CallbackQuery, state: FSMContext, session: 
             await callback.answer(GAR_NOTHING, show_alert=True)
             return
         await callback.answer()
-        await send_screen(callback.bot, callback.message.chat.id, callback.message, GAR_PICK_SQUAD, items_menu(items, CB_CLAN_GAR_PUT_SQUAD_PREFIX, CB_CLAN_GAR_PUT))
+        await send_screen(callback.bot, callback.message.chat.id, callback.message, GAR_PICK_SQUAD,
+                          items_menu(items, CB_CLAN_GAR_PUT_SQUAD_PREFIX, CB_CLAN_GAR_PUT, page or 0, f"{CB_CLAN_GAR_PUT_SQUAD_PREFIX}{PAGE_MARK}"))
         return
     try:
         key = StatistKey.decode(code)
@@ -315,7 +323,7 @@ async def _show_access(callback: CallbackQuery, session: AsyncSession) -> None:
 
 @router.callback_query(F.data == CB_CLAN_GAR_ACCESS)
 async def cb_gar_access(callback: CallbackQuery, session: AsyncSession) -> None:
-    if await _member(callback, session, GARRISON_FREE_RANKS) is None:
+    if await _member(callback, session, GARRISON_ACCESS_RANKS) is None:
         return
     await callback.answer()
     await _show_access(callback, session)

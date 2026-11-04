@@ -23,7 +23,9 @@ from bot.config.clan import (
     CLAN_PAGE,
     CLAN_WALL_DEFENSE,
     CLAN_WAR_COOLDOWN_HOURS,
+    CLAN_WAR_ATTACKER_SHIELD_HOURS,
     CLAN_WAR_SHIELD_HOURS,
+    CLAN_WAR_SHIELD_WIN_HOURS,
     CLAN_WAR_TREASURY_PERCENT,
     war_lands,
 )
@@ -176,7 +178,9 @@ async def attack(session: AsyncSession, redis: Redis, user_id: int, target_id: i
                 await clan_repo.add_building(session, defender.id, kind, -n)
         now = _now()
         attacker.last_attack_at = now
-        defender.shield_until = now + timedelta(hours=CLAN_WAR_SHIELD_HOURS)
+        defender.shield_until = now + timedelta(hours=CLAN_WAR_SHIELD_HOURS if won else CLAN_WAR_SHIELD_WIN_HOURS)
+        if CLAN_WAR_ATTACKER_SHIELD_HOURS > 0:
+            attacker.shield_until = now + timedelta(hours=CLAN_WAR_ATTACKER_SHIELD_HOURS)
         await clan_repo.add_war(
             session, attacker_id=attacker.id, defender_id=defender.id, attacker_name=attacker.name, defender_name=defender.name,
             attacker_won=won, lands_taken=lands_taken, treasury_taken=treasury, attacker_power=a_power, defender_power=d_power,

@@ -77,7 +77,7 @@ export function BlackjackTab({ data, reload }: { data: CasinoData; reload: () =>
 			)}
 			{!playing && (
 				<>
-					<StakePicker data={data} allowStatists onChange={setStake} />
+					<StakePicker data={data} onChange={setStake} />
 					<button className="btn gold block" type="button" disabled={!stake || busy} onClick={() => stake && void call("/casino/blackjack/deal", stake)}>
 						{hand ? <RotateCcw size={18} /> : null} {hand ? "Новая раздача" : "Раздать"}
 					</button>

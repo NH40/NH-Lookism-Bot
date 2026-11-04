@@ -55,10 +55,8 @@ export interface PokerConfig {
 
 export interface CasinoData {
   resources: CasinoResource[];
-  squads: CasinoSquad[];
   symbols: CasinoSymbol[];
   pair_multiplier: number;
-  statists_min: number;
   blackjack: BlackjackHand | null;
   lobby: PokerLobbyRow[];
   seat_table_id: number | null;

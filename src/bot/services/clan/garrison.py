@@ -32,7 +32,7 @@ from bot.config.school import (
     SCHOOL_DODGE_PER_LEVEL,
     SCHOOL_FLEE_PER_LEVEL,
 )
-from bot.constant.clan import GARRISON_FREE_RANKS
+from bot.constant.clan import GARRISON_ACCESS_RANKS, GARRISON_FREE_RANKS, RANK_OWNER
 from bot.constant.extra import CAMP_ATTACK, CAMP_DEFENSE
 from bot.db.repositories import card as card_repo
 from bot.db.repositories import clan as clan_repo
@@ -54,7 +54,7 @@ class GarrisonView:
     power: int
     can_take: bool
     take_in_seconds: int
-    needs_approval: bool = False  # нет права забирать (выдаёт владелец)
+    needs_approval: bool = False  # нет права забирать (выдаёт владелец или зам)
     pending: bool = False  # запрос доступа ждёт ответа
     contracts: tuple = ()  # (ранг, сколько, мощь бойца, секунд до конца) — забрать нельзя
 
@@ -217,16 +217,16 @@ async def request_access(session: AsyncSession, user_id: int) -> int:
 
 
 async def access_requests(session: AsyncSession, actor_id: int) -> list[tuple[int, str]]:
-    """Ждущие запросы доступа к роте (видит владелец — только он выдаёт право)."""
-    actor = await require_member(session, actor_id, GARRISON_FREE_RANKS)
+    """Ждущие запросы доступа к роте (видят владелец и зам — они выдают право)."""
+    actor = await require_member(session, actor_id, GARRISON_ACCESS_RANKS)
     rows = await clan_repo.garrison_requests(session, actor.clan_id)
     labels = await clan_repo.member_labels(session, [m.user_id for m in rows])
     return [(m.user_id, labels[m.user_id][0]) for m in rows]
 
 
 async def resolve_access(session: AsyncSession, actor_id: int, user_id: int, approved: bool) -> None:
-    """Одобрить (пока владелец не отнимет) или отклонить запрос — только владелец. Коммитит."""
-    actor = await require_member(session, actor_id, GARRISON_FREE_RANKS)
+    """Одобрить (пока не отнимут) или отклонить запрос — владелец или зам. Коммитит."""
+    actor = await require_member(session, actor_id, GARRISON_ACCESS_RANKS)
     if not await clan_repo.resolve_garrison_access(session, actor.clan_id, user_id, approved):
         raise ClanError("request_gone")
     verdict = "одобрил(а)" if approved else "отклонил(а)"
@@ -235,16 +235,20 @@ async def resolve_access(session: AsyncSession, actor_id: int, user_id: int, app
 
 
 async def access_list(session: AsyncSession, actor_id: int) -> list[tuple[int, str, bool, bool]]:
-    """Участники (кроме владельца) для экрана доступа: (user_id, имя, есть право, просит доступ)."""
-    actor = await require_member(session, actor_id, GARRISON_FREE_RANKS)
-    members = [m for m in await clan_repo.list_members(session, actor.clan_id) if m.user_id != actor_id]
+    """Участники (кроме владельца и себя) для экрана доступа: (user_id, имя, есть право, просит доступ)."""
+    actor = await require_member(session, actor_id, GARRISON_ACCESS_RANKS)
+    members = [m for m in await clan_repo.list_members(session, actor.clan_id) if m.user_id != actor_id and m.rank != RANK_OWNER]
     labels = await clan_repo.member_labels(session, [m.user_id for m in members])
     return [(m.user_id, labels[m.user_id][0], m.garrison_approved, m.garrison_request_at is not None) for m in members]
 
 
 async def set_access(session: AsyncSession, actor_id: int, user_id: int, allowed: bool) -> None:
-    """Владелец выдаёт или отнимает у участника право забирать из роты (2026-10-12). Коммитит."""
-    actor = await require_member(session, actor_id, GARRISON_FREE_RANKS)
+    """Владелец или зам выдаёт/отнимает у участника право забирать из роты (2026-10-12, зам — 2026-11-04).
+    Коммитит."""
+    actor = await require_member(session, actor_id, GARRISON_ACCESS_RANKS)
+    target = await clan_repo.get_member(session, user_id)
+    if target is not None and target.rank == RANK_OWNER:
+        raise ClanError("not_member")
     if user_id == actor_id or not await clan_repo.set_garrison_access(session, actor.clan_id, user_id, allowed):
         raise ClanError("not_member")
     verdict = "выдал(а)" if allowed else "отнял(а)"

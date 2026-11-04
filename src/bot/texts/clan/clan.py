@@ -250,11 +250,11 @@ GAR_ACCESS_HEADER = (
 GAR_ACCESS_EMPTY = "📭 <i>В клане нет других участников.</i>"
 BTN_GAR_ACCESS_ON = "✅ {name} — отнять"
 BTN_GAR_ACCESS_OFF = "{bell}🔒 {name} — выдать"
-PUSH_GAR_REVOKED = "🔑 Владелец клана отнял у тебя доступ к роте."
+PUSH_GAR_REVOKED = "🔑 Руководство клана отняло у тебя доступ к роте."
 BTN_GAR_APPROVE = "✅ {name}"
 BTN_GAR_DENY = "❌ {name}"
 PUSH_GAR_REQUEST = "🔑 {name} просит доступ к клановой роте — 🏰 Клан → Доступ к роте."
-PUSH_GAR_APPROVED = "🔑 Владелец клана выдал тебе доступ к роте — теперь бойцов можно забирать."
+PUSH_GAR_APPROVED = "🔑 Руководство клана выдало тебе доступ к роте — теперь бойцов можно забирать."
 PUSH_GAR_DENIED = "🔑 В доступе к клановой роте отказано."
 GAR_REQUESTED_ALERT = "Запрос отправлен владельцу и заместителю"
 BTN_GAR_PUT = "📥 Внести"
@@ -358,6 +358,7 @@ DONE_ALERT = "Готово"
 
 # Статистика вклада участников (2026-10-21).
 BTN_STATS = "📊 Вклад участников"
+STATS_PERIOD_LABELS = {"patch": "🗓 Этот патч", "all": "♾ За всё время"}
 STATS_SORT_LABELS = {
     "treasury": "💰 Казна", "garrison": "⚔️ Рота", "spent": "🛒 Траты", "wars": "🗡 Войны", "activity": "🕒 Актив",
 }

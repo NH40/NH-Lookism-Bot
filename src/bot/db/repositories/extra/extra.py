@@ -81,4 +81,5 @@ async def get_stack_for_update(
 
 
 async def total_quantity(session: AsyncSession, user_id: int) -> int:
-    return await session.scalar(select(func.coalesce(func.sum(Extra.quantity), 0)).where(Extra.user_id == user_id))
+    # SUM(bigint) в Postgres — numeric: без int() вызывающие падали на Decimal * float (саботаж).
+    return int(await session.scalar(select(func.coalesce(func.sum(Extra.quantity), 0)).where(Extra.user_id == user_id)) or 0)

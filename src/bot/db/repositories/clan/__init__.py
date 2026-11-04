@@ -35,6 +35,8 @@ from bot.db.repositories.clan.clan import (  # noqa: F401
     member_ids,
     member_labels,
     member_stats,
+    reset_for_patch,
+    STAT_COUNTERS,
     names,
     officers,
     pending_share,

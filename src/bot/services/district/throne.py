@@ -167,7 +167,7 @@ async def resolve_liberation(session: AsyncSession, contender_id: int, holder_id
         names = tuple(n for _, n in released)
         ratio = result.attacker.initial_power / result.defender.initial_power if result.defender.initial_power else 10.0
         coins = await empire_repo.emperor_coins(session, holder_id, for_update=True)
-        treasury = coins * war_treasury_percent(ratio) // 100
+        treasury = max(coins, 0) * war_treasury_percent(ratio) // 100
         if treasury:
             await empire_repo.move_coins(session, holder_id, contender_id, treasury)
         final = await phase_repo.count_cities_of(session, holder_id) == 0

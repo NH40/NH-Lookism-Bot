@@ -371,13 +371,15 @@ async def _show_mine(callback: CallbackQuery, session: AsyncSession) -> None:
         ))
 
     async def trade_rows(trades, other) -> str:
-        return "".join(
+        # Список, не генератор: `await` превращает генератор в асинхронный, и join падал
+        # (TypeError: can only join an iterable, 18 раз в логах у «Мои лоты»).
+        return "".join([
             MINE_TRADE_ROW.format(
                 id=t.id, item=item_amount_label(t.item_kind, t.item_code, t.amount), price=amount_label(t.price_res, t.price),
                 who=await _seller_name(session, other(t)), countdown=_left(t.expires_at),
             )
             for t in trades
-        )
+        ])
 
     if incoming:
         parts += MINE_INCOMING.format(rows=await trade_rows(incoming, lambda t: t.from_id))
@@ -509,14 +511,16 @@ async def _squads(session: AsyncSession, user_id: int) -> list[tuple[str, str, i
     ]
 
 
-@router.callback_query(F.data == CB_EXCHANGE_ITEM_STATISTS)
+@router.callback_query((F.data == CB_EXCHANGE_ITEM_STATISTS) | F.data.startswith(f"{CB_EXCHANGE_ITEM_STATISTS}:"))
 async def cb_exchange_item_statists(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
+    raw_page = callback.data.removeprefix(CB_EXCHANGE_ITEM_STATISTS).lstrip(":")
+    page = int(raw_page) if raw_page.isdigit() else 0
     squads = await _squads(session, callback.from_user.id)
     if not squads:
         await callback.answer(PICK_SQUAD_NONE, show_alert=True)
         return
     await callback.answer()
-    await safe_edit_text(callback.message, PICK_SQUAD.format(title=await _title(state)), reply_markup=squads_menu(squads))
+    await safe_edit_text(callback.message, PICK_SQUAD.format(title=await _title(state)), reply_markup=squads_menu(squads, page))
 
 
 @router.callback_query(F.data.startswith(CB_EXCHANGE_ITEM_SQUAD_PREFIX))

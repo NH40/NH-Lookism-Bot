@@ -20,7 +20,12 @@ from __future__ import annotations
 
 from typing import NamedTuple
 
-from bot.config.game import EXTRA_TRAINING_STAGE1_POWER_MULTIPLIER, EXTRA_TRAINING_STAGE2_POWER_BONUS_PERCENT
+from bot.config.game import (
+    EXTRA_TRAINING_LEVEL_CAP_BASE,
+    EXTRA_TRAINING_LEVEL_CAP_STEP,
+    EXTRA_TRAINING_STAGE1_POWER_MULTIPLIER,
+    EXTRA_TRAINING_STAGE2_POWER_BONUS_PERCENT,
+)
 from bot.constant.characteristic import (
     POT_GANG_BOSS,
     POT_GEN_ZERO,
@@ -43,15 +48,21 @@ def extra_power_for_rank(rank: str) -> int:
     return EXTRA_RANK_POWER_BASE * (1 + n * (n + 1) // 2)
 
 
+def training_level_cap(rank: str) -> int:
+    """Кап уровня тренировки ранга (см. `config/game`): F- 3, F 6, … Infinity 159."""
+    return EXTRA_TRAINING_LEVEL_CAP_BASE + RANK_INDEX[rank] * EXTRA_TRAINING_LEVEL_CAP_STEP
+
+
 def extra_unit_power(rank: str, stars: int, training_level: int) -> int:
     """Мощь ОДНОЙ единицы статиста в стопке (см. `db/models/extra.py` — статисты
     хранятся стопками, мощь никогда не хранится поштучно, всегда считается по этой
     формуле). `training_level` — сколько раз статист прошёл этап 1 тренировки (мощь
-    ×1.2 каждый раз, накопительно), `stars` — сколько раз прошёл этап 2 (+50% каждая
-    звезда) — оба множителя берутся из `config/game` (см. `services/training`), чтобы
-    не дублировать числа в двух местах."""
+    ×`EXTRA_TRAINING_STAGE1_POWER_MULTIPLIER` каждый раз, накопительно; стопки, накачанные
+    до капа, считаются по капу — уровень в ключе стопки не переписываем), `stars` — сколько
+    раз прошёл этап 2 (+50% каждая звезда) — оба множителя берутся из `config/game`
+    (см. `services/training`), чтобы не дублировать числа в двух местах."""
     base = extra_power_for_rank(rank)
-    power = base * (EXTRA_TRAINING_STAGE1_POWER_MULTIPLIER**training_level)
+    power = base * (EXTRA_TRAINING_STAGE1_POWER_MULTIPLIER ** min(training_level, training_level_cap(rank)))
     power *= (1 + EXTRA_TRAINING_STAGE2_POWER_BONUS_PERCENT / 100) ** stars
     return round(power)
 

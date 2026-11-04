@@ -59,3 +59,11 @@ def format_duration(total_seconds: int) -> str:
     if hours:
         return f"{hours}ч {minutes}м"
     return f"{minutes}м"
+
+
+def clip_rows(rows: list[str], limit: int) -> str:
+    """Строки списка для экрана: не больше `limit` + «…и ещё N». Экран рисуется одним сообщением, а
+    у Telegram потолок 4096 символов — длинные списки отрядов роняли его целиком."""
+    if len(rows) <= limit:
+        return "".join(rows)
+    return "".join(rows[:limit]) + f"…и ещё {len(rows) - limit}\n"

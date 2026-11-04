@@ -70,7 +70,7 @@ export function SlotsTab({ data, reload }: { data: CasinoData; reload: () => voi
 					))}
 				</div>
 			</Panel>
-			<StakePicker data={data} allowStatists={false} onChange={setStake} />
+			<StakePicker data={data} onChange={setStake} />
 			<button className="btn gold block" type="button" disabled={!stake || spinning} onClick={() => void spin()}>
 				<Play size={18} /> Крутить{label ? ` · ${label}` : ""}
 			</button>

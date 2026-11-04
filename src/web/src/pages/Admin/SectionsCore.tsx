@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { Chip, Panel, Screen, countdown, fmt } from "../../components/ui";
 import { adminPlayerPath } from "../../constants";
 import { useAction, useApi } from "../../hooks/useApi";
-import type { AdminConfigKey, AdminMeta, AdminSystem, Paged } from "../../types";
+import type { AdminConfigKey, AdminConfigSection, AdminMeta, AdminSystem, Paged } from "../../types";
 import { ConfirmButton, Field, Kv, Pager, Select, Seg, TextInput } from "./AdminKit";
 import { BarChart, type Point } from "./Charts";
 import { LogRow } from "./PlayerPage";
@@ -107,35 +107,59 @@ export function RolesSection({ meta }: { meta: AdminMeta }) {
 // ---------------------------------------------------------------- настройки на лету
 
 export function ConfigSection({ meta }: { meta: AdminMeta }) {
-  const data = useApi<{ keys: AdminConfigKey[] }>("/admin/config");
+  const data = useApi<{ keys: AdminConfigKey[]; sections: AdminConfigSection[] }>("/admin/config");
   const { run, busy } = useAction(data.reload);
   const [open, setOpen] = useState<string | null>(null);
   const [value, setValue] = useState("");
   const [hours, setHours] = useState(0);
+  const [section, setSection] = useState("shield");
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const keys = (data.data?.keys ?? []).filter((k) =>
+    q ? k.title.toLowerCase().includes(q) || k.key.toLowerCase().includes(q) : section === "_changed" ? k.overridden : k.section === section,
+  );
+  const changed = (data.data?.keys ?? []).filter((k) => k.overridden).length;
   return (
     <Screen status={data.status} error={data.error}>
       {data.data && (
         <Panel title="Настройки на лету">
-          <div className="adm-hint">Действуют без перезапуска; в другом процессе (бот / Mini App) — через ~15 с.</div>
+          <div className="adm-hint">Действуют сразу и без перезапуска; в другом процессе (бот / Mini App) — через ~15 с. Время можно писать так: 12ч, 30м, 1д.</div>
+          <TextInput value={query} onChange={setQuery} placeholder="Поиск по названию" />
+          {!q && (
+            <div className="adm-config-sections" style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "10px 0" }}>
+              {data.data.sections.map((s) => (
+                <button key={s.code} type="button" className={`btn small ${section === s.code ? "" : "ghost"}`} onClick={() => setSection(s.code)}>
+                  {s.title} · {s.count}
+                </button>
+              ))}
+              {changed > 0 && (
+                <button type="button" className={`btn small ${section === "_changed" ? "" : "ghost"}`} onClick={() => setSection("_changed")}>
+                  ★ Изменённые · {changed}
+                </button>
+              )}
+            </div>
+          )}
           <div className="adm-list">
-            {data.data.keys.map((k) => (
+            {keys.length === 0 && <div className="adm-hint">Ничего не найдено.</div>}
+            {keys.map((k) => (
               <div key={k.key}>
                 <button type="button" className={`adm-item ${open === k.key ? "on" : ""}`} onClick={() => { setOpen(open === k.key ? null : k.key); setValue(String(k.value)); setHours(0); }}>
                   <div>
                     <b>{k.title}</b>
                     <small>
-                      по умолчанию {k.default} · {k.min}…{k.max}
+                      по умолчанию {k.shown_default} · {k.min}…{k.max}
                       {k.overridden ? (k.left_seconds != null ? ` · изменено, ещё ${countdown(k.left_seconds)}` : " · изменено навсегда") : ""}
                     </small>
                   </div>
                   <div className="adm-right">
-                    {k.value}
+                    {k.shown}
                     {k.overridden && <span className="adm-tag gold">★</span>}
                   </div>
                 </button>
                 {open === k.key && (
                   <div style={{ display: "grid", gap: 8, margin: "8px 0" }}>
-                    <TextInput type="number" value={value} onChange={setValue} placeholder={`${k.min}…${k.max}`} />
+                    <TextInput value={value} onChange={setValue} placeholder={`${k.min}…${k.max}`} />
+                    {k.text_frozen && <div className="adm-hint">В описаниях для игроков останется старое число — сама механика меняется сразу.</div>}
                     {k.expiring && (
                       <Select value={hours} onChange={setHours} options={meta.catalog.config_durations.map((x) => ({ value: x.hours, label: x.name }))} />
                     )}

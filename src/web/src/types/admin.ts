@@ -141,6 +141,16 @@ export interface AdminConfigKey {
   expiring: boolean;
   overridden: boolean;
   left_seconds: number | null;
+  section: string;
+  shown: string;
+  shown_default: string;
+  text_frozen: boolean;
+}
+
+export interface AdminConfigSection {
+  code: string;
+  title: string;
+  count: number;
 }
 
 export interface AdminPromo {

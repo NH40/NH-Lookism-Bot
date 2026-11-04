@@ -21,7 +21,7 @@ CREATE_PROMPT = (
     "• <b>time N</b> — действует N часов\n"
     "• <b>users @a,@b</b> — только эти игроки\n"
     "• ресурсы: <code>{resources}</code>\n"
-    "• минус — штраф (ниже 0 не уйдёт)\n\n"
+    "• минус — штраф: баланс может уйти в минус (−100000 при 3000 → −97000)\n\n"
     "Примеры:\n<code>START uses 100 coins:500 tickets:5</code>\n"
     "<code>GIFT time 24 donate:50</code>\n<code>VIP users @ivan,@petr blood:10</code>\n"
     "<code>BONUS coins:1000</code>\n\n"

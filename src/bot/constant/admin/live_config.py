@@ -23,6 +23,7 @@ CONFIRM_KIND_WIPE = "wipe"
 
 # Настройки на лету: adm:cf:
 CB_CONFIG_LIST = "adm:cf:list"
+CB_CONFIG_SECTION_PREFIX = "adm:cf:g:"  # + раздел:страница
 CB_CONFIG_KEY_PREFIX = "adm:cf:k:"  # + key
 CB_CONFIG_SET_PREFIX = "adm:cf:s:"  # + key
 CB_CONFIG_DUR_PREFIX = "adm:cf:d:"  # + key:hours (0 — навсегда)

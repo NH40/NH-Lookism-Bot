@@ -22,7 +22,7 @@ from api.db import get_session
 from api.deps import get_redis
 from api.push import push_poker
 from api.routers._common import bad, clean_label, require_user
-from bot.config.casino import BLACKJACK_STATISTS_MIN, SLOTS_PAIR_MULTIPLIER, SLOTS_SYMBOLS
+from bot.config.casino import SLOTS_PAIR_MULTIPLIER, SLOTS_SYMBOLS
 from bot.config.poker import (
     POKER_ACTION_TIMEOUT_SECONDS,
     POKER_BUY_INS,
@@ -54,16 +54,14 @@ from bot.services.casino import (
     Stake,
     X3StrategyError,
 )
-from bot.services.extra import list_squads
 from bot.services.poker import PokerError, PokerEvent
 from bot.services.poker.engine import RANK_NAMES, SUITS
-from bot.services.resource import StatistKey, balances
+from bot.services.resource import balances
 from bot.texts.casino import (
     BUSY_ALERT,
     HAND_GONE_ALERT,
     HAND_IN_PROGRESS_ALERT,
     NOT_ENOUGH_ALERT,
-    STATISTS_MIN_ALERT,
     X3_ALERT,
 )
 from bot.texts.poker import ERRORS as POKER_ERRORS
@@ -117,12 +115,6 @@ class ResourceOpt(BaseModel):
     balance: int
 
 
-class SquadOpt(BaseModel):
-    code: str
-    label: str
-    total: int
-
-
 class SymbolOut(BaseModel):
     symbol: str
     multiplier: int
@@ -167,10 +159,8 @@ class PokerConfig(BaseModel):
 
 class CasinoOut(BaseModel):
     resources: list[ResourceOpt]
-    squads: list[SquadOpt]
     symbols: list[SymbolOut]
     pair_multiplier: float
-    statists_min: int
     blackjack: BlackjackOut | None
     lobby: list[LobbyRow]
     seat_table_id: int | None
@@ -206,17 +196,6 @@ def _stake_label(stake: Stake) -> str:
     return f"{format_number(stake.amount)} × {_plain(item_label(STAKE_STATIST, stake.code))}"
 
 
-async def _squad_opts(session: AsyncSession, user_id: int) -> list[SquadOpt]:
-    out = []
-    for s in await list_squads(session, user_id):
-        total = s.attack + s.defense
-        if total <= 0:
-            continue
-        code = StatistKey(s.rank, s.stars, s.training_level, s.school, s.school_level).encode()
-        out.append(SquadOpt(code=code, label=_plain(item_label(STAKE_STATIST, code)), total=total))
-    return out
-
-
 @router.get("", response_model=CasinoOut)
 async def get_casino(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
                      redis: Redis = Depends(get_redis)) -> CasinoOut:
@@ -227,9 +206,8 @@ async def get_casino(user_id: int = Depends(get_current_user_id), session: Async
     return CasinoOut(
         resources=[ResourceOpt(code=c, label=RESOURCE_NAMES.get(c, c), balance=bal.get(c, 0))
                    for c in CASINO_STAKE_RESOURCES],
-        squads=await _squad_opts(session, user_id),
         symbols=[SymbolOut(symbol=s, multiplier=m) for s, (_, m) in SLOTS_SYMBOLS.items()],
-        pair_multiplier=SLOTS_PAIR_MULTIPLIER, statists_min=BLACKJACK_STATISTS_MIN,
+        pair_multiplier=SLOTS_PAIR_MULTIPLIER,
         blackjack=_bj(hand) if hand else None,
         lobby=[LobbyRow(id=t.id, buy_in=t.buy_in, players=t.players, max_players=t.max_players, starts_in=t.starts_in) for t in tables],
         seat_table_id=await poker_svc.seat_of(session, user_id),
@@ -273,8 +251,6 @@ def _bj_action_result(state: casino_svc.BlackjackState) -> dict:
 async def bj_deal(body: StakeIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
                   redis: Redis = Depends(get_redis)) -> dict:
     await require_user(session, user_id)
-    if body.kind == STAKE_STATIST and body.amount < BLACKJACK_STATISTS_MIN:
-        raise bad(STATISTS_MIN_ALERT)
     try:
         state = await casino_svc.blackjack_deal(session, redis, user_id, body.stake())
     except (CasinoBusyError, X3StrategyError, NotEnoughError, InvalidStakeError, HandInProgressError) as exc:

@@ -11,6 +11,7 @@ CONTRACT_SCREEN = (
 )
 CONTRACT_DISCOUNT_LINE = "\n🩸 Скидка Джинчоля: −{percent}%"
 CONTRACT_ACTIVE_HEAD = "\n━━━━━━━━━━━━━━━━━━\n🪖 <b>Сейчас наняты:</b>"
+CONTRACT_ACTIVE_MORE = "\n   …и ещё {count}"
 CONTRACT_ACTIVE_LINE = "\n   🔹 {quantity} × {rank} — ещё {countdown}"
 BTN_CONTRACT_RANK = "{rank} · {price} 🪙"
 BTN_CONTRACT_PREV = "◀️ Сильнее"

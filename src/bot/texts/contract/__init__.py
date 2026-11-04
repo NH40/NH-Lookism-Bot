@@ -9,6 +9,7 @@ from bot.texts.contract.contract import (  # noqa: F401
     BUSY_ALERT,
     CONTRACT_ACTIVE_HEAD,
     CONTRACT_ACTIVE_LINE,
+    CONTRACT_ACTIVE_MORE,
     CONTRACT_DISCOUNT_LINE,
     CONTRACT_SCREEN,
     NOT_ENOUGH_ALERT,

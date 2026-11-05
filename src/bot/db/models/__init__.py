@@ -19,6 +19,7 @@ from bot.db.models.business import Business  # noqa: F401
 from bot.db.models.card_stack import CardStack  # noqa: F401
 from bot.db.models.card_position import CardPosition  # noqa: F401
 from bot.db.models.mastery_quest import MasteryQuest  # noqa: F401
+from bot.db.models.emperor_announcement import EmperorAnnouncement  # noqa: F401
 from bot.db.models.emperor_tax import EmperorTaxOverride  # noqa: F401
 from bot.db.models.sabotage_log import SabotageLog  # noqa: F401
 from bot.db.models.emperor_war import EmperorWar  # noqa: F401

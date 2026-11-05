@@ -1,4 +1,18 @@
 """Публичное API домена empire (сервис)."""
+from bot.services.empire.announcement import (  # noqa: F401
+    AnnounceNoSubjectsError,
+    AnnounceNotEmperorError,
+    AnnounceOnCooldownError,
+    AnnounceTextError,
+    AnnounceView,
+    LogPage,
+    Published,
+    clean_text as clean_announcement,
+    deliver as deliver_announcement,
+    get_announce_view,
+    get_log as announcement_log,
+    publish as publish_announcement,
+)
 from bot.services.empire.empire import (  # noqa: F401
     InvalidRateError,
     NotEmperorError,

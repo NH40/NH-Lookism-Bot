@@ -14,28 +14,37 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import get_current_user_id
 from api.db import get_session
 from api.deps import get_redis
-from api.push import push, with_bot_session
+from api.db import session_factory
+from api.push import get_bot, push, with_bot_session
+from api.routers.admin import background
 from api.routers._common import bad, clean_label, require_user, ttl_seconds
 from api.routers.profile import plain
 from bot.cache.keys import empire_war_cooldown, empire_war_shield
 from bot.config.country import COUNTRY_BY_CODE
 from bot.config.empire import (
+    EMPIRE_ANNOUNCE_MAX_CHARS,
     EMPIRE_TAX_MAX_PERCENT,
     EMPIRE_TAX_MIN_PERCENT,
     SABOTAGE_CHANCE_PERCENT,
     SABOTAGE_RECENT_HOURS,
 )
+from bot.constant.admin.live_config import KEY_CD_EMPIRE_ANNOUNCE
 from bot.constant.empire import SABOTAGE_ACTIONS, WAR_ACCEPTED, WAR_FORFEIT, WAR_VOID
 from bot.constant.phase import PHASE_FIST
 from bot.constant.settings import NOTIFY_SABOTAGE, NOTIFY_WAR_CALL
 from bot.db.models.business import Business
 from bot.db.repositories.empire import get_emperor as get_emperor_row
 from bot.db.repositories.user import get_by_id
+from bot.services.admin.live_config import cooldown_seconds
 from bot.services.city import get_city
 from bot.services.gang import get_gang
 from bot.keyboards.empire import war_accept_menu
 from bot.services.district import NoAttackersError
 from bot.services.empire import (
+    AnnounceNoSubjectsError,
+    AnnounceNotEmperorError,
+    AnnounceOnCooldownError,
+    AnnounceTextError,
     InvalidRateError,
     NoEmperorError,
     NotEmperorError,
@@ -53,12 +62,16 @@ from bot.services.empire import (
     WarNotFoundError,
     WarOnCooldownError,
     accept_war,
+    announcement_log,
     declare_war,
+    deliver_announcement,
     find_subject,
+    get_announce_view,
     get_incoming_war,
     get_overview,
     get_sabotage_view,
     list_war_targets,
+    publish_announcement,
     sabotage,
     set_global_rate,
     set_personal_rate,
@@ -66,6 +79,9 @@ from bot.services.empire import (
 )
 from bot.texts.district import NO_ATTACKERS
 from bot.texts.empire import (
+    ANNOUNCE_COOLDOWN_ALERT,
+    ANNOUNCE_NO_SUBJECTS_ALERT,
+    ANNOUNCE_SENT,
     INVALID_RATE_ALERT,
     NO_EMPEROR,
     NOT_EMPEROR_ALERT,
@@ -123,6 +139,24 @@ class WarHistoryOut(BaseModel):
     treasury: int
 
 
+class AnnouncementSentOut(BaseModel):
+    id: int
+    text: str
+    created_at: datetime
+    recipients: int
+    delivered: int
+    muted: int
+
+
+class AnnounceOut(BaseModel):
+    cooldown_seconds: int
+    interval_seconds: int
+    max_chars: int
+    subjects: int
+    muted: int
+    sent: list[AnnouncementSentOut]
+
+
 class RulerOut(BaseModel):
     cities: int
     players: int
@@ -138,6 +172,7 @@ class RulerOut(BaseModel):
     incoming: IncomingWarOut | None
     war_cooldown_seconds: int
     history: list[WarHistoryOut]
+    announce: AnnounceOut
 
 
 class SabotageActionOut(BaseModel):
@@ -184,7 +219,16 @@ async def _ruler(session: AsyncSession, redis: Redis, user_id: int) -> RulerOut:
         )
         for h in await war_history(session, user_id)
     ]
+    view = await get_announce_view(session, redis, user_id)
     return RulerOut(
+        announce=AnnounceOut(
+            cooldown_seconds=view.cooldown_seconds, interval_seconds=cooldown_seconds(KEY_CD_EMPIRE_ANNOUNCE),
+            max_chars=EMPIRE_ANNOUNCE_MAX_CHARS, subjects=view.subjects, muted=view.muted,
+            sent=[
+                AnnouncementSentOut(id=r.id, text=r.text, created_at=r.created_at, recipients=r.recipients, delivered=r.delivered, muted=r.muted)
+                for r in view.sent
+            ],
+        ),
         cities=stats.cities, players=stats.players, tax_percent=stats.tax_percent, collected=stats.collected,
         treasury=stats.nh_coins, holdings=holdings,
         overrides=[OverrideOut(username=u, name=_name(u, n), percent=p) for u, n, p in stats.overrides],
@@ -252,6 +296,57 @@ async def post_tax(
     except InvalidRateError:
         raise bad(INVALID_RATE_ALERT)
     return MessageOut(message=RATE_SET_ALERT.format(percent=body.percent))
+
+
+class AnnounceIn(BaseModel):
+    text: str
+
+
+@router.post("/announce", response_model=MessageOut)
+async def post_announce(
+    body: AnnounceIn,
+    user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> MessageOut:
+    try:
+        published = await publish_announcement(session, redis, user_id, body.text)
+    except AnnounceNotEmperorError:
+        raise bad(NOT_EMPEROR_ALERT)
+    except AnnounceTextError:
+        raise bad(f"Нужен текст до {EMPIRE_ANNOUNCE_MAX_CHARS} символов.")
+    except AnnounceNoSubjectsError:
+        raise bad(ANNOUNCE_NO_SUBJECTS_ALERT)
+    except AnnounceOnCooldownError as e:
+        raise bad(ANNOUNCE_COOLDOWN_ALERT.format(countdown=format_countdown(e.retry_after_seconds)))
+    background(deliver_announcement(get_bot(), session_factory, published))
+    return MessageOut(message=clean_label(ANNOUNCE_SENT.format(count=len(published.recipient_ids), muted=published.muted)))
+
+
+class AnnouncementLogItemOut(BaseModel):
+    id: int
+    emperor: str
+    text: str
+    created_at: datetime
+
+
+class AnnouncementLogOut(BaseModel):
+    items: list[AnnouncementLogItemOut]
+    page: int
+    has_more: bool
+
+
+@router.get("/announcements", response_model=AnnouncementLogOut)
+async def get_announcements(
+    page: int = Query(0, ge=0),
+    user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+) -> AnnouncementLogOut:
+    result = await announcement_log(session, user_id, page)
+    return AnnouncementLogOut(
+        items=[AnnouncementLogItemOut(id=r.id, emperor=r.emperor_name, text=r.text, created_at=r.created_at) for r in result.items],
+        page=result.page, has_more=result.has_more,
+    )
 
 
 class SubjectRateOut(BaseModel):

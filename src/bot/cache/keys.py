@@ -78,6 +78,11 @@ def sabotage_cooldown(user_id: int, action: str) -> str:
     return f"cooldown:sabotage:{user_id}:{action}"
 
 
+def empire_announce_cooldown(user_id: int) -> str:
+    """КД объявления императора (`KEY_CD_EMPIRE_ANNOUNCE`): ключ и есть КД."""
+    return f"cooldown:empire_announce:{user_id}"
+
+
 def empire_war_cooldown(user_id: int) -> str:
     """КД объявления войны императоров (`config/empire.EMPIRE_WAR_COOLDOWN_SECONDS`)."""
     return f"cooldown:empire_war:{user_id}"

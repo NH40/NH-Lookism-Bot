@@ -12,6 +12,7 @@ from bot.constant.settings.settings import (  # noqa: F401
     NOTIFY_CD_PERSONAL,
     NOTIFY_CLAN,
     NOTIFY_CLAN_WAR,
+    NOTIFY_EMPEROR,
     NOTIFY_EXCHANGE,
     NOTIFY_MASTERY,
     NOTIFY_POTION,

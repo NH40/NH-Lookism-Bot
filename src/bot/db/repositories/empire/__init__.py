@@ -1,4 +1,12 @@
 """Публичное API домена empire (репозиторий)."""
+from bot.db.repositories.empire.announcement import (  # noqa: F401
+    add_delivered,
+    create as create_announcement,
+    emperor_city_ids,
+    list_for_city,
+    list_sent,
+    list_subjects,
+)
 from bot.db.repositories.empire.empire import (  # noqa: F401
     EmpireStats,
     Subject,

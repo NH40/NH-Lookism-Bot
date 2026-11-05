@@ -10,6 +10,13 @@ CB_EMPIRE_PERSONAL_RATE_PREFIX = "empire:prate:"
 """f"{CB_EMPIRE_PERSONAL_RATE_PREFIX}{user_id}:{percent|EMPIRE_RATE_RESET}"."""
 EMPIRE_RATE_RESET = "reset"
 
+# Объявления императора.
+CB_EMPIRE_ANNOUNCE = "empire:announce"
+CB_EMPIRE_ANNOUNCE_WRITE = "empire:announce:write"
+CB_EMPIRE_ANNOUNCE_SEND = "empire:announce:send"
+CB_EMPIRE_LOG_PREFIX = "empire:log:"
+"""f"{CB_EMPIRE_LOG_PREFIX}{page}" — журнал объявлений у игрока."""
+
 # Саботаж снизу — вид действия (ключ шансов в `config/empire`, `sabotage_logs.action`).
 SABOTAGE_STATISTS = "statists"
 SABOTAGE_UNIQUE = "unique"

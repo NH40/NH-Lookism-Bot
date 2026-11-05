@@ -12,12 +12,12 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from bot.constant.common import CB_MENU_CLANS, CB_MENU_DEVELOPMENT, CB_MENU_QUESTS, CB_MENU_SETTINGS, CB_MENU_SHOP
 from bot.constant.business import CB_BUSINESS_OPEN
 from bot.constant.characteristic import CB_STATS_OPEN, CB_STATS_UP_PREFIX, STATS_UP_FIVE, STATS_UP_MAX, STATS_UP_ONE
-from bot.constant.empire import CB_EMPIRE_OPEN, CB_SABOTAGE_OPEN
+from bot.constant.empire import CB_EMPIRE_LOG_PREFIX, CB_EMPIRE_OPEN, CB_SABOTAGE_OPEN
 from bot.constant.mastery import CB_MASTERY_OPEN
 from bot.constant.profile import CB_PROFILE_OPEN
 from bot.constant.training import CB_TRAIN_PERSONAL
 from bot.texts.common import BTN_BACK_TO_PROFILE
-from bot.texts.empire import BTN_EMPIRE, BTN_SABOTAGE
+from bot.texts.empire import BTN_ANNOUNCE_LOG, BTN_EMPIRE, BTN_SABOTAGE
 from bot.texts.profile import BTN_PERSONAL_TRAINING, BTN_STAT_UP_FIVE, BTN_STAT_UP_MAX, BTN_STAT_UP_ONE, BTN_STATS, STAT_LABELS
 from bot.constant.gang import CB_GANG_OPEN
 from bot.constant.map import CB_MAP_OPEN
@@ -65,8 +65,12 @@ def profile_menu(
     if emperor:
         rows.append([_btn(BTN_EMPIRE, CB_EMPIRE_OPEN)])
     # Саботаж — подданным чужого императора (игрок города, где император не он).
-    if under_emperor:
-        rows.append([_btn(BTN_SABOTAGE, CB_SABOTAGE_OPEN)])
+    bottom = [_btn(BTN_SABOTAGE, CB_SABOTAGE_OPEN)] if under_emperor else []
+    # Журнал объявлений — всем жителям; император видит свои на экране империи.
+    if under_emperor or not emperor:
+        bottom.append(_btn(BTN_ANNOUNCE_LOG, f"{CB_EMPIRE_LOG_PREFIX}0"))
+    if bottom:
+        rows.append(bottom)
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

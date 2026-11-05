@@ -24,6 +24,12 @@ BTN_RATE_CURRENT = "• {percent}% •"
 BTN_PERSONAL = "🎯 Персональная ставка"
 BTN_RESET_PERSONAL = "↩️ Как у всех"
 BTN_BACK_TO_EMPIRE = "◀️ К империи"
+BTN_ANNOUNCE = "📜 Объявление игрокам"
+BTN_ANNOUNCE_WRITE = "✍️ Написать"
+BTN_ANNOUNCE_SEND = "✅ Отправить"
+BTN_ANNOUNCE_EDIT = "✏️ Изменить"
+BTN_ANNOUNCE_BACK = "◀️ К объявлениям"
+BTN_ANNOUNCE_LOG = "📜 Объявления"
 
 EMPIRE_SCREEN = (
     "👑 <b>Империя</b>\n━━━━━━━━━━━━━━━━━━\n"
@@ -57,6 +63,41 @@ PERSONAL_RESET_ALERT = "Игрок платит общий налог"
 NOT_EMPEROR_ALERT = "Ты не император."
 SUBJECT_GONE_ALERT = "Игрок уже не в твоей империи."
 INVALID_RATE_ALERT = f"Ставка — от {EMPIRE_TAX_MIN_PERCENT} до {EMPIRE_TAX_MAX_PERCENT}%."
+
+# --- объявления императора ---
+ANNOUNCE_SCREEN = (
+    "📜 <b>Объявление игрокам</b>\n━━━━━━━━━━━━━━━━━━\n"
+    "Сообщение получат все, кто платит тебе налог. Раз в {interval}.\n"
+    "👥 Платят налог: <b>{subjects}</b>\n"
+    "🔕 Выключили объявления: <b>{muted}</b>\n"
+    "{status}"
+    "{sent_block}"
+)
+ANNOUNCE_READY_LINE = "✅ Можно отправить.\n"
+ANNOUNCE_COOLDOWN_LINE = "⏳ Следующее — через <b>{countdown}</b>.\n"
+ANNOUNCE_SENT_HEADER = "━━━━━━━━━━━━━━━━━━\n<b>Последние</b>\n"
+ANNOUNCE_SENT_LINE = "🕓 {time}: получили <b>{delivered}</b> из {recipients}, выключили {muted}\n<i>{text}</i>\n\n"
+ANNOUNCE_PROMPT = "✍️ Напиши текст объявления, до {limit} символов."
+ANNOUNCE_BAD_TEXT = "Нужен текст до {limit} символов. Пришли ещё раз:"
+ANNOUNCE_PREVIEW = "📜 <b>Так увидят игроки:</b>\n━━━━━━━━━━━━━━━━━━\n{text}\n━━━━━━━━━━━━━━━━━━\nОтправить?"
+ANNOUNCE_SENT = "📜 Рассылка началась: {count} игрокам, ещё {muted} выключили объявления. Когда закончится, придёт итог."
+ANNOUNCE_PUSH = (
+    "📜 <b>Объявление императора {name}</b>\n━━━━━━━━━━━━━━━━━━\n{text}\n━━━━━━━━━━━━━━━━━━\n"
+    "<i>Выключить: Настройки → Уведомления. Все объявления: кнопка в профиле.</i>"
+)
+ANNOUNCE_REPORT = (
+    "📜 <b>Объявление разослано</b>\n"
+    "Получили: <b>{delivered}</b> из {recipients}\n"
+    "🔕 Выключили объявления: {muted}\n"
+    "🚫 Не дошло (бот заблокирован): {failed}"
+)
+ANNOUNCE_UNNAMED = "Император"
+ANNOUNCE_LOG_SCREEN = "📜 <b>Объявления императора</b>\n━━━━━━━━━━━━━━━━━━\n{items}"
+ANNOUNCE_LOG_ITEM = "👑 <b>{name}</b> · {time}\n{text}\n\n"
+ANNOUNCE_LOG_EMPTY = "В твоём городе объявлений пока не было."
+ANNOUNCE_COOLDOWN_ALERT = "Следующее объявление через {countdown}."
+ANNOUNCE_NO_SUBJECTS_ALERT = "На твоих землях пока нет игроков."
+ANNOUNCE_STALE_ALERT = "Это объявление уже отправлено или устарело. Напиши заново."
 
 # Строка на экране бизнеса у игрока, который платит налог.
 TAX_LINE = "👑 Налог императору <b>{emperor}</b>: <b>{percent}%</b> <i>(уже вычтен)</i>\n"

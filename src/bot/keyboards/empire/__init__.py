@@ -1,5 +1,9 @@
 """Публичное API домена empire (клавиатуры)."""
 from bot.keyboards.empire.empire import (  # noqa: F401
+    announce_confirm_menu,
+    announce_log_menu,
+    announce_menu,
+    back_to_announce_menu,
     back_to_empire_menu,
     empire_menu,
     personal_rate_menu,

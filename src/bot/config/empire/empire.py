@@ -15,6 +15,15 @@ EMPIRE_TAX_STEPS: tuple[int, ...] = (10, 20, 30, 40, 50)  # кнопки ста�
 EMPEROR_PASSIVE_BONUS_PERCENT = 10  # «сверху», у игрока не вычитается
 EMPIRE_OVERRIDES_SHOWN = 10  # сколько персональных ставок показать на экране
 
+# Объявления императора (пользователь 2026-11-06: раз в 4 часа, значение меняется в админке).
+EMPIRE_ANNOUNCE_COOLDOWN_SECONDS = 4 * 60 * 60
+EMPIRE_ANNOUNCE_MAX_CHARS = 1000
+EMPIRE_ANNOUNCE_BATCH_SIZE = 25  # темп рассылки в лимитах Telegram
+EMPIRE_ANNOUNCE_BATCH_PAUSE_SECONDS = 1
+# 3 объявления по 1000 символов с заголовками умещаются в лимит сообщения Telegram (4096).
+EMPIRE_ANNOUNCE_LOG_PAGE_SIZE = 3
+EMPIRE_ANNOUNCE_SENT_SHOWN = 3  # последних объявлений на экране императора
+
 # --- Саботаж снизу (пользователь 2026-10-01: фиксированный шанс, провал — только КД,
 # переманить можно только уника, не стоящего на позиции). Числа — решение автора кода. ---
 SABOTAGE_COOLDOWN_SECONDS = 12 * 60 * 60  # общий КД на любую попытку (успех или провал)

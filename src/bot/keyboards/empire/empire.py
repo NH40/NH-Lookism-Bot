@@ -5,6 +5,10 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.config.empire import EMPIRE_TAX_STEPS
 from bot.constant.empire import (
+    CB_EMPIRE_ANNOUNCE,
+    CB_EMPIRE_ANNOUNCE_SEND,
+    CB_EMPIRE_ANNOUNCE_WRITE,
+    CB_EMPIRE_LOG_PREFIX,
     CB_EMPIRE_OPEN,
     CB_EMPIRE_PERSONAL,
     CB_EMPIRE_PERSONAL_RATE_PREFIX,
@@ -20,6 +24,11 @@ from bot.constant.empire import (
 from bot.constant.profile import CB_PROFILE_OPEN
 from bot.texts.common import BTN_BACK_TO_PROFILE
 from bot.texts.empire import (
+    BTN_ANNOUNCE,
+    BTN_ANNOUNCE_BACK,
+    BTN_ANNOUNCE_EDIT,
+    BTN_ANNOUNCE_SEND,
+    BTN_ANNOUNCE_WRITE,
     BTN_BACK_TO_EMPIRE,
     BTN_BACK_TO_TARGETS,
     BTN_NEXT,
@@ -53,6 +62,7 @@ def empire_menu(current_rate: int, incoming_war_id: int | None = None) -> Inline
     rows = [
         _rate_row(current_rate, CB_EMPIRE_RATE_PREFIX),
         [_btn(BTN_PERSONAL, CB_EMPIRE_PERSONAL)],
+        [_btn(BTN_ANNOUNCE, CB_EMPIRE_ANNOUNCE)],
     ]
     if incoming_war_id is not None:
         rows.append([_btn(BTN_WAR_ACCEPT, f"{CB_WAR_ACCEPT_PREFIX}{incoming_war_id}")])
@@ -71,6 +81,37 @@ def personal_rate_menu(subject_id: int, current: int, *, has_override: bool) -> 
 
 def back_to_empire_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[_btn(BTN_BACK_TO_EMPIRE, CB_EMPIRE_OPEN)]])
+
+
+def announce_menu() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[_btn(BTN_ANNOUNCE_WRITE, CB_EMPIRE_ANNOUNCE_WRITE)], [_btn(BTN_BACK_TO_EMPIRE, CB_EMPIRE_OPEN)]]
+    )
+
+
+def back_to_announce_menu() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[_btn(BTN_ANNOUNCE_BACK, CB_EMPIRE_ANNOUNCE)]])
+
+
+def announce_confirm_menu() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [_btn(BTN_ANNOUNCE_SEND, CB_EMPIRE_ANNOUNCE_SEND)],
+            [_btn(BTN_ANNOUNCE_EDIT, CB_EMPIRE_ANNOUNCE_WRITE)],
+            [_btn(BTN_ANNOUNCE_BACK, CB_EMPIRE_ANNOUNCE)],
+        ]
+    )
+
+
+def announce_log_menu(page: int, has_more: bool) -> InlineKeyboardMarkup:
+    nav = []
+    if page > 0:
+        nav.append(_btn(BTN_PREV, f"{CB_EMPIRE_LOG_PREFIX}{page - 1}"))
+    if has_more:
+        nav.append(_btn(BTN_NEXT, f"{CB_EMPIRE_LOG_PREFIX}{page + 1}"))
+    rows = [nav] if nav else []
+    rows.append([_btn(BTN_BACK_TO_PROFILE, CB_PROFILE_OPEN)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def sabotage_menu(cooldowns: dict[str, str | None]) -> InlineKeyboardMarkup:

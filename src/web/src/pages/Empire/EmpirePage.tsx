@@ -1,7 +1,7 @@
-import { Crown, Eye, Shield, Swords } from "lucide-react";
+import { Crown, Eye, Megaphone, Shield, Swords } from "lucide-react";
 import { useCallback, useState } from "react";
 import { apiGet, ApiError } from "../../api";
-import type { EmpireData, EmpireIncomingWar, EmpireRuler, EmpireSubject, EmpireSubjectRate, EmpireWarTarget, EmpireWarTargets, SabotageAction } from "../../types";
+import type { EmpireAnnounce, EmpireAnnouncementLog, EmpireData, EmpireIncomingWar, EmpireRuler, EmpireSubject, EmpireSubjectRate, EmpireWarTarget, EmpireWarTargets, SabotageAction } from "../../types";
 import { BackHeader, Panel, Screen, StatRow, countdown, fmt, useCountdown, useToast } from "../../components/ui";
 import { ROUTE_MAP } from "../../constants/constants";
 import { Sheet } from "../../components/Sheet";
@@ -53,6 +53,8 @@ function TaxTab({ ruler, min, max, onChanged }: { ruler: EmpireRuler; min: numbe
         <StatRow label="Владения" value={`${fmt(ruler.holdings)} зд.`} />
       </Panel>
 
+      <AnnouncePanel announce={ruler.announce} onChanged={onChanged} />
+
       <Panel title="ПЕРСОНАЛЬНЫЕ СТАВКИ">
         <div className="row" style={{ gap: 8 }}>
           <input className="emp-input" placeholder="@ник подданного" value={nick} onChange={(e) => setNick(e.currentTarget.value.replace(/\s/g, ""))} />
@@ -97,6 +99,65 @@ function TaxTab({ ruler, min, max, onChanged }: { ruler: EmpireRuler; min: numbe
         </Sheet>
       )}
     </>
+  );
+}
+
+const when = (iso: string) => new Date(iso).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+function AnnouncePanel({ announce, onChanged }: { announce: EmpireAnnounce; onChanged: () => void }) {
+  const [text, setText] = useState("");
+  const { run, busy } = useAction(onChanged);
+  const left = useCountdown(announce.cooldown_seconds);
+  const hours = announce.interval_seconds / 3600;
+  const send = async () => {
+    if (await run("/empire/announce", { text })) setText("");
+  };
+  return (
+    <Panel title="ОБЪЯВЛЕНИЕ ИГРОКАМ" tone="gold">
+      <p className="emp-note" style={{ margin: "0 0 10px" }}>
+        Получат все, кто платит тебе налог: {fmt(announce.subjects)}, из них выключили объявления {fmt(announce.muted)}. Раз в {Number.isInteger(hours) ? `${hours} ч` : `${Math.round(announce.interval_seconds / 60)} мин`}.
+      </p>
+      <textarea className="emp-input emp-text" placeholder="Текст объявления" maxLength={announce.max_chars} value={text} onChange={(e) => setText(e.currentTarget.value)} />
+      <button className="btn block" type="button" style={{ marginTop: 8 }} disabled={busy || left > 0 || !text.trim() || announce.subjects === 0} onClick={send}>
+        <Megaphone size={16} />{left > 0 ? `Через ${countdown(left)}` : "Отправить"}
+      </button>
+      {announce.sent.map((a) => (
+        <div key={a.id} className="emp-ann">
+          <small>{when(a.created_at)}: получили {fmt(a.delivered)} из {fmt(a.recipients)}, выключили {fmt(a.muted)}</small>
+          <p>{a.text}</p>
+        </div>
+      ))}
+    </Panel>
+  );
+}
+
+function AnnouncementLog() {
+  const [page, setPage] = useState(0);
+  const { data } = useApi<EmpireAnnouncementLog>(`/empire/announcements?page=${page}`);
+  return (
+    <Panel title="ОБЪЯВЛЕНИЯ ИМПЕРАТОРА">
+      {!data ? (
+        <p className="emp-note">Загружаю…</p>
+      ) : data.items.length === 0 ? (
+        <p className="emp-note" style={{ textAlign: "center" }}>В твоём городе объявлений пока не было.</p>
+      ) : (
+        data.items.map((a) => (
+          <div key={a.id} className="emp-ann">
+            <small>{a.emperor} · {when(a.created_at)}</small>
+            <p>{a.text}</p>
+          </div>
+        ))
+      )}
+      {data && (data.page > 0 || data.has_more) && (
+        <div className="pager">
+          <span>Стр. {data.page + 1}</span>
+          <span>
+            <button type="button" disabled={data.page <= 0} onClick={() => setPage(data.page - 1)}>Назад</button>
+            <button type="button" disabled={!data.has_more} onClick={() => setPage(data.page + 1)}>Далее</button>
+          </span>
+        </div>
+      )}
+    </Panel>
   );
 }
 
@@ -268,6 +329,7 @@ export function EmpirePage() {
             </>
           )}
           {data.subject && <SubjectView subject={data.subject} onChanged={reload} />}
+          {(!ruler || data.subject) && <AnnouncementLog />}
         </div>
       )}
     </Screen>

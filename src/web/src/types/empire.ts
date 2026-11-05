@@ -22,6 +22,24 @@ export interface EmpireWarHistory {
   treasury: number;
 }
 
+export interface EmpireAnnouncementSent {
+  id: number;
+  text: string;
+  created_at: string;
+  recipients: number;
+  delivered: number;
+  muted: number;
+}
+
+export interface EmpireAnnounce {
+  cooldown_seconds: number;
+  interval_seconds: number;
+  max_chars: number;
+  subjects: number;
+  muted: number;
+  sent: EmpireAnnouncementSent[];
+}
+
 export interface EmpireRuler {
   cities: number;
   players: number;
@@ -37,6 +55,7 @@ export interface EmpireRuler {
   incoming: EmpireIncomingWar | null;
   war_cooldown_seconds: number;
   history: EmpireWarHistory[];
+  announce: EmpireAnnounce;
 }
 
 export interface SabotageAction {
@@ -61,6 +80,19 @@ export interface EmpireData {
   tax_min: number;
   tax_max: number;
   subtitle: string;
+}
+
+export interface EmpireAnnouncementLogItem {
+  id: number;
+  emperor: string;
+  text: string;
+  created_at: string;
+}
+
+export interface EmpireAnnouncementLog {
+  items: EmpireAnnouncementLogItem[];
+  page: number;
+  has_more: boolean;
 }
 
 export interface EmpireSubjectRate {

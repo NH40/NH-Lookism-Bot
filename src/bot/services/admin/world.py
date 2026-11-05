@@ -4,16 +4,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import text, func, select, update
+from sqlalchemy import delete, text, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.constant.admin.world import (
-    AUDIT_W_CANCEL_CHALLENGES, AUDIT_W_CANCEL_WAR, AUDIT_W_DEL_EMP, AUDIT_W_RESET, AUDIT_W_SET_EMP,
+    AUDIT_W_CANCEL_CHALLENGES, AUDIT_W_CANCEL_WAR, AUDIT_W_COUNTRY_BATTLES, AUDIT_W_COUNTRY_ENTRY, AUDIT_W_COUNTRY_KICK, AUDIT_W_DEL_EMP, AUDIT_W_RESET, AUDIT_W_SET_EMP,
     AUDIT_W_SET_OWNER, CHALLENGE_CANCELLED, RESOLUTION_ADMIN, SEARCH_LIMIT, WAR_CANCELLED,
 )
 from bot.constant.district import CHALLENGE_PENDING
 from bot.constant.empire import WAR_PENDING
+from bot.constant.phase import PHASE_GANG
 from bot.db.models.business import Business
+from bot.db.models.country import Country
+from bot.db.models.emperor_tax import EmperorTaxOverride
 from bot.db.models.city import City
 from bot.db.models.district import District
 from bot.db.models.district_challenge import DistrictChallenge
@@ -176,6 +179,10 @@ async def countries_overview(session: AsyncSession) -> list[dict]:
         GROUP BY c.country_code
     """))).all()
     by_code = {r[0]: r for r in rows}
+    flags = {r[0]: (r[1], r[2]) for r in await session.execute(select(Country.code, Country.entry_closed, Country.battles_closed))}
+    players = dict((await session.execute(
+        select(User.country_code, func.count()).where(User.country_code.is_not(None)).group_by(User.country_code)
+    )).all())
     out = []
     for c in COUNTRIES:
         r = by_code.get(c.code)
@@ -183,6 +190,8 @@ async def countries_overview(session: AsyncSession) -> list[dict]:
             continue
         out.append({
             "code": c.code, "name": c.name, "cities": r[1], "owned": r[2], "bots": r[3],
+            "entry_closed": flags.get(c.code, (False, False))[0], "battles_closed": flags.get(c.code, (False, False))[1],
+            "players": players.get(c.code, 0),
             "emperor": {"id": r[5], "label": f"@{r[4]}" if r[4] else f"id{r[5]}"} if r[5] else None,
         })
     return out
@@ -203,3 +212,98 @@ async def country_cities(session: AsyncSession, country_code: str) -> list[dict]
         }
         for cid, name, eid, uname, total, bots, owners in rows
     ]
+
+
+async def set_country_entry(session: AsyncSession, admin_id: int, code: str, closed: bool) -> bool:
+    """Закрыть/открыть вход в страну. Игроки внутри не затрагиваются. Коммитит. → есть ли страна."""
+    result = await session.execute(update(Country).where(Country.code == code).values(entry_closed=closed))
+    if not result.rowcount:
+        return False
+    await audit.log(session, admin_id, AUDIT_W_COUNTRY_ENTRY, None, {"country": code, "closed": closed})
+    await session.commit()
+    return True
+
+
+_COUNTRY_DISTRICTS = "SELECT d.id FROM districts d JOIN cities c ON c.id = d.city_id WHERE c.country_code = :cc"
+_COUNTRY_CITIES = "SELECT id FROM cities WHERE country_code = :cc"
+
+
+async def _cancel_country_fights(session: AsyncSession, code: str) -> tuple[int, int]:
+    """Отменить висящие вызовы в стране и войны её игроков: иначе они дозрели бы до боя. НЕ коммитит."""
+    challenges = await session.execute(text(f"""
+        UPDATE district_challenges SET status = :cancelled, resolution = :admin, resolved_at = now()
+        WHERE status = :pending AND (
+            city_id IN ({_COUNTRY_CITIES}) OR district_id IN ({_COUNTRY_DISTRICTS})
+            OR attacker_id IN (SELECT id FROM users WHERE country_code = :cc)
+            OR defender_id IN (SELECT id FROM users WHERE country_code = :cc)
+        )
+    """), {"cc": code, "cancelled": CHALLENGE_CANCELLED, "admin": RESOLUTION_ADMIN, "pending": CHALLENGE_PENDING})
+    wars = await session.execute(text("""
+        UPDATE emperor_wars SET status = :cancelled, resolution = :admin, resolved_at = now()
+        WHERE status = :pending AND (
+            attacker_id IN (SELECT id FROM users WHERE country_code = :cc)
+            OR defender_id IN (SELECT id FROM users WHERE country_code = :cc)
+        )
+    """), {"cc": code, "cancelled": WAR_CANCELLED, "admin": RESOLUTION_ADMIN, "pending": WAR_PENDING})
+    return challenges.rowcount or 0, wars.rowcount or 0
+
+
+async def set_country_battles(session: AsyncSession, admin_id: int, code: str, closed: bool) -> tuple[int, int] | None:
+    """Запретить/разрешить бои в стране. При запрете висящие вызовы и войны отменяются. Коммитит.
+    → (отменено вызовов, войн) или None, если страны нет."""
+    result = await session.execute(update(Country).where(Country.code == code).values(battles_closed=closed))
+    if not result.rowcount:
+        return None
+    cancelled = await _cancel_country_fights(session, code) if closed else (0, 0)
+    await audit.log(session, admin_id, AUDIT_W_COUNTRY_BATTLES, None, {"country": code, "closed": closed, "challenges": cancelled[0], "wars": cancelled[1]})
+    await session.commit()
+    return cancelled
+
+
+async def kick_country(session: AsyncSession, admin_id: int, code: str) -> list[int]:
+    """Выселить всех игроков страны. Одна транзакция, всё SQL-запросами (правило 3).
+
+    Игрок сохраняет армию, уников, ресурсы и развитие. Здания на районах становятся владениями (доход
+    остаётся, как при коронации). Районы страны уходят ботам, города теряют императоров, сами выселенные
+    теряют и чужие города, и персональные налоги. Фаза — банда, как у свергнутого императора: иначе в новой
+    стране оказался бы второй император. Дальше игрок выбирает страну заново через /start. Коммитит.
+    → id выселенных (для уведомлений)."""
+    kicked = list((await session.scalars(
+        select(User.id).where(User.country_code == code).order_by(User.id).with_for_update()
+    )).all())
+    owners = list((await session.scalars(text(f"SELECT DISTINCT owner_id FROM districts WHERE owner_id IS NOT NULL AND id IN ({_COUNTRY_DISTRICTS})"), {"cc": code})).all())
+    to_accrue = sorted(set(kicked) | set(owners))
+    if to_accrue:
+        await accrue_many(session, to_accrue)  # доход до этой секунды — по старому набору зданий
+    challenges, wars = await _cancel_country_fights(session, code)
+    await session.execute(text(f"""
+        UPDATE businesses b SET holder_id = d.owner_id, origin_city_id = d.city_id, district_id = NULL
+        FROM districts d WHERE b.district_id = d.id AND d.owner_id IS NOT NULL AND d.id IN ({_COUNTRY_DISTRICTS})
+    """), {"cc": code})
+    await session.execute(text(f"UPDATE districts SET owner_id = NULL, captured_at = NULL WHERE owner_id IS NOT NULL AND id IN ({_COUNTRY_DISTRICTS})"), {"cc": code})
+    await session.execute(update(City).where(City.country_code == code).values(emperor_id=None))
+    if kicked:
+        await session.execute(update(City).where(City.emperor_id.in_(kicked)).values(emperor_id=None))
+        await session.execute(delete(EmperorTaxOverride).where(EmperorTaxOverride.emperor_id.in_(kicked)))
+    await session.execute(
+        update(User).where(User.country_code == code).values(phase=PHASE_GANG, country_code=None, city_id=None)
+    )
+    await audit.log(session, admin_id, AUDIT_W_COUNTRY_KICK, None, {"country": code, "players": len(kicked), "challenges": challenges, "wars": wars})
+    await session.commit()
+    return kicked
+
+
+async def send_kick_notices(bot, user_ids: list[int], country_name: str) -> None:
+    """Сообщить выселенным. Шлётся всем без учёта настроек: без этого игрок не поймёт, что случилось.
+    Фоновая задача, best-effort: заблокировавшие бота пропускаются, темп — в лимитах Telegram."""
+    import asyncio
+
+    from bot.texts.country import KICKED_NOTICE
+
+    for i, user_id in enumerate(user_ids, 1):
+        try:
+            await bot.send_message(user_id, KICKED_NOTICE.format(name=country_name))
+        except Exception:  # noqa: BLE001 — заблокировал бота, удалён и т.п.
+            pass
+        if i % 25 == 0:
+            await asyncio.sleep(1)

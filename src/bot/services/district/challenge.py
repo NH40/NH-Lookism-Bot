@@ -15,6 +15,8 @@ raw-notes «Карта»: «если это игрок, то ему приход
 """
 from __future__ import annotations
 
+from bot.services.country import ensure_battles_open
+
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -214,6 +216,7 @@ async def issue_challenge(session: AsyncSession, redis: Redis, attacker: User, d
     КД на сражения ПРОВЕРЯЕТСЯ, но не ставится — он ставится после боя (raw-notes: «после
     сражения у игрока начинается кд»); повторно бросить вызов, пока висит текущий, не
     даёт уникальный индекс, а не КД."""
+    await ensure_battles_open(session, attacker.country_code)
     row = await get_row(session, district_id)
     if row is None:
         raise DistrictNotFoundError
@@ -293,6 +296,7 @@ async def issue_city_challenge(
     на принятие, иначе бой против лагеря защиты; на кону — районы, что защитник держит в
     городе В МОМЕНТ боя. Тот же порядок проверок: всё, что не должно ничего стоить, — до
     вставки; гарантия единственности — в частичных индексах."""
+    await ensure_battles_open(session, attacker.country_code)
     if is_emperor(attacker.phase):
         raise EmperorNoConquestError
     if not can_conquer_cities(attacker.phase):

@@ -43,6 +43,7 @@ from bot.texts.stealth import STEALTH_LABEL
 from bot.texts.activity import LOG_CAPTURED, LOG_PVE, LOST, WON
 from bot.services.characteristic import get_combat_profile
 from bot.services.business import accrue
+from bot.services.country import ensure_battles_open
 from bot.services.city import get_city
 from bot.services.district.army import apply_losses, load_camp
 from bot.services.combat import CombatStack, base_chances, simulate_battle
@@ -219,6 +220,7 @@ async def attack_district(session: AsyncSession, redis: Redis, user: User, distr
     """Составная операция (правило 10): проверки → КД → бой → списание погибших → захват
     → один commit. Все проверки, которые не должны тратить КД (чужой город, свой
     район, пустой лагерь атаки), — ДО выставления КД в Redis."""
+    await ensure_battles_open(session, user.country_code)
     row = await get_row(session, district_id)
     if row is None:
         raise DistrictNotFoundError

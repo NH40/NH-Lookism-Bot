@@ -1,6 +1,8 @@
 """Админка — Районы, города, императоры (хендлеры)."""
 from __future__ import annotations
 
+import asyncio
+
 from aiogram import F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
@@ -18,10 +20,12 @@ from bot.services.admin import roles
 from bot.services.admin import world as svc
 from bot.states.admin_world import AdminWorldStates
 from bot.texts.admin import world as T
-from bot.utils.formatting import esc
+from bot.constant.admin import ROLE_SUPER
+from bot.utils.formatting import esc, format_number
 from bot.utils.safe_edit import safe_edit_text
 
 router = Router(name="admin_world")
+_notice_tasks: set[asyncio.Task] = set()  # ссылка на задачу, иначе её может собрать сборщик мусора
 
 
 def _owner(row) -> str:
@@ -70,6 +74,104 @@ async def cb_section(callback: CallbackQuery, session: AsyncSession, state: FSMC
     await state.clear()
     await callback.answer()
     await safe_edit_text(callback.message, T.WORLD_MENU, reply_markup=K.menu())
+
+
+async def _country_row(session: AsyncSession, code: str) -> dict | None:
+    return next((r for r in await svc.countries_overview(session) if r["code"] == code), None)
+
+
+async def _show_country(callback: CallbackQuery, session: AsyncSession, code: str, alert: str | None = None) -> None:
+    row = await _country_row(session, code)
+    if row is None:
+        await callback.answer()
+        return
+    await callback.answer(alert or "", show_alert=bool(alert))
+    emperor = row["emperor"]["label"] if row["emperor"] else "—"
+    text = T.COUNTRY_CARD.format(
+        name=esc(row["name"]), players=format_number(row["players"]), cities=row["cities"], owned=format_number(row["owned"]),
+        total=format_number(row["owned"] + row["bots"]), emperor=esc(emperor),
+        entry=T.STATE_CLOSED if row["entry_closed"] else T.STATE_OPEN,
+        battles=T.STATE_FORBIDDEN if row["battles_closed"] else T.STATE_ALLOWED,
+    )
+    can_kick = await roles.role_of(session, callback.from_user.id) == ROLE_SUPER
+    await safe_edit_text(callback.message, text, reply_markup=K.country_card(
+        code, entry_closed=row["entry_closed"], battles_closed=row["battles_closed"], can_kick=can_kick,
+    ))
+
+
+@router.callback_query(F.data == C.CB_W_COUNTRIES)
+async def cb_countries(callback: CallbackQuery, session: AsyncSession) -> None:
+    if not await guard(callback, session, SECTION_WORLD):
+        return
+    await callback.answer()
+    await safe_edit_text(callback.message, T.COUNTRIES_MENU, reply_markup=K.countries(await svc.countries_overview(session)))
+
+
+@router.callback_query(F.data.startswith(C.CB_W_COUNTRY_PREFIX))
+async def cb_country(callback: CallbackQuery, session: AsyncSession) -> None:
+    if await guard(callback, session, SECTION_WORLD):
+        await _show_country(callback, session, callback.data.removeprefix(C.CB_W_COUNTRY_PREFIX))
+
+
+@router.callback_query(F.data.startswith(C.CB_W_ENTRY_PREFIX))
+async def cb_country_entry(callback: CallbackQuery, session: AsyncSession) -> None:
+    if not await guard(callback, session, SECTION_WORLD):
+        return
+    code = callback.data.removeprefix(C.CB_W_ENTRY_PREFIX)
+    row = await _country_row(session, code)
+    if row is not None:
+        await svc.set_country_entry(session, callback.from_user.id, code, not row["entry_closed"])
+    await _show_country(callback, session, code)
+
+
+@router.callback_query(F.data.startswith(C.CB_W_BATTLES_PREFIX))
+async def cb_country_battles(callback: CallbackQuery, session: AsyncSession) -> None:
+    if not await guard(callback, session, SECTION_WORLD):
+        return
+    code = callback.data.removeprefix(C.CB_W_BATTLES_PREFIX)
+    row = await _country_row(session, code)
+    alert = None
+    if row is not None:
+        closing = not row["battles_closed"]
+        cancelled = await svc.set_country_battles(session, callback.from_user.id, code, closing)
+        if closing and cancelled:
+            alert = T.BATTLES_CANCELLED_ALERT.format(challenges=cancelled[0], wars=cancelled[1])
+    await _show_country(callback, session, code, alert)
+
+
+@router.callback_query(F.data.startswith(C.CB_W_KICK_ASK_PREFIX))
+async def cb_country_kick_ask(callback: CallbackQuery, session: AsyncSession) -> None:
+    if not await guard(callback, session, SECTION_WORLD):
+        return
+    if await roles.role_of(session, callback.from_user.id) != ROLE_SUPER:
+        await callback.answer(T.KICK_NO_RIGHTS_ALERT, show_alert=True)
+        return
+    code = callback.data.removeprefix(C.CB_W_KICK_ASK_PREFIX)
+    row = await _country_row(session, code)
+    if row is None:
+        await callback.answer()
+        return
+    await callback.answer()
+    await safe_edit_text(callback.message, T.KICK_ASK.format(name=esc(row["name"]), players=format_number(row["players"])), reply_markup=K.kick_confirm(code))
+
+
+@router.callback_query(F.data.startswith(C.CB_W_KICK_OK_PREFIX))
+async def cb_country_kick_ok(callback: CallbackQuery, session: AsyncSession) -> None:
+    if not await guard(callback, session, SECTION_WORLD):
+        return
+    if await roles.role_of(session, callback.from_user.id) != ROLE_SUPER:
+        await callback.answer(T.KICK_NO_RIGHTS_ALERT, show_alert=True)
+        return
+    code = callback.data.removeprefix(C.CB_W_KICK_OK_PREFIX)
+    row = await _country_row(session, code)
+    if row is None:
+        await callback.answer()
+        return
+    kicked = await svc.kick_country(session, callback.from_user.id, code)
+    task = asyncio.create_task(svc.send_kick_notices(callback.bot, kicked, row["name"]))
+    _notice_tasks.add(task)
+    task.add_done_callback(_notice_tasks.discard)
+    await _show_country(callback, session, code, T.KICK_DONE_ALERT.format(count=format_number(len(kicked))))
 
 
 @router.callback_query(F.data == C.CB_W_FIND)

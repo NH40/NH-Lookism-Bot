@@ -277,6 +277,9 @@ async def challenge_throne(session: AsyncSession, redis, user_id: int):
     from bot.constant.cooldown import CD_BATTLE
     from bot.constant.phase import PHASE_CIRCLE
     from bot.db.models.user import User
+    from bot.services.country import ensure_battles_open_for
+
+    await ensure_battles_open_for(session, user_id)
     from bot.services.admin.live_config import battle_cooldown_seconds
     from bot.services.cooldown import schedule as schedule_ready
     from bot.services.district.district import BattleOnCooldownError

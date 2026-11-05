@@ -12,6 +12,8 @@
 """
 from __future__ import annotations
 
+from bot.services.country import ensure_entry_open
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config.country import CountryDef
@@ -49,5 +51,6 @@ async def finish_onboarding(session: AsyncSession, user_id: int, city_id: int) -
     city = await get_city(session, city_id)
     if city is None:
         raise UnknownCityError(city_id)
+    await ensure_entry_open(session, city.country_code)
     await set_country_and_city(session, user_id, city.country_code, city_id)
     return city

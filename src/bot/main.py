@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from aiogram.filters import ExceptionTypeFilter
+
+from bot.handlers.country import on_battles_closed
+from bot.services.country import BattlesClosedError
+
 import asyncio
 import logging
 import time
@@ -305,6 +310,7 @@ async def main() -> None:
     dp.message.outer_middleware(command_state_reset_mw)
 
     dp.include_routers(*get_routers())
+    dp.errors.register(on_battles_closed, ExceptionTypeFilter(BattlesClosedError))
 
     background = [
         asyncio.create_task(_heartbeat_loop()),

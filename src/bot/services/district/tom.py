@@ -9,6 +9,8 @@
 """
 from __future__ import annotations
 
+from bot.services.country import ensure_battles_open
+
 from dataclasses import dataclass
 
 from redis.asyncio import Redis
@@ -45,6 +47,7 @@ class TomFightResult:
 async def fight_tom(session: AsyncSession, redis: Redis, user: User) -> TomFightResult:
     """Составная операция (правило 10): проверки → КД → бой → потери → (победа) тренер → один
     commit. Порядок блокировок: строка цепочки → стопки лагеря."""
+    await ensure_battles_open(session, user.country_code)
     quest = await lock_quest_for_tom(session, user.id)
     stacks = await load_camp(session, user.id, CAMP_ATTACK, for_update=True)
     if not stacks:

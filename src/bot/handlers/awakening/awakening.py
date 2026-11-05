@@ -136,6 +136,7 @@ async def cb_awaken_confirm(callback: CallbackQuery, session: AsyncSession, redi
 @router.callback_query(F.data == CB_AWAKEN_RELOCATE)
 async def cb_awaken_relocate(callback: CallbackQuery, session: AsyncSession, redis: Redis) -> None:
     from bot.keyboards.start import country_menu
+    from bot.services.country import closed_entries
     from bot.services.awakening import RelocateExpiredError, RelocateHasDistrictsError, relocate
     from bot.texts.awakening import RELOCATE_EXPIRED_ALERT, RELOCATE_HAS_DISTRICTS_ALERT, RELOCATE_PICK
 
@@ -149,4 +150,4 @@ async def cb_awaken_relocate(callback: CallbackQuery, session: AsyncSession, red
         return
     await callback.answer()
     await safe_clear_markup(callback.message)
-    await callback.message.answer(RELOCATE_PICK, reply_markup=country_menu())
+    await callback.message.answer(RELOCATE_PICK, reply_markup=country_menu(await closed_entries(session)))

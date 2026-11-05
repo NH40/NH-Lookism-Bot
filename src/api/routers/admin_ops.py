@@ -15,6 +15,7 @@ from api.db import get_session, session_factory
 from api.push import get_bot
 from api.routers._common import bad, clean_label
 from api.routers.admin import access, background, done
+from bot.constant.admin import ROLE_SUPER
 from bot.constant.admin import (
     SECTION_CLANS,
     SECTION_EVENTS,
@@ -323,13 +324,60 @@ async def get_countries(user_id: int = Depends(get_current_user_id), session: As
 
 @router.get("/world/countries/{code}")
 async def get_country(code: str, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
-    await access(session, user_id, SECTION_WORLD)
+    role = await access(session, user_id, SECTION_WORLD)
     from bot.config.country import COUNTRY_BY_CODE
 
     country = COUNTRY_BY_CODE.get(code.upper())
     if country is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Страна не найдена.")
-    return {"code": country.code, "name": country.name, "cities": await world_svc.country_cities(session, country.code)}
+    row = next((r for r in await world_svc.countries_overview(session) if r["code"] == country.code), None)
+    return {
+        "code": country.code, "name": country.name, "cities": await world_svc.country_cities(session, country.code),
+        "entry_closed": bool(row and row["entry_closed"]), "battles_closed": bool(row and row["battles_closed"]),
+        "players": row["players"] if row else 0, "can_kick": role == ROLE_SUPER,
+    }
+
+
+class CountryFlagIn(BaseModel):
+    closed: bool
+
+
+def _country_or_404(code: str):
+    from bot.config.country import COUNTRY_BY_CODE
+
+    country = COUNTRY_BY_CODE.get(code.upper())
+    if country is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Страна не найдена.")
+    return country
+
+
+@router.post("/world/countries/{code}/entry")
+async def post_country_entry(code: str, body: CountryFlagIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    await access(session, user_id, SECTION_WORLD)
+    country = _country_or_404(code)
+    await world_svc.set_country_entry(session, user_id, country.code, body.closed)
+    return done(f"{country.name}: вход {'закрыт' if body.closed else 'открыт'}")
+
+
+@router.post("/world/countries/{code}/battles")
+async def post_country_battles(code: str, body: CountryFlagIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    await access(session, user_id, SECTION_WORLD)
+    country = _country_or_404(code)
+    cancelled = await world_svc.set_country_battles(session, user_id, country.code, body.closed) or (0, 0)
+    if body.closed:
+        return done(f"{country.name}: бои запрещены. Отменено вызовов: {cancelled[0]}, войн: {cancelled[1]}")
+    return done(f"{country.name}: бои разрешены")
+
+
+@router.post("/world/countries/{code}/kick")
+async def post_country_kick(code: str, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    role = await access(session, user_id, SECTION_WORLD)
+    if role != ROLE_SUPER:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Выселять может только супер-админ.")
+    country = _country_or_404(code)
+    kicked = await world_svc.kick_country(session, user_id, country.code)
+    background(world_svc.send_kick_notices(get_bot(), kicked, country.name))
+    return done(f"{country.name}: выселено игроков {len(kicked)}")
 
 
 @router.get("/world/cities")

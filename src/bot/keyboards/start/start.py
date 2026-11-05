@@ -22,9 +22,12 @@ from bot.constant.start import (
 from bot.db.models.city import City
 
 
-def country_menu() -> InlineKeyboardMarkup:
+def country_menu(closed: frozenset[str] = frozenset()) -> InlineKeyboardMarkup:
+    """`closed` — страны, закрытые для входа в админке (`services/country.closed_entries`)."""
     builder = InlineKeyboardBuilder()
     for country in COUNTRIES:
+        if country.code in closed:
+            continue
         builder.button(text=country.name, callback_data=f"{CB_START_COUNTRY_PREFIX}{country.code}")
     builder.adjust(2)
     return builder.as_markup()

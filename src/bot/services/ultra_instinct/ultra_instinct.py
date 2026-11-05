@@ -189,6 +189,7 @@ async def _safe_boss_fights(session_factory, redis: Redis, user_id: int, setting
         fight_boss,
     )
     from bot.services.district.district import BattleOnCooldownError, NoAttackersError
+    from bot.services.country import BattlesClosedError
     from bot.services.foresight.foresight import _simulate
 
     chosen = set(settings.get(KEY_BOSSES, ()))
@@ -214,7 +215,7 @@ async def _safe_boss_fights(session_factory, redis: Redis, user_id: int, setting
             continue
         fought = await attempt(
             "bosses", lambda s, ev=event_id: _fight(s, redis, user_id, ev, fight_boss, get_by_id),
-            (BossAlreadyDefeatedError, EventGoneError, BattleOnCooldownError, NoAttackersError),
+            (BossAlreadyDefeatedError, EventGoneError, BattleOnCooldownError, NoAttackersError, BattlesClosedError),
         )
         if fought:
             return  # один бой за проход: дальше общий КД боссов

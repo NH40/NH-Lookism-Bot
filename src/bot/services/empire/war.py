@@ -15,6 +15,8 @@
 """
 from __future__ import annotations
 
+from bot.services.country import ensure_battles_open_for
+
 import logging
 import random
 from dataclasses import dataclass, field
@@ -175,6 +177,7 @@ async def declare_war(session: AsyncSession, redis: Redis, attacker_id: int, def
     """Объявление войны. Порядок: права → цель → щит цели → висящие вызовы → КД (`SET NX EX`,
     он же защита от двойного клика) → строка вызова (частичные уникальные индексы — вторая
     линия защиты от гонки) → commit. Сбой после взятия КД — КД снимается."""
+    await ensure_battles_open_for(session, attacker_id, defender_id)
     target = await get_target(session, attacker_id, defender_id)
     if target.cities == 0:
         raise TargetHasNoCitiesError

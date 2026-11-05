@@ -10,6 +10,8 @@ raw-notes «Фазы»: «круг уже сражается с другими �
 """
 from __future__ import annotations
 
+from bot.services.country import ensure_battles_open
+
 
 from dataclasses import dataclass
 
@@ -176,6 +178,7 @@ async def attack_city_bots(session: AsyncSession, redis: Redis, user: User, city
     (не стоят КД) → КД `SET NX EX` по фазе → бой против суммарной армии ботов города →
     потери → начисление бизнеса → захват ВСЕХ районов ботов одним UPDATE → проверка
     перехода фазы → один commit."""
+    await ensure_battles_open(session, user.country_code)
     if is_emperor(user.phase):
         raise EmperorNoConquestError
     if not can_conquer_cities(user.phase):

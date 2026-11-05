@@ -14,6 +14,10 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
+from fastapi.responses import JSONResponse
+
+from bot.services.country import BattlesClosedError
+from bot.texts.country import BATTLES_CLOSED_ALERT
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -80,6 +84,12 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="LookismBattlePlanet API", lifespan=lifespan)
+
+
+@app.exception_handler(BattlesClosedError)
+async def _battles_closed(_request, exc: BattlesClosedError) -> JSONResponse:
+    """Запрет боёв в стране: один ответ на все места боя (сервис бросает его до КД и списаний)."""
+    return JSONResponse(status_code=400, content={"detail": BATTLES_CLOSED_ALERT.format(name=exc.country_name)})
 
 # В проде Caddy/аналог проксирует и фронтенд, и /api под одним доменом — CORS не
 # нужен вовсе. allow_methods шире, чем у read-only Mini App UAP — тут почти всё пишет.

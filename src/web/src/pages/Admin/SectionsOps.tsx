@@ -284,6 +284,9 @@ export function EventsSection({ meta }: { meta: AdminMeta }) {
 interface CountryRow {
   code: string;
   name: string;
+  entry_closed: boolean;
+  battles_closed: boolean;
+  players: number;
   cities: number;
   owned: number;
   bots: number;
@@ -366,6 +369,7 @@ function Countries({ onPick }: { onPick: (code: string) => void }) {
               <small>{c.cities} городов · {fmt(c.owned)}/{fmt(c.owned + c.bots)} районов у игроков</small>
               <OwnedBar owned={c.owned} total={c.owned + c.bots} />
               <small style={{ marginTop: 6 }}>{c.emperor ? `император ${c.emperor.label}` : "без императора"}</small>
+              <small>{fmt(c.players)} игроков{c.entry_closed ? " · вход закрыт" : ""}{c.battles_closed ? " · бои запрещены" : ""}</small>
             </button>
           ))}
         </div>
@@ -375,12 +379,38 @@ function Countries({ onPick }: { onPick: (code: string) => void }) {
 }
 
 function CountryCities({ code, onPick }: { code: string; onPick: (id: number) => void }) {
-  const data = useApi<{ name: string; cities: CountryCity[] }>(`/admin/world/countries/${code}`);
+  const data = useApi<{ name: string; cities: CountryCity[]; entry_closed: boolean; battles_closed: boolean; players: number; can_kick: boolean }>(`/admin/world/countries/${code}`);
+  const { run, busy } = useAction(data.reload);
   const [filter, setFilter] = useState<"all" | "contested" | "bots">("all");
   const d = data.data;
   const list = d?.cities.filter((c) => filter === "all" || (filter === "bots" ? c.bots === c.districts : c.owners > 1)) ?? [];
   return (
     <Screen status={data.status} error={data.error}>
+      {d && (
+        <Panel title="УПРАВЛЕНИЕ СТРАНОЙ" tone="gold">
+          <div className="adm-hint">
+            Игроков: {fmt(d.players)}. Вход {d.entry_closed ? "закрыт" : "открыт"}, бои {d.battles_closed ? "запрещены" : "разрешены"}.
+          </div>
+          <div className="grid-2" style={{ gap: 8, marginTop: 8 }}>
+            <button type="button" className={`btn ${d.entry_closed ? "gold" : "ghost"}`} disabled={busy} onClick={() => run(`/admin/world/countries/${code}/entry`, { closed: !d.entry_closed })}>
+              {d.entry_closed ? "Открыть вход" : "Закрыть вход"}
+            </button>
+            <ConfirmButton tone={d.battles_closed ? "gold" : "ghost"} disabled={busy} onConfirm={() => run(`/admin/world/countries/${code}/battles`, { closed: !d.battles_closed })}>
+              {d.battles_closed ? "Разрешить бои" : "Запретить бои"}
+            </ConfirmButton>
+          </div>
+          {d.can_kick && (
+            <div style={{ marginTop: 8 }}>
+              <div className="adm-hint">
+                Выселение нельзя отменить. Армия, уники, ресурсы и развитие останутся, здания станут владениями. Районы уйдут ботам, императоры потеряют титул, у всех фаза станет банда. Чтобы игроки не вернулись сюда же, сначала закрой вход.
+              </div>
+              <ConfirmButton disabled={busy || !d.players} onConfirm={() => run(`/admin/world/countries/${code}/kick`)}>
+                Выселить всех: {fmt(d.players)}
+              </ConfirmButton>
+            </div>
+          )}
+        </Panel>
+      )}
       {d && (
         <Panel title={d.name}>
           <Seg value={filter} onChange={setFilter} options={[{ value: "all", label: "Все" }, { value: "contested", label: "Делят игроки" }, { value: "bots", label: "Только боты" }]} cols={3} />

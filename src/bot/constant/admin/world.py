@@ -3,6 +3,12 @@ from __future__ import annotations
 
 P = "adm:w:"
 CB_W_FIND = f"{P}find"
+CB_W_COUNTRIES = f"{P}countries"
+CB_W_COUNTRY_PREFIX = f"{P}cn:"  # + код страны
+CB_W_ENTRY_PREFIX = f"{P}cne:"  # + код: закрыть/открыть вход
+CB_W_BATTLES_PREFIX = f"{P}cnb:"  # + код: запретить/разрешить бои
+CB_W_KICK_ASK_PREFIX = f"{P}cnk:"  # + код: выселить всех, подтверждение
+CB_W_KICK_OK_PREFIX = f"{P}cnky:"
 CB_W_CITY_PREFIX = f"{P}c:"  # + city_id
 CB_W_DISTRICT_PREFIX = f"{P}d:"  # + district_id
 CB_W_SET_OWNER_PREFIX = f"{P}so:"  # + district_id — ввод игрока
@@ -21,6 +27,9 @@ CHALLENGE_CANCELLED = "cancelled"
 WAR_CANCELLED = "cancelled"
 RESOLUTION_ADMIN = "admin"
 
+AUDIT_W_COUNTRY_ENTRY = "world_country_entry"
+AUDIT_W_COUNTRY_BATTLES = "world_country_battles"
+AUDIT_W_COUNTRY_KICK = "world_country_kick"
 AUDIT_W_SET_OWNER = "world_set_district_owner"
 AUDIT_W_RESET = "world_reset_district"
 AUDIT_W_SET_EMP = "world_set_emperor"

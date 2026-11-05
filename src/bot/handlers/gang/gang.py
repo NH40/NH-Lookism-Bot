@@ -33,6 +33,7 @@ from bot.constant.gang import (
 from bot.handlers.profile import show_profile
 from bot.keyboards.gang import delete_confirm_menu, gang_menu, squad_back_menu, squad_key, squad_menu, squads_menu
 from bot.keyboards.start import country_menu
+from bot.services.country import closed_entries
 from bot.services.extra import (
     InvalidCampMoveError,
     Squad,
@@ -376,4 +377,4 @@ async def cb_gang_delete_confirm(callback: CallbackQuery, session: AsyncSession,
     await safe_clear_markup(callback.message)
     # Заново онбординг — тот же первый экран, что у /start нового игрока.
     await callback.message.answer(DELETE_DONE)
-    await callback.message.answer(CHOOSE_COUNTRY, reply_markup=country_menu())
+    await callback.message.answer(CHOOSE_COUNTRY, reply_markup=country_menu(await closed_entries(session)))

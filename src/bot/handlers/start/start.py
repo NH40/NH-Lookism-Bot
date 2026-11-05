@@ -28,6 +28,8 @@ from bot.services.characteristic import roll_potential
 from bot.handlers.gang import prompt_gang_name
 from bot.handlers.profile import show_profile
 from bot.keyboards.start import city_menu, country_menu
+from bot.services.country import CountryEntryClosedError, closed_entries, ensure_entry_open
+from bot.texts.country import COUNTRY_CLOSED_ALERT
 from bot.services.city import list_cities
 from bot.services.gang import get_gang
 from bot.services.start import UnknownCityError, UnknownCountryError, finish_onboarding, is_onboarded, resolve_country
@@ -58,7 +60,7 @@ async def cmd_start(message: Message, session: AsyncSession, state: FSMContext, 
     if lbp1_coins:
         await message.answer(LBP1_DONATE_CREDITED.format(coins=format_number(lbp1_coins)))
     if not is_onboarded(user):
-        await message.answer(CHOOSE_COUNTRY, reply_markup=country_menu())
+        await message.answer(CHOOSE_COUNTRY, reply_markup=country_menu(await closed_entries(session)))
         return
 
     if await get_gang(session, user.id) is None:
@@ -92,6 +94,12 @@ async def cb_choose_country(callback: CallbackQuery, session: AsyncSession) -> N
     except UnknownCountryError:
         await callback.answer(UNKNOWN_COUNTRY, show_alert=True)
         return
+    try:
+        await ensure_entry_open(session, code)
+    except CountryEntryClosedError:
+        await callback.answer(COUNTRY_CLOSED_ALERT, show_alert=True)
+        await callback.message.edit_text(CHOOSE_COUNTRY, reply_markup=country_menu(await closed_entries(session)))
+        return
     await _show_city_page(callback, session, country_code=code, page=0)
 
 
@@ -103,8 +111,8 @@ async def cb_city_page(callback: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data == CB_START_BACK_TO_COUNTRY)
-async def cb_back_to_country(callback: CallbackQuery) -> None:
-    await callback.message.edit_text(CHOOSE_COUNTRY, reply_markup=country_menu())
+async def cb_back_to_country(callback: CallbackQuery, session: AsyncSession) -> None:
+    await callback.message.edit_text(CHOOSE_COUNTRY, reply_markup=country_menu(await closed_entries(session)))
     await callback.answer()
 
 
@@ -115,6 +123,10 @@ async def cb_choose_city(callback: CallbackQuery, session: AsyncSession, state: 
         city = await finish_onboarding(session, callback.from_user.id, city_id)
     except UnknownCityError:
         await callback.answer(UNKNOWN_CITY, show_alert=True)
+        return
+    except CountryEntryClosedError:
+        await callback.answer(COUNTRY_CLOSED_ALERT, show_alert=True)
+        await callback.message.edit_text(CHOOSE_COUNTRY, reply_markup=country_menu(await closed_entries(session)))
         return
     country = resolve_country(city.country_code)
     await callback.message.edit_text(

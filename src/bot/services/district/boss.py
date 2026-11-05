@@ -15,6 +15,8 @@
 """
 from __future__ import annotations
 
+from bot.services.country import ensure_battles_open
+
 import random
 from dataclasses import dataclass, replace
 
@@ -97,6 +99,7 @@ async def fight_boss(
     """Составная операция (правило 10): событие живо → участие под `FOR UPDATE` → лагерь →
     КД → бой → потери → (победа) награда → один commit."""
     rng = rng or random.Random()
+    await ensure_battles_open(session, user.country_code)
     event = await event_repo.get_active(session, event_id, user.id)
     if event is None or event.kind != EVENT_BOSS:
         raise EventGoneError

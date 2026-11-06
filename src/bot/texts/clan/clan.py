@@ -102,8 +102,8 @@ BTN_NEXT = "▶️"
 
 # --- поиск / топ ---
 FIND_HEADER = "🔍 <b>Кланы</b> (стр. {page}/{pages})\n━━━━━━━━━━━━━━━━━━\n"
-TOP_HEADER = "🏆 <b>Топ кланов</b> — по землям (стр. {page}/{pages})\n━━━━━━━━━━━━━━━━━━\n"
-CLAN_LINE = "🏰 <b>{place}.</b> {name} — 🌍 {lands}, 👥 {members}\n"
+TOP_HEADER = "🏆 <b>Топ кланов</b> — по мощи: рота + участники (стр. {page}/{pages})\n━━━━━━━━━━━━━━━━━━\n"
+CLAN_LINE = "🏰 <b>{place}.</b> {name} — ⚔️ {power}, 🌍 {lands}, 👥 {members}\n"
 CLANS_EMPTY = "📭 <i>Кланов пока нет — стань первым!</i>"
 
 # --- участники ---

@@ -93,6 +93,20 @@ def stacks_power(stacks: list[CombatStack]) -> int:
     return round(sum(s.unit_power * s.quantity for s in stacks))
 
 
+async def all_garrison_powers(session: AsyncSession) -> dict[int, int]:
+    """Мощь рот всех кланов тремя запросами — той же формулой, что `garrison_stacks`."""
+    extras, cards = await clan_repo.all_garrisons(session)
+    power: dict[int, float] = {}
+    for row in extras:
+        unit = statist_unit_power(row.rank, row.stars, row.training_level, row.school, row.school_level)
+        power[row.clan_id] = power.get(row.clan_id, 0.0) + unit * row.quantity
+    for row in cards:
+        power[row.clan_id] = power.get(row.clan_id, 0.0) + _card_power(row.card_code) * row.quantity
+    for row in await contract_repo.list_all_clans_active(session):
+        power[row.clan_id] = power.get(row.clan_id, 0.0) + extra_unit_power(row.rank, 0, 0) * row.quantity
+    return {clan_id: round(value) for clan_id, value in power.items()}
+
+
 async def clan_power(session: AsyncSession, clan_id: int) -> int:
     """Мощь клана = мощь роты."""
     return stacks_power(await garrison_stacks(session, clan_id))

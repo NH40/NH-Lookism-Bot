@@ -66,11 +66,11 @@ async def count_clans(session: AsyncSession) -> int:
 
 
 async def top_page(session: AsyncSession, limit: int, offset: int) -> list[tuple[Clan, int]]:
-    """Топ кланов: земли, затем число участников, затем старшинство."""
+    """Топ кланов: мощь (рота + участники, снимок), затем земли, затем старшинство."""
     members = func.count(ClanMember.user_id)
     rows = await session.execute(
         select(Clan, members).outerjoin(ClanMember, ClanMember.clan_id == Clan.id)
-        .group_by(Clan.id).order_by(Clan.lands.desc(), members.desc(), Clan.id).limit(limit).offset(offset)
+        .group_by(Clan.id).order_by(Clan.power_cache.desc(), Clan.lands.desc(), Clan.id).limit(limit).offset(offset)
     )
     return [(c, int(n)) for c, n in rows.all()]
 
@@ -82,9 +82,34 @@ async def search_page(session: AsyncSession, query: str, limit: int, offset: int
     members = func.count(ClanMember.user_id)
     rows = await session.execute(
         select(Clan, members).outerjoin(ClanMember, ClanMember.clan_id == Clan.id).where(Clan.name.ilike(pattern, escape="\\"))
-        .group_by(Clan.id).order_by(Clan.lands.desc(), members.desc(), Clan.id).limit(limit).offset(offset)
+        .group_by(Clan.id).order_by(Clan.power_cache.desc(), Clan.lands.desc(), Clan.id).limit(limit).offset(offset)
     )
     return [(c, int(n)) for c, n in rows.all()], total
+
+
+async def all_garrisons(session: AsyncSession) -> tuple[Sequence[ClanGarrisonExtra], Sequence[ClanGarrisonCard]]:
+    """Роты всех кланов двумя запросами — для снимка мощи в топе."""
+    extras = (await session.scalars(select(ClanGarrisonExtra).where(ClanGarrisonExtra.quantity > 0))).all()
+    cards = (await session.scalars(select(ClanGarrisonCard).where(ClanGarrisonCard.quantity > 0))).all()
+    return extras, cards
+
+
+async def member_power_sums(session: AsyncSession) -> dict[int, int]:
+    """Сумма снимков мощи участников по кланам, одним GROUP BY."""
+    rows = await session.execute(
+        select(ClanMember.clan_id, func.coalesce(func.sum(User.army_power_cache), 0))
+        .join(User, User.id == ClanMember.user_id).group_by(ClanMember.clan_id)
+    )
+    return {clan_id: int(total) for clan_id, total in rows.all()}
+
+
+async def set_powers(session: AsyncSession, values: dict[int, int]) -> None:
+    """Записать снимок мощи всем кланам (у кого нет ни роты, ни участников — 0). Не коммитит."""
+    await session.execute(update(Clan).values(power_cache=0))
+    if values:
+        await session.execute(
+            text("UPDATE clans SET power_cache = :p WHERE id = :c"), [{"c": c, "p": p} for c, p in values.items()]
+        )
 
 
 async def top_ids(session: AsyncSession, limit: int) -> set[int]:

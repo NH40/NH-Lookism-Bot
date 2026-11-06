@@ -13,7 +13,7 @@ TOP_PLAYERS_SCREEN = (
     "<i>Награды — по итогу сезона (раз в месяц) и при вайпе. Мощь обновляется раз в 10 минут.</i>"
 )
 TOP_CLANS_SCREEN = (
-    "🏯 <b>Топ кланов</b> — по землям\n"
+    "🏯 <b>Топ кланов</b> — по мощи (рота + участники)\n"
     "━━━━━━━━━━━━━━━━━━\n"
     "{rows}\n"
     "━━━━━━━━━━━━━━━━━━\n"
@@ -22,7 +22,7 @@ TOP_CLANS_SCREEN = (
 )
 SEASON_LINE = "⏳ Итог сезона через <b>{countdown}</b>\n"
 PLAYER_ROW = "{medal} <b>{name}</b> — ⚔️ {power}{reward}"
-CLAN_ROW = "{medal} <b>{name}</b> — 🗺 {lands} · 👥 {members}{reward}"
+CLAN_ROW = "{medal} <b>{name}</b> — ⚔️ {power} · 🗺 {lands} · 👥 {members}{reward}"
 REWARD_SUFFIX = "\n      🎁 {reward}"
 EMPTY_ROWS = "<i>Пока пусто.</i>"
 NOT_IN_TOP = "—"

@@ -4,7 +4,7 @@
 Battle Pass. В обоих случаях топ-10 игроков и топ-5 кланов получают награды
 (`config/top`). Мощь для сортировки — снимок `users.army_power_cache`: фоном раз в
 `TOP_POWER_REFRESH_SECONDS` для заходивших за сутки и для ВСЕХ перед выплатой (честный
-итог, а не устаревший снимок). Выплата — ровно один раз на ключ (`season_top_payouts`, PK).
+итог, а не устаревший снимок). Кланы — по снимку `clans.power_cache` (рота + участники). Выплата — ровно один раз на ключ (`season_top_payouts`, PK).
 """
 from __future__ import annotations
 
@@ -55,7 +55,21 @@ async def refresh_powers(session_factory: async_sessionmaker[AsyncSession], *, e
             values = [(uid, (await get_army_stats(session, uid)).total_power) for uid in ids[start : start + TOP_POWER_BATCH]]
             await top_repo.set_powers(session, values)
             await session.commit()
+    await refresh_clan_powers(session_factory)
     return len(ids)
+
+
+async def refresh_clan_powers(session_factory: async_sessionmaker[AsyncSession]) -> None:
+    """Снимок мощи кланов (пользователь 2026-11-06): рота + сумма мощи участников, кто больше — выше.
+    Всего несколько запросов на все кланы; мощь участников — их свежие снимки `army_power_cache`."""
+    from bot.services.clan.garrison import all_garrison_powers
+
+    async with session_factory() as session:
+        garrisons = await all_garrison_powers(session)
+        members = await clan_repo.member_power_sums(session)
+        totals = {c: garrisons.get(c, 0) + members.get(c, 0) for c in set(garrisons) | set(members)}
+        await clan_repo.set_powers(session, totals)
+        await session.commit()
 
 
 # --- экраны ---
@@ -66,6 +80,7 @@ class ClanRow:
     name: str
     lands: int
     members: int
+    power: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,7 +94,7 @@ class TopView:
 
 async def get_top(session: AsyncSession, user_id: int) -> TopView:
     players = await top_repo.players_page(session, TOP_PAGE_SIZE, 0)
-    clans = [ClanRow(c.name, c.lands, n) for c, n in await clan_repo.top_page(session, TOP_PAGE_SIZE, 0)]
+    clans = [ClanRow(c.name, c.lands, n, c.power_cache) for c, n in await clan_repo.top_page(session, TOP_PAGE_SIZE, 0)]
     mine = await top_repo.rank_of(session, user_id)
     now = datetime.now(timezone.utc)
     season = await bp_repo.current_season(session, now)
@@ -124,7 +139,7 @@ async def snapshot_winners(session_factory: async_sessionmaker[AsyncSession]) ->
                 winners.append(Winner(row.user_id, place, donate, coins, tickets))
         for place, (clan, _) in enumerate(await clan_repo.top_page(session, TOP_CLAN_PLACES, 0), start=1):
             donate, coins, tickets = clan_reward(place)
-            if clan.lands <= 0 or not (donate or coins or tickets):
+            if clan.power_cache <= 0 or not (donate or coins or tickets):
                 continue
             winners.extend(
                 Winner(uid, place, donate, coins, tickets, clan=clan.name) for uid in await clan_repo.member_ids(session, clan.id)

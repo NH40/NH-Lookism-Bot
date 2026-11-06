@@ -178,7 +178,7 @@ async def on_clan_name(message: Message, state: FSMContext, session: AsyncSessio
 async def _clans_page(session: AsyncSession, page: int, header: str, prefix: str, back: str):
     rows, page, pages = await clan_service.browse(session, page, CLAN_PAGE)
     lines = "".join(
-        CLAN_LINE.format(place=page * CLAN_PAGE + i + 1, name=esc(c.name), lands=c.lands, members=n) for i, (c, n) in enumerate(rows)
+        CLAN_LINE.format(place=page * CLAN_PAGE + i + 1, name=esc(c.name), power=format_number(c.power_cache), lands=c.lands, members=n) for i, (c, n) in enumerate(rows)
     ) or CLANS_EMPTY
     return header.format(page=page + 1, pages=pages) + lines, clans_list_menu(rows, prefix, page, pages, back)
 

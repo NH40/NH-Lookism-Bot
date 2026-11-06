@@ -5,6 +5,7 @@ from bot.db.repositories.contract.contract import (  # noqa: F401
     delete_for_user,
     list_active,
     lock_expired_with_retain,
+    list_all_clans_active,
     list_clan_active,
     lose,
     lose_clan,

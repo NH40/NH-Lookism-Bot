@@ -88,7 +88,7 @@ export interface TopPlayer {
 
 export interface TopData {
   players: TopPlayer[];
-  clans: { place: number; name: string; lands: number; members: number; reward: string }[];
+  clans: { place: number; name: string; power: number; lands: number; members: number; reward: string }[];
   my_place: number | null;
   my_power: number;
   season_ends_in: number | null;

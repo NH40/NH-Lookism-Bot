@@ -83,6 +83,11 @@ async def list_clan_active(session: AsyncSession, clan_id: int, *, for_update: b
     return (await session.scalars(stmt.order_by(ClanContract.expires_at, ClanContract.id))).all()
 
 
+async def list_all_clans_active(session: AsyncSession) -> Sequence[ClanContract]:
+    """Действующие контрактники всех клановых рот — для снимка мощи в топе."""
+    return (await session.scalars(select(ClanContract).where(ClanContract.quantity > 0, ClanContract.expires_at > func.now()))).all()
+
+
 async def create_clan(session: AsyncSession, clan_id: int, rank: str, quantity: int, expires_at: datetime) -> None:
     session.add(ClanContract(clan_id=clan_id, rank=rank, quantity=quantity, expires_at=expires_at))
 

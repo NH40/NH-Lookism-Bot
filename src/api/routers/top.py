@@ -32,6 +32,7 @@ class TopPlayerOut(BaseModel):
 class TopClanOut(BaseModel):
     place: int
     name: str
+    power: int
     lands: int
     members: int
     reward: str
@@ -65,7 +66,7 @@ async def top(user_id: int = Depends(get_current_user_id), session: AsyncSession
     return TopOut(
         players=[_player(i, p, user_id, reward_text(*player_reward(i))) for i, p in enumerate(view.players, start=1)],
         clans=[
-            TopClanOut(place=i, name=c.name, lands=c.lands, members=c.members, reward=reward_text(*clan_reward(i)))
+            TopClanOut(place=i, name=c.name, power=c.power, lands=c.lands, members=c.members, reward=reward_text(*clan_reward(i)))
             for i, c in enumerate(view.clans, start=1)
         ],
         my_place=view.my_place,

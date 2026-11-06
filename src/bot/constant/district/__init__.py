@@ -9,6 +9,7 @@ from bot.constant.district.district import (  # noqa: F401
     CHALLENGE_RESOLVED,
     RESOLUTION_ACCEPTED,
     RESOLUTION_TIMEOUT,
+    RESOLUTION_TRAVEL,
     RESOLUTION_VOID,
     SCOPE_CITY,
     SCOPE_DISTRICT,

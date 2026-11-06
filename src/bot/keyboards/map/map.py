@@ -12,6 +12,8 @@ from bot.constant.map import CB_MAP_CITY_PREFIX, CB_MAP_COUNTRY_PAGE_PREFIX, CB_
 from bot.constant.profile import CB_PROFILE_OPEN
 from bot.texts.common import BTN_BACK_TO_PROFILE
 from bot.texts.map import BTN_BACK_TO_COUNTRY, BTN_MY_CITY_DISTRICTS
+from bot.constant.travel import CB_TRAVEL_OPEN
+from bot.texts.travel import BTN_TRAVEL
 
 
 def _btn(text: str, callback_data: str) -> InlineKeyboardButton:
@@ -62,6 +64,7 @@ def city_map_menu(
     back = _btn(BTN_BACK_TO_COUNTRY, f"{CB_MAP_COUNTRY_PAGE_PREFIX}0") if back_to_country else _btn(
         BTN_BACK_TO_PROFILE, CB_PROFILE_OPEN
     )
+    rows.append([_btn(BTN_TRAVEL, CB_TRAVEL_OPEN)])
     rows.append([back])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -75,7 +78,7 @@ def country_map_menu(
         CITY_PAGE_SIZE,
         CB_MAP_COUNTRY_PAGE_PREFIX,
     )
-    rows.append([_btn(BTN_MY_CITY_DISTRICTS, f"{CB_MAP_PAGE_PREFIX}0")])
+    rows.append([_btn(BTN_MY_CITY_DISTRICTS, f"{CB_MAP_PAGE_PREFIX}0"), _btn(BTN_TRAVEL, CB_TRAVEL_OPEN)])
     rows.append([_btn(BTN_BACK_TO_PROFILE, CB_PROFILE_OPEN)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

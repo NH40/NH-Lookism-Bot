@@ -62,6 +62,7 @@ from api.routers import settings as settings_router
 from api.routers import shop
 from api.routers import teacher
 from api.routers import training
+from api.routers import travel
 from api.routers import ultra_instinct
 from api.routers import unique_path
 from api.routers import unique_technique
@@ -131,6 +132,7 @@ app.include_router(quest.router)
 app.include_router(shop.router)
 app.include_router(exchange.router)
 app.include_router(empire.router)
+app.include_router(travel.router)
 app.include_router(country.router)
 app.include_router(guide.router)
 app.include_router(intel.router)

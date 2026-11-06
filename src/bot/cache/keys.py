@@ -78,6 +78,11 @@ def sabotage_cooldown(user_id: int, action: str) -> str:
     return f"cooldown:sabotage:{user_id}:{action}"
 
 
+def country_swap_cooldown(user_id: int) -> str:
+    """КД смены страны (`KEY_CD_COUNTRY_SWAP`, `services/travel`): ключ и есть КД."""
+    return f"cooldown:country_swap:{user_id}"
+
+
 def empire_announce_cooldown(user_id: int) -> str:
     """КД объявления императора (`KEY_CD_EMPIRE_ANNOUNCE`): ключ и есть КД."""
     return f"cooldown:empire_announce:{user_id}"

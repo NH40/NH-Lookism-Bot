@@ -1,10 +1,10 @@
-import { Building2, ChevronLeft, ChevronRight, Crown, Flag, Skull, Swords, Trophy, UserPlus, Users, Layers } from "lucide-react";
+import { Building2, ChevronLeft, ChevronRight, Crown, Flag, Luggage, Skull, Swords, Trophy, UserPlus, Users, Layers } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { imgUrl } from "../../api";
 import type { BattleResult, BossResult, ChallengeResult, DistrictCard, MapData, MapDistrict, MapEvent } from "../../types";
 import { Panel, Screen, StatRow, countdown, fmt, useCountdown } from "../../components/ui";
-import { PHASE_CIRCLE, PHASE_FIST, ROUTE_BUSINESS, ROUTE_CARDS, ROUTE_COUNTRY, ROUTE_EMPIRE, ROUTE_DEVELOPMENT, ROUTE_GANG, ROUTE_MAP_EVENTS, ROUTE_TRAINING } from "../../constants/constants";
+import { PHASE_CIRCLE, PHASE_FIST, ROUTE_BUSINESS, ROUTE_CARDS, ROUTE_COUNTRY, ROUTE_EMPIRE, ROUTE_DEVELOPMENT, ROUTE_GANG, ROUTE_MAP_EVENTS, ROUTE_TRAINING, ROUTE_TRAVEL } from "../../constants/constants";
 import { useAction, useApi } from "../../hooks/useApi";
 import { Sheet } from "../../components/Sheet";
 import { Journal } from "../../components/Journal";
@@ -289,6 +289,14 @@ export function MapPage() {
             )}
           </Panel>
 
+          <Link to={ROUTE_TRAVEL} className="emp-entry country">
+            <span className="ico"><Luggage size={20} color="var(--cyan-2)" /></span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <b>Переезд</b>
+              <small>другой город или страна</small>
+            </span>
+            <ChevronRight size={18} />
+          </Link>
           {(data.phase === PHASE_CIRCLE || data.phase === PHASE_FIST) && (
             <Link to={ROUTE_COUNTRY} className="emp-entry country">
               <span className="ico"><Flag size={20} color="var(--cyan-2)" /></span>

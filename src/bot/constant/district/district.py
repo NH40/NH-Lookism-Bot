@@ -18,6 +18,7 @@ CHALLENGE_RESOLVED = "resolved"
 RESOLUTION_ACCEPTED = "accepted"  # защитник принял — бьётся лагерем атаки
 RESOLUTION_TIMEOUT = "timeout"  # не ответил за час — бьётся лагерь защиты
 RESOLUTION_VOID = "void"  # к моменту боя район уже не принадлежит защитнику — боя нет
+RESOLUTION_TRAVEL = "travel"  # участник переехал или отказался от районов — вызов снят
 
 # Масштаб вызова: один район (банда) или все районы защитника в городе (круг).
 SCOPE_DISTRICT = "district"

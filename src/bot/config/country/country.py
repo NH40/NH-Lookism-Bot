@@ -11,6 +11,9 @@ callback_data в `constant/start`) — сверяться по нему, не п
 """
 from __future__ import annotations
 
+# Переезд (пользователь 2026-11-06): смена страны — не чаще раза в час, меняется в админке.
+COUNTRY_SWAP_COOLDOWN_SECONDS = 60 * 60
+
 from dataclasses import dataclass
 
 

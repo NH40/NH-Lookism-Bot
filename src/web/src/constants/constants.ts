@@ -7,6 +7,7 @@ export const ROUTE_MAP_EVENTS = "/map/events";
 export const ROUTE_CARDS = "/map/cards";
 export const ROUTE_EMPIRE = "/map/empire";
 export const ROUTE_COUNTRY = "/map/country";
+export const ROUTE_TRAVEL = "/map/travel";
 export const ROUTE_STATS = "/stats";
 export const ROUTE_INTEL = "/more/intel";
 export const ROUTE_GUIDE = "/more/guide";

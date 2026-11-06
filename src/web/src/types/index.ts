@@ -9,6 +9,7 @@ export * from "./exchange";
 export * from "./casino";
 export * from "./clan";
 export * from "./empire";
+export * from "./travel";
 export * from "./stats";
 export * from "./country";
 export * from "./intel";

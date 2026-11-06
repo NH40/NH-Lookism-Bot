@@ -10,6 +10,7 @@ import {
   ROUTE_CARDS,
   ROUTE_EMPIRE,
   ROUTE_COUNTRY,
+  ROUTE_TRAVEL,
   ROUTE_STATS,
   ROUTE_INTEL,
   ROUTE_GUIDE,
@@ -51,6 +52,7 @@ import { ShopPage } from "./pages/Shop";
 import { TrainingPage } from "./pages/Training";
 import { MasteryPage } from "./pages/Mastery";
 import { EmpirePage } from "./pages/Empire";
+import { TravelPage } from "./pages/Travel";
 import { CountryPage } from "./pages/Country";
 import { StatsPage } from "./pages/Stats";
 import { IntelPage } from "./pages/Intel";
@@ -107,6 +109,7 @@ export function App() {
           <Route path={ROUTE_CARDS} element={<CardsPage />} />
           <Route path={ROUTE_EMPIRE} element={<EmpirePage />} />
           <Route path={ROUTE_COUNTRY} element={<CountryPage />} />
+          <Route path={ROUTE_TRAVEL} element={<TravelPage />} />
           <Route path={ROUTE_STATS} element={<StatsPage />} />
           <Route path={ROUTE_INTEL} element={<IntelPage />} />
           <Route path={ROUTE_GUIDE} element={<GuidePage />} />

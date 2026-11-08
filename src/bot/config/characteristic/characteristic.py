@@ -152,6 +152,13 @@ class PotentialTraining(NamedTuple):
     nothing_percent: int  # шанс не получить ничего
 
 
+# «67 MONSTER» (пользователь 2026-11-08, выдаётся только в админке): надстройка над текущим потенциалом,
+# переживает пробуждение. Усиливает очки личной тренировки, а с родословной Ямадзаки — её боевые бафы и КД
+# действий Ультра инстинкта.
+MONSTER_POTENTIAL_MULT = 1.5
+MONSTER_YAMAZAKI_MULT = 1.25
+MONSTER_UI_COOLDOWN_CUT = 0.25
+
 POTENTIAL_TRAINING: dict[str, PotentialTraining] = {
     POT_MEMBER: PotentialTraining(1, 2, 30),
     POT_GANG_BOSS: PotentialTraining(1, 3, 25),

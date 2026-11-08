@@ -11,14 +11,14 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from bot.constant.common import CB_MENU_CLANS, CB_MENU_DEVELOPMENT, CB_MENU_QUESTS, CB_MENU_SETTINGS, CB_MENU_SHOP
 from bot.constant.business import CB_BUSINESS_OPEN
-from bot.constant.characteristic import CB_STATS_OPEN, CB_STATS_UP_PREFIX, STATS_UP_FIVE, STATS_UP_MAX, STATS_UP_ONE
+from bot.constant.characteristic import CB_STATS_MAX_ASK_PREFIX, CB_STATS_MAX_NO, CB_STATS_OPEN, CB_STATS_UP_PREFIX, STATS_UP_FIVE, STATS_UP_MAX, STATS_UP_ONE
 from bot.constant.empire import CB_EMPIRE_LOG_PREFIX, CB_EMPIRE_OPEN, CB_SABOTAGE_OPEN
 from bot.constant.mastery import CB_MASTERY_OPEN
 from bot.constant.profile import CB_PROFILE_OPEN
 from bot.constant.training import CB_TRAIN_PERSONAL
 from bot.texts.common import BTN_BACK_TO_PROFILE
 from bot.texts.empire import BTN_ANNOUNCE_LOG, BTN_EMPIRE, BTN_SABOTAGE
-from bot.texts.profile import BTN_PERSONAL_TRAINING, BTN_STAT_UP_FIVE, BTN_STAT_UP_MAX, BTN_STAT_UP_ONE, BTN_STATS, STAT_LABELS
+from bot.texts.profile import BTN_PERSONAL_TRAINING, BTN_STAT_MAX_NO, BTN_STAT_MAX_YES, BTN_STAT_UP_FIVE, BTN_STAT_UP_MAX, BTN_STAT_UP_ONE, BTN_STATS, STAT_LABELS
 from bot.constant.gang import CB_GANG_OPEN
 from bot.constant.map import CB_MAP_OPEN
 from bot.constant.recruit import CB_RECRUIT_OPEN
@@ -74,6 +74,12 @@ def profile_menu(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def stat_max_confirm_menu(code: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[_btn(BTN_STAT_MAX_YES, f"{CB_STATS_UP_PREFIX}{code}:{STATS_UP_MAX}")], [_btn(BTN_STAT_MAX_NO, CB_STATS_MAX_NO)]]
+    )
+
+
 def stats_menu(stats: list[tuple[str, bool]]) -> InlineKeyboardMarkup:
     """`stats` — (код характеристики, можно ли ещё поднимать). На каждую — «+1», «+5», «Макс»
     (сколько хватит очков); характеристика на Infinity — без кнопок."""
@@ -86,7 +92,7 @@ def stats_menu(stats: list[tuple[str, bool]]) -> InlineKeyboardMarkup:
             [
                 _btn(BTN_STAT_UP_ONE.format(label=STAT_LABELS[code]), f"{prefix}{STATS_UP_ONE}"),
                 _btn(BTN_STAT_UP_FIVE, f"{prefix}{STATS_UP_FIVE}"),
-                _btn(BTN_STAT_UP_MAX, f"{prefix}{STATS_UP_MAX}"),
+                _btn(BTN_STAT_UP_MAX, f"{CB_STATS_MAX_ASK_PREFIX}{code}"),
             ]
         )
     rows.append([_btn(BTN_PERSONAL_TRAINING, CB_TRAIN_PERSONAL)])

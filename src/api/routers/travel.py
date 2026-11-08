@@ -16,6 +16,8 @@ from bot.handlers.travel.travel import interval_label
 from bot.services.city import get_city, list_cities
 from bot.services.country import CountryEntryClosedError, closed_entries
 from bot.services.travel import (
+    ChallengePendingError,
+    CityMoveCooldownError,
     CountrySwapCooldownError,
     EmperorCannotLeaveError,
     HasDistrictsError,
@@ -31,6 +33,8 @@ from bot.services.travel import (
 from bot.texts.country import COUNTRY_CLOSED_ALERT
 from bot.texts.travel import (
     ABANDONED,
+    CHALLENGE_PENDING_ALERT,
+    CITY_COOLDOWN_ALERT,
     COOLDOWN_ALERT,
     EMPEROR_ALERT,
     HAS_DISTRICTS_ALERT,
@@ -54,12 +58,15 @@ _ERRORS = {
     UnknownCityError: UNKNOWN_CITY_ALERT,
     CountryEntryClosedError: COUNTRY_CLOSED_ALERT,
     LossesNotConfirmedError: "Подтверди потерю районов.",
+    ChallengePendingError: CHALLENGE_PENDING_ALERT,
 }
 
 
 def _error(exc: Exception):
     if isinstance(exc, CountrySwapCooldownError):
         return bad(COOLDOWN_ALERT.format(countdown=format_countdown(exc.retry_after_seconds)))
+    if isinstance(exc, CityMoveCooldownError):
+        return bad(CITY_COOLDOWN_ALERT.format(countdown=format_countdown(exc.retry_after_seconds)))
     return bad(_ERRORS[type(exc)])
 
 
@@ -83,6 +90,9 @@ class TravelOut(BaseModel):
     buildings: int
     cities: int
     cooldown_seconds: int
+    city_cooldown_seconds: int
+    under_challenge: bool
+    city_interval: str
     interval: str
     emperor: bool
     must_abandon: bool
@@ -105,7 +115,8 @@ async def get_travel(
     return TravelOut(
         phase=s.phase, country_code=s.country_code, country=_name(s.country_code), city_id=s.city_id,
         city=city.name if city else "—", districts=s.holdings.districts, buildings=s.holdings.buildings,
-        cities=s.holdings.cities, cooldown_seconds=s.cooldown_seconds, interval=interval_label(s.interval_seconds),
+        cities=s.holdings.cities, cooldown_seconds=s.cooldown_seconds, city_cooldown_seconds=s.city_cooldown_seconds,
+        under_challenge=s.under_challenge, city_interval=interval_label(s.city_interval_seconds), interval=interval_label(s.interval_seconds),
         emperor=s.emperor, must_abandon=s.must_abandon, circle=s.phase == PHASE_CIRCLE,
         countries=[
             CountryOut(code=c.code, name=clean_label(c.name))
@@ -148,7 +159,7 @@ async def post_move(
 ) -> MessageOut:
     try:
         result = await move(session, redis, user_id, body.city_id, accept_losses=body.accept_losses)
-    except tuple(_ERRORS) + (CountrySwapCooldownError,) as e:
+    except tuple(_ERRORS) + (CountrySwapCooldownError, CityMoveCooldownError) as e:
         raise _error(e)
     text = MOVED.format(country=_name(result.city.country_code), city=result.city.name)
     if result.lost:

@@ -14,6 +14,8 @@ from sqlalchemy import delete, func, insert, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.constant.business import UPGRADE_CAPACITY, UPGRADE_LEVEL
+from bot.constant.ledger import REASON_INCOME
+from bot.utils.log_context import coin_reason
 from bot.db.models.business import Business
 from bot.db.models.city import City
 from bot.db.models.district import District
@@ -56,11 +58,12 @@ async def add_coins(session: AsyncSession, user_id: int, amount: int) -> None:
 async def credit_accrual(session: AsyncSession, user_id: int, *, amount: int, accrued_at: datetime) -> None:
     """Зачисление накопленного дохода и сдвиг отметки начисления. Вызывается только под
     `get_wallet(for_update=True)` той же транзакции. НЕ коммитит (правило 10)."""
-    await session.execute(
-        update(User)
-        .where(User.id == user_id)
-        .values(nh_coins=User.nh_coins + amount, coins_accrued_at=accrued_at)
-    )
+    with coin_reason(REASON_INCOME):
+        await session.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(nh_coins=User.nh_coins + amount, coins_accrued_at=accrued_at)
+        )
 
 
 async def spend_coins(session: AsyncSession, user_id: int, amount: int) -> bool:

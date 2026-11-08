@@ -2,6 +2,8 @@
 from bot.constant.characteristic.characteristic import (  # noqa: F401
     CB_POTENTIAL_UP,
     CB_STATS_OPEN,
+    CB_STATS_MAX_ASK_PREFIX,
+    CB_STATS_MAX_NO,
     CB_STATS_UP_PREFIX,
     MASTERIES,
     MASTERY_ENDURANCE,

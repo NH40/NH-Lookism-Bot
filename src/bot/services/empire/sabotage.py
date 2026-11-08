@@ -35,6 +35,7 @@ from bot.config.path_gauge import GAUGE_SENSORY_SABOTAGE
 from bot.constant.unique_path import PATH_SENSORY
 from bot.constant.empire import SABOTAGE_ACTIONS, SABOTAGE_STATISTS, SABOTAGE_TREASURY, SABOTAGE_UNIQUE
 from bot.constant.extra import CAMP_ATTACK
+from bot.constant.ledger import REASON_SABOTAGE
 from bot.db.repositories import card as card_repo
 from bot.db.repositories import empire as empire_repo
 from bot.db.repositories import extra as extra_repo
@@ -119,7 +120,7 @@ async def _steal_treasury(session: AsyncSession, emperor_id: int, user_id: int, 
     if coins <= 0:
         raise NothingToStealError
     amount = min(max(int(coins * SABOTAGE_TREASURY_PERCENT / 100 * (1 + loot)), 1), int(SABOTAGE_TREASURY_CAP * (1 + loot)), coins)
-    await empire_repo.move_coins(session, emperor_id, user_id, amount)
+    await empire_repo.move_coins(session, emperor_id, user_id, amount, REASON_SABOTAGE)
     return SabotageResult(SABOTAGE_TREASURY, True, emperor_id, amount=amount)
 
 

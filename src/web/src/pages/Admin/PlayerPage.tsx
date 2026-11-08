@@ -333,6 +333,9 @@ function DevTab({ uid, meta, onChange }: { uid: number; meta: AdminMeta; onChang
               <button type="button" className={`btn small ${d.premium ? "gold" : "ghost"}`} disabled={busy} onClick={() => dev({ action: "pass" })}>
                 Премиум-пасс: {d.premium ? "вкл" : "выкл"}
               </button>
+              <button type="button" className={`btn small ${d.monster ? "red" : "ghost"}`} disabled={busy} onClick={() => dev({ action: "monster" })}>
+                67 MONSTER: {d.monster ? "вкл" : "выкл"}
+              </button>
             </div>
             <Field label={`Пробуждение · сейчас ${d.awakening}`}>
               <div className="adm-grid-btn">
@@ -451,13 +454,13 @@ function PunishTab({ card, meta, onChange }: { card: AdminPlayerCard; meta: Admi
 
 // ---------------------------------------------------------------- журнал игрока
 
-type PlayerLogKind = "audit" | "activity" | "payments";
+type PlayerLogKind = "audit" | "activity" | "payments" | "coins" | "goods" | "changes" | "battles";
 
 function PlayerLogTab({ uid }: { uid: number }) {
   const [kind, setKind] = useState<PlayerLogKind>("audit");
   return (
     <Panel title="Журнал">
-      <Seg value={kind} onChange={setKind} options={[{ value: "audit", label: "Админы" }, { value: "activity", label: "Действия" }, { value: "payments", label: "Платежи" }]} cols={3} />
+      <Seg value={kind} onChange={setKind} options={[{ value: "audit", label: "Админы" }, { value: "activity", label: "Действия" }, { value: "payments", label: "Платежи" }, { value: "coins", label: "Монеты" }, { value: "goods", label: "Имущество" }, { value: "changes", label: "Изменения" }, { value: "battles", label: "Бои" }]} cols={4} />
       <PlayerLogList key={kind} uid={uid} kind={kind} />
     </Panel>
   );
@@ -496,6 +499,24 @@ export function LogRow({ kind, row }: { kind: string; row: Record<string, unknow
           {details && <small style={{ wordBreak: "break-all" }}>{details}</small>}
         </div>
         <div className="adm-right">{when(r.created_at)}</div>
+      </div>
+    );
+  }
+  if (typeof row.title === "string") {
+    const lines = (row.lines as string[] | undefined) ?? [];
+    return (
+      <div className="adm-item" style={{ flexWrap: "wrap" }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <b style={{ overflowWrap: "anywhere" }}>{row.title}</b>
+          <small style={{ overflowWrap: "anywhere" }}>{String(row.sub ?? "")}</small>
+        </div>
+        <div className="adm-right">{when(row.created_at as string)}</div>
+        {lines.length > 0 && (
+          <details style={{ width: "100%", marginTop: 6 }}>
+            <summary style={{ fontSize: 12, fontWeight: 700 }}>Подробнее</summary>
+            <pre style={{ fontSize: 11, whiteSpace: "pre-wrap", overflowWrap: "anywhere", margin: "6px 0 0" }}>{lines.join("\n")}</pre>
+          </details>
+        )}
       </div>
     );
   }

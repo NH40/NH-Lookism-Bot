@@ -29,6 +29,7 @@ from bot.handlers.empire import send_war_reports
 from bot.logging_setup import setup_logging
 from bot.middlewares.ban_check import BanCheckMiddleware
 from bot.middlewares.beta_gate import BetaGateMiddleware
+from bot.middlewares.log_context import LogContextMiddleware
 from bot.middlewares.command_state_reset import CommandStateResetMiddleware
 from bot.middlewares.db_session import DbSessionMiddleware
 from bot.middlewares.tech_mode import TechModeMiddleware
@@ -59,6 +60,8 @@ from bot.handlers.poker import push_event as push_poker_event
 from bot.services.mastery import activate_due, check_breakthroughs
 from bot.config.top import TOP_POWER_REFRESH_SECONDS
 from bot.services.top import refresh_powers, sweep_seasons
+from bot.services.error_log import run_sink
+from bot.utils.log_context import set_source
 from bot.services.cooldown import sweep as sweep_cooldown_pushes
 
 log = logging.getLogger(__name__)
@@ -197,6 +200,7 @@ async def _ultra_instinct_loop(session_factory: async_sessionmaker[AsyncSession]
     """Автоматика Ультра инстинкта (родословная Ямадзаки): вербовка, тренировки, крутка —
     за игрока, теми же сервисами и с теми же КД. Не может быть ленивой: смысл способности —
     чтобы действия шли, даже когда игрок не в боте."""
+    set_source("bg:ultra_instinct")
     while True:
         try:
             await run_ultra_instinct(session_factory, redis)
@@ -300,6 +304,7 @@ async def main() -> None:
     # работают на все апдейты, даже если ни один хендлер не совпал по фильтрам (важно
     # для антифлуда/техрежима/бана) — см. CLAUDE.md UAP, "Антифлуд и fallback".
     for observer in (dp.message, dp.callback_query):
+        observer.outer_middleware(LogContextMiddleware())
         observer.outer_middleware(throttle_mw)
         observer.outer_middleware(db_mw)
         observer.outer_middleware(tech_mw)
@@ -325,6 +330,7 @@ async def main() -> None:
         asyncio.create_task(_cooldown_loop(bot, session_factory, redis)),
         asyncio.create_task(_arkhangel_loop(bot, session_factory, redis)),
         asyncio.create_task(refresh_live_config(session_factory)),
+        asyncio.create_task(run_sink(session_factory, lambda: bot)),
     ]
     if sbp_service.enabled():
         background.append(asyncio.create_task(_sbp_loop(bot, session_factory)))

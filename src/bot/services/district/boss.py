@@ -15,6 +15,8 @@
 """
 from __future__ import annotations
 
+from bot.constant.ledger import BATTLE_BOSS
+
 from bot.services.country import ensure_battles_open
 
 import random
@@ -119,7 +121,7 @@ async def fight_boss(
     m = matchup(profile, vs=(VS_BOSS,), defender_chances=boss_chances(event.code), attacker_stacks=stacks, rng=rng)
     result = simulate_battle(stacks, boss, attacker_chances=m.attacker, defender_chances=m.defender, rng=rng)
     await apply_losses(session, user.id, CAMP_ATTACK, result.attacker.dead)
-    abs_lines = await after_battle(session, m, result, attacker_id=user.id, attacker_stacks=stacks)
+    abs_lines = await after_battle(session, m, result, kind=BATTLE_BOSS, attacker_id=user.id, attacker_stacks=stacks)
     entry.attempts += 1
 
     fragment_kind = BOSS_FRAGMENT[event.code]

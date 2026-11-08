@@ -94,6 +94,7 @@ export interface AdminStatists {
 
 export interface AdminDev {
   name: string;
+  monster: boolean;
   systems: Record<string, { owned: Record<string, number>; active: string | null }>;
   bloodlines: Record<string, { code: string | null; level: number }>;
   second_body: boolean;

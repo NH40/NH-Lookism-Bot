@@ -8,6 +8,7 @@ from bot.db.repositories.characteristic.characteristic import (  # noqa: F401
     get_stats,
     get_strength,
     invest,
+    is_monster,
     set_potential_if_missing,
     upgrade_potential,
 )

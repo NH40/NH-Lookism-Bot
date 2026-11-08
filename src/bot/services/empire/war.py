@@ -15,6 +15,8 @@
 """
 from __future__ import annotations
 
+from bot.constant.ledger import BATTLE_WAR
+
 from bot.services.country import ensure_battles_open_for
 
 import logging
@@ -46,6 +48,7 @@ from bot.config.empire import (
 )
 from bot.constant.empire import WAR_ACCEPTED, WAR_FORFEIT, WAR_VOID
 from bot.constant.extra import CAMP_ATTACK, CAMP_DEFENSE
+from bot.constant.ledger import REASON_WAR_TREASURY
 from bot.db.repositories import phase as phase_repo
 from bot.db.repositories import empire as empire_repo
 from bot.db.repositories.empire import EmperorRow
@@ -292,7 +295,7 @@ async def _resolve(session: AsyncSession, redis: Redis, war, resolution: str, *,
         result = simulate_battle(
             camps[attacker_id], camps[defender_id], attacker_chances=m.attacker, defender_chances=m.defender, rng=rng,
         )
-        abs_lines = await after_battle(session, m, result, attacker_id=attacker_id, attacker_stacks=camps[attacker_id], defender_id=defender_id)
+        abs_lines = await after_battle(session, m, result, kind=BATTLE_WAR, attacker_id=attacker_id, attacker_stacks=camps[attacker_id], defender_id=defender_id)
         war_journal = journal(result, m.spy) + abs_lines
         war_journal_def = journal(result, m.spy, viewer_is_attacker=False) + abs_lines
         await apply_losses(session, attacker_id, CAMP_ATTACK, result.attacker.dead)
@@ -312,7 +315,7 @@ async def _resolve(session: AsyncSession, redis: Redis, war, resolution: str, *,
     loser_coins = await empire_repo.emperor_coins(session, loser, for_update=True)
     treasury = max(loser_coins, 0) * percent // 100
     if treasury:
-        await empire_repo.move_coins(session, loser, winner, treasury)
+        await empire_repo.move_coins(session, loser, winner, treasury, REASON_WAR_TREASURY)
 
     names: list[str] = []
     demoted = False

@@ -33,6 +33,7 @@ CB_DEV_BODY = "adm:d:tb:"  # + uid — второе тело
 CB_DEV_PASS = "adm:d:tp:"  # + uid — премиум Battle Pass
 CB_DEV_AWAKEN = "adm:d:aw:"  # + level:uid
 CB_DEV_POTENTIAL = "adm:d:po:"  # + idx:uid
+CB_DEV_MONSTER = "adm:d:mo:"  # + uid
 CB_DEV_STATS = "adm:d:st:"  # + uid — выбор характеристики
 CB_DEV_STAT_PICK = "adm:d:sr:"  # + stat:uid
 
@@ -77,6 +78,7 @@ AUDIT_DEV_BODY = "dev_second_body"
 AUDIT_DEV_PASS = "dev_premium_pass"
 AUDIT_DEV_AWAKENING = "dev_awakening"
 AUDIT_DEV_POTENTIAL = "dev_potential"
+AUDIT_DEV_MONSTER = "dev_monster"
 AUDIT_DEV_STAT = "dev_stat_rank"
 AUDIT_BAN = "ban"
 AUDIT_UNBAN = "unban"

@@ -14,6 +14,7 @@ from bot.constant.admin.players_admin import (
     AUDIT_DEV_AWAKENING,
     AUDIT_DEV_BLOODLINE,
     AUDIT_DEV_BODY,
+    AUDIT_DEV_MONSTER,
     AUDIT_DEV_PASS,
     AUDIT_DEV_POTENTIAL,
     AUDIT_DEV_SET_ACTIVE,
@@ -32,6 +33,7 @@ from bot.constant.admin.players_admin import (
     CB_DEV_LIST,
     CB_DEV_MENU,
     CB_DEV_MISC,
+    CB_DEV_MONSTER,
     CB_DEV_PASS,
     CB_DEV_POTENTIAL,
     CB_DEV_STATS,
@@ -223,7 +225,7 @@ async def _show_misc(callback: CallbackQuery, session: AsyncSession, user: User)
         awakening=user.awakening_level, potential=esc(user.potential or "—"),
         stats=", ".join(f"{t.STAT_NAMES[s]} {RANK_LADDER[i]}" for s, i in ranks.items()),
     )
-    await edit_screen(callback, text, kb.dev_misc(user.id, body=body, premium=premium))
+    await edit_screen(callback, text, kb.dev_misc(user.id, body=body, premium=premium, monster=bool(user.monster_potential)))
 
 
 @router.callback_query(F.data.startswith(CB_DEV_MISC))
@@ -256,6 +258,17 @@ async def cb_pass(callback: CallbackQuery, session: AsyncSession) -> None:
     on = await players_admin.toggle_premium_pass(session, user.id)
     await _commit(callback, session, AUDIT_DEV_PASS, user.id, {"premium": on})
     await back_to_card(callback, session, user.id, t.DONE_PASS.format(state=t.STATE_ON if on else t.STATE_OFF))
+
+
+@router.callback_query(F.data.startswith(CB_DEV_MONSTER))
+async def cb_monster(callback: CallbackQuery, session: AsyncSession) -> None:
+    opened = await _open(callback, session, CB_DEV_MONSTER)
+    if opened is None:
+        return
+    user = opened[1]
+    on = await players_admin.toggle_monster(session, user.id)
+    await _commit(callback, session, AUDIT_DEV_MONSTER, user.id, {"monster": on})
+    await back_to_card(callback, session, user.id, t.DONE_MONSTER.format(state=t.STATE_ON if on else t.STATE_OFF))
 
 
 @router.callback_query(F.data.startswith(CB_DEV_AWAKEN))

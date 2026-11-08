@@ -13,6 +13,7 @@ from urllib.parse import parse_qsl
 from fastapi import Header, HTTPException, status
 
 from bot.config.settings import get_settings
+from bot.utils.log_context import set_user
 
 INIT_DATA_MAX_AGE_SECONDS = 24 * 60 * 60
 
@@ -54,6 +55,8 @@ async def get_current_user_id(x_telegram_init_data: str = Header(alias="X-Telegr
 
     try:
         user = json.loads(user_raw)
-        return int(user["id"])
+        user_id = int(user["id"])
+        set_user(user_id)  # для журналов
+        return user_id
     except (ValueError, KeyError, TypeError) as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Malformed user in initData") from exc

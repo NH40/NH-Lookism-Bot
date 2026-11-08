@@ -113,6 +113,14 @@ BTN_STATS = "📊 Характеристики"
 BTN_STAT_UP_ONE = "{label} +1"
 BTN_STAT_UP_FIVE = "+5"
 BTN_STAT_UP_MAX = "Макс"
+MONSTER_TAG = " · 67 MONSTER"
+BTN_STAT_MAX_YES = "✅ Да, вложить"
+BTN_STAT_MAX_NO = "◀️ Отмена"
+STAT_MAX_CONFIRM = (
+    "⚠️ <b>Вложить всё в {label}?</b>\n━━━━━━━━━━━━━━━━━━\n"
+    "Ранг: {rank_from} → <b>{rank_to}</b> (+{ranks})\n"
+    "Потратится <b>{cost}</b> из {points} очков. Отменить нельзя."
+)
 BTN_PERSONAL_TRAINING = "🧘 Личная тренировка"
 
 # --- popup (без HTML) ---

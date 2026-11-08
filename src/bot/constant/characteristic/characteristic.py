@@ -69,6 +69,9 @@ POTENTIAL_ORDER: tuple[str, ...] = (
 
 CB_STATS_OPEN = "stats:open"
 CB_STATS_UP_PREFIX = "stats:up:"
+CB_STATS_MAX_ASK_PREFIX = "stats:maxask:"
+"""f"{CB_STATS_MAX_ASK_PREFIX}{stat}" — подтверждение кнопки «Макс»."""
+CB_STATS_MAX_NO = "stats:maxno"
 """f"{CB_STATS_UP_PREFIX}{stat}:{STATS_UP_ONE|STATS_UP_FIVE|STATS_UP_MAX}"."""
 STATS_UP_ONE = "1"
 STATS_UP_FIVE = "5"

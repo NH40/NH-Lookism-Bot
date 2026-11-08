@@ -87,6 +87,7 @@ class StatsView:
     potential: str
     dev_points: int
     strength_power_percent: int
+    monster: bool = False
 
 
 async def get_stats_view(session: AsyncSession, user_id: int) -> StatsView:
@@ -107,6 +108,7 @@ async def get_stats_view(session: AsyncSession, user_id: int) -> StatsView:
         potential=potential,
         dev_points=row.dev_points,
         strength_power_percent=strength_power_percent(RANK_LADDER[row.ranks[STAT_STRENGTH]]),
+        monster=row.monster,
     )
 
 
@@ -116,6 +118,31 @@ class InvestResult:
     ranks: int
     cost: int
     new_rank: str
+
+
+@dataclass(frozen=True, slots=True)
+class MaxPreview:
+    stat: str
+    ranks: int
+    cost: int
+    points: int
+    rank_from: str
+    rank_to: str
+
+
+async def preview_max(session: AsyncSession, user_id: int, stat: str) -> MaxPreview:
+    """Что сделает кнопка «Макс» — для экрана подтверждения, без записи."""
+    if stat not in STATS:
+        raise UnknownStatError
+    row = await char_repo.get_stats(session, user_id)
+    current = row.ranks[stat]
+    if current >= STAT_MAX_INDEX:
+        raise StatMaxedError
+    discount = await _stat_discount(session, user_id)
+    ranks, cost = stat_ranks_affordable(current, row.dev_points, None, discount)
+    if ranks == 0:
+        raise NotEnoughPointsError(cost=stat_rank_up_cost(current, discount), points=row.dev_points)
+    return MaxPreview(stat, ranks, cost, row.dev_points, RANK_LADDER[current], RANK_LADDER[current + ranks])
 
 
 async def invest(session: AsyncSession, user_id: int, stat: str, mode: str) -> InvestResult:

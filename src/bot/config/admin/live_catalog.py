@@ -191,6 +191,9 @@ SCALARS: dict[str, tuple[str, str, str]] = {
     "SCHOOL_JOIN_PERCENT": ("shop", "bot.config.school.school", "Школы: шанс вступить, %"),
     "SCHOOL_LEVEL_UP_PERCENT": ("shop", "bot.config.school.school", "Школы: шанс уровня, %"),
     # 🌀 Развитие и мастерство
+    "MONSTER_POTENTIAL_MULT": ("dev", "bot.config.characteristic.characteristic", "67 MONSTER: множитель очков тренировки"),
+    "MONSTER_YAMAZAKI_MULT": ("dev", "bot.config.characteristic.characteristic", "67 MONSTER: боевые бафы Ямадзаки, ×"),
+    "MONSTER_UI_COOLDOWN_CUT": ("dev", "bot.config.characteristic.characteristic", "67 MONSTER: сокращение КД Ультра инстинкта"),
     "AWAKENING_BUFF_MULTIPLIER_PER_LEVEL": ("dev", "bot.config.development.development", "Пробуждение: множитель за этап"),
     "RELOCATE_WINDOW_SECONDS": ("dev", "bot.config.awakening.awakening", "Смена страны после пробуждения: окно, сек"),
     "GENIUS_LEVEL_COST_PER_LEVEL": ("dev", "bot.config.genius.genius", "Гениальность: цена уровня, шаг"),

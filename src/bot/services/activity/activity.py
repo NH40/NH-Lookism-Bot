@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from bot.config.activity import ACTIVITY_KEEP_DAYS
+from sqlalchemy import text
+
+from bot.config.activity import ACTIVITY_KEEP_DAYS, BATTLE_LOG_KEEP_DAYS, ERROR_LOG_KEEP_DAYS, LEDGER_KEEP_DAYS
 from bot.config.development import PATH_MEMORY_SIZE
 from bot.db.repositories import activity as activity_repo
 
@@ -29,4 +31,8 @@ async def remember_opponents(session: AsyncSession, a_id: int, b_id: int) -> Non
 async def purge(session_factory: async_sessionmaker[AsyncSession]) -> None:
     async with session_factory() as session:
         await activity_repo.purge(session, ACTIVITY_KEEP_DAYS)
+        for table, column, days in (
+            ("player_ledger", "created_at", LEDGER_KEEP_DAYS), ("battle_log", "created_at", BATTLE_LOG_KEEP_DAYS), ("error_log", "last_seen", ERROR_LOG_KEEP_DAYS),
+        ):
+            await session.execute(text(f"DELETE FROM {table} WHERE {column} < now() - make_interval(days => :d)"), {"d": days})
         await session.commit()

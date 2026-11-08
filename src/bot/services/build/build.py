@@ -42,7 +42,8 @@ from bot.config.genius import LEVELS as GENIUS_LEVELS
 from bot.config.unique_path import LEVELS as PATH_LEVELS
 from bot.config.unique_technique import LEVELS as TECHNIQUE_LEVELS
 from bot.config.game import BUSINESS_PARLIAMENT_INFLUENCE, INFLUENCE_PER_DISTRICT, INFLUENCE_STARTING
-from bot.constant.bloodline import BLOODLINE_GAPRYONG
+from bot.config.characteristic import MONSTER_UI_COOLDOWN_CUT, MONSTER_YAMAZAKI_MULT
+from bot.constant.bloodline import BLOODLINE_GAPRYONG, BLOODLINE_YAMAZAKI
 from bot.constant.business import BIZ_PARLIAMENT
 from bot.constant.genius import GENIUS_MEDICINE
 from bot.db.repositories import business as business_repo
@@ -162,6 +163,7 @@ class Build:
 
 
 EMPTY_BUILD = Build()
+BUILD_MEMO_KEY = "build_memo"  # ключ в `session.info`, сбрасывается при записи
 
 
 def _resonance(row: BuildRow) -> int:
@@ -180,6 +182,15 @@ async def _memory_copies(session: AsyncSession, user_id: int) -> list[CombatMods
 
 
 async def get_build(session: AsyncSession, user_id: int) -> Build:
+    """Билд игрока, один расчёт на сессию. Стресс-тест 2026-11-08: экран пересчитывал его 12–14 раз, по 8 запросов
+    каждый, это было 100 из 137 SQL на профиль. Любая запись в сессии сбрасывает запомненное (`db/session.py`)."""
+    memo = session.info.setdefault(BUILD_MEMO_KEY, {})
+    if user_id not in memo:
+        memo[user_id] = await _compute_build(session, user_id)
+    return memo[user_id]
+
+
+async def _compute_build(session: AsyncSession, user_id: int) -> Build:
     row = await build_repo.get_row(session, user_id)
     if row is None:
         return EMPTY_BUILD
@@ -194,6 +205,15 @@ async def get_build(session: AsyncSession, user_id: int) -> Build:
         effects[SOURCE_PATH2] = level_effect(PATH_LEVELS, row.path2, row.path2_level)
     if row.bloodline2:
         effects[SOURCE_BLOODLINE2] = level_effect(BLOODLINE_LEVELS, row.bloodline2, row.bloodline2_level)
+    # 67 MONSTER: боевые бафы Ямадзаки сильнее, Ультра инстинкт (со 2 уровня) действует чаще.
+    if row.monster:
+        for source, code, level in ((SOURCE_BLOODLINE, row.bloodline, row.bloodline_level), (SOURCE_BLOODLINE2, row.bloodline2, row.bloodline2_level)):
+            if code != BLOODLINE_YAMAZAKI or source not in effects:
+                continue
+            base = effects[source]
+            cut = MONSTER_UI_COOLDOWN_CUT if level >= 2 else 0.0
+            eco = base.eco + EconomyMods(recruit_cooldown=cut, personal_cooldown=cut, extras_training_cooldown=cut)
+            effects[source] = LevelEffect(combat=base.combat.scale(MONSTER_YAMAZAKI_MULT), eco=eco, special=base.special)
     special: dict = {}
     for effect in effects.values():
         _merge_special(special, effect.special)

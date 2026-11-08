@@ -365,7 +365,7 @@ function StatsTab({ tab }: { tab: StatTab }) {
 
 // ---------------------------------------------------------------- журналы
 
-type LogKind = "audit" | "payments" | "clan" | "blackmarket";
+type LogKind = "audit" | "payments" | "clan" | "blackmarket" | "errors" | "slow" | "big" | "upsets";
 
 export function LogsSection() {
   const [kind, setKind] = useState<LogKind>("audit");
@@ -374,6 +374,7 @@ export function LogsSection() {
       <Seg value={kind} onChange={setKind} options={[
         { value: "audit", label: "Админы" }, { value: "payments", label: "Платежи" },
         { value: "clan", label: "Клан. донат" }, { value: "blackmarket", label: "Чёрный рынок" },
+        { value: "errors", label: "Ошибки" }, { value: "slow", label: "Медленное" }, { value: "big", label: "Крупные суммы" }, { value: "upsets", label: "Перекосы боёв" },
       ]} />
       <LogsList key={kind} kind={kind} />
     </>

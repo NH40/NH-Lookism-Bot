@@ -37,6 +37,12 @@ from api.routers import card
 from api.routers import casino
 from api.routers import exchange
 from api.routers import empire
+import logging
+import time
+
+from bot.config.admin import LOG_SLOW_API_MS
+from bot.services.error_log import normalize, record_slow, run_sink
+from bot.utils.log_context import reset_source, set_source
 from api.routers import country
 from api.routers import guide
 from api.routers import intel
@@ -74,12 +80,18 @@ async def lifespan(app: FastAPI):
     import asyncio
 
     from api.db import session_factory
+    from api.push import get_bot
+    from bot.config.settings import get_settings
+    from bot.logging_setup import setup_logging
     from bot.services.admin.live_config import load as load_live_config, refresh_loop
 
+    setup_logging(get_settings().log_level, "api")
     await load_live_config(session_factory)
     refresher = asyncio.create_task(refresh_loop(session_factory))
+    sink = asyncio.create_task(run_sink(session_factory, get_bot))
     yield
     refresher.cancel()
+    sink.cancel()
     await close_bot()
     await engine.dispose()
 
@@ -94,6 +106,34 @@ async def _battles_closed(_request, exc: BattlesClosedError) -> JSONResponse:
 
 # В проде Caddy/аналог проксирует и фронтенд, и /api под одним доменом — CORS не
 # нужен вовсе. allow_methods шире, чем у read-only Mini App UAP — тут почти всё пишет.
+_log = logging.getLogger(__name__)
+
+
+class _LogContext:
+    """Источник для журналов, ошибки с контекстом игрока и медленные запросы. Чистый ASGI: контекст доходит до обработчика."""
+
+    def __init__(self, app) -> None:
+        self.inner = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.inner(scope, receive, send)
+            return
+        token = set_source(f"api:{scope['method']} {scope['path']}")
+        started = time.perf_counter()
+        try:
+            await self.inner(scope, receive, send)
+        except Exception:
+            _log.exception("Ошибка запроса Mini App")
+            raise
+        finally:
+            ms = int((time.perf_counter() - started) * 1000)
+            if ms >= LOG_SLOW_API_MS and not scope["path"].startswith("/api/img"):
+                record_slow("api", f"{scope['method']} {normalize(scope['path'])}", ms)
+            reset_source(token)
+
+
+app.add_middleware(_LogContext)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

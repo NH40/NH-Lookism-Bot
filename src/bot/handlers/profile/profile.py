@@ -31,6 +31,7 @@ from bot.texts.profile import (
     MASTERY_OPEN_HINT,
     MASTERY_TIER_LABELS,
     NO_CLAN,
+    MONSTER_TAG,
     POTENTIAL_LABELS,
     POTENTIAL_LINE,
     POTION_LINE,
@@ -65,7 +66,7 @@ def render_stats_block(stats: StatsView) -> str:
             else ""
         )
         lines.append(STAT_LINE.format(label=STAT_LABELS[stat.code], rank=stat.rank, bonus=bonus))
-    lines.append(POTENTIAL_LINE.format(potential=POTENTIAL_LABELS[stats.potential]))
+    lines.append(POTENTIAL_LINE.format(potential=POTENTIAL_LABELS[stats.potential] + (MONSTER_TAG if stats.monster else "")))
     lines.append(DEV_POINTS_LINE.format(points=format_number(stats.dev_points)))
     return "\n".join(lines)
 

@@ -32,6 +32,7 @@ from bot.constant.admin.players_admin import (
     AUDIT_DEV_AWAKENING,
     AUDIT_DEV_BLOODLINE,
     AUDIT_DEV_BODY,
+    AUDIT_DEV_MONSTER,
     AUDIT_DEV_PASS,
     AUDIT_DEV_POTENTIAL,
     AUDIT_DEV_SET_ACTIVE,
@@ -336,7 +337,7 @@ async def get_dev(uid: int, user_id: int = Depends(get_current_user_id), session
     return {
         "name": _name_of(user), "systems": systems, "bloodlines": blood,
         "second_body": bool(user.second_body), "premium": premium, "awakening": user.awakening_level,
-        "potential": user.potential, "stats": {s: RANK_LADDER[i] for s, i in ranks.items()}, "phase": user.phase,
+        "potential": user.potential, "monster": bool(user.monster_potential), "stats": {s: RANK_LADDER[i] for s, i in ranks.items()}, "phase": user.phase,
     }
 
 
@@ -386,6 +387,9 @@ async def post_dev(uid: int, body: DevIn, user_id: int = Depends(get_current_use
             raise bad(f"Пробуждение от 0 до {AWAKENING_MAX}.")
         await players_admin.set_awakening(session, uid, body.level)
         action, details, notice = AUDIT_DEV_AWAKENING, {"level": body.level}, t.DONE_AWAKEN.format(value=body.level)
+    elif a == "monster":
+        on = await players_admin.toggle_monster(session, uid)
+        action, details, notice = AUDIT_DEV_MONSTER, {"monster": on}, t.DONE_MONSTER.format(state=t.STATE_ON if on else t.STATE_OFF)
     elif a == "potential":
         if body.value not in POTENTIAL_ORDER:
             raise bad("Неизвестный потенциал.")

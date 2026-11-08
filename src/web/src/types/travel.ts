@@ -10,6 +10,9 @@ export interface TravelData {
   buildings: number;
   cities: number;
   cooldown_seconds: number;
+  city_cooldown_seconds: number;
+  under_challenge: boolean;
+  city_interval: string;
   interval: string;
   emperor: boolean;
   must_abandon: boolean;

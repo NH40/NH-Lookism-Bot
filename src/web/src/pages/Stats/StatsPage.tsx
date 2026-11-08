@@ -1,9 +1,10 @@
 import { Crosshair, Eye, Shield, Sparkles, Swords, Zap } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { StatsData } from "../../types";
 import { BackHeader, Panel, Screen, fmt } from "../../components/ui";
 import { ROUTE_PROFILE } from "../../constants";
 import { useAction, useApi } from "../../hooks/useApi";
+import { Sheet } from "../../components/Sheet";
 import "./Stats.css";
 
 // Характеристики — прокачка рангов за очки развития (как экран «📊 Характеристики» бота).
@@ -18,6 +19,7 @@ const MODE_LABELS: Record<string, string> = { "1": "+1", "5": "+5", max: "Мак
 export function StatsPage() {
   const { data, status, error, reload } = useApi<StatsData>("/stats");
   const { run, busy } = useAction(reload);
+  const [maxFor, setMaxFor] = useState<{ code: string; label: string } | null>(null);
   return (
     <Screen status={status} error={error}>
       {data && (
@@ -41,7 +43,7 @@ export function StatsPage() {
                 {s.next_cost !== null && (
                   <div className="grid-3" style={{ marginTop: 8 }}>
                     {data.modes.map((m) => (
-                      <button key={m} className="btn small" type="button" disabled={busy || data.dev_points < (s.next_cost ?? 0)} onClick={() => run("/stats/up", { stat: s.code, mode: m })}>
+                      <button key={m} className="btn small" type="button" disabled={busy || data.dev_points < (s.next_cost ?? 0)} onClick={() => (m === "max" ? setMaxFor({ code: s.code, label: s.label }) : run("/stats/up", { stat: s.code, mode: m }))}>
                         {MODE_LABELS[m] ?? m}
                       </button>
                     ))}
@@ -50,6 +52,12 @@ export function StatsPage() {
               </div>
             ))}
           </Panel>
+          {maxFor && (
+            <Sheet title={`Вложить всё в ${maxFor.label}?`} onClose={() => setMaxFor(null)}>
+              <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 700 }}>Потратятся очки развития, на сколько хватит: у тебя {fmt(data.dev_points)}. Отменить нельзя.</p>
+              <button className="btn block" type="button" disabled={busy} onClick={async () => { await run("/stats/up", { stat: maxFor.code, mode: "max" }); setMaxFor(null); }}>Да, вложить</button>
+            </Sheet>
+          )}
           <p className="muted" style={{ margin: 0, fontSize: 11, fontWeight: 700, lineHeight: 1.45 }}>
             Очки даёт личная тренировка (раз в час), их число зависит от потенциала. Каждый следующий ранг стоит дороже.
           </p>

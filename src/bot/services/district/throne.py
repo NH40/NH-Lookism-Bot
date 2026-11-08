@@ -12,6 +12,8 @@ PvP), перед потерей бизнеса проигравшему начи
 """
 from __future__ import annotations
 
+from bot.constant.ledger import BATTLE_THRONE
+
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -22,6 +24,7 @@ from bot.services.intel.scout import has_report as has_scout_report
 from bot.constant.position_skill import VS_THRONE
 from bot.services.position_skill.battle import journal, matchup
 from bot.constant.extra import CAMP_ATTACK, CAMP_DEFENSE
+from bot.constant.ledger import REASON_WAR_TREASURY
 from bot.constant.activity import ACT_BATTLE
 from bot.services.activity import log as log_activity
 from bot.services.activity import remember_opponents
@@ -72,7 +75,7 @@ async def resolve_throne(session: AsyncSession, contender_id: int, incumbent_id:
         defender_chances=m.defender,
     )
     await apply_losses(session, contender_id, CAMP_ATTACK, result.attacker.dead)
-    abs_lines = await after_battle(session, m, result, attacker_id=contender_id, attacker_stacks=camps[contender_id], defender_id=incumbent_id)
+    abs_lines = await after_battle(session, m, result, kind=BATTLE_THRONE, attacker_id=contender_id, attacker_stacks=camps[contender_id], defender_id=incumbent_id)
     await apply_losses(session, incumbent_id, CAMP_DEFENSE, result.defender.dead)
 
     # Доход бизнеса до этой секунды — обоим, пока здания ещё на своих местах.
@@ -152,7 +155,7 @@ async def resolve_liberation(session: AsyncSession, contender_id: int, holder_id
     )
     result = simulate_battle(camps[contender_id], camps[holder_id], attacker_chances=m.attacker, defender_chances=m.defender)
     await apply_losses(session, contender_id, CAMP_ATTACK, result.attacker.dead)
-    abs_lines = await after_battle(session, m, result, attacker_id=contender_id, attacker_stacks=camps[contender_id], defender_id=holder_id)
+    abs_lines = await after_battle(session, m, result, kind=BATTLE_THRONE, attacker_id=contender_id, attacker_stacks=camps[contender_id], defender_id=holder_id)
     await apply_losses(session, holder_id, CAMP_DEFENSE, result.defender.dead)
     contender_gang, holder_gang = await get_gang(session, contender_id), await get_gang(session, holder_id)
     labels = {"contender_label": contender_gang.name if contender_gang else "—", "holder_label": holder_gang.name if holder_gang else "—"}
@@ -169,7 +172,7 @@ async def resolve_liberation(session: AsyncSession, contender_id: int, holder_id
         coins = await empire_repo.emperor_coins(session, holder_id, for_update=True)
         treasury = max(coins, 0) * war_treasury_percent(ratio) // 100
         if treasury:
-            await empire_repo.move_coins(session, holder_id, contender_id, treasury)
+            await empire_repo.move_coins(session, holder_id, contender_id, treasury, REASON_WAR_TREASURY)
         final = await phase_repo.count_cities_of(session, holder_id) == 0
         businesses = await phase_repo.transfer_holdings(
             session, holder_id, contender_id, [cid for cid, _ in released], cities_before, everything=final

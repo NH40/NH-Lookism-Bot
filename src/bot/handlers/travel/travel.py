@@ -23,6 +23,8 @@ from bot.keyboards.travel import abandon_menu, after_move_menu, cities_menu, con
 from bot.services.city import get_city, list_cities
 from bot.services.country import CountryEntryClosedError, closed_entries
 from bot.services.travel import (
+    ChallengePendingError,
+    CityMoveCooldownError,
     CountrySwapCooldownError,
     EmperorCannotLeaveError,
     HasDistrictsError,
@@ -42,6 +44,10 @@ from bot.texts.travel import (
     ABANDON_ASK,
     ABANDONED,
     CONFIRM_COUNTRY,
+    CHALLENGE_LINE,
+    CHALLENGE_PENDING_ALERT,
+    CITY_COOLDOWN_ALERT,
+    CITY_COOLDOWN_LINE,
     CONFIRM_LOSSES,
     COOLDOWN_ALERT,
     COOLDOWN_LINE,
@@ -58,6 +64,7 @@ from bot.texts.travel import (
     RULES_EMPEROR,
     RULES_GANG,
     RULES_GANG_DISTRICTS,
+    RULES_INTERVAL_LINE,
     SAME_CITY_ALERT,
     TRAVEL_SCREEN,
     UNKNOWN_CITY_ALERT,
@@ -101,6 +108,12 @@ async def _render(session: AsyncSession, status: TravelStatus):
         if status.cooldown_seconds and not status.emperor
         else "",
     )
+    if status.city_interval_seconds and not status.must_abandon:
+        text += RULES_INTERVAL_LINE.format(interval=interval_label(status.city_interval_seconds))
+    if status.city_cooldown_seconds:
+        text += CITY_COOLDOWN_LINE.format(countdown=format_countdown(status.city_cooldown_seconds))
+    if status.under_challenge:
+        text += CHALLENGE_LINE
     return text, travel_menu(status.country_code, must_abandon=status.must_abandon, can_leave_country=not status.emperor)
 
 
@@ -112,17 +125,20 @@ _ALERTS = {
     EmperorCannotLeaveError: EMPEROR_ALERT,
     UnknownCityError: UNKNOWN_CITY_ALERT,
     CountryEntryClosedError: COUNTRY_CLOSED_ALERT,
+    ChallengePendingError: CHALLENGE_PENDING_ALERT,
 }
 
 
 async def _alert(callback: CallbackQuery, exc: Exception) -> None:
     if isinstance(exc, CountrySwapCooldownError):
         await callback.answer(COOLDOWN_ALERT.format(countdown=format_countdown(exc.retry_after_seconds)), show_alert=True)
+    elif isinstance(exc, CityMoveCooldownError):
+        await callback.answer(CITY_COOLDOWN_ALERT.format(countdown=format_countdown(exc.retry_after_seconds)), show_alert=True)
     else:
         await callback.answer(_ALERTS[type(exc)], show_alert=True)
 
 
-_HANDLED = (*_ALERTS, CountrySwapCooldownError)
+_HANDLED = (*_ALERTS, CountrySwapCooldownError, CityMoveCooldownError)
 
 
 @router.callback_query(F.data == CB_TRAVEL_OPEN)
@@ -145,6 +161,8 @@ async def cb_travel_countries(callback: CallbackQuery, session: AsyncSession, re
             raise EmperorCannotLeaveError
         if status.must_abandon:
             raise HasDistrictsError
+        if status.under_challenge:
+            raise ChallengePendingError
     except _HANDLED as e:
         await _alert(callback, e)
         return
@@ -238,6 +256,8 @@ async def cb_travel_abandon_ask(callback: CallbackQuery, session: AsyncSession, 
         status = await get_status(session, redis, callback.from_user.id)
         if not status.must_abandon:
             raise NoDistrictsError
+        if status.under_challenge:
+            raise ChallengePendingError
     except _HANDLED as e:
         await _alert(callback, e)
         return

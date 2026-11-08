@@ -15,7 +15,7 @@ from bot.constant.characteristic import STATS_UP_FIVE, STATS_UP_MAX, STATS_UP_ON
 from bot.services.characteristic import NotEnoughPointsError, StatMaxedError, UnknownStatError, get_stats_view, invest
 from bot.services.mastery import check_unlock
 from bot.services.unique_path import check_conviction
-from bot.texts.profile import POTENTIAL_LABELS, STAT_EFFECTS, STAT_INVESTED, STAT_LABELS, STAT_MAXED, STAT_NOT_ENOUGH
+from bot.texts.profile import MONSTER_TAG, POTENTIAL_LABELS, STAT_EFFECTS, STAT_INVESTED, STAT_LABELS, STAT_MAXED, STAT_NOT_ENOUGH
 from bot.texts.unique_path import CONVICTION_PUSH
 from bot.utils.formatting import format_number
 
@@ -47,7 +47,7 @@ async def get_stats(user_id: int = Depends(get_current_user_id), session: AsyncS
             StatOut(code=s.code, label=plain(STAT_LABELS[s.code]), rank=s.rank, effect=STAT_EFFECTS[s.code], next_cost=s.next_cost)
             for s in view.stats
         ],
-        potential=clean_label(POTENTIAL_LABELS[view.potential]), dev_points=view.dev_points,
+        potential=clean_label(POTENTIAL_LABELS[view.potential] + (MONSTER_TAG if view.monster else "")), dev_points=view.dev_points,
         strength_power_percent=view.strength_power_percent, modes=[STATS_UP_ONE, STATS_UP_FIVE, STATS_UP_MAX],
     )
 

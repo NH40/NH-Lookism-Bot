@@ -191,6 +191,13 @@ async def set_awakening(session: AsyncSession, user_id: int, level: int) -> None
     await session.execute(update(User).where(User.id == user_id).values(awakening_level=level))
 
 
+async def toggle_monster(session: AsyncSession, user_id: int) -> bool:
+    """Выдать или снять 67 MONSTER одним UPDATE. → включён ли теперь. НЕ коммитит."""
+    return bool(await session.scalar(
+        update(User).where(User.id == user_id).values(monster_potential=~User.monster_potential).returning(User.monster_potential)
+    ))
+
+
 async def set_potential(session: AsyncSession, user_id: int, potential: str) -> None:
     await session.execute(update(User).where(User.id == user_id).values(potential=potential))
 

@@ -34,15 +34,16 @@ class StatsRow:
     ranks: dict[str, int]  # код характеристики → индекс ранга
     potential: str | None
     dev_points: int
+    monster: bool = False
 
 
 def _select():
-    return select(*_STAT_COLUMNS.values(), User.potential, User.dev_points)
+    return select(*_STAT_COLUMNS.values(), User.potential, User.dev_points, User.monster_potential)
 
 
 def _row(row) -> StatsRow:
     values = list(row)
-    return StatsRow(ranks=dict(zip(_STAT_COLUMNS, values[:4])), potential=values[4], dev_points=values[5])
+    return StatsRow(ranks=dict(zip(_STAT_COLUMNS, values[:4])), potential=values[4], dev_points=values[5], monster=bool(values[6]))
 
 
 async def get_stats(session: AsyncSession, user_id: int, *, for_update: bool = False) -> StatsRow | None:
@@ -51,6 +52,10 @@ async def get_stats(session: AsyncSession, user_id: int, *, for_update: bool = F
         stmt = stmt.with_for_update()
     row = (await session.execute(stmt)).one_or_none()
     return _row(row) if row is not None else None
+
+
+async def is_monster(session: AsyncSession, user_id: int) -> bool:
+    return bool(await session.scalar(select(User.monster_potential).where(User.id == user_id)))
 
 
 async def get_strength(session: AsyncSession, user_id: int) -> int:

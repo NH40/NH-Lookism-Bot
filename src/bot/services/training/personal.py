@@ -23,7 +23,7 @@ from bot.db.repositories.unique_path import bump_training_reps
 from bot.constant.cooldown import CD_PERSONAL
 from bot.services.cooldown import schedule as schedule_ready
 from bot.cache.keys import personal_training_cooldown
-from bot.config.characteristic import POTENTIAL_TRAINING
+from bot.config.characteristic import MONSTER_POTENTIAL_MULT, POTENTIAL_TRAINING
 from bot.db.repositories import characteristic as char_repo
 from bot.constant.dev_quest import TASK_PERSONAL_TRAIN
 from bot.services.dev_quest import emit as quest_event
@@ -54,6 +54,9 @@ async def train_personal(
     potential = await ensure_potential(session, user_id)
     table = POTENTIAL_TRAINING[potential]
     points = 0 if rng.random() * 100 < table.nothing_percent else rng.randint(table.min_points, table.max_points)
+    if points and await char_repo.is_monster(session, user_id):
+        boosted = points * MONSTER_POTENTIAL_MULT
+        points = int(boosted) + (1 if rng.random() < boosted - int(boosted) else 0)
     if points and profile.eco.dev_points:
         # Бонус систем развития (Самдак, гений тренировок): дробная часть — вероятностно.
         boosted = points * (1 + profile.eco.dev_points)

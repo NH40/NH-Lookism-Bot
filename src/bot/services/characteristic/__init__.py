@@ -12,6 +12,7 @@ from bot.services.characteristic.characteristic import (  # noqa: F401
     ensure_potential,
     get_stats_view,
     invest,
+    preview_max,
     potential_progress,
     roll_potential,
     upgrade_potential,

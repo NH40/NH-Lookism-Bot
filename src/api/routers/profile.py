@@ -132,7 +132,7 @@ async def get_my_profile(
         else None,
         phase=profile.phase,
         phase_label=PHASE_LABELS.get(profile.phase, profile.phase),
-        potential_label=POTENTIAL_LABELS.get(profile.stats.potential, profile.stats.potential),
+        potential_label=POTENTIAL_LABELS.get(profile.stats.potential, profile.stats.potential) + (" · 67 MONSTER" if profile.stats.monster else ""),
         potential_points=pot.points, potential_cost=pot.cost,
         potential_next=POTENTIAL_LABELS.get(pot.next_potential) if pot.next_potential else None,
         gang_name=profile.gang_name,

@@ -1,5 +1,7 @@
 """Публичное API домена travel (сервис)."""
 from bot.services.travel.travel import (  # noqa: F401
+    ChallengePendingError,
+    CityMoveCooldownError,
     CountrySwapCooldownError,
     EmperorCannotLeaveError,
     HasDistrictsError,

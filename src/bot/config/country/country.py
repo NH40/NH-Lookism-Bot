@@ -13,6 +13,8 @@ from __future__ import annotations
 
 # Переезд (пользователь 2026-11-06): смена страны — не чаще раза в час, меняется в админке.
 COUNTRY_SWAP_COOLDOWN_SECONDS = 60 * 60
+# Между любыми переездами — 15 минут (пользователь 2026-11-08: переездом сбрасывали вызов).
+CITY_MOVE_COOLDOWN_SECONDS = 15 * 60
 
 from dataclasses import dataclass
 

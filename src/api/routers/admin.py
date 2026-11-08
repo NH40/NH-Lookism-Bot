@@ -65,7 +65,9 @@ from bot.constant.referral import REF_NAME_MAX_LEN
 from bot.constant.resource import RESOURCES
 from bot.services.admin import audit, beta, live_config, players, roles
 from bot.services.admin import events_admin
+from bot.constant.ledger import ASSET_PROFILE, ASSETS_GOODS, ASSETS_MONEY, LOG_KIND_ERROR, LOG_KIND_SLOW
 from bot.services.admin import logs as logs_svc
+from bot.texts.admin import logs as logs_text
 from bot.services.admin import patch as patch_service
 from bot.services.admin import stats as stats_svc
 from bot.texts.admin.admin import ROLE_NAMES, SECTION_TITLES
@@ -498,6 +500,9 @@ async def get_audit(
     }
 
 
+_LEDGER_KINDS = {"coins": ASSETS_MONEY, "goods": ASSETS_GOODS, "changes": (ASSET_PROFILE,)}
+
+
 @router.get("/logs/{kind}")
 async def get_log(
     kind: str, page: int = Query(0, ge=0), target_id: int | None = None,
@@ -514,6 +519,25 @@ async def get_log(
     elif kind == "blackmarket":
         rows = await logs_svc.blackmarket_summary(session)
         items, total = [{"kind": k, "code": c, "buyers": b, "max_level": m} for k, c, b, m in rows], len(rows)
+    elif kind in _LEDGER_KINDS:
+        if target_id is None:
+            raise bad("Нужен id игрока.")
+        rows, total = await logs_svc.ledger_page(session, target_id, _LEDGER_KINDS[kind], offset=offset, limit=per)
+        items = [logs_text.ledger_item(r) for r in rows]
+    elif kind == "battles":
+        if target_id is None:
+            raise bad("Нужен id игрока.")
+        rows, total = await logs_svc.battles_page(session, target_id, offset=offset, limit=per)
+        items = [logs_text.battle_item(r) for r in rows]
+    elif kind == "upsets":
+        rows, total = await logs_svc.upsets_page(session, offset=offset, limit=per)
+        items = [logs_text.battle_item(r) for r in rows]
+    elif kind == "big":
+        rows, total = await logs_svc.big_moves_page(session, offset=offset, limit=per)
+        items = [logs_text.big_item(r) for r in rows]
+    elif kind in ("errors", "slow"):
+        rows, total = await logs_svc.errors_page(session, LOG_KIND_ERROR if kind == "errors" else LOG_KIND_SLOW, offset=offset, limit=per)
+        items = [logs_text.error_item(r) for r in rows]
     elif kind == "activity":
         if target_id is None:
             raise bad("Нужен id игрока.")

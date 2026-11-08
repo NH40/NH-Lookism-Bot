@@ -36,6 +36,7 @@ export function TravelPage() {
   const [abandon, setAbandon] = useState(false);
   const { run, busy } = useAction(reload);
   const cd = useCountdown(data?.cooldown_seconds ?? 0);
+  const cityCd = useCountdown(data?.city_cooldown_seconds ?? 0);
 
   const moveTo = async (city: TravelCity, acceptLosses: boolean) => {
     if (await run("/travel/move", { city_id: city.id, accept_losses: acceptLosses })) {
@@ -45,7 +46,7 @@ export function TravelPage() {
     }
   };
   const pickCity = (city: TravelCity) => {
-    if (!data) return;
+    if (!data || cityCd > 0) return;
     if (country === null || country === data.country_code) void moveTo(city, false);
     else setTarget(city);
   };
@@ -69,10 +70,12 @@ export function TravelPage() {
                     : `Между городами страны — свободно. Сменить страну можно раз в ${data.interval}.`}
             </p>
             {cd > 0 && !data.emperor && <p className="emp-note">Сменить страну можно через {countdown(cd)}.</p>}
+            <p className="emp-note">Между переездами — {data.city_interval}.{cityCd > 0 ? ` Следующий через ${countdown(cityCd)}.` : ""}</p>
+            {data.under_challenge && <p className="emp-note">Против тебя висит вызов: отказаться от районов и сменить страну можно только после боя.</p>}
           </Panel>
 
           {data.must_abandon ? (
-            <button className="btn red block" type="button" disabled={busy} onClick={() => setAbandon(true)}>
+            <button className="btn red block" type="button" disabled={busy || data.under_challenge} onClick={() => setAbandon(true)}>
               <Flag size={16} />Отказаться от районов
             </button>
           ) : (
@@ -104,7 +107,7 @@ export function TravelPage() {
                   Ты потеряешь {fmt(data.districts)} районов в {data.cities} гор. и {fmt(data.buildings)} зданий и станешь бандой. Отменить нельзя.
                 </p>
               )}
-              <button className="btn block" type="button" disabled={busy || cd > 0} onClick={() => moveTo(target, true)}>
+              <button className="btn block" type="button" disabled={busy || cd > 0 || cityCd > 0 || data.under_challenge} onClick={() => moveTo(target, true)}>
                 {cd > 0 ? `Через ${countdown(cd)}` : "Переехать"}
               </button>
             </Sheet>

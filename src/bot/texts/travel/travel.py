@@ -29,6 +29,9 @@ RULES_CIRCLE = (
     "но все районы и здания пропадут, и ты снова станешь бандой.\n"
 )
 COOLDOWN_LINE = "⏳ Сменить страну можно через <b>{countdown}</b>.\n"
+CITY_COOLDOWN_LINE = "⏳ Следующий переезд через <b>{countdown}</b>.\n"
+CHALLENGE_LINE = "⚔️ Против тебя висит вызов: отказаться от районов и сменить страну можно только после боя.\n"
+RULES_INTERVAL_LINE = "Между переездами — {interval}.\n"
 
 PICK_COUNTRY = "🌍 Выбери страну:"
 PICK_CITY = "🏙 <b>{country}</b> — выбери город:"
@@ -55,4 +58,6 @@ HAS_DISTRICTS_ALERT = "Сначала откажись от районов."
 NO_DISTRICTS_ALERT = "У тебя нет районов."
 EMPEROR_ALERT = "Император не покидает страну, пока на троне."
 COOLDOWN_ALERT = "Сменить страну можно через {countdown}."
+CITY_COOLDOWN_ALERT = "Следующий переезд через {countdown}."
+CHALLENGE_PENDING_ALERT = "Против тебя висит вызов. Сначала бой или конец срока вызова."
 UNKNOWN_CITY_ALERT = "Такого города нет."

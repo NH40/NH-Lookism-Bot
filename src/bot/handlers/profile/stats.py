@@ -9,7 +9,7 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.constant.characteristic import CB_POTENTIAL_UP, CB_STATS_OPEN, CB_STATS_UP_PREFIX
+from bot.constant.characteristic import CB_POTENTIAL_UP, CB_STATS_MAX_ASK_PREFIX, CB_STATS_MAX_NO, CB_STATS_OPEN, CB_STATS_UP_PREFIX
 from bot.keyboards.profile import stats_menu
 from bot.services.characteristic import (
     potential_progress,
@@ -25,7 +25,9 @@ from bot.services.mastery import check_unlock
 from bot.handlers.unique_path import notify_conviction
 from bot.texts.profile import (
     NOT_ONBOARDED,
+    MONSTER_TAG,
     POTENTIAL_LABELS,
+    STAT_MAX_CONFIRM,
     POTENTIAL_LINE,
     STAT_EFFECT_LINE,
     STAT_EFFECTS,
@@ -50,7 +52,7 @@ def render_stats_screen(view: StatsView, progress=None):
             lines.append(STAT_SCREEN_LINE_MAX.format(label=STAT_LABELS[stat.code], rank=stat.rank))
         else:
             lines.append(STAT_SCREEN_LINE.format(label=STAT_LABELS[stat.code], rank=stat.rank, cost=stat.next_cost))
-    lines.append(POTENTIAL_LINE.format(potential=POTENTIAL_LABELS[view.potential]))
+    lines.append(POTENTIAL_LINE.format(potential=POTENTIAL_LABELS[view.potential] + (MONSTER_TAG if view.monster else "")))
     effects = "\n".join(
         STAT_EFFECT_LINE.format(label=STAT_LABELS[s.code], effect=STAT_EFFECTS[s.code]) for s in view.stats
     )
@@ -85,6 +87,47 @@ async def cb_stats_open(callback: CallbackQuery, session: AsyncSession) -> None:
         await get_stats_view(session, callback.from_user.id), await potential_progress(session, callback.from_user.id)
     )
     await callback.message.answer(text, reply_markup=markup)
+
+
+@router.callback_query(F.data.startswith(CB_STATS_MAX_ASK_PREFIX))
+async def cb_stats_max_ask(callback: CallbackQuery, session: AsyncSession) -> None:
+    """«Макс» вкладывает всё накопленное: случайный тап не должен тратить очки сразу (игрок 2026-11-06)."""
+    from bot.keyboards.profile import stat_max_confirm_menu
+    from bot.services.characteristic import preview_max
+
+    if await get_gang(session, callback.from_user.id) is None:
+        await callback.answer(NOT_ONBOARDED, show_alert=True)
+        return
+    stat = callback.data.removeprefix(CB_STATS_MAX_ASK_PREFIX)
+    try:
+        p = await preview_max(session, callback.from_user.id, stat)
+    except UnknownStatError:
+        await callback.answer()
+        return
+    except StatMaxedError:
+        await callback.answer(STAT_MAXED, show_alert=True)
+        return
+    except NotEnoughPointsError as exc:
+        await callback.answer(STAT_NOT_ENOUGH.format(cost=exc.cost, points=format_number(exc.points)), show_alert=True)
+        return
+    await callback.answer()
+    await safe_edit_text(
+        callback.message,
+        STAT_MAX_CONFIRM.format(
+            label=STAT_LABELS[p.stat], rank_from=p.rank_from, rank_to=p.rank_to, ranks=p.ranks,
+            cost=format_number(p.cost), points=format_number(p.points),
+        ),
+        reply_markup=stat_max_confirm_menu(stat),
+    )
+
+
+@router.callback_query(F.data == CB_STATS_MAX_NO)
+async def cb_stats_max_no(callback: CallbackQuery, session: AsyncSession) -> None:
+    await callback.answer()
+    text, markup = render_stats_screen(
+        await get_stats_view(session, callback.from_user.id), await potential_progress(session, callback.from_user.id)
+    )
+    await safe_edit_text(callback.message, text, reply_markup=markup)
 
 
 @router.callback_query(F.data.startswith(CB_STATS_UP_PREFIX))

@@ -41,6 +41,13 @@ async def cancel_challenges(session: AsyncSession, user_id: int) -> int:
     return result.rowcount or 0
 
 
+async def has_incoming_challenge(session: AsyncSession, user_id: int) -> bool:
+    return bool(await session.scalar(
+        text("SELECT 1 FROM district_challenges WHERE status = :pending AND defender_id = :uid LIMIT 1"),
+        {"uid": user_id, "pending": CHALLENGE_PENDING},
+    ))
+
+
 async def abandon_all(session: AsyncSession, user_id: int) -> None:
     """Все районы игрока — ботам, здания на них сгорают (пользователь 2026-11-06)."""
     await session.execute(

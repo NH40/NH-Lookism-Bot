@@ -9,6 +9,8 @@
 """
 from __future__ import annotations
 
+from bot.constant.ledger import BATTLE_TOM
+
 from bot.services.country import ensure_battles_open
 
 from dataclasses import dataclass
@@ -62,7 +64,7 @@ async def fight_tom(session: AsyncSession, redis: Redis, user: User) -> TomFight
     m = matchup(profile, vs=(VS_BOSS,), defender_chances=base_chances(), attacker_kw={"no_block_no_flee": True}, attacker_stacks=stacks)
     result = simulate_battle(stacks, tom, attacker_chances=m.attacker, defender_chances=m.defender)
     await apply_losses(session, user.id, CAMP_ATTACK, result.attacker.dead)
-    abs_lines = await after_battle(session, m, result, attacker_id=user.id, attacker_stacks=stacks)
+    abs_lines = await after_battle(session, m, result, kind=BATTLE_TOM, attacker_id=user.id, attacker_stacks=stacks)
     if result.attacker_won:
         mark_tom_defeated(quest)
     await session.commit()

@@ -12,10 +12,12 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.constant.ledger import REASON_EMPEROR_TAX
 from bot.db.models.city import City
 from bot.db.models.emperor_tax import EmperorTaxOverride
 from bot.db.models.sabotage_log import SabotageLog
 from bot.db.models.user import User
+from bot.utils.log_context import coin_reason
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,11 +82,12 @@ async def credit_emperor(session: AsyncSession, emperor_id: int, amount: int) ->
     2026-10-01) и в счётчик собранного."""
     if amount <= 0:
         return
-    await session.execute(
-        update(User)
-        .where(User.id == emperor_id)
-        .values(nh_coins=User.nh_coins + amount, empire_collected=User.empire_collected + amount)
-    )
+    with coin_reason(REASON_EMPEROR_TAX):
+        await session.execute(
+            update(User)
+            .where(User.id == emperor_id)
+            .values(nh_coins=User.nh_coins + amount, empire_collected=User.empire_collected + amount)
+        )
 
 
 async def set_global_rate(session: AsyncSession, emperor_id: int, percent: int) -> None:
@@ -184,10 +187,11 @@ async def emperor_coins(session: AsyncSession, emperor_id: int, *, for_update: b
     return await session.scalar(stmt.with_for_update() if for_update else stmt) or 0
 
 
-async def move_coins(session: AsyncSession, from_id: int, to_id: int, amount: int) -> None:
+async def move_coins(session: AsyncSession, from_id: int, to_id: int, amount: int, reason: str = "") -> None:
     """Перевод NHCoin; строка `from_id` уже заблокирована вызывающим (`emperor_coins(for_update=True)`)."""
-    await session.execute(update(User).where(User.id == from_id).values(nh_coins=User.nh_coins - amount))
-    await session.execute(update(User).where(User.id == to_id).values(nh_coins=User.nh_coins + amount))
+    with coin_reason(reason):
+        await session.execute(update(User).where(User.id == from_id).values(nh_coins=User.nh_coins - amount))
+        await session.execute(update(User).where(User.id == to_id).values(nh_coins=User.nh_coins + amount))
 
 
 async def add_sabotage_log(

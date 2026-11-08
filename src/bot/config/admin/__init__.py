@@ -1,6 +1,12 @@
 """Публичное API домена admin (конфиг)."""
 from bot.config.admin.admin import (  # noqa: F401
     ADMIN_AUDIT_PAGE,
+    ERROR_ALERTS_PER_HOUR,
+    LOG_BIG_MOVE_HOURS,
+    LOG_BIG_MOVE_MIN,
+    LOG_SLOW_API_MS,
+    LOG_SLOW_BOT_MS,
+    LOG_SLOW_SQL_MS,
     BETA_ATTEMPTS_WINDOW_SECONDS,
     BETA_CODE_MAX_LENGTH,
     BETA_CODE_MIN_LENGTH,

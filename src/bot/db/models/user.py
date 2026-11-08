@@ -107,6 +107,8 @@ class User(Base):
     # Донат-валюта: 1 ₽ = 1 коин (ЮKassa через Telegram Payments, как в UAP). Тратится только на
     # чёрном рынке — ускорение развития, не боевая сила.
     donate_coins: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
+    # «67 MONSTER» — надстройка над потенциалом, только из админки (пользователь 2026-11-08).
+    monster_potential: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     active_technique: Mapped[str | None] = mapped_column(String(32), nullable=True)
     active_genius: Mapped[str | None] = mapped_column(String(32), nullable=True)
     path_fragments: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")

@@ -39,6 +39,7 @@ class BuildRow:
     path2_gauge: float = 0.0
     influence_banked: int = 0
     security_off_until: datetime | None = None
+    monster: bool = False
 
 
 async def get_row(session: AsyncSession, user_id: int) -> BuildRow | None:
@@ -54,7 +55,7 @@ async def get_row(session: AsyncSession, user_id: int) -> BuildRow | None:
                 User.mastery_speed,
                 User.mastery_strength,
                 User.second_body, User.active_path2, _Path2.level, User.bloodline2, User.bloodline2_level,
-                UserPath.gauge, _Path2.gauge, User.influence_banked, User.security_off_until,
+                UserPath.gauge, _Path2.gauge, User.influence_banked, User.security_off_until, User.monster_potential,
             )
             .outerjoin(UserPath, (UserPath.user_id == User.id) & (UserPath.code == User.active_path))
             .outerjoin(UserTechnique, (UserTechnique.user_id == User.id) & (UserTechnique.code == User.active_technique))
@@ -65,7 +66,7 @@ async def get_row(session: AsyncSession, user_id: int) -> BuildRow | None:
     ).one_or_none()
     if row is None:
         return None
-    bl, bll, p, pl, t, tl, g, gl, aw, msp, mst, body, p2, p2l, bl2, bl2l, pg, p2g, banked, sec_off = row
+    bl, bll, p, pl, t, tl, g, gl, aw, msp, mst, body, p2, p2l, bl2, bl2l, pg, p2g, banked, sec_off, monster = row
     if not body:
         p2 = p2l = bl2 = bl2l = None
     return BuildRow(
@@ -79,6 +80,7 @@ async def get_row(session: AsyncSession, user_id: int) -> BuildRow | None:
         path2=p2 if p2l else None, path2_level=p2l or 0,
         bloodline2=bl2, bloodline2_level=bl2l or 0,
         path_gauge=pg or 0.0, path2_gauge=p2g or 0.0, influence_banked=banked or 0, security_off_until=sec_off,
+        monster=bool(monster),
     )
 
 

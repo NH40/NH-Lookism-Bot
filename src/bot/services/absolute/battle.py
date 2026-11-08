@@ -11,17 +11,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.config.absolute import ARIAN_BLOCK_SECONDS, MANAGER_COINS_BURN, MARISE_CLONE, MARISE_CLONE_CAP
 from bot.constant.absolute import ABS_MANAGER, ABS_MARISE
 from bot.constant.extra import CAMP_ATTACK
+from bot.constant.ledger import BATTLE_BOTS, BATTLE_PVP, REASON_ELITE_LOOT, REASON_MANAGER_BURN
+from bot.services.battle_log import record as record_battle
 from bot.db.models.user import User
 from bot.db.repositories.extra import add_to_stack
 from bot.services.absolute.absolute import active
 from bot.texts.absolute import JOURNAL_ARIAN, JOURNAL_LOOT, JOURNAL_MANAGER, JOURNAL_MARISE
+from bot.utils.log_context import coin_reason
 from bot.utils.formatting import format_number
 
 _KIND_EXTRA = "x"  # ключ стопки статистов в бою (`services/district/army`)
 
 
 async def after_battle(session: AsyncSession, m, result, *, attacker_id: int, attacker_stacks=None,
-                       defender_id: int | None = None) -> tuple[str, ...]:
+                       defender_id: int | None = None, kind: str = "") -> tuple[str, ...]:
     lines: list[str] = []
     attacker_abs = await active(session, attacker_id)
     defender_abs = frozenset() if defender_id is None or m.arian else await active(session, defender_id)
@@ -33,7 +36,8 @@ async def after_battle(session: AsyncSession, m, result, *, attacker_id: int, at
         coins = await session.scalar(select(User.nh_coins).where(User.id == attacker_id).with_for_update()) or 0
         burned = int(max(coins, 0) * MANAGER_COINS_BURN)
         if burned:
-            await session.execute(update(User).where(User.id == attacker_id).values(nh_coins=User.nh_coins - burned))
+            with coin_reason(REASON_MANAGER_BURN):
+                await session.execute(update(User).where(User.id == attacker_id).values(nh_coins=User.nh_coins - burned))
         lines.append(JOURNAL_MANAGER.format(amount=format_number(burned)))
     if ABS_MARISE in attacker_abs and attacker_stacks:
         dead = result.attacker.dead
@@ -63,6 +67,7 @@ async def after_battle(session: AsyncSession, m, result, *, attacker_id: int, at
         looted = await _battle_loot(session, winner, loser)
         if looted:
             lines.append(JOURNAL_LOOT.format(amount=format_number(looted)))
+    record_battle(session, m, result, kind=kind or (BATTLE_PVP if pvp else BATTLE_BOTS), attacker_id=attacker_id, defender_id=defender_id, notes=lines)
     return tuple(lines)
 
 
@@ -80,6 +85,7 @@ async def _battle_loot(session: AsyncSession, winner_id: int, loser_id: int) -> 
     )
     amount = int(max(dict(rows.all()).get(loser_id, 0), 0) * share)
     if amount:
-        await session.execute(update(User).where(User.id == loser_id).values(nh_coins=User.nh_coins - amount))
-        await session.execute(update(User).where(User.id == winner_id).values(nh_coins=User.nh_coins + amount))
+        with coin_reason(REASON_ELITE_LOOT):
+            await session.execute(update(User).where(User.id == loser_id).values(nh_coins=User.nh_coins - amount))
+            await session.execute(update(User).where(User.id == winner_id).values(nh_coins=User.nh_coins + amount))
     return amount

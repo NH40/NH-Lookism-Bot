@@ -68,5 +68,12 @@ SECTION_ORDER: tuple[str, ...] = (
     SECTION_CONFIG, SECTION_SYSTEM,
 )
 ADMIN_AUDIT_PAGE = 15  # записей журнала на страницу
+# Журналы (2026-11-08): что считать медленным, крупным, и сколько пушей о новых ошибках в час.
+LOG_SLOW_API_MS = 1500
+LOG_SLOW_BOT_MS = 2500
+LOG_SLOW_SQL_MS = 500
+LOG_BIG_MOVE_MIN = 1_000_000
+LOG_BIG_MOVE_HOURS = 24
+ERROR_ALERTS_PER_HOUR = 5
 # Как часто бот и API перечитывают настройки на лету (правка из другого процесса — с этой задержкой).
 LIVE_CONFIG_REFRESH_SECONDS = 15

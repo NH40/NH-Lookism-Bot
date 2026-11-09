@@ -1,4 +1,4 @@
-import { Coins, Crosshair, Dna, Eye, FlaskConical, Gem, Home, Lightbulb, Move, Route, Shield, Sparkles, Swords, Ticket, Zap } from "lucide-react";
+import { Award, ChevronUp, Coins, Crown, Crosshair, Dna, Eye, FlaskConical, Gem, Home, Lightbulb, Medal, Move, Route, Shield, Sparkles, Swords, Ticket, Trophy, Zap } from "lucide-react";
 import type { ReactNode } from "react";
 import type { ProfileDevItem, ProfileData } from "../../types";
 import { Bar, Chip, Panel, Screen, StatRow, countdown, fmt } from "../../components/ui";
@@ -22,6 +22,71 @@ const DEV_ICONS: Record<ProfileDevItem["kind"], { icon: ReactNode; label: string
   genius: { icon: <Lightbulb size={18} color="#a78bfa" />, label: "гений" },
 };
 
+const LEAGUE_ICONS = [Medal, Award, Trophy, Gem, Crown];
+
+function LeagueCard({ league: l }: { league: ProfileData["league"] }) {
+  const Icon = LEAGUE_ICONS[l.index] ?? Medal;
+  const need = l.next_score === null ? 0 : l.next_score - l.floor;
+  const done = Math.min(Math.max(l.score - l.floor, 0), need);
+  return (
+    <section className={`lg-card lg-${l.index}`}>
+      <div className="lg-top">
+        <div className="lg-ico">
+          <Icon size={24} />
+        </div>
+        <div className="lg-title">
+          <small>Лига</small>
+          <div className="disp lg-name">{l.name}</div>
+        </div>
+        <div className="lg-score">
+          <b className="disp">{fmt(l.score)}</b>
+          <small>счёт</small>
+        </div>
+      </div>
+      <div className="lg-ladder">
+        {l.ladder.map((name, i) => (
+          <span key={name} className={i === l.index ? "now" : i < l.index ? "done" : ""}>
+            <i />
+            <small>{name.replace(" поколение", "")}</small>
+          </span>
+        ))}
+      </div>
+      {l.next_name !== null && l.next_score !== null ? (
+        <div className="lg-progress">
+          <div className="lg-bar">
+            <i style={{ width: `${need > 0 ? (done / need) * 100 : 0}%` }} />
+          </div>
+          <div className="lg-next">
+            <span>
+              <ChevronUp size={13} />
+              {done >= need ? `«${l.next_name}»: повышение в полночь по Москве` : `Дальше: «${l.next_name}»`}
+            </span>
+            <span>
+              {fmt(Math.min(l.score, l.next_score))} / {fmt(l.next_score)}
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="lg-next lg-top-note">Высшая лига</div>
+      )}
+      <div className="lg-buffs">
+        {l.index > 0 ? (
+          <>
+            <span>
+              <Coins size={13} /> +{l.income_percent}% дохода
+            </span>
+            <span>
+              <Swords size={13} /> +{l.power_percent}% атаки и прочности
+            </span>
+          </>
+        ) : (
+          <span className="off">Бафф появится со следующей лиги</span>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export function ProfilePage() {
   const { data, status, error, reload } = useApi<ProfileData>("/profile");
   const { run, busy } = useAction(reload);
@@ -34,7 +99,7 @@ export function ProfilePage() {
 
 function ProfileView({ p, run, busy }: { p: ProfileData; run: (path: string, body?: unknown) => Promise<unknown>; busy: boolean }) {
   const name = p.display_name ?? (p.username ? `@${p.username}` : "Игрок");
-  const sub = [p.gang_name ? `Банда «${p.gang_name}»` : null, p.clan_name ? `Клан «${p.clan_name}»` : null, p.city?.name, `Лига: ${p.league_name} (${p.league_score}${p.league_next ? `, до ${p.league_next}` : ""})`].filter(Boolean).join(" · ");
+  const sub = [p.gang_name ? `Банда «${p.gang_name}»` : null, p.clan_name ? `Клан «${p.clan_name}»` : null, p.city?.name].filter(Boolean).join(" · ");
   // Аватар: всегда фото Telegram самого игрока (пользователь 2026-11-09), иначе эмблема с инициалами.
   const avatar = getWebApp()?.initDataUnsafe.user?.photo_url ?? null;
   const initials = name.replace("@", "").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join("") || "?";
@@ -65,6 +130,7 @@ function ProfileView({ p, run, busy }: { p: ProfileData; run: (path: string, bod
         </div>
       </div>
 
+      <LeagueCard league={p.league} />
 
       <div className="grid-3">
         <Chip variant="gold" icon={<Coins size={18} color="#f5b942" />} value={fmt(p.nh_coins)} label="NHCoin" />

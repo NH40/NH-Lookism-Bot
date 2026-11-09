@@ -17,7 +17,7 @@ from api.auth import get_current_user_id
 from api.db import get_session
 from api.bot_info import get_bot_link
 from api.deps import get_redis
-from api.schemas import ActivePotionOut, CityOut, CountryOut, DevItemOut, PhaseProgressOut, ProfileOut, StatOut
+from api.schemas import ActivePotionOut, CityOut, CountryOut, DevItemOut, LeagueOut, PhaseProgressOut, ProfileOut, StatOut
 from bot.config.clan import CLAN_DONATE_LEVELS, CLAN_MAX_MEMBERS
 from bot.services import donate as donate_service
 from bot.services.business import get_wallet
@@ -30,7 +30,17 @@ from bot.texts.profile import PHASE_LABELS, POTENTIAL_LABELS, STAT_LABELS
 from bot.texts.unique_path import PATH_NAMES
 from bot.texts.unique_technique import TECHNIQUE_NAMES
 
-from bot.config.league import LEAGUES, next_league  # noqa: E402
+from bot.config.league import LEAGUE_THRESHOLDS, LEAGUES, league_bonus, next_league  # noqa: E402
+
+def _league_out(league: int, score: int) -> LeagueOut:
+    following = next_league(league)
+    income, power = league_bonus(league)
+    return LeagueOut(
+        index=league, name=LEAGUES[league].name, score=score, floor=LEAGUE_THRESHOLDS[league],
+        next_name=following[0].name if following else None, next_score=following[1] if following else None,
+        income_percent=income, power_percent=power, ladder=[item.name for item in LEAGUES],
+    )
+
 
 router = APIRouter(prefix="/api", tags=["profile"])
 
@@ -135,8 +145,7 @@ async def get_my_profile(
         phase=profile.phase,
         phase_label=PHASE_LABELS.get(profile.phase, profile.phase),
         potential_label=POTENTIAL_LABELS.get(profile.stats.potential, profile.stats.potential) + (" · 67 MONSTER" if profile.stats.monster else ""),
-        league_name=LEAGUES[profile.stats.league].name, league_score=profile.stats.league_score,
-        league_next=(lambda f: f"{f[0].name}: {f[1]}" if f else None)(next_league(profile.stats.league)),
+        league=_league_out(profile.stats.league, profile.stats.league_score),
         potential_points=pot.points, potential_cost=pot.cost,
         potential_next=POTENTIAL_LABELS.get(pot.next_potential) if pot.next_potential else None,
         gang_name=profile.gang_name,

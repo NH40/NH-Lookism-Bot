@@ -24,3 +24,36 @@
 .pf-abs:last-child { border-bottom: 0; }
 .pf-abs.off { opacity: .5; }
 .pf-abs-blocked { margin-bottom: 6px; font-size: 12px; font-weight: 800; color: var(--red-2, #ff8aa0); }
+
+/* Лига: цвет ступени задаётся переменными, разметка одна на все лиги. */
+.lg-card { --lg: 201, 138, 90; --lg-2: #f3c49b; position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 16px; border: 1px solid rgba(var(--lg), 0.55); background: linear-gradient(135deg, rgba(var(--lg), 0.24), rgba(14, 24, 62, 0.88) 62%); box-shadow: 0 0 18px rgba(var(--lg), 0.18); }
+.lg-1 { --lg: 174, 190, 214; --lg-2: #e6edf9; }
+.lg-2 { --lg: 245, 185, 66; --lg-2: #ffe08a; }
+.lg-3 { --lg: 92, 200, 255; --lg-2: #bdeeff; }
+.lg-4 { --lg: 183, 148, 255; --lg-2: #f3dcff; box-shadow: 0 0 26px rgba(var(--lg), 0.42); }
+.lg-top { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.lg-ico { flex-shrink: 0; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%; color: var(--lg-2); border: 1px solid rgba(var(--lg), 0.8); background: radial-gradient(circle at 35% 30%, rgba(var(--lg), 0.5), rgba(var(--lg), 0.12)); box-shadow: 0 0 14px rgba(var(--lg), 0.5); }
+.lg-title { flex: 1; min-width: 0; }
+.lg-title small, .lg-score small { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.55); }
+.lg-name { margin-top: 2px; font-size: 19px; font-weight: 800; line-height: 1.15; color: var(--lg-2); text-shadow: 0 0 12px rgba(var(--lg), 0.55); overflow-wrap: anywhere; }
+.lg-score { flex-shrink: 0; text-align: right; }
+.lg-score b { display: block; font-size: 18px; font-weight: 800; color: #fff; }
+.lg-ladder { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.lg-ladder span { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; color: rgba(255, 255, 255, 0.4); }
+.lg-ladder i { width: 100%; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.13); }
+.lg-ladder small { font-size: 10px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.lg-ladder .done i { background: rgba(var(--lg), 0.55); }
+.lg-ladder .done { color: rgba(255, 255, 255, 0.65); }
+.lg-ladder .now i { background: var(--lg-2); box-shadow: 0 0 8px rgba(var(--lg), 0.9); }
+.lg-ladder .now { color: var(--lg-2); }
+.lg-progress { display: flex; flex-direction: column; gap: 5px; }
+.lg-bar { height: 8px; border-radius: 4px; overflow: hidden; background: rgba(255, 255, 255, 0.1); }
+.lg-bar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, rgba(var(--lg), 0.75), var(--lg-2)); transition: width 0.4s ease; }
+.lg-next { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; font-weight: 700; color: rgba(255, 255, 255, 0.72); }
+.lg-next span:first-child { display: inline-flex; align-items: center; gap: 3px; min-width: 0; }
+.lg-next span:last-child { flex-shrink: 0; }
+.lg-top-note { color: var(--lg-2); }
+.lg-buffs { display: flex; flex-wrap: wrap; gap: 6px; }
+.lg-buffs span { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 8px; font-size: 11.5px; font-weight: 700; color: var(--lg-2); border: 1px solid rgba(var(--lg), 0.4); background: rgba(var(--lg), 0.12); }
+.lg-buffs .off { color: rgba(255, 255, 255, 0.55); border-color: rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.05); }
+@media (prefers-reduced-motion: reduce) { .lg-bar i { transition: none; } }

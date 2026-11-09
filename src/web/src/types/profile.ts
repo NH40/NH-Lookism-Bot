@@ -20,9 +20,17 @@ export interface ProfileData {
   phase: string;
   phase_label: string;
   potential_label: string;
-  league_name: string;
-  league_score: number;
-  league_next: string | null;
+  league: {
+    index: number;
+    name: string;
+    score: number;
+    floor: number;
+    next_name: string | null;
+    next_score: number | null;
+    income_percent: number;
+    power_percent: number;
+    ladder: string[];
+  };
   potential_points?: number;
   potential_cost?: number | null;
   potential_next?: string | null;

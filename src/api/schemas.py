@@ -54,6 +54,18 @@ class AbsolutesOut(BaseModel):
     blocked_seconds: int  # Ариан противника заблокировал абсолюты (0 — нет)
 
 
+class LeagueOut(BaseModel):
+    index: int
+    name: str
+    score: int
+    floor: int  # счёт, с которого началась текущая лига
+    next_name: str | None
+    next_score: int | None
+    income_percent: int
+    power_percent: int
+    ladder: list[str]
+
+
 class ProfileOut(BaseModel):
     user_id: int
     username: str | None
@@ -64,9 +76,7 @@ class ProfileOut(BaseModel):
     phase: str
     phase_label: str
     potential_label: str
-    league_name: str
-    league_score: int
-    league_next: str | None
+    league: LeagueOut
     potential_points: int = 0  # очки потенциала (2026-10-28)
     potential_cost: int | None = None  # сколько нужно до следующего; None — Легенда
     potential_next: str | None = None

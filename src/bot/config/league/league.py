@@ -57,3 +57,18 @@ def next_league(league: int) -> tuple[LeagueDef, int] | None:
     if league + 1 >= len(LEAGUES):
         return None
     return LEAGUES[league + 1], LEAGUE_THRESHOLDS[league + 1]
+
+
+def league_bonus(league: int) -> tuple[int, int]:
+    """Бафф лиги в процентах: (доход, атака и прочность)."""
+    return round(league * LEAGUE_INCOME_STEP * 100), round(league * LEAGUE_POWER_STEP * 100)
+
+
+def league_progress(league: int, score: int) -> tuple[int, int] | None:
+    """Прогресс внутри лиги: (набрано, нужно). None — Легенды, выше лиг нет."""
+    following = next_league(league)
+    if following is None:
+        return None
+    floor = LEAGUE_THRESHOLDS[league]
+    need = following[1] - floor
+    return min(max(score - floor, 0), need), need

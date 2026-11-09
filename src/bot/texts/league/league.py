@@ -1,8 +1,14 @@
 """Лиги (тексты)."""
 from __future__ import annotations
 
-LEAGUE_LINE = "🏅 Лига: <b>{name}</b> · счёт {score}{next}"
-LEAGUE_NEXT = " (до «{name}»: {score})"
+LEAGUE_ICONS = ("🥉", "🥈", "🥇", "💠", "👑")
+LEAGUE_HEAD = "\n{icon} Лига: <b>{name}</b> · счёт {score}"
+LEAGUE_BAR = "{bar} {score} / {target}"
+LEAGUE_NEXT = "↑ Дальше: «{name}» с {score} очков"
+LEAGUE_READY = "↑ «{name}»: повышение в полночь по Москве"
+LEAGUE_TOP = "Высшая лига"
+LEAGUE_BUFF = "💪 Бафф: +{income}% дохода, +{power}% атаки и прочности\n"
+LEAGUE_NO_BUFF = "💪 Бафф появится со следующей лиги\n"
 PROMOTED = (
     "🏅 <b>Повышение: лига «{name}»!</b>\n━━━━━━━━━━━━━━━━━━\n"
     "Ты перерос прошлую лигу. Теперь у тебя бафф лиги: +{income}% дохода и +{power}% к атаке и прочности.\n\n"

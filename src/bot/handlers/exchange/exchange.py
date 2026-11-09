@@ -226,11 +226,12 @@ async def cb_exchange_buy(callback: CallbackQuery, session: AsyncSession, redis:
         await callback.answer()
         return
     lot = await get_lot(session, int(raw))
+    price_res = lot.price_res if lot else ""  # после отката в сервисе объект истёк, читать его уже нельзя
     # Popup-тексты — без HTML.
     try:
         deal = await buy_lot(session, redis, callback.from_user.id, int(raw))
     except ExchangeError as exc:
-        await callback.answer(_error(exc, lot.price_res if lot else ""), show_alert=True)
+        await callback.answer(_error(exc, price_res), show_alert=True)
         return
     await callback.answer(BOUGHT_ALERT.format(item=item_amount_label(deal.item_kind, deal.item_code, deal.amount)), show_alert=True)
     await send_deal_pushes(callback.bot, session, [deal])
@@ -291,10 +292,11 @@ async def cb_exchange_auction(callback: CallbackQuery, state: FSMContext, sessio
 async def _place_bid(bot: Bot, session: AsyncSession, redis: Redis, user_id: int, auction_id: int, amount: int) -> str | None:
     """→ текст ошибки или None (ставка принята, пуши отправлены)."""
     a = await get_auction(session, auction_id)
+    price_res = a.price_res if a else ""  # после отката объект истёк
     try:
         deal = await bid(session, redis, user_id, auction_id, amount)
     except ExchangeError as exc:
-        return _error(exc, a.price_res if a else "")
+        return _error(exc, price_res)
     await send_deal_pushes(bot, session, [deal])
     return None
 
@@ -427,10 +429,11 @@ async def cb_exchange_trade_accept(callback: CallbackQuery, session: AsyncSessio
         return
     incoming, _ = await list_trades(session, callback.from_user.id)
     trade = next((t for t in incoming if t.id == int(raw)), None)
+    price_res = trade.price_res if trade else ""  # после отката объект истёк
     try:
         deal = await accept_trade(session, redis, callback.from_user.id, int(raw))
     except ExchangeError as exc:
-        await callback.answer(_error(exc, trade.price_res if trade else ""), show_alert=True)
+        await callback.answer(_error(exc, price_res), show_alert=True)
         return
     await callback.answer(ACCEPTED_ALERT.format(item=item_amount_label(deal.item_kind, deal.item_code, deal.amount)), show_alert=True)
     await send_deal_pushes(callback.bot, session, [deal])

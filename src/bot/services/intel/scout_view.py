@@ -85,6 +85,8 @@ def _value(field: str, value, seen: str) -> str:
     if field == F_BATTLES:
         return " · ".join(x for _t, x in value) or "боёв не было"
     if field == F_COOLDOWNS:
+        if isinstance(value, list):  # вилка разведки: [от, до]
+            return "уже может" if not value[1] else f"через {format_countdown(value[0])} – {format_countdown(value[1])}"
         return "уже может" if not value else f"через {format_countdown(int(value))}"
     if field == F_CLAN:
         return f"{value[0]} ({value[1]})" if value else "без клана"

@@ -486,7 +486,8 @@ def _heal(side: _Side, opponent: _Side, rng: Random) -> None:
     for key, count in side.round_dead.items():
         if count <= 0:
             continue
-        revived = rng.binomialvariate(count, fraction)
+        # Лечение и «Преодоление» считают от одних павших: поднять больше, чем лежит, нельзя.
+        revived = min(rng.binomialvariate(count, fraction), max(side.dead[key], 0))
         side.alive[key] += revived
         side.dead[key] -= revived
 
@@ -604,7 +605,7 @@ def _revive_strike(side: _Side, opponent: _Side, m: CombatMods, rng: Random) -> 
     for key, count in side.round_dead.items():
         if count <= 0:
             continue
-        revived = rng.binomialvariate(count, share)
+        revived = min(rng.binomialvariate(count, share), max(side.dead[key], 0))
         if revived:
             side.alive[key] += revived
             side.dead[key] -= revived

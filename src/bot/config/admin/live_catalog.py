@@ -22,7 +22,8 @@ SECTIONS: dict[str, str] = {
     "dev": "🌀 Развитие и мастерство",
     "quest": "🎫 Пасс, задания, топ",
     "events": "👹 Боссы и учителя",
-    "absolute": "⭐ Абсолюты"
+    "absolute": "⭐ Абсолюты",
+    "league": "🏅 Лиги"
 }
 
 # Константа → (раздел, модуль, заголовок).
@@ -231,6 +232,9 @@ SCALARS: dict[str, tuple[str, str, str]] = {
     "SCHOOL_TEACHER_SPAWN_CHANCE_PER_TICK": ("events", "bot.config.school.school", "Учитель статистов: шанс появления за проход"),
     "SCHOOL_TEACHER_DURATION_SECONDS": ("events", "bot.config.school.school", "Учитель статистов живёт, сек"),
     "EVENT_PUSH_ACTIVE_DAYS": ("events", "bot.config.event.event", "Пуш о событии: тем, кто заходил за, дней"),
+    # 🏅 Лиги
+    "LEAGUE_INCOME_STEP": ("league", "bot.config.league.league", "Лиги: доход за ступень"),
+    "LEAGUE_POWER_STEP": ("league", "bot.config.league.league", "Лиги: атака и прочность за ступень"),
     # ⭐ Абсолюты
     "HASBULLA_SHOP_DISCOUNT": ("absolute", "bot.config.absolute.absolute", "Хасбулла: скидка в магазине"),
     "KUROPATKA_REVIVE": ("absolute", "bot.config.absolute.absolute", "Куропатка: шанс воскрешения"),
@@ -246,6 +250,7 @@ SCALARS: dict[str, tuple[str, str, str]] = {
 
 # Таблица (dict или tuple чисел) → (раздел, модуль, заголовок): каждое значение — своя настройка.
 TABLES: dict[str, tuple[str, str, str]] = {
+    "LEAGUE_THRESHOLDS": ("league", "bot.config.league.league", "Лиги: счёт для лиги №"),
     "BUSINESS_BUILD_COST": ("business", "bot.config.game.game", "Цена постройки"),
     "SABOTAGE_CHANCE_PERCENT": ("empire", "bot.config.empire.empire", "Саботаж: шанс, %"),
     "DEPOSIT_RATES": ("market", "bot.config.deposit.deposit", "Вклады: ставка за часов"),

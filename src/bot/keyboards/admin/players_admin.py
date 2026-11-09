@@ -21,6 +21,7 @@ from bot.constant.admin.players_admin import (
     CB_DEV_MENU,
     CB_DEV_MISC,
     CB_DEV_PASS,
+    CB_DEV_LEAGUE,
     CB_DEV_MONSTER,
     CB_DEV_POTENTIAL,
     CB_DEV_STATS,
@@ -138,12 +139,19 @@ def dev_misc(uid: int, *, body: bool, premium: bool, monster: bool = False) -> I
     rows = [
         [_btn(t.BTN_TOGGLE_BODY.format(state=state(body)), f"{CB_DEV_BODY}{uid}")],
         [_btn(t.BTN_TOGGLE_PASS.format(state=state(premium)), f"{CB_DEV_PASS}{uid}")],
-        [_btn(t.BTN_TOGGLE_MONSTER.format(state=state(monster)), f"{CB_DEV_MONSTER}{uid}")],
+        [_btn(t.BTN_TOGGLE_MONSTER.format(state=state(monster)), f"{CB_DEV_MONSTER}{uid}"), _btn(t.BTN_LEAGUE, f"{CB_DEV_LEAGUE}-1:{uid}")],
         [_btn(t.BTN_AWAKENING, f"{CB_DEV_AWAKEN}-1:{uid}"), _btn(t.BTN_POTENTIAL, f"{CB_DEV_POTENTIAL}-1:{uid}")],
         [_btn(t.BTN_STATS, f"{CB_DEV_STATS}{uid}")],
         _back(f"{CB_DEV_MENU}{uid}"),
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def dev_league(uid: int) -> InlineKeyboardMarkup:
+    from bot.config.league import LEAGUES
+
+    buttons = [_btn(x.name, f"{CB_DEV_LEAGUE}{x.index}:{uid}") for x in LEAGUES]
+    return InlineKeyboardMarkup(inline_keyboard=_rows(buttons, 2) + [_back(f"{CB_DEV_MISC}{uid}")])
 
 
 def dev_awakening(uid: int, max_level: int) -> InlineKeyboardMarkup:

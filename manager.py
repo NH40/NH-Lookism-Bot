@@ -317,6 +317,17 @@ async def rebuild_circ_bonuses():
     print(f"✅ Пересчитаны круговые бонусы для {len(users)} игроков")
 
 
+async def launch_leagues():
+    """Разовый запуск лиг: после `seed`. Повторный запуск откажет (лиги уже распределены)."""
+    from bot.config.settings import get_settings
+    from bot.db.session import make_engine, make_session_factory
+    from bot.services.league import launch
+
+    engine = make_engine(get_settings())
+    print("Лиги:", await launch(make_session_factory(engine)))
+    await engine.dispose()
+
+
 async def seed():
     """Засеивает статичный контент карты 2.0.0 (страны/города — см. src/bot/config/country,
     config/city; районы — по district_count каждого города) — идемпотентно (ON CONFLICT
@@ -361,6 +372,7 @@ Lookism Battle Planet — Manager
   list                          Список бэкапов
   migrate                       Создать таблицы в БД
   seed                          Засеять страны/города/районы 2.0.0 (идемпотентно)
+  launch_leagues                Разово распределить игроков по лигам с переносом территории
   stats                         Статистика игроков
   set_clan_leader <clan> <tg>   Сменить лидера клана
   add_king_cities               Добавить 10 king-городов каждого типа в каждый сектор
@@ -387,6 +399,8 @@ if __name__ == "__main__":
         asyncio.run(migrate())
     elif args[0] == "seed":
         asyncio.run(seed())
+    elif args[0] == "launch_leagues":
+        asyncio.run(launch_leagues())
     elif args[0] == "stats":
         asyncio.run(stats())
     elif args[0] == "set_clan_leader" and len(args) == 3:

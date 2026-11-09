@@ -4,5 +4,6 @@ from bot.services.start.start import (  # noqa: F401
     UnknownCountryError,
     finish_onboarding,
     is_onboarded,
+    menu_args,
     resolve_country,
 )

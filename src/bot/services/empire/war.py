@@ -159,17 +159,27 @@ async def _label(session: AsyncSession, user_id: int) -> str:
     return await stealth_label(session, user_id, gang.name if gang else "—")
 
 
+async def _league(session: AsyncSession, user_id: int) -> int:
+    from sqlalchemy import select
+
+    from bot.db.models.user import User
+
+    return await session.scalar(select(User.league).where(User.id == user_id)) or 0
+
+
 async def list_targets(session: AsyncSession, user_id: int, page: int) -> TargetsPage:
     await _ensure_emperor(session, user_id)
     page = max(page, 0)
     items, has_more = await empire_repo.list_emperors(
-        session, exclude_id=user_id, offset=page * EMPIRE_WAR_TARGETS_PAGE_SIZE, limit=EMPIRE_WAR_TARGETS_PAGE_SIZE
+        session, exclude_id=user_id, league=await _league(session, user_id), offset=page * EMPIRE_WAR_TARGETS_PAGE_SIZE, limit=EMPIRE_WAR_TARGETS_PAGE_SIZE
     )
     return TargetsPage(items=items, page=page, has_more=has_more)
 
 
 async def get_target(session: AsyncSession, user_id: int, target_id: int) -> EmperorRow:
     await _ensure_emperor(session, user_id)
+    if await _league(session, user_id) != await _league(session, target_id):  # у каждой лиги своя карта
+        raise TargetNotEmperorError
     target = await empire_repo.get_emperor(session, target_id)
     if target is None or target_id == user_id:
         raise TargetNotEmperorError

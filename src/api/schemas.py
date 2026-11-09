@@ -64,6 +64,9 @@ class ProfileOut(BaseModel):
     phase: str
     phase_label: str
     potential_label: str
+    league_name: str
+    league_score: int
+    league_next: str | None
     potential_points: int = 0  # очки потенциала (2026-10-28)
     potential_cost: int | None = None  # сколько нужно до следующего; None — Легенда
     potential_next: str | None = None

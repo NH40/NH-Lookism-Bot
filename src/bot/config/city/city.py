@@ -26,6 +26,8 @@
 """
 from __future__ import annotations
 
+from bot.config.country.country import LEAGUE_COUNT, league_code
+
 from dataclasses import dataclass
 
 
@@ -352,4 +354,9 @@ CITY_SEEDS: tuple[CitySeed, ...] = (
     CitySeed("ES", "Сантандер", 4),
     CitySeed("ES", "Толедо", 4),
     CitySeed("ES", "Кадис", 4),
+)
+
+# Лиги: те же города в копии страны каждой лиги.
+CITY_SEEDS = tuple(
+    CitySeed(league_code(s.country_code, league), s.name, s.district_count) for league in range(LEAGUE_COUNT) for s in CITY_SEEDS
 )

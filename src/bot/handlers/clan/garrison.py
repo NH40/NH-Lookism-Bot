@@ -25,6 +25,10 @@ from bot.constant.clan import (
     CB_CLAN_GAR_PUT_SQUAD_PREFIX,
     CB_CLAN_GAR_REQUEST,
     CB_CLAN_GAR_TAKE,
+    CB_CLAN_GAR_TAKE_ALL_CARDS,
+    CB_CLAN_GAR_TAKE_ALL_CARDS_OK,
+    CB_CLAN_GAR_TAKE_ALL_STATISTS,
+    CB_CLAN_GAR_TAKE_ALL_STATISTS_OK,
     CB_CLAN_GAR_TAKE_CARD_PREFIX,
     CB_CLAN_GAR_TAKE_SQUAD_PREFIX,
     CB_CLAN_GARRISON,
@@ -456,6 +460,40 @@ async def cb_gar_revoke(callback: CallbackQuery, session: AsyncSession) -> None:
     await notify_player(callback.bot, session, int(raw), NOTIFY_CLAN, PUSH_GAR_REVOKED)
     await _show_access(callback, session)
 
+
+
+# --- «забрать всех» из роты (2026-11-09) ---
+
+@router.callback_query(F.data.in_({CB_CLAN_GAR_TAKE_ALL_STATISTS, CB_CLAN_GAR_TAKE_ALL_CARDS}))
+async def cb_gar_take_all_ask(callback: CallbackQuery, session: AsyncSession) -> None:
+    from bot.keyboards.clan import put_all_confirm_menu
+    from bot.texts.clan import GAR_TAKE_ALL_CONFIRM_CARDS, GAR_TAKE_ALL_CONFIRM_STATISTS
+
+    if await _member(callback, session) is None:
+        return
+    statists = callback.data == CB_CLAN_GAR_TAKE_ALL_STATISTS
+    await callback.answer()
+    await send_screen(
+        callback.bot, callback.message.chat.id, callback.message,
+        GAR_TAKE_ALL_CONFIRM_STATISTS if statists else GAR_TAKE_ALL_CONFIRM_CARDS,
+        put_all_confirm_menu(CB_CLAN_GAR_TAKE_ALL_STATISTS_OK if statists else CB_CLAN_GAR_TAKE_ALL_CARDS_OK),
+    )
+
+
+@router.callback_query(F.data.in_({CB_CLAN_GAR_TAKE_ALL_STATISTS_OK, CB_CLAN_GAR_TAKE_ALL_CARDS_OK}))
+async def cb_gar_take_all(callback: CallbackQuery, session: AsyncSession, redis: Redis) -> None:
+    from bot.texts.clan import GAR_TAKE_ALL_DONE
+
+    if await _member(callback, session) is None:
+        return
+    fn = clan_service.take_all_statists if callback.data == CB_CLAN_GAR_TAKE_ALL_STATISTS_OK else clan_service.take_all_cards
+    try:
+        units = await fn(session, redis, callback.from_user.id)
+    except clan_service.ClanError as exc:
+        await callback.answer(error_text(exc), show_alert=True)
+        return
+    await callback.answer(GAR_TAKE_ALL_DONE.format(units=format_number(units)), show_alert=True)
+    await send_screen(callback.bot, callback.message.chat.id, callback.message, GAR_PUT_PICK, garrison_put_menu())
 
 
 # --- «внести всех» в роту (2026-10-21) ---

@@ -10,7 +10,7 @@ from api.auth import get_current_user_id
 from api.db import get_session
 from api.deps import get_redis
 from api.routers._common import bad, clean_label
-from bot.config.country import COUNTRIES, COUNTRY_BY_CODE
+from bot.config.country import COUNTRY_BY_CODE, countries_of
 from bot.constant.phase import PHASE_CIRCLE
 from bot.handlers.travel.travel import interval_label
 from bot.services.city import get_city, list_cities
@@ -120,7 +120,7 @@ async def get_travel(
         emperor=s.emperor, must_abandon=s.must_abandon, circle=s.phase == PHASE_CIRCLE,
         countries=[
             CountryOut(code=c.code, name=clean_label(c.name))
-            for c in COUNTRIES
+            for c in countries_of(s.league)
             if c.code != s.country_code and c.code not in closed
         ],
     )
@@ -134,7 +134,7 @@ class CityOut(BaseModel):
 
 @router.get("/cities", response_model=list[CityOut])
 async def get_cities(
-    country: str = Query(..., min_length=2, max_length=2), session: AsyncSession = Depends(get_session)
+    country: str = Query(..., min_length=2, max_length=4), session: AsyncSession = Depends(get_session)
 ) -> list[CityOut]:
     if country not in COUNTRY_BY_CODE:
         raise bad(UNKNOWN_CITY_ALERT)

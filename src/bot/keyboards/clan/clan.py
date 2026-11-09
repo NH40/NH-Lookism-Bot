@@ -39,6 +39,8 @@ from bot.constant.clan import (
     CB_CLAN_GAR_PUT_SQUAD_PREFIX,
     CB_CLAN_GAR_REQUEST,
     CB_CLAN_GAR_TAKE,
+    CB_CLAN_GAR_TAKE_ALL_CARDS,
+    CB_CLAN_GAR_TAKE_ALL_STATISTS,
     CB_CLAN_GAR_TAKE_CARD_PREFIX,
     CB_CLAN_GAR_TAKE_SQUAD_PREFIX,
     CB_CLAN_GARRISON,
@@ -115,6 +117,8 @@ from bot.texts.clan import (
     BTN_GAR_PUT_STATISTS,
     BTN_GAR_REQUEST,
     BTN_GAR_TAKE,
+    BTN_GAR_TAKE_ALL_CARDS,
+    BTN_GAR_TAKE_ALL_STATISTS,
     BTN_GARRISON,
     BTN_INVITE,
     BTN_ITEM,
@@ -397,7 +401,8 @@ def items_menu(
 
 def take_menu(statists: list[tuple[str, str, int]], cards: list[tuple[str, str, int]]) -> InlineKeyboardMarkup:
     # Предел кнопок Telegram: сильнейшие отряды роты первыми, остальное — через Mini App.
-    rows = [[_btn(BTN_ITEM.format(name=n, quantity=format_number(q)), f"{CB_CLAN_GAR_TAKE_SQUAD_PREFIX}{c}")] for c, n, q in statists[:TAKE_MENU_MAX]]
+    rows = [[_btn(BTN_GAR_TAKE_ALL_STATISTS, CB_CLAN_GAR_TAKE_ALL_STATISTS), _btn(BTN_GAR_TAKE_ALL_CARDS, CB_CLAN_GAR_TAKE_ALL_CARDS)]]
+    rows += [[_btn(BTN_ITEM.format(name=n, quantity=format_number(q)), f"{CB_CLAN_GAR_TAKE_SQUAD_PREFIX}{c}")] for c, n, q in statists[:TAKE_MENU_MAX]]
     rows += [[_btn(BTN_ITEM.format(name=n, quantity=format_number(q)), f"{CB_CLAN_GAR_TAKE_CARD_PREFIX}{c}")] for c, n, q in cards[:TAKE_MENU_MAX]]
     rows.append(_back(CB_CLAN_GARRISON))
     return InlineKeyboardMarkup(inline_keyboard=rows)

@@ -48,6 +48,8 @@ from bot.texts.development import describe_level
 from bot.config.potion import POTION_EFFECTS
 from bot.constant.potion import POTIONS
 from bot.services.potion import catalog as potion_catalog
+from bot.config.league import LEAGUES, next_league
+from bot.texts.league import LEAGUE_LINE, LEAGUE_NEXT
 from bot.utils.formatting import esc, format_countdown, format_number
 from bot.utils.mini_app import resolve_mini_app_base_url
 
@@ -67,6 +69,11 @@ def render_stats_block(stats: StatsView) -> str:
         )
         lines.append(STAT_LINE.format(label=STAT_LABELS[stat.code], rank=stat.rank, bonus=bonus))
     lines.append(POTENTIAL_LINE.format(potential=POTENTIAL_LABELS[stats.potential] + (MONSTER_TAG if stats.monster else "")))
+    following = next_league(stats.league)
+    lines.append(LEAGUE_LINE.format(
+        name=LEAGUES[stats.league].name, score=format_number(stats.league_score),
+        next=LEAGUE_NEXT.format(name=following[0].name, score=format_number(following[1])) if following else "",
+    ))
     lines.append(DEV_POINTS_LINE.format(points=format_number(stats.dev_points)))
     return "\n".join(lines)
 

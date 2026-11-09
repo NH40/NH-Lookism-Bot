@@ -42,7 +42,7 @@ class User(Base):
     ban_reason: Mapped[str | None] = mapped_column(String(256), nullable=True)
 
     country_code: Mapped[str | None] = mapped_column(
-        String(2), ForeignKey("countries.code"), nullable=True
+        String(4), ForeignKey("countries.code"), nullable=True
     )
     city_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("cities.id"), nullable=True)
     phase: Mapped[str] = mapped_column(String(16), nullable=False, default=PHASE_GANG, server_default=PHASE_GANG)
@@ -109,6 +109,9 @@ class User(Base):
     donate_coins: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
     # «67 MONSTER» — надстройка над потенциалом, только из админки (пользователь 2026-11-08).
     monster_potential: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    # Лига (`config/league`): своя копия карты; счёт пересчитывается раз в сутки, вниз лига не падает.
+    league: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0", index=True)
+    league_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     active_technique: Mapped[str | None] = mapped_column(String(32), nullable=True)
     active_genius: Mapped[str | None] = mapped_column(String(32), nullable=True)
     path_fragments: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")

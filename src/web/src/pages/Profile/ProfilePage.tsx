@@ -1,6 +1,5 @@
 import { Coins, Crosshair, Dna, Eye, FlaskConical, Gem, Home, Lightbulb, Move, Route, Shield, Sparkles, Swords, Ticket, Zap } from "lucide-react";
 import type { ReactNode } from "react";
-import { imgUrl } from "../../api";
 import type { ProfileDevItem, ProfileData } from "../../types";
 import { Bar, Chip, Panel, Screen, StatRow, countdown, fmt } from "../../components/ui";
 import { Link } from "react-router-dom";
@@ -35,9 +34,9 @@ export function ProfilePage() {
 
 function ProfileView({ p, run, busy }: { p: ProfileData; run: (path: string, body?: unknown) => Promise<unknown>; busy: boolean }) {
   const name = p.display_name ?? (p.username ? `@${p.username}` : "Игрок");
-  const sub = [p.gang_name ? `Банда «${p.gang_name}»` : null, p.clan_name ? `Клан «${p.clan_name}»` : null, p.city?.name].filter(Boolean).join(" · ");
-  // Аватар: карта на позиции «Лидер» → фото Telegram → эмблема с инициалами.
-  const avatar = p.avatar ? imgUrl(p.avatar, 320) : (getWebApp()?.initDataUnsafe.user?.photo_url ?? null);
+  const sub = [p.gang_name ? `Банда «${p.gang_name}»` : null, p.clan_name ? `Клан «${p.clan_name}»` : null, p.city?.name, `Лига: ${p.league_name} (${p.league_score}${p.league_next ? `, до ${p.league_next}` : ""})`].filter(Boolean).join(" · ");
+  // Аватар: всегда фото Telegram самого игрока (пользователь 2026-11-09), иначе эмблема с инициалами.
+  const avatar = getWebApp()?.initDataUnsafe.user?.photo_url ?? null;
   const initials = name.replace("@", "").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join("") || "?";
   const total = p.attack_power + p.defense_power;
   const attackShare = total > 0 ? p.attack_power : 0;

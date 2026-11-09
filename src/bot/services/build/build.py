@@ -39,6 +39,7 @@ from bot.config.development import (
     awakening_multiplier,
 )
 from bot.config.genius import LEVELS as GENIUS_LEVELS
+from bot.config.league import LEAGUE_INCOME_STEP, LEAGUE_POWER_STEP
 from bot.config.unique_path import LEVELS as PATH_LEVELS
 from bot.config.unique_technique import LEVELS as TECHNIQUE_LEVELS
 from bot.config.game import BUSINESS_PARLIAMENT_INFLUENCE, INFLUENCE_PER_DISTRICT, INFLUENCE_STARTING
@@ -322,6 +323,11 @@ async def _compute_build(session: AsyncSession, user_id: int) -> Build:
     # Клан: здания на землях клана и донат-уровень — небоевые бафы участникам (боевые бафы
     # донат-уровня работают только у клановой роты в войне, `services/clan/war`).
     eco = eco + await _clan_eco(session, user_id)
+    # Бафф лиги: за каждую ступень выше первой (пользователь 2026-11-09).
+    if row.league:
+        eco = eco + EconomyMods(income=LEAGUE_INCOME_STEP * row.league)
+        power = LEAGUE_POWER_STEP * row.league
+        battle = battle.with_total(battle.total + CombatMods(attack=power, durability=power))
     positions = await _positions(session, user_id)
     eco = eco + positions.eco
     training_kpd = await _training_kpd(session, user_id, row) * (1 + special.get("training_kpd_boost", 0.0))

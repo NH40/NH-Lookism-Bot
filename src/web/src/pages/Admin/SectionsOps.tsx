@@ -284,6 +284,8 @@ export function EventsSection({ meta }: { meta: AdminMeta }) {
 interface CountryRow {
   code: string;
   name: string;
+  short: string;
+  league: number;
   entry_closed: boolean;
   battles_closed: boolean;
   players: number;
@@ -314,11 +316,11 @@ function OwnedBar({ owned, total }: { owned: number; total: number }) {
 export function WorldSection() {
   const [country, setCountry] = useState<string | null>(null);
   const [cityId, setCityId] = useState<number | null>(null);
-  const [found, setFound] = useState<{ id: number; name: string; country: string }[] | null>(null);
+  const [found, setFound] = useState<{ id: number; name: string; country: string; league: string }[] | null>(null);
   const toast = useToast();
   const search = async (q: string) => {
     try {
-      const r = await apiGet<{ items: { id: number; name: string; country: string }[] }>(`/admin/world/cities?q=${encodeURIComponent(q)}`);
+      const r = await apiGet<{ items: { id: number; name: string; country: string; league: string }[] }>(`/admin/world/cities?q=${encodeURIComponent(q)}`);
       setFound(r.items);
       if (r.items.length === 1) {
         setCountry(r.items[0].country);
@@ -337,7 +339,7 @@ export function WorldSection() {
             {found.map((c) => (
               <button key={c.id} type="button" className="adm-item" onClick={() => { setCountry(c.country); setCityId(c.id); setFound(null); }}>
                 <b>{c.name}</b>
-                <span className="adm-right">{c.country}</span>
+                <span className="adm-right">{c.league}</span>
               </button>
             ))}
             {!found.length && <div className="adm-hint">Не нашлось.</div>}
@@ -358,14 +360,17 @@ export function WorldSection() {
 }
 
 function Countries({ onPick }: { onPick: (code: string) => void }) {
-  const data = useApi<{ items: CountryRow[] }>("/admin/world/countries");
+  const data = useApi<{ items: CountryRow[]; leagues: string[] }>("/admin/world/countries");
+  const [league, setLeague] = useState("0");
   return (
     <Screen status={data.status} error={data.error}>
       {data.data && (
-        <div className="grid-2" style={{ gap: 8 }}>
-          {data.data.items.map((c) => (
+        <>
+        <Seg value={league} onChange={setLeague} cols={3} options={data.data.leagues.map((name, i) => ({ value: String(i), label: name }))} />
+        <div className="grid-2" style={{ gap: 8, marginTop: 10 }}>
+          {data.data.items.filter((c) => c.league === Number(league)).map((c) => (
             <button key={c.code} type="button" className="tile" style={{ font: "inherit", textAlign: "left" }} onClick={() => onPick(c.code)}>
-              <b>{c.name}</b>
+              <b>{c.short}</b>
               <small>{c.cities} городов · {fmt(c.owned)}/{fmt(c.owned + c.bots)} районов у игроков</small>
               <OwnedBar owned={c.owned} total={c.owned + c.bots} />
               <small style={{ marginTop: 6 }}>{c.emperor ? `император ${c.emperor.label}` : "без императора"}</small>
@@ -373,6 +378,7 @@ function Countries({ onPick }: { onPick: (code: string) => void }) {
             </button>
           ))}
         </div>
+        </>
       )}
     </Screen>
   );

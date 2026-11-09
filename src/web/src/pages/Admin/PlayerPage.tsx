@@ -344,6 +344,13 @@ function DevTab({ uid, meta, onChange }: { uid: number; meta: AdminMeta; onChang
                 ))}
               </div>
             </Field>
+            <Field label={`Лига · сейчас ${c.leagues[d.league]}, счёт ${fmt(d.league_score)} · смена снимает территорию`}>
+              <div className="grid-3" style={{ gap: 6 }}>
+                {c.leagues.map((name, i) => (
+                  <button key={name} type="button" className={`btn small ${d.league === i ? "" : "ghost"}`} disabled={busy || d.league === i} onClick={() => dev({ action: "league", level: i })}>{name}</button>
+                ))}
+              </div>
+            </Field>
             <Field label={`Потенциал · сейчас ${d.potential ?? "—"}`}>
               <div className="grid-3" style={{ gap: 6 }}>
                 {c.potentials.map((p) => (

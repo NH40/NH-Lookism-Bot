@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from bot.config.country import COUNTRIES
+from bot.config.country import countries_of
 from bot.config.game import CITY_PAGE_SIZE
 from bot.constant.common import CB_NOOP
 from bot.constant.start import (
@@ -22,10 +22,10 @@ from bot.constant.start import (
 from bot.db.models.city import City
 
 
-def country_menu(closed: frozenset[str] = frozenset()) -> InlineKeyboardMarkup:
+def country_menu(closed: frozenset[str] = frozenset(), league: int = 0) -> InlineKeyboardMarkup:
     """`closed` — страны, закрытые для входа в админке (`services/country.closed_entries`)."""
     builder = InlineKeyboardBuilder()
-    for country in COUNTRIES:
+    for country in countries_of(league):
         if country.code in closed:
             continue
         builder.button(text=country.name, callback_data=f"{CB_START_COUNTRY_PREFIX}{country.code}")

@@ -18,7 +18,7 @@ from api.deps import get_redis
 from api.routers._common import bad, clean_label, require_user, ttl_seconds
 from api.routers.img import ASSETS_DIR
 from bot.cache.keys import battle_cooldown, boss_cooldown
-from bot.config.country import COUNTRY_BY_CODE
+from bot.config.country import COUNTRY_BY_CODE, base_code
 from bot.config.event import ART_ALIASES, BOSS_ART, SCHOOL_TEACHER_ART, TECHNIQUE_TEACHER_ART
 from bot.constant.event import BOSS_FRAGMENT, BOSSES, EVENT_BOSS, EVENT_SCHOOL_TEACHER, EVENT_TEACHER
 from bot.constant.school import SCHOOLS
@@ -192,7 +192,7 @@ async def get_map(
 
     return MapOut(
         city=CityOut(
-            id=city.id, name=city.name, art=COUNTRY_ART.get(city.country_code), country_name=clean_label(country.name) if country else None,
+            id=city.id, name=city.name, art=COUNTRY_ART.get(base_code(city.country_code)), country_name=clean_label(country.name) if country else None,
             district_count=city.district_count,
         ),
         emperor=EmperorOut(

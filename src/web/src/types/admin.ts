@@ -16,6 +16,7 @@ export interface AdminMeta {
     dev_kinds: { kind: string; title: string; items: Named[] }[];
     bloodlines: Named[];
     potentials: string[];
+    leagues: string[];
     stats: Named[];
     max_level: number;
     awakening_max: number;
@@ -95,6 +96,8 @@ export interface AdminStatists {
 export interface AdminDev {
   name: string;
   monster: boolean;
+  league: number;
+  league_score: number;
   systems: Record<string, { owned: Record<string, number>; active: string | null }>;
   bloodlines: Record<string, { code: string | null; level: number }>;
   second_body: boolean;

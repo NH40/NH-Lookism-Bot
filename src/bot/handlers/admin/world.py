@@ -104,7 +104,18 @@ async def cb_countries(callback: CallbackQuery, session: AsyncSession) -> None:
     if not await guard(callback, session, SECTION_WORLD):
         return
     await callback.answer()
-    await safe_edit_text(callback.message, T.COUNTRIES_MENU, reply_markup=K.countries(await svc.countries_overview(session)))
+    await safe_edit_text(callback.message, T.LEAGUES_MENU, reply_markup=K.leagues(await svc.countries_overview(session)))
+
+
+@router.callback_query(F.data.startswith(C.CB_W_LEAGUE_PREFIX))
+async def cb_league(callback: CallbackQuery, session: AsyncSession) -> None:
+    if not await guard(callback, session, SECTION_WORLD):
+        return
+    await callback.answer()
+    raw = callback.data.removeprefix(C.CB_W_LEAGUE_PREFIX)
+    league = int(raw) if raw.isdigit() else 0
+    rows = [r for r in await svc.countries_overview(session) if r["league"] == league]
+    await safe_edit_text(callback.message, T.COUNTRIES_MENU, reply_markup=K.countries(rows))
 
 
 @router.callback_query(F.data.startswith(C.CB_W_COUNTRY_PREFIX))
@@ -183,6 +194,14 @@ async def cb_find(callback: CallbackQuery, session: AsyncSession, state: FSMCont
     await safe_edit_text(callback.message, T.ASK_CITY, reply_markup=K.back_to_menu_only())
 
 
+def _country_label(code: str) -> str:
+    from bot.config.country import COUNTRY_BY_CODE
+    from bot.config.league import LEAGUES
+
+    country = COUNTRY_BY_CODE[code]
+    return f"{country.name} · {LEAGUES[country.league].name}"
+
+
 @router.message(StateFilter(AdminWorldStates.waiting_city), F.text)
 async def msg_city(message: Message, session: AsyncSession, state: FSMContext) -> None:
     if not await roles.can(session, message.from_user.id, SECTION_WORLD):
@@ -196,7 +215,7 @@ async def msg_city(message: Message, session: AsyncSession, state: FSMContext) -
         screen = await _city_screen(session, cities[0].id)
         await message.answer(screen[0], reply_markup=screen[1])
         return
-    await message.answer(T.PICK_CITY, reply_markup=K.pick_cities([(c.id, c.name, c.country_code) for c in cities]))
+    await message.answer(T.PICK_CITY, reply_markup=K.pick_cities([(c.id, c.name, _country_label(c.country_code)) for c in cities]))
 
 
 @router.callback_query(F.data.startswith(C.CB_W_CITY_PREFIX))

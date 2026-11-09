@@ -9,7 +9,7 @@ from aiogram.types import CallbackQuery
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.config.country import COUNTRY_BY_CODE
+from bot.config.country import COUNTRY_BY_CODE, league_of_code
 from bot.constant.travel import (
     CB_TRAVEL_ABANDON,
     CB_TRAVEL_ABANDON_ASK,
@@ -168,7 +168,7 @@ async def cb_travel_countries(callback: CallbackQuery, session: AsyncSession, re
         return
     await callback.answer()
     exclude = set(await closed_entries(session)) | {status.country_code}
-    await safe_edit_text(callback.message, PICK_COUNTRY, reply_markup=countries_menu(exclude))
+    await safe_edit_text(callback.message, PICK_COUNTRY, reply_markup=countries_menu(exclude, status.league))
 
 
 @router.callback_query(F.data.startswith(CB_TRAVEL_CITIES_PREFIX))
@@ -181,6 +181,9 @@ async def cb_travel_cities(callback: CallbackQuery, session: AsyncSession, redis
         status = await get_status(session, redis, callback.from_user.id)
     except NotOnboardedError as e:
         await _alert(callback, e)
+        return
+    if league_of_code(code) != status.league:
+        await callback.answer()
         return
     cities = [c for c in await list_cities(session, code) if c.id != status.city_id]
     await callback.answer()

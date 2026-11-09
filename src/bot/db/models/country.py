@@ -16,7 +16,7 @@ class Country(Base):
 
     __tablename__ = "countries"
 
-    code: Mapped[str] = mapped_column(String(2), primary_key=True, autoincrement=False)
+    code: Mapped[str] = mapped_column(String(4), primary_key=True, autoincrement=False)
     name: Mapped[str] = mapped_column(String(32), nullable=False)
     # Управление из админки (раздел карты): страну нельзя выбрать и в ней нельзя воевать.
     entry_closed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")

@@ -66,6 +66,7 @@ from bot.constant.resource import RESOURCES
 from bot.services.admin import audit, beta, live_config, players, roles
 from bot.services.admin import events_admin
 from bot.constant.ledger import ASSET_PROFILE, ASSETS_GOODS, ASSETS_MONEY, LOG_KIND_ERROR, LOG_KIND_SLOW
+from bot.config.league import LEAGUES
 from bot.services.admin import logs as logs_svc
 from bot.texts.admin import logs as logs_text
 from bot.services.admin import patch as patch_service
@@ -156,6 +157,7 @@ async def get_admin(user_id: int = Depends(get_current_user_id), session: AsyncS
             ],
             "bloodlines": named(tp.BLOODLINE_CODES, tp.BLOODLINE_TITLES),
             "potentials": list(POTENTIAL_ORDER),
+            "leagues": [x.name for x in LEAGUES],
             "stats": [{"code": s, "name": tp.STAT_NAMES[s]} for s in STATS],
             "max_level": MAX_LEVEL,
             "awakening_max": AWAKENING_MAX,

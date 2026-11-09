@@ -60,6 +60,7 @@ from bot.handlers.poker import push_event as push_poker_event
 from bot.services.mastery import activate_due, check_breakthroughs
 from bot.config.top import TOP_POWER_REFRESH_SECONDS
 from bot.services.top import refresh_powers, sweep_seasons
+from bot.handlers.league import league_loop
 from bot.services.error_log import run_sink
 from bot.utils.log_context import set_source
 from bot.services.cooldown import sweep as sweep_cooldown_pushes
@@ -331,6 +332,7 @@ async def main() -> None:
         asyncio.create_task(_arkhangel_loop(bot, session_factory, redis)),
         asyncio.create_task(refresh_live_config(session_factory)),
         asyncio.create_task(run_sink(session_factory, lambda: bot)),
+        asyncio.create_task(league_loop(bot, session_factory, redis)),
     ]
     if sbp_service.enabled():
         background.append(asyncio.create_task(_sbp_loop(bot, session_factory)))

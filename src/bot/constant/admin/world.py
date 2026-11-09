@@ -5,6 +5,7 @@ P = "adm:w:"
 CB_W_FIND = f"{P}find"
 CB_W_COUNTRIES = f"{P}countries"
 CB_W_COUNTRY_PREFIX = f"{P}cn:"  # + код страны
+CB_W_LEAGUE_PREFIX = f"{P}lg:"  # + лига
 CB_W_ENTRY_PREFIX = f"{P}cne:"  # + код: закрыть/открыть вход
 CB_W_BATTLES_PREFIX = f"{P}cnb:"  # + код: запретить/разрешить бои
 CB_W_KICK_ASK_PREFIX = f"{P}cnk:"  # + код: выселить всех, подтверждение

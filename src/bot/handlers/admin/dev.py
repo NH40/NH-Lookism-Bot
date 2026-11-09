@@ -14,6 +14,7 @@ from bot.constant.admin.players_admin import (
     AUDIT_DEV_AWAKENING,
     AUDIT_DEV_BLOODLINE,
     AUDIT_DEV_BODY,
+    AUDIT_DEV_LEAGUE,
     AUDIT_DEV_MONSTER,
     AUDIT_DEV_PASS,
     AUDIT_DEV_POTENTIAL,
@@ -33,6 +34,7 @@ from bot.constant.admin.players_admin import (
     CB_DEV_LIST,
     CB_DEV_MENU,
     CB_DEV_MISC,
+    CB_DEV_LEAGUE,
     CB_DEV_MONSTER,
     CB_DEV_PASS,
     CB_DEV_POTENTIAL,
@@ -258,6 +260,27 @@ async def cb_pass(callback: CallbackQuery, session: AsyncSession) -> None:
     on = await players_admin.toggle_premium_pass(session, user.id)
     await _commit(callback, session, AUDIT_DEV_PASS, user.id, {"premium": on})
     await back_to_card(callback, session, user.id, t.DONE_PASS.format(state=t.STATE_ON if on else t.STATE_OFF))
+
+
+@router.callback_query(F.data.startswith(CB_DEV_LEAGUE))
+async def cb_league(callback: CallbackQuery, session: AsyncSession) -> None:
+    from bot.config.league import LEAGUES
+    from bot.services.league import promote
+
+    opened = await _open(callback, session, CB_DEV_LEAGUE)
+    if opened is None or len(opened[0]) != 1:
+        return
+    user = opened[1]
+    idx = int(opened[0][0]) if opened[0][0].lstrip("-").isdigit() else -1
+    if idx < 0:
+        await edit_screen(callback, t.DEV_LEAGUE.format(name=name_of(user), current=LEAGUES[user.league].name, score=user.league_score), kb.dev_league(user.id))
+        return
+    if idx >= len(LEAGUES):
+        await callback.answer()
+        return
+    await promote(session, user.id, idx)
+    await _commit(callback, session, AUDIT_DEV_LEAGUE, user.id, {"league": idx})
+    await back_to_card(callback, session, user.id, t.DONE_LEAGUE.format(value=LEAGUES[idx].name))
 
 
 @router.callback_query(F.data.startswith(CB_DEV_MONSTER))

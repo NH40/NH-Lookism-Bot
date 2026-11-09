@@ -23,9 +23,10 @@ from dataclasses import dataclass
 class CountryDef:
     code: str
     name: str
+    league: int = 0
 
 
-COUNTRIES: tuple[CountryDef, ...] = (
+_BASE_COUNTRIES: tuple[CountryDef, ...] = (
     CountryDef("RU", "Россия"),
     CountryDef("US", "США"),
     CountryDef("CN", "Китай"),
@@ -39,5 +40,32 @@ COUNTRIES: tuple[CountryDef, ...] = (
     CountryDef("IT", "Италия"),
     CountryDef("ES", "Испания"),
 )
+
+# Лиги (пользователь 2026-11-09): у каждой лиги своя копия всех стран — `RU` (первая лига), `RU1` ... `RU4`. Всё, что
+# считается по коду страны (императоры, налоги, захват страны), само работает внутри своей копии.
+LEAGUE_COUNT = 5
+
+
+def league_code(base: str, league: int) -> str:
+    return base if league == 0 else f"{base}{league}"
+
+
+def base_code(code: str) -> str:
+    """Код страны без лиги: для картинки карты."""
+    return code[:2]
+
+
+def league_of_code(code: str) -> int:
+    return int(code[2:] or 0)
+
+
+COUNTRIES: tuple[CountryDef, ...] = tuple(
+    CountryDef(league_code(c.code, league), c.name, league) for league in range(LEAGUE_COUNT) for c in _BASE_COUNTRIES
+)
+
+
+def countries_of(league: int) -> tuple[CountryDef, ...]:
+    return tuple(c for c in COUNTRIES if c.league == league)
+
 
 COUNTRY_BY_CODE: dict[str, CountryDef] = {c.code: c for c in COUNTRIES}

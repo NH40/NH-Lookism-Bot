@@ -88,6 +88,8 @@ class StatsView:
     dev_points: int
     strength_power_percent: int
     monster: bool = False
+    league: int = 0
+    league_score: int = 0
 
 
 async def get_stats_view(session: AsyncSession, user_id: int) -> StatsView:
@@ -109,6 +111,8 @@ async def get_stats_view(session: AsyncSession, user_id: int) -> StatsView:
         dev_points=row.dev_points,
         strength_power_percent=strength_power_percent(RANK_LADDER[row.ranks[STAT_STRENGTH]]),
         monster=row.monster,
+        league=row.league,
+        league_score=row.league_score,
     )
 
 

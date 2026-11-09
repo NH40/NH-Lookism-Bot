@@ -35,15 +35,17 @@ class StatsRow:
     potential: str | None
     dev_points: int
     monster: bool = False
+    league: int = 0
+    league_score: int = 0
 
 
 def _select():
-    return select(*_STAT_COLUMNS.values(), User.potential, User.dev_points, User.monster_potential)
+    return select(*_STAT_COLUMNS.values(), User.potential, User.dev_points, User.monster_potential, User.league, User.league_score)
 
 
 def _row(row) -> StatsRow:
     values = list(row)
-    return StatsRow(ranks=dict(zip(_STAT_COLUMNS, values[:4])), potential=values[4], dev_points=values[5], monster=bool(values[6]))
+    return StatsRow(ranks=dict(zip(_STAT_COLUMNS, values[:4])), potential=values[4], dev_points=values[5], monster=bool(values[6]), league=values[7], league_score=values[8])
 
 
 async def get_stats(session: AsyncSession, user_id: int, *, for_update: bool = False) -> StatsRow | None:

@@ -167,6 +167,7 @@ async def cancel_emperor_wars(session: AsyncSession, admin_id: int, emperor_id: 
 async def countries_overview(session: AsyncSession) -> list[dict]:
     """Страны для раздела «Мир»: городов, районов у игроков/ботов, император (один запрос)."""
     from bot.config.country import COUNTRIES
+    from bot.config.league import LEAGUES
 
     rows = (await session.execute(text("""
         SELECT c.country_code, count(DISTINCT c.id),
@@ -189,7 +190,7 @@ async def countries_overview(session: AsyncSession) -> list[dict]:
         if r is None:
             continue
         out.append({
-            "code": c.code, "name": c.name, "cities": r[1], "owned": r[2], "bots": r[3],
+            "code": c.code, "name": f"{c.name} · {LEAGUES[c.league].name}", "short": c.name, "league": c.league, "cities": r[1], "owned": r[2], "bots": r[3],
             "entry_closed": flags.get(c.code, (False, False))[0], "battles_closed": flags.get(c.code, (False, False))[1],
             "players": players.get(c.code, 0),
             "emperor": {"id": r[5], "label": f"@{r[4]}" if r[4] else f"id{r[5]}"} if r[5] else None,

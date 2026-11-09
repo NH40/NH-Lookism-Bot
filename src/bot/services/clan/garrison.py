@@ -312,6 +312,60 @@ async def take_cards_from(session: AsyncSession, redis: Redis, user_id: int, cod
 
 
 
+# --- «забрать всех» одной кнопкой (пользователь 2026-11-09: по одному отряду — «тот ещё геморрой») ---
+
+async def take_all_statists(session: AsyncSession, redis: Redis, user_id: int) -> int:
+    """Все статисты роты — игроку, те же проверки и права, что у вывода одного отряда. → бойцов."""
+    member = await require_member(session, user_id)
+    await _check_tenure(member)
+    lock = await _lock(redis, user_id)
+    try:
+        rows = await clan_repo.garrison_extras(session, member.clan_id, for_update=True)
+        if not rows:
+            raise ClanError("not_enough")
+        units = 0
+        for row in rows:
+            key, amount = _key(row), row.quantity
+            if await clan_repo.take_garrison_extra(session, member.clan_id, key.stack(), amount):
+                await give_statists(session, user_id, key, amount)
+                units += amount
+        await clan_repo.bump_stats(session, member.clan_id, user_id, garrison_taken=units)
+        await clan_repo.log(session, member.clan_id, f"📤 {await _name(session, user_id)} забрал(а) из роты всех статистов: {units}")
+        await session.commit()
+        return units
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
+        await redis.delete(lock)
+
+
+async def take_all_cards(session: AsyncSession, redis: Redis, user_id: int) -> int:
+    """Все уники роты — игроку. → копий."""
+    member = await require_member(session, user_id)
+    await _check_tenure(member)
+    lock = await _lock(redis, user_id)
+    try:
+        rows = await clan_repo.garrison_cards(session, member.clan_id, for_update=True)
+        if not rows:
+            raise ClanError("not_enough")
+        units = 0
+        for row in rows:
+            code, amount = row.card_code, row.quantity
+            if await clan_repo.take_garrison_card(session, member.clan_id, code, amount):
+                await card_repo.add_to_stack(session, user_id=user_id, card_code=code, camp=CAMP_DEFENSE, quantity=amount)
+                units += amount
+        await clan_repo.bump_stats(session, member.clan_id, user_id, garrison_taken=units)
+        await clan_repo.log(session, member.clan_id, f"📤 {await _name(session, user_id)} забрал(а) из роты всех уников: {units}")
+        await session.commit()
+        return units
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
+        await redis.delete(lock)
+
+
 # --- «внести всех» одной кнопкой (пользователь 2026-10-21) ---
 
 async def put_all_statists(session: AsyncSession, redis: Redis, user_id: int) -> tuple[int, int]:

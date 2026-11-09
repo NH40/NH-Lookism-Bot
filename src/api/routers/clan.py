@@ -993,6 +993,30 @@ async def get_stats(sort: str = "treasury", period: str = "patch", user_id: int 
 
 
 
+@router.post("/garrison/take-all-statists")
+async def take_all_statists(
+    user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session), redis: Redis = Depends(get_redis)
+) -> dict:
+    await _me(session, user_id)
+    try:
+        units = await clan_service.take_all_statists(session, redis, user_id)
+    except ClanError as exc:
+        raise _err(exc) from None
+    return _ok(f"Из роты забраны все статисты: {format_number(units)}")
+
+
+@router.post("/garrison/take-all-cards")
+async def take_all_cards(
+    user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session), redis: Redis = Depends(get_redis)
+) -> dict:
+    await _me(session, user_id)
+    try:
+        units = await clan_service.take_all_cards(session, redis, user_id)
+    except ClanError as exc:
+        raise _err(exc) from None
+    return _ok(f"Из роты забраны все уники: {format_number(units)}")
+
+
 @router.post("/garrison/put-all-statists")
 async def put_all_statists(
     user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session), redis: Redis = Depends(get_redis),

@@ -30,6 +30,8 @@ from bot.texts.profile import PHASE_LABELS, POTENTIAL_LABELS, STAT_LABELS
 from bot.texts.unique_path import PATH_NAMES
 from bot.texts.unique_technique import TECHNIQUE_NAMES
 
+from bot.config.league import LEAGUES, next_league  # noqa: E402
+
 router = APIRouter(prefix="/api", tags=["profile"])
 
 _TARGET_LABELS = {"circle": "Круг", "fist": "Кулак"}
@@ -133,6 +135,8 @@ async def get_my_profile(
         phase=profile.phase,
         phase_label=PHASE_LABELS.get(profile.phase, profile.phase),
         potential_label=POTENTIAL_LABELS.get(profile.stats.potential, profile.stats.potential) + (" · 67 MONSTER" if profile.stats.monster else ""),
+        league_name=LEAGUES[profile.stats.league].name, league_score=profile.stats.league_score,
+        league_next=(lambda f: f"{f[0].name}: {f[1]}" if f else None)(next_league(profile.stats.league)),
         potential_points=pot.points, potential_cost=pot.cost,
         potential_next=POTENTIAL_LABELS.get(pot.next_potential) if pot.next_potential else None,
         gang_name=profile.gang_name,

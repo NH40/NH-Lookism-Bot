@@ -12,7 +12,10 @@
 """
 from __future__ import annotations
 
-from bot.services.country import ensure_entry_open
+from sqlalchemy import select
+
+from bot.config.country import league_of_code
+from bot.services.country import closed_entries, ensure_entry_open
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,13 +46,22 @@ def resolve_country(code: str) -> CountryDef:
     return country
 
 
+async def _league(session: AsyncSession, user_id: int) -> int:
+    return await session.scalar(select(User.league).where(User.id == user_id)) or 0
+
+
+async def menu_args(session: AsyncSession, user_id: int) -> tuple[frozenset[str], int]:
+    """Аргументы меню выбора страны: закрытые страны и лига игрока."""
+    return await closed_entries(session), await _league(session, user_id)
+
+
 async def finish_onboarding(session: AsyncSession, user_id: int, city_id: int) -> City:
     """Завершает онбординг: проверяет, что город реально существует, затем фиксирует
     страну+город одним атомарным шагом (см. `set_country_and_city`). Если игрок уже
     прошёл онбординг раньше (гонка двух завершений подряд) — обновление молча не
     применяется, вызывающий хендлер сам решает, что показать (см. `handlers/start`)."""
     city = await get_city(session, city_id)
-    if city is None:
+    if city is None or league_of_code(city.country_code) != await _league(session, user_id):
         raise UnknownCityError(city_id)
     await ensure_entry_open(session, city.country_code)
     await set_country_and_city(session, user_id, city.country_code, city_id)

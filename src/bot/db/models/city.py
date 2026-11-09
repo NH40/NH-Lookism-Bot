@@ -22,7 +22,7 @@ class City(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     country_code: Mapped[str] = mapped_column(
-        String(2), ForeignKey("countries.code"), index=True, nullable=False
+        String(4), ForeignKey("countries.code"), index=True, nullable=False
     )
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     district_count: Mapped[int] = mapped_column(Integer, nullable=False)

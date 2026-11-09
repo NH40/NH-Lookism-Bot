@@ -78,6 +78,11 @@ def sabotage_cooldown(user_id: int, action: str) -> str:
     return f"cooldown:sabotage:{user_id}:{action}"
 
 
+def league_sweep_flag(day: str) -> str:
+    """Ежедневный пересчёт лиг за этот день уже запущен."""
+    return f"league:sweep:{day}"
+
+
 def city_move_cooldown(user_id: int) -> str:
     """КД переезда (`KEY_CD_CITY_MOVE`): любой переезд, в том числе со сменой страны."""
     return f"cooldown:city_move:{user_id}"

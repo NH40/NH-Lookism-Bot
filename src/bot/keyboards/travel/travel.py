@@ -5,7 +5,7 @@ from collections.abc import Sequence
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from bot.config.country import COUNTRIES
+from bot.config.country import countries_of
 from bot.config.game import CITY_PAGE_SIZE
 from bot.constant.common import CB_NOOP
 from bot.constant.map import CB_MAP_OPEN
@@ -46,8 +46,8 @@ def travel_menu(country_code: str, *, must_abandon: bool, can_leave_country: boo
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def countries_menu(exclude: set[str]) -> InlineKeyboardMarkup:
-    buttons = [_btn(c.name, f"{CB_TRAVEL_CITIES_PREFIX}{c.code}:0") for c in COUNTRIES if c.code not in exclude]
+def countries_menu(exclude: set[str], league: int = 0) -> InlineKeyboardMarkup:
+    buttons = [_btn(c.name, f"{CB_TRAVEL_CITIES_PREFIX}{c.code}:0") for c in countries_of(league) if c.code not in exclude]
     rows = [buttons[i : i + 2] for i in range(0, len(buttons), 2)]
     rows.append([_btn(BTN_BACK_TO_TRAVEL, CB_TRAVEL_OPEN)])
     return InlineKeyboardMarkup(inline_keyboard=rows)

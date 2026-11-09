@@ -20,6 +20,7 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.cache.keys import city_move_cooldown, country_swap_cooldown
+from bot.config.country import league_of_code
 from bot.constant.admin.live_config import KEY_CD_CITY_MOVE, KEY_CD_COUNTRY_SWAP
 from bot.constant.phase import PHASE_CIRCLE, PHASE_GANG
 from bot.db.models.city import City
@@ -87,6 +88,7 @@ class TravelStatus:
     city_cooldown_seconds: int = 0  # до следующего переезда
     city_interval_seconds: int = 0
     under_challenge: bool = False  # против игрока висит вызов
+    league: int = 0
 
     @property
     def emperor(self) -> bool:
@@ -115,6 +117,7 @@ async def _status(session: AsyncSession, redis: Redis, user) -> TravelStatus:
         city_cooldown_seconds=max(0, await redis.ttl(city_move_cooldown(user.id))),
         city_interval_seconds=cooldown_seconds(KEY_CD_CITY_MOVE),
         under_challenge=await repo.has_incoming_challenge(session, user.id),
+        league=user.league,
     )
 
 
@@ -147,6 +150,8 @@ async def abandon_districts(session: AsyncSession, user_id: int) -> Holdings:
 
 async def check_move(session: AsyncSession, redis: Redis, status: TravelStatus, city: City) -> None:
     """Можно ли переехать (без записи). Подтверждение потерь круга не проверяет."""
+    if league_of_code(city.country_code) != status.league:  # у каждой лиги своя карта
+        raise UnknownCityError
     if city.id == status.city_id:
         raise SameCityError
     if status.must_abandon:

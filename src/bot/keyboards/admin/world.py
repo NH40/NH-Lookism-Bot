@@ -1,11 +1,13 @@
 """Админка «Районы, города, императоры»: клавиатуры."""
 from __future__ import annotations
 
+from bot.config.country import league_of_code
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.constant.admin import CB_ADMIN_OPEN
 from bot.constant.admin.world import (
-    CB_W_BATTLES_PREFIX, CB_W_COUNTRIES, CB_W_COUNTRY_PREFIX, CB_W_ENTRY_PREFIX, CB_W_KICK_ASK_PREFIX, CB_W_KICK_OK_PREFIX,
+    CB_W_BATTLES_PREFIX, CB_W_COUNTRIES, CB_W_COUNTRY_PREFIX, CB_W_LEAGUE_PREFIX, CB_W_ENTRY_PREFIX, CB_W_KICK_ASK_PREFIX, CB_W_KICK_OK_PREFIX,
     CB_W_CH_ASK_PREFIX, CB_W_CITY_PREFIX, CB_W_DEL_EMP_ASK_PREFIX, CB_W_DISTRICT_PREFIX, CB_W_FIND,
     CB_W_RESET_ASK_PREFIX, CB_W_SET_EMP_PREFIX, CB_W_SET_OWNER_PREFIX, CB_W_WAR_ASK_PREFIX,
 )
@@ -28,18 +30,31 @@ def menu() -> InlineKeyboardMarkup:
     return _m([[_b(BTN_COUNTRIES, CB_W_COUNTRIES)], [_b(BTN_FIND_CITY, CB_W_FIND)], [_b(BTN_BACK, CB_ADMIN_OPEN)]])
 
 
+def leagues(rows: list[dict]) -> InlineKeyboardMarkup:
+    """Выбор лиги: у каждой свои страны."""
+    from bot.config.league import LEAGUES
+    from bot.constant.admin import CB_ADMIN_SECTION_PREFIX, SECTION_WORLD
+
+    grid = [
+        [_b(f"{x.name} · {sum(r['players'] for r in rows if r['league'] == x.index)}", f"{CB_W_LEAGUE_PREFIX}{x.index}")]
+        for x in LEAGUES
+    ]
+    grid.append([_b(BTN_BACK, f"{CB_ADMIN_SECTION_PREFIX}{SECTION_WORLD}")])
+    return _m(grid)
+
+
 def countries(rows: list[dict]) -> InlineKeyboardMarkup:
     from bot.constant.admin import CB_ADMIN_SECTION_PREFIX, SECTION_WORLD
 
     buttons = [
         _b(
-            BTN_COUNTRY.format(marks=("🚪" if r["entry_closed"] else "") + ("⚔️" if r["battles_closed"] else ""), name=r["name"], players=r["players"]),
+            BTN_COUNTRY.format(marks=("🚪" if r["entry_closed"] else "") + ("⚔️" if r["battles_closed"] else ""), name=r["short"], players=r["players"]),
             f"{CB_W_COUNTRY_PREFIX}{r['code']}",
         )
         for r in rows
     ]
     grid = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
-    grid.append([_b(BTN_BACK, f"{CB_ADMIN_SECTION_PREFIX}{SECTION_WORLD}")])
+    grid.append([_b(BTN_BACK, CB_W_COUNTRIES)])
     return _m(grid)
 
 
@@ -50,7 +65,7 @@ def country_card(code: str, *, entry_closed: bool, battles_closed: bool, can_kic
     ]
     if can_kick:
         rows.append([_b(BTN_KICK, f"{CB_W_KICK_ASK_PREFIX}{code}")])
-    rows.append([_b(BTN_BACK, CB_W_COUNTRIES)])
+    rows.append([_b(BTN_BACK, f"{CB_W_LEAGUE_PREFIX}{league_of_code(code)}")])
     return _m(rows)
 
 

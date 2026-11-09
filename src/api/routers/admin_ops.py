@@ -319,7 +319,9 @@ def _owner(row) -> str | None:
 @router.get("/world/countries")
 async def get_countries(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
     await access(session, user_id, SECTION_WORLD)
-    return {"items": await world_svc.countries_overview(session)}
+    from bot.config.league import LEAGUES
+
+    return {"items": await world_svc.countries_overview(session), "leagues": [x.name for x in LEAGUES]}
 
 
 @router.get("/world/countries/{code}")
@@ -332,7 +334,7 @@ async def get_country(code: str, user_id: int = Depends(get_current_user_id), se
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Страна не найдена.")
     row = next((r for r in await world_svc.countries_overview(session) if r["code"] == country.code), None)
     return {
-        "code": country.code, "name": country.name, "cities": await world_svc.country_cities(session, country.code),
+        "code": country.code, "name": row["name"] if row else country.name, "cities": await world_svc.country_cities(session, country.code),
         "entry_closed": bool(row and row["entry_closed"]), "battles_closed": bool(row and row["battles_closed"]),
         "players": row["players"] if row else 0, "can_kick": role == ROLE_SUPER,
     }
@@ -384,7 +386,10 @@ async def post_country_kick(code: str, user_id: int = Depends(get_current_user_i
 async def get_cities(q: str, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
     await access(session, user_id, SECTION_WORLD)
     cities = await world_svc.find_cities(session, q)
-    return {"items": [{"id": c.id, "name": c.name, "country": c.country_code} for c in cities]}
+    from bot.config.country import COUNTRY_BY_CODE
+    from bot.config.league import LEAGUES
+
+    return {"items": [{"id": c.id, "name": c.name, "country": c.country_code, "league": LEAGUES[COUNTRY_BY_CODE[c.country_code].league].name} for c in cities]}
 
 
 @router.get("/world/cities/{city_id}")

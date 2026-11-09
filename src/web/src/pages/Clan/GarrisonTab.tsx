@@ -17,6 +17,7 @@ export function GarrisonTab({ clan, onChanged }: { clan: ClanInfo; onChanged: ()
 	});
 	const [mode, setMode] = useState<Mode | null>(null);
 	const [putAll, setPutAll] = useState<"statists" | "cards" | null>(null);
+	const [takeAll, setTakeAll] = useState<"statists" | "cards" | null>(null);
 
 	const items = (g: ClanGarrison, m: Mode): PickItem[] => {
 		const statists = (m === "put-statists" ? g.my_statists : g.statists).map((s) => ({ id: s.key, title: s.title, sub: `мощь ${fmt(s.power)} · ${fmt(s.quantity)} шт.`, max: s.quantity }));
@@ -62,6 +63,8 @@ export function GarrisonTab({ clan, onChanged }: { clan: ClanInfo; onChanged: ()
 							<div className="grid-2" style={{ marginTop: 8 }}>
 								<button className="btn ghost small" type="button" disabled={data.statists.length === 0} onClick={() => setMode("take-statists")}><PackageMinus size={15} />Забрать бойцов</button>
 								<button className="btn ghost small" type="button" disabled={data.cards.length === 0} onClick={() => setMode("take-cards")}><PackageMinus size={15} />Забрать уников</button>
+								<button className="btn ghost small" type="button" disabled={busy || data.statists.length === 0} onClick={() => setTakeAll("statists")}>Всех статистов</button>
+								<button className="btn ghost small" type="button" disabled={busy || data.cards.length === 0} onClick={() => setTakeAll("cards")}>Всех уников</button>
 							</div>
 						)}
 						{!data.can_take && <div className="muted clan-hint">Забирать из роты можно через {countdown(data.take_in_seconds)} после вступления.</div>}
@@ -91,6 +94,18 @@ export function GarrisonTab({ clan, onChanged }: { clan: ClanInfo; onChanged: ()
 								</div>
 							)}
 						</Panel>
+					)}
+
+					{takeAll && (
+						<ConfirmSheet
+							title={takeAll === "statists" ? "Забрать всех статистов" : "Забрать всех уников"}
+							text="Всё выбранное уйдёт из роты к тебе. Рота останется без этих бойцов."
+							confirmLabel="Забрать всё"
+							tone="gold"
+							busy={busy}
+							onConfirm={async () => { await run(`/clan/garrison/take-all-${takeAll}`, {}); setTakeAll(null); }}
+							onClose={() => setTakeAll(null)}
+						/>
 					)}
 
 					{putAll && (

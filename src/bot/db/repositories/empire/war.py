@@ -45,14 +45,14 @@ def _emperors_query(cities):
 
 
 async def list_emperors(
-    session: AsyncSession, *, exclude_id: int, offset: int, limit: int
+    session: AsyncSession, *, exclude_id: int, league: int, offset: int, limit: int
 ) -> tuple[list[EmperorRow], bool]:
     """Другие императоры — страница + флаг «есть ещё» (`LIMIT limit+1`, без COUNT)."""
     cities = _cities_count()
     rows = (
         await session.execute(
             _emperors_query(cities)
-            .where(User.id != exclude_id)
+            .where(User.id != exclude_id, User.league == league)
             .order_by(cities.desc(), User.id)
             .offset(offset)
             .limit(limit + 1)

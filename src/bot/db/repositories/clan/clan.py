@@ -269,6 +269,43 @@ async def garrison_cards(session: AsyncSession, clan_id: int, *, for_update: boo
     return (await session.scalars(stmt.order_by(ClanGarrisonCard.card_code))).all()
 
 
+async def take_all_garrison_extras(session: AsyncSession, clan_id: int, user_id: int, camp: str) -> int:
+    """Все статисты роты — в армию игрока: строки роты под `FOR UPDATE`, один upsert в `extras`,
+    один UPDATE роты. НЕ коммитит. → бойцов (0 — рота пуста)."""
+    units = await session.scalar(text(
+        "SELECT COALESCE(SUM(q), 0) FROM (SELECT quantity AS q FROM clan_garrison_extras "
+        "WHERE clan_id = :c AND quantity > 0 FOR UPDATE) g"
+    ), {"c": clan_id})
+    if not units:
+        return 0
+    await session.execute(text(
+        "INSERT INTO extras (user_id, camp, rank, stars, training_level, quantity, school, school_level) "
+        "SELECT :u, :camp, rank, stars, training_level, quantity, school, school_level "
+        "FROM clan_garrison_extras WHERE clan_id = :c AND quantity > 0 "
+        "ON CONFLICT (user_id, camp, rank, stars, training_level, school, school_level) "
+        "DO UPDATE SET quantity = extras.quantity + EXCLUDED.quantity"
+    ), {"u": user_id, "camp": camp, "c": clan_id})
+    await session.execute(text("UPDATE clan_garrison_extras SET quantity = 0 WHERE clan_id = :c AND quantity > 0"), {"c": clan_id})
+    return int(units)
+
+
+async def take_all_garrison_cards(session: AsyncSession, clan_id: int, user_id: int, camp: str) -> int:
+    """Все уники роты — игроку тем же способом. НЕ коммитит. → копий."""
+    units = await session.scalar(text(
+        "SELECT COALESCE(SUM(q), 0) FROM (SELECT quantity AS q FROM clan_garrison_cards "
+        "WHERE clan_id = :c AND quantity > 0 FOR UPDATE) g"
+    ), {"c": clan_id})
+    if not units:
+        return 0
+    await session.execute(text(
+        "INSERT INTO card_stacks (user_id, card_code, camp, quantity) "
+        "SELECT :u, card_code, :camp, quantity FROM clan_garrison_cards WHERE clan_id = :c AND quantity > 0 "
+        "ON CONFLICT (user_id, card_code, camp) DO UPDATE SET quantity = card_stacks.quantity + EXCLUDED.quantity"
+    ), {"u": user_id, "camp": camp, "c": clan_id})
+    await session.execute(text("UPDATE clan_garrison_cards SET quantity = 0 WHERE clan_id = :c AND quantity > 0"), {"c": clan_id})
+    return int(units)
+
+
 async def add_garrison_extra(session: AsyncSession, clan_id: int, key: dict, delta: int) -> None:
     await session.execute(
         pg_insert(ClanGarrisonExtra).values(clan_id=clan_id, quantity=delta, **key)

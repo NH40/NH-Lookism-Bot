@@ -132,7 +132,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    mem_limit: 256m
+    # 2026-11-10: было 256m — API держался у потолка (224 МБ) и тормозил; бот занимает ~200 из 512.
+    mem_limit: 384m
     logging: *default-logging
 
   # Внутренний статический сервер SPA (см. Dockerfile.web/Caddyfile в корне репозитория) —

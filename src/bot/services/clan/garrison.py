@@ -320,15 +320,12 @@ async def take_all_statists(session: AsyncSession, redis: Redis, user_id: int) -
     await _check_tenure(member)
     lock = await _lock(redis, user_id)
     try:
-        rows = await clan_repo.garrison_extras(session, member.clan_id, for_update=True)
-        if not rows:
+        # Одним INSERT ... SELECT и одним UPDATE (правило 3), как «внести всё»: раньше цикл по
+        # тысячам стопок держал строки игрока минутами — его тренировки и другие действия ждали
+        # (журнал медленных запросов 2026-11-10: до 17 минут).
+        units = await clan_repo.take_all_garrison_extras(session, member.clan_id, user_id, CAMP_DEFENSE)
+        if not units:
             raise ClanError("not_enough")
-        units = 0
-        for row in rows:
-            key, amount = _key(row), row.quantity
-            if await clan_repo.take_garrison_extra(session, member.clan_id, key.stack(), amount):
-                await give_statists(session, user_id, key, amount)
-                units += amount
         await clan_repo.bump_stats(session, member.clan_id, user_id, garrison_taken=units)
         await clan_repo.log(session, member.clan_id, f"📤 {await _name(session, user_id)} забрал(а) из роты всех статистов: {units}")
         await session.commit()
@@ -346,15 +343,9 @@ async def take_all_cards(session: AsyncSession, redis: Redis, user_id: int) -> i
     await _check_tenure(member)
     lock = await _lock(redis, user_id)
     try:
-        rows = await clan_repo.garrison_cards(session, member.clan_id, for_update=True)
-        if not rows:
+        units = await clan_repo.take_all_garrison_cards(session, member.clan_id, user_id, CAMP_DEFENSE)
+        if not units:
             raise ClanError("not_enough")
-        units = 0
-        for row in rows:
-            code, amount = row.card_code, row.quantity
-            if await clan_repo.take_garrison_card(session, member.clan_id, code, amount):
-                await card_repo.add_to_stack(session, user_id=user_id, card_code=code, camp=CAMP_DEFENSE, quantity=amount)
-                units += amount
         await clan_repo.bump_stats(session, member.clan_id, user_id, garrison_taken=units)
         await clan_repo.log(session, member.clan_id, f"📤 {await _name(session, user_id)} забрал(а) из роты всех уников: {units}")
         await session.commit()

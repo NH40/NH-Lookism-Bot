@@ -90,28 +90,33 @@ async def bump_upgrade(session: AsyncSession, user_id: int, *, kind: str, curren
     return result.rowcount > 0
 
 
-def _owned_by(user_id: int):
-    """Здания игрока: на его районах ИЛИ в его владениях (у императора, район освобождён)."""
-    return or_(District.owner_id == user_id, Business.holder_id == user_id)
+def _owned_types(user_id: int):
+    """Типы зданий игрока: на его районах ИЛИ в его владениях (у императора, район освобождён).
+
+    Двумя частями по индексам (`districts.owner_id`, `businesses.holder_id`), а не одним
+    `WHERE район.owner = u OR здание.holder = u`: из-за OR база перебирала все ~95 тыс. зданий на
+    каждый подсчёт (журнал медленных запросов 2026-11-10). Вторая часть не берёт здания на своих
+    районах — иначе такое здание посчиталось бы дважды."""
+    on_districts = (
+        select(Business.type.label("type")).join(District, District.id == Business.district_id).where(District.owner_id == user_id)
+    )
+    held = (
+        select(Business.type.label("type"))
+        .outerjoin(District, District.id == Business.district_id)
+        .where(Business.holder_id == user_id, or_(District.owner_id.is_(None), District.owner_id != user_id))
+    )
+    return on_districts.union_all(held).subquery()
 
 
 async def count_by_type(session: AsyncSession, user_id: int) -> dict[str, int]:
-    rows = await session.execute(
-        select(Business.type, func.count())
-        .outerjoin(District, District.id == Business.district_id)
-        .where(_owned_by(user_id))
-        .group_by(Business.type)
-    )
+    owned = _owned_types(user_id)
+    rows = await session.execute(select(owned.c.type, func.count()).group_by(owned.c.type))
     return {type_: count for type_, count in rows.all()}
 
 
 async def count_type(session: AsyncSession, user_id: int, type_: str) -> int:
-    return await session.scalar(
-        select(func.count())
-        .select_from(Business)
-        .outerjoin(District, District.id == Business.district_id)
-        .where(_owned_by(user_id), Business.type == type_)
-    )
+    owned = _owned_types(user_id)
+    return await session.scalar(select(func.count()).select_from(owned).where(owned.c.type == type_))
 
 
 async def count_by_type_on_district(session: AsyncSession, district_id: int) -> dict[str, int]:

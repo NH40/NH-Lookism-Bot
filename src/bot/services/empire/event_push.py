@@ -18,6 +18,7 @@ from bot.config.empire import (
     EMPIRE_EVENT_MIN_FUND,
     EMPIRE_FEAST_INCOME_PERCENT,
     EMPIRE_GIFT_COINS_PER_POWER,
+    EMPIRE_GIFT_MAX_RANK,
     EMPIRE_TOURNAMENT_HOURS,
 )
 from bot.constant.empire import EVENT_COINS, EVENT_DAILY, EVENT_STATISTS
@@ -35,11 +36,12 @@ def about(kind: str) -> str:
     return t.ABOUT[kind].format(
         claim_hours=EMPIRE_EVENT_CLAIM_HOURS, per_power=EMPIRE_GIFT_COINS_PER_POWER, feast=EMPIRE_FEAST_INCOME_PERCENT,
         drill=EMPIRE_DRILL_CD_PERCENT, tour_hours=EMPIRE_TOURNAMENT_HOURS, max_days=EMPIRE_DAILY_GIFT_MAX_DAYS,
+        max_rank=EMPIRE_GIFT_MAX_RANK,
     )
 
 
 def prompt(kind: str, hours: int = 0) -> str:
-    return t.PROMPTS[kind].format(hours=hours, min_fund=format_number(EMPIRE_EVENT_MIN_FUND), max_days=EMPIRE_DAILY_GIFT_MAX_DAYS)
+    return t.PROMPTS[kind].format(hours=hours, min_fund=format_number(EMPIRE_EVENT_MIN_FUND), max_days=EMPIRE_DAILY_GIFT_MAX_DAYS, max_rank=EMPIRE_GIFT_MAX_RANK)
 
 
 def error_text(exc: Exception, kind: str, hours: int) -> str:

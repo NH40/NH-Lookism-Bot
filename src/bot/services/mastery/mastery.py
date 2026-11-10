@@ -400,12 +400,13 @@ async def admin_give_quest(session: AsyncSession, user_id: int) -> int:
     Коммитит. → этап."""
     quest = await mastery_repo.get(session, user_id, for_update=True)
     if quest is None:
-        await mastery_repo.create_pending(session, user_id, _now())
+        await mastery_repo.create_pending(session, user_id, _now() - timedelta(minutes=5))
         quest = await mastery_repo.get(session, user_id, for_update=True)
     if quest.status not in (QUEST_PENDING, QUEST_BREAKTHROUGH):
         raise QuestBusyError
     quest.status = QUEST_PENDING
-    quest.available_at = _now()
+    # С запасом в прошлое: активация сверяет с now() начала транзакции, а не с часами Python.
+    quest.available_at = _now() - timedelta(minutes=5)
     await session.flush()
     await _activate(session, user_id, quest.stage)
     await session.commit()
@@ -427,14 +428,12 @@ async def admin_skip_stage(session: AsyncSession, user_id: int) -> int:
 
 
 async def admin_give_points(session: AsyncSession, user_id: int, amount: int) -> int:
-    """± невложенные очки мастерства (не ниже 0). Нет цепочки — заводит её пройденной, чтобы
-    очки было куда вложить. Коммитит. → невложенных теперь."""
+    """± невложенные очки мастерства (не ниже 0). Нет цепочки — заводит её с этапа 1 (задание
+    придёт сразу), чтобы очкам было где лежать и цепочка не считалась пройденной. Коммитит."""
     quest = await mastery_repo.get(session, user_id, for_update=True)
     if quest is None:
         await mastery_repo.create_pending(session, user_id, _now())
         quest = await mastery_repo.get(session, user_id, for_update=True)
-        quest.status = QUEST_COMPLETE
-        quest.stage = MASTERY_STAGES
     quest.points_free = max(0, quest.points_free + amount)
     await session.commit()
     return quest.points_free

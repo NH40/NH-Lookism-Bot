@@ -98,7 +98,11 @@ def _quest_block(view: MasteryView) -> str:
         )
         return QUEST_BREAKTHROUGH_TEXT.format(stage=view.stage, stage_name=stage_name, need=view.breakthrough_need, items=items)
     if view.status == QUEST_TRAINER:
-        return QUEST_TRAINER_TEXT.format(free=view.points_free, next_stage=view.stage + 1)
+        from bot.config.mastery import MASTERY_STAGES
+        from bot.texts.mastery.mastery import TRAINER_LAST_STAGE, TRAINER_NEXT_STAGE
+
+        after = TRAINER_LAST_STAGE if view.stage >= MASTERY_STAGES else TRAINER_NEXT_STAGE.format(stage=view.stage + 1)
+        return QUEST_TRAINER_TEXT.format(free=view.points_free, after=after)
     lines = []
     for task in view.tasks:
         label = TASK_LABELS[task.code]

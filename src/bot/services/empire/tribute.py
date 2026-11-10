@@ -9,7 +9,8 @@
 Не в транзакции игрока: налог зачисляется при сборе дохода каждого игрока, и запись ещё в
 строки старших императоров там дала бы взаимоблокировки (как при переносе стран). Фоновый
 проход раз в `EMPIRE_TRIBUTE_SWEEP_SECONDS` берёт прирост `empire_collected` с прошлой отметки
-(`tribute_mark`) — одной транзакцией, строки императоров по порядку id.
+(`tribute_mark`) — одной транзакцией; строку, занятую сбором дохода, пропускает (SKIP LOCKED) —
+её прирост учтётся в следующий проход, а сбор дохода игрока не упрётся в дань.
 """
 from __future__ import annotations
 
@@ -36,7 +37,7 @@ WITH e AS (
     FROM users u
     WHERE EXISTS (SELECT 1 FROM cities c WHERE c.emperor_id = u.id)
     ORDER BY u.id
-    FOR UPDATE OF u
+    FOR UPDATE OF u SKIP LOCKED
 )
 UPDATE users u SET
     tribute_mark = e.mark,

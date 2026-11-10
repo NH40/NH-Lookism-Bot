@@ -38,6 +38,7 @@ from bot.config.empire import (
     EMPIRE_EVENT_MIN_FUND,
     EMPIRE_FEAST_INCOME_PERCENT,
     EMPIRE_GIFT_COINS_PER_POWER,
+    EMPIRE_GIFT_MAX_RANK,
     EMPIRE_TOURNAMENT_HOURS,
     EMPIRE_TOURNAMENT_SHARES,
 )
@@ -235,7 +236,10 @@ async def start_coins(session: AsyncSession, emperor_id: int, per_player: int, s
 
 
 async def start_statists(session: AsyncSession, emperor_id: int, rank: str, per_player: int, slots: int) -> Started:
-    if rank not in RANK_INDEX or per_player < 1 or not 1 <= slots <= EMPIRE_EVENT_MAX_SLOTS:
+    if (
+        rank not in RANK_INDEX or RANK_INDEX[rank] > RANK_INDEX[EMPIRE_GIFT_MAX_RANK]
+        or per_player < 1 or not 1 <= slots <= EMPIRE_EVENT_MAX_SLOTS
+    ):
         raise BadParamsError
     units = per_player * slots
     return await _start(
@@ -419,8 +423,12 @@ async def take_feast(session: AsyncSession, event_id: int, want: int) -> int:
     """Бонус праздника — из фонда, сколько осталось (атомарно). → выплачено."""
     if want <= 0:
         return 0
+    # SKIP LOCKED: PvP, трон и война начисляют доход двоим в одной транзакции — ожидание строки
+    # фонда там давало бы взаимоблокировку с самим подданным, собирающим доход. Строка занята —
+    # бонус за этот сбор пропускается (редко), зато никто не ждёт.
     taken = await session.scalar(text(
-        "WITH e AS (SELECT id, LEAST(pool, :w) AS t FROM empire_events WHERE id = :id AND status = 'active' FOR UPDATE) "
+        "WITH e AS (SELECT id, LEAST(pool, :w) AS t FROM empire_events WHERE id = :id AND status = 'active' "
+        "FOR UPDATE SKIP LOCKED) "
         "UPDATE empire_events v SET pool = v.pool - e.t, spent = v.spent + e.t FROM e WHERE v.id = e.id RETURNING e.t"
     ), {"w": want, "id": event_id})
     return int(taken or 0)

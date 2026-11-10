@@ -50,6 +50,7 @@ function TaxTab({ ruler, min, max, onChanged }: { ruler: EmpireRuler; min: numbe
         <Rates min={min} max={max} value={ruler.tax_percent} busy={busy} onPick={(p) => run("/empire/tax", { percent: p })} />
         <p className="emp-note">Налог игрок теряет — он уходит тебе. Сверху +10% от дохода каждого (у него не вычитается).</p>
         <StatRow label="Собрано всего" value={<span style={{ color: "var(--gold-2)" }}>{fmt(ruler.collected)}</span>} />
+        <StatRow label="Дань младших сегодня" value={fmt(ruler.tribute_today ?? 0)} />
         <StatRow label="Владения" value={`${fmt(ruler.holdings)} зд.`} />
       </Panel>
 

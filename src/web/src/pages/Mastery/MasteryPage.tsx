@@ -63,14 +63,14 @@ export function MasteryPage() {
 
           {data.status === "pending" && (
             <Panel title={`Этап ${data.stage} — ${data.stage_name}`} tone="violet">
-              <div className="ms-locked">Задание придёт в случайный момент. Когда именно — не знает никто: чем выше потенциал, тем дольше ждать.</div>
+              <div className="ms-locked">Ожидайте: задание этапа готовится и придёт в случайный момент (чем выше потенциал, тем дольше). Придёт сообщение в бота.</div>
             </Panel>
           )}
 
           {data.status === "breakthrough" && (
             <Panel title={`Стена перед этапом ${data.stage} — ${data.stage_name}`} tone="violet">
               <div className="ms-locked" style={{ marginBottom: 8 }}>
-                Чтобы пробить стену, сделай что-то грандиозное — любые {data.breakthrough_need} из списка. Потом задание этапа придёт в случайный момент.
+                Чтобы начать этап, пробей стену — выполни любые {data.breakthrough_need} из списка. Как выполнишь, придёт сообщение «Стена пробита», и задание этапа начнёт готовиться.
               </div>
               {(data.breakthrough ?? []).map((b) => (
                 <div key={b.label} style={{ fontSize: 13, fontWeight: 700, margin: "4px 0" }}>{b.done ? "✅" : "⬜"} {b.label}</div>
@@ -105,22 +105,11 @@ export function MasteryPage() {
           )}
 
           {data.status === "trainer" && (
-            <Panel title="Тренер Том Ли" tone="gold">
-              <StatRow label="Очков куплено" value={`${data.points_bought}/${data.points_per_stage}`} />
-              <StatRow label="Цена очка" value={`${fmt(data.price ?? 0)} NHCoin`} />
-              <StatRow label="У тебя" value={`${fmt(data.nh_coins)} NHCoin`} />
-              {data.points_bought < data.points_per_stage ? (
-                <button
-                  className={`btn gold block ${data.nh_coins >= (data.price ?? 0) ? "" : "off"}`}
-                  style={{ marginTop: 8 }}
-                  disabled={busy || data.nh_coins < (data.price ?? 0)}
-                  onClick={() => run("/mastery/buy")}
-                >
-                  Купить очко мастерства
-                </button>
-              ) : (
-                <div className="muted ms-note">Все очки этапа куплены — вложи их в ступени выше.</div>
-              )}
+            <Panel title="Том Ли побеждён" tone="gold">
+              <StatRow label="Невложенных очков" value={String(data.points_free)} />
+              <div className="muted ms-note">
+                Вкладывай как хочешь: в одно мастерство или в разные, до {data.level_cap} уровня каждое. Когда вложишь все — откроется стена перед следующим этапом.
+              </div>
             </Panel>
           )}
 

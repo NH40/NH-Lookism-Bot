@@ -29,9 +29,7 @@ SECTIONS: dict[str, str] = {
 # Константа → (раздел, модуль, заголовок).
 SCALARS: dict[str, tuple[str, str, str]] = {
     # 🛡 Щиты и войны
-    "EMPIRE_WAR_SHIELD_SECONDS": ("shield", "bot.config.empire.empire", "Щит императора после поражения в войне, сек"),
-    "EMPIRE_WAR_SHIELD_WIN_SECONDS": ("shield", "bot.config.empire.empire", "Щит императора после отбитой войны, сек"),
-    "EMPIRE_WAR_ATTACKER_SHIELD_SECONDS": ("shield", "bot.config.empire.empire", "Щит нападавшего императора после войны, сек"),
+    "EMPIRE_WAR_FREE_ATTACK_FACTOR": ("shield", "bot.config.empire.empire", "Война империй: множитель шанса второй атаки (ловкость)"),
     "EMPIRE_WAR_ACCEPT_SECONDS": ("shield", "bot.config.empire.empire", "Война империй: окно принятия, сек"),
     "EMPIRE_WAR_TREASURY_MAX_PERCENT": ("shield", "bot.config.empire.empire", "Война империй: доля казны при равных силах, %"),
     "EMPIRE_WAR_TREASURY_MIN_PERCENT": ("shield", "bot.config.empire.empire", "Война империй: доля казны при большом перевесе, %"),
@@ -142,6 +140,8 @@ SCALARS: dict[str, tuple[str, str, str]] = {
     "EMPIRE_TAX_MIN_PERCENT": ("empire", "bot.config.empire.empire", "Налог: минимум, %"),
     "EMPIRE_TAX_MAX_PERCENT": ("empire", "bot.config.empire.empire", "Налог: максимум, %"),
     "EMPIRE_TAX_DEFAULT_PERCENT": ("empire", "bot.config.empire.empire", "Налог по умолчанию, %"),
+    "EMPIRE_TRIBUTE_PERCENT": ("empire", "bot.config.empire.empire", "Дань младших императоров, % их налога"),
+    "EMPIRE_TRIBUTE_CAP_PERCENT": ("empire", "bot.config.empire.empire", "Дань: потолок за сутки, % своего налога"),
     "EMPEROR_PASSIVE_BONUS_PERCENT": ("empire", "bot.config.empire.empire", "Пассивный бонус императору, % от дохода жителей"),
     "SABOTAGE_STATISTS_PERCENT": ("empire", "bot.config.empire.empire", "Саботаж: доля стопки статистов, %"),
     "SABOTAGE_STATISTS_FLOOR": ("empire", "bot.config.empire.empire", "Саботаж: пол кражи статистов"),
@@ -234,6 +234,28 @@ SCALARS: dict[str, tuple[str, str, str]] = {
     "EVENT_PUSH_ACTIVE_DAYS": ("events", "bot.config.event.event", "Пуш о событии: тем, кто заходил за, дней"),
     # 🏅 Лиги
     "LEAGUE_INCOME_STEP": ("league", "bot.config.league.league", "Лиги: доход за ступень"),
+    "SCORE_POWER_LOG": ("league", "bot.config.league.league", "Счёт лиги: за порядок мощи армии"),
+    "SCORE_DONATE_LOG": ("league", "bot.config.league.league", "Счёт лиги: за порядок доната"),
+    "SCORE_STAT_RANK": ("league", "bot.config.league.league", "Счёт лиги: за ранг характеристики"),
+    "SCORE_MASTERY": ("league", "bot.config.league.league", "Счёт лиги: за уровень мастерства"),
+    "SCORE_AWAKENING": ("league", "bot.config.league.league", "Счёт лиги: за этап пробуждения"),
+    "SCORE_POTENTIAL": ("league", "bot.config.league.league", "Счёт лиги: за ступень потенциала"),
+    "SCORE_BLOODLINE_LEVEL": ("league", "bot.config.league.league", "Счёт лиги: за уровень родословной"),
+    "SCORE_SECOND_BODY": ("league", "bot.config.league.league", "Счёт лиги: второе тело"),
+    "SCORE_TECHNIQUE_LEVEL": ("league", "bot.config.league.league", "Счёт лиги: за уровень техники"),
+    "SCORE_GENIUS_LEVEL": ("league", "bot.config.league.league", "Счёт лиги: за уровень гениальности"),
+    "SCORE_PATH_LEVEL": ("league", "bot.config.league.league", "Счёт лиги: за уровень пути"),
+    "GAUGE_MAX": ("dev", "bot.config.path_gauge.path_gauge", "Шкала пути: максимум"),
+    "GAUGE_CAP_PER_LEVEL": ("dev", "bot.config.path_gauge.path_gauge", "Шкала пути: потолок за уровень"),
+    "GAUGE_PVP_WEIGHT": ("dev", "bot.config.path_gauge.path_gauge", "Шкала пути: вес PvP"),
+    "GAUGE_MAX_PER_BATTLE": ("dev", "bot.config.path_gauge.path_gauge", "Шкала пути: максимум за бой"),
+    "GAUGE_BUSINESS_COINS": ("dev", "bot.config.path_gauge.path_gauge", "Шкала Бизнесмена: NHCoin за единицу"),
+    "GAUGE_SENSORY_SCOUT": ("dev", "bot.config.path_gauge.path_gauge", "Шкала Чувств: за разведку"),
+    "GAUGE_SENSORY_SABOTAGE": ("dev", "bot.config.path_gauge.path_gauge", "Шкала Чувств: за саботаж"),
+    "GAUGE_FORESIGHT_SCOUT": ("dev", "bot.config.path_gauge.path_gauge", "Шкала Предвидения: за разведку"),
+    "GAUGE_COPY_TECH_LEVEL": ("dev", "bot.config.path_gauge.path_gauge", "Шкала Копирования: за уровень техники"),
+    "BOSS_SPAWN_CHANCE_PER_TICK": ("events", "bot.config.event.event", "Босс: шанс появления за тик"),
+    "TEACHER_SPAWN_CHANCE_PER_TICK": ("events", "bot.config.event.event", "Учитель: шанс появления за тик"),
     "LEAGUE_POWER_STEP": ("league", "bot.config.league.league", "Лиги: атака и прочность за ступень"),
     # ⭐ Абсолюты
     "HASBULLA_SHOP_DISCOUNT": ("absolute", "bot.config.absolute.absolute", "Хасбулла: скидка в магазине"),
@@ -248,9 +270,80 @@ SCALARS: dict[str, tuple[str, str, str]] = {
     "ARIAN_BLOCK_SECONDS": ("absolute", "bot.config.absolute.absolute", "Ариан: блок абсолютов, сек"),
 }
 
+# Подразделы (пользователь 2026-11-10: «разделы слишком крупные»): раздел → (название, regex по имени
+# константы или ключа). Первое совпадение; не совпало ни с одним — «Прочее». Ключ строки таблицы —
+# по имени таблицы.
+GROUPS: dict[str, tuple[tuple[str, str], ...]] = {
+    "shield": (
+        ("Война императоров", r"^EMPIRE_WAR_"),
+        ("Войны кланов", r"^CLAN_WAR_"),
+        ("PvP-вызовы и бой без КД", r"^CHALLENGE_|^FREE_ATTACK_"),
+    ),
+    "battle": (
+        ("Урон, раунды, базовые шансы", r"^BATTLE_(MAX_ROUNDS|DAMAGE|BASE_|CRIT|SURE_HIT|FIRST_STRIKE)"),
+        ("Потолки эффектов и реакций", r"^BATTLE_|^REACTION"),
+        ("Характеристики (за ранг)", r"_PER_RANK$|^SPY_"),
+    ),
+    "statist": (
+        ("Тренировка статистов", r"^EXTRA_TRAINING_"),
+        ("Сила статистов и влияние", r"^EXTRA_RANK|^INFLUENCE_"),
+    ),
+    "business": (
+        ("Доход зданий", r"INCOME|BLACK_MARKET|_SHOP_|ACCRUAL|TRAINING_BONUS|PARLIAMENT_INFLUENCE"),
+        ("Улучшения и цены", r"UPGRADE|CAPACITY|BUILD_COST"),
+    ),
+    "clan": (
+        ("Земли и постройки", r"LAND|FORGE|WALL|DEMOLISH|TOWER|DOJO|BOSS|TEACHER"),
+        ("Магазин и контракты клана", r"^CLAN_SHOP_|^CLAN_CONTRACT_"),
+        ("Донат клана", r"DONATE"),
+        ("Состав, рота, доли", r"MEMBERS|CREATE|IMAGE|GARRISON|SHARE"),
+    ),
+    "empire": (
+        ("Налог и дань", r"TAX|TRIBUTE|PASSIVE"),
+        ("Саботаж", r"^SABOTAGE_"),
+    ),
+    "casino": (
+        ("Слоты и блэкджек", r"^SLOTS_|^BLACKJACK_|^CASINO_"),
+        ("Покер", r"^POKER_"),
+    ),
+    "market": (
+        ("Биржа", r"^EXCHANGE_"),
+        ("Вклады", r"^DEPOSIT_"),
+        ("Ячейки", r"^STORAGE_"),
+    ),
+    "shop": (
+        ("Зелья", r"^POTION_"),
+        ("Контракты", r"^CONTRACT_"),
+        ("Школы", r"^SCHOOL_"),
+    ),
+    "dev": (
+        ("Мастерство и Том Ли", r"^MASTERY_|^TOM_|^EQUAL_WIN"),
+        ("Пробуждение и 67 MONSTER", r"^AWAKENING_|^MONSTER_"),
+        ("Шкалы путей", r"^GAUGE_"),
+        ("Пути, техники, гениальности", r"^PATH_|^TECH|^GENIUS_|^INFINITE_"),
+        ("Тренировки и потенциал", r"^TRAINING_|^POTENTIAL_|^RELOCATE_"),
+    ),
+    "quest": (
+        ("Battle Pass", r"^BP_"),
+        ("Ежедневные задания", r"^QUEST"),
+        ("Награды топа", r"^TOP_"),
+    ),
+    "league": (
+        ("Пороги и бонусы лиг", r"^LEAGUE_"),
+        ("Счёт лиги", r"^SCORE_"),
+    ),
+    "events": (
+        ("Боссы", r"^BOSS_"),
+        ("Учителя", r"TEACHER"),
+    ),
+}
+GROUP_OTHER = "Прочее"
+
 # Таблица (dict или tuple чисел) → (раздел, модуль, заголовок): каждое значение — своя настройка.
 TABLES: dict[str, tuple[str, str, str]] = {
     "LEAGUE_THRESHOLDS": ("league", "bot.config.league.league", "Лиги: счёт для лиги №"),
+    "EMPIRE_WAR_COOLDOWN_BY_LEAGUE_SECONDS": ("shield", "bot.config.empire.empire", "Война империй: КД нападения, сек, лига №"),
+    "EMPIRE_WAR_SHIELD_BY_LEAGUE_SECONDS": ("shield", "bot.config.empire.empire", "Война империй: щит проигравшему, сек, лига №"),
     "BUSINESS_BUILD_COST": ("business", "bot.config.game.game", "Цена постройки"),
     "SABOTAGE_CHANCE_PERCENT": ("empire", "bot.config.empire.empire", "Саботаж: шанс, %"),
     "DEPOSIT_RATES": ("market", "bot.config.deposit.deposit", "Вклады: ставка за часов"),
@@ -264,8 +357,12 @@ TABLES: dict[str, tuple[str, str, str]] = {
     "SCHOOL_COUNTER_PER_LEVEL": ("shop", "bot.config.school.school", "Школы: контратака за уровень"),
     "AWAKENING_QUEST_BASE": ("dev", "bot.config.awakening.awakening", "Квест пробуждения: база задания"),
     "POTENTIAL_UPGRADE_COST": ("dev", "bot.config.characteristic.characteristic", "Потенциал: цена с ранга"),
-    "MASTERY_POINT_PRICE": ("dev", "bot.config.mastery.mastery", "Мастерство: цена очка, этап"),
     "TOM_POWER_PERCENT": ("dev", "bot.config.mastery.mastery", "Том Ли: мощь от лагеря, % этап"),
+    "MASTERY_DELAY_HOURS_LOW": ("dev", "bot.config.mastery.mastery", "Мастерство: ожидание задания (низший потенциал), ч, мин/макс №"),
+    "MASTERY_DELAY_HOURS_HIGH": ("dev", "bot.config.mastery.mastery", "Мастерство: ожидание задания (высший потенциал), ч, мин/макс №"),
+    "MASTERY_BREAKTHROUGH_NEED": ("dev", "bot.config.mastery.mastery", "Мастерство: действий для прорыва, этап"),
+    "RARITY_CHANCE_PERCENT": ("gacha", "bot.config.card.card", "Крутка: шанс редкости, %"),
+    "QUEST_TIER_WEIGHTS": ("quest", "bot.config.quest.quest", "Задания: вес тира №"),
     "QUEST_TIER_XP": ("quest", "bot.config.quest.quest", "Задания: опыт за тир"),
     "TOP_PLAYER_DONATE": ("quest", "bot.config.top.top", "Топ игроков: донат за место"),
     "TOP_PLAYER_COINS": ("quest", "bot.config.top.top", "Топ игроков: NHCoin за место"),

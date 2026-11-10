@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -84,6 +84,12 @@ class User(Base):
     # пассивные 10%) — для экрана «👑 Империя». У не-императоров не используются.
     empire_tax_percent: Mapped[int] = mapped_column(Integer, nullable=False, default=10, server_default="10")
     empire_collected: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
+    # Дань младших императоров (`services/empire/tribute`): отметка `empire_collected` прошлого
+    # прохода и суточные счётчики для потолка (свой налог / полученная дань за день UTC).
+    tribute_mark: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
+    tribute_day: Mapped[date | None] = mapped_column(Date, nullable=True)
+    tribute_own: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
+    tribute_got: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
 
     # Родословная (`docs/design/development_systems.md`): код из `constant/bloodline`, выбирается
     # ОДИН раз (при регистрации), дальше меняется только донатом; NULL — ещё не выбрана.

@@ -28,8 +28,6 @@ from redis.asyncio import Redis
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from bot.services.admin.live_config import cooldown_seconds
-from bot.constant.admin.live_config import KEY_CD_EMPIRE_WAR
 from bot.services.absolute import after_battle
 from bot.services.intel.scout import has_report as has_scout_report
 from bot.constant.position_skill import ROLE_ATTACK, ROLE_DEFENSE, VS_WAR
@@ -37,9 +35,9 @@ from bot.services.position_skill.battle import journal, matchup
 from bot.cache.keys import empire_war_cooldown, empire_war_shield
 from bot.config.empire import (
     EMPIRE_WAR_ACCEPT_SECONDS,
-    EMPIRE_WAR_ATTACKER_SHIELD_SECONDS,
-    EMPIRE_WAR_SHIELD_SECONDS,
-    EMPIRE_WAR_SHIELD_WIN_SECONDS,
+    EMPIRE_WAR_FREE_ATTACK_FACTOR,
+    war_cooldown_seconds,
+    war_shield_seconds,
     EMPIRE_WAR_SWEEP_BATCH,
     EMPIRE_WAR_HISTORY_SHOWN,
     EMPIRE_WAR_TARGETS_PAGE_SIZE,
@@ -144,6 +142,7 @@ class WarOutcome:
     treasury_percent: int = 0
     defender_demoted: bool = False
     businesses_taken: int = 0  # зданий из владений перешло победителю вместе с городами
+    free_attack: bool = False  # ловкость: КД нападающему снят
     journal: tuple[str, ...] = ()  # журнал боя глазами нападающего (`services/position_skill.journal`)
     defender_journal: tuple[str, ...] = ()  # тот же бой глазами защитника
 
@@ -207,7 +206,7 @@ async def declare_war(session: AsyncSession, redis: Redis, attacker_id: int, def
 
     profile = await get_combat_profile(session, attacker_id)
     key = empire_war_cooldown(attacker_id)
-    if not await redis.set(key, "1", nx=True, ex=profile.cooldown(cooldown_seconds(KEY_CD_EMPIRE_WAR))):
+    if not await redis.set(key, "1", nx=True, ex=profile.cooldown(war_cooldown_seconds(await _league(session, attacker_id)))):
         raise WarOnCooldownError(max(0, await redis.ttl(key)))
     window = profile.accept_window(EMPIRE_WAR_ACCEPT_SECONDS)
     try:
@@ -376,18 +375,28 @@ async def _resolve(session: AsyncSession, redis: Redis, war, resolution: str, *,
         from bot.services.mastery import record_pvp_win
 
         await record_pvp_win(session, attacker_id, attacker_power, defender_power)
+    loser = defender_id if attacker_won else attacker_id
+    loser_league = await _league(session, loser)
     await session.commit()
-    # Щит защитнику — только после commit (правило 10: Redis не опережает Postgres).
-    defender_shield = EMPIRE_WAR_SHIELD_SECONDS if attacker_won else EMPIRE_WAR_SHIELD_WIN_SECONDS
-    if defender_shield > 0:
-        await redis.set(empire_war_shield(defender_id), "1", ex=defender_shield)
-    if EMPIRE_WAR_ATTACKER_SHIELD_SECONDS > 0:
-        await redis.set(empire_war_shield(attacker_id), "1", ex=EMPIRE_WAR_ATTACKER_SHIELD_SECONDS)
+    # Щит — только проигравшему (2026-11-10), после commit (правило 10: Redis не опережает Postgres).
+    shield = war_shield_seconds(loser_league)
+    if shield > 0:
+        await redis.set(empire_war_shield(loser), "1", ex=shield)
+    # Ловкость: вторая атака без КД — шанс ×EMPIRE_WAR_FREE_ATTACK_FACTOR (на императоре сложнее).
+    from bot.services.characteristic.combat import get_combat_profile
+    from bot.services.district.free_attack import roll_free_attack
+
+    free_attack = await roll_free_attack(
+        redis, attacker_id, await get_combat_profile(session, attacker_id), won=attacker_won, vs_bots=False,
+        factor=EMPIRE_WAR_FREE_ATTACK_FACTOR,
+    )
+    if free_attack:
+        await redis.delete(empire_war_cooldown(attacker_id))
     return WarOutcome(
         war.id, attacker_id, defender_id, resolution=resolution, attacker_won=attacker_won, rounds=rounds,
         journal=war_journal, defender_journal=war_journal_def,
         attacker_power=int(attacker_power), attacker_dead=attacker_dead,
         defender_power=int(defender_power), defender_dead=defender_dead,
         city_names=names, treasury_taken=treasury, treasury_percent=percent, defender_demoted=demoted,
-        businesses_taken=businesses, **labels,
+        businesses_taken=businesses, free_attack=free_attack, **labels,
     )

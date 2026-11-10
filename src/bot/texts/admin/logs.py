@@ -16,6 +16,7 @@ from bot.constant.ledger import (
     BATTLE_WAR,
     REASON_ELITE_LOOT,
     REASON_EMPEROR_TAX,
+    REASON_EMPEROR_TRIBUTE,
     REASON_INCOME,
     REASON_MANAGER_BURN,
     REASON_SABOTAGE,
@@ -104,6 +105,7 @@ def activity_page(rows, total: int, page: int, per: int) -> str:
 _REASONS = {
     REASON_INCOME: "Доход зданий",
     REASON_EMPEROR_TAX: "Налог императору",
+    REASON_EMPEROR_TRIBUTE: "Дань младших императоров",
     REASON_MANAGER_BURN: "Менеджер: сожжено при атаке",
     REASON_ELITE_LOOT: "Элита: добыча в бою",
     REASON_SABOTAGE: "Саботаж: кража из казны",

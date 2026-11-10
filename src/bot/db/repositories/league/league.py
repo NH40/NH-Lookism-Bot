@@ -52,7 +52,8 @@ async def all_scores(session: AsyncSession) -> list[tuple[int, int, int]]:
 
 async def set_scores(session: AsyncSession, values: list[tuple[int, int]]) -> None:
     if values:
-        await session.execute(text("UPDATE users SET league_score = :s WHERE id = :u"), [{"u": u, "s": s} for u, s in values])
+        # По возрастанию id — тот же порядок, что у снимков мощи (`top.set_powers`): без взаимоблокировок.
+        await session.execute(text("UPDATE users SET league_score = :s WHERE id = :u"), [{"u": u, "s": s} for u, s in sorted(values)])
 
 
 async def set_leagues(session: AsyncSession, values: list[tuple[int, int]]) -> None:

@@ -24,6 +24,7 @@ from bot.constant.mastery import (
     QUEST_TRAINER,
     TASK_TOM,
 )
+from bot.config.mastery import MASTERY_LEVEL_CAP
 from bot.db.repositories.user import get_by_id
 from bot.keyboards.mastery import mastery_menu, open_mastery_menu
 from bot.services.district import BattleOnCooldownError, NoAttackersError, fight_tom
@@ -45,6 +46,7 @@ from bot.texts.mastery import (
     MASTERY_CAPPED_ALERT,
     MASTERY_SCREEN,
     NO_FREE_POINTS_ALERT,
+    PUSH_BREAKTHROUGH,
     PUSH_QUEST,
     QUEST_ACTIVE as QUEST_ACTIVE_TEXT,
     QUEST_COMPLETE as QUEST_COMPLETE_TEXT,
@@ -53,6 +55,7 @@ from bot.texts.mastery import (
     QUEST_PENDING as QUEST_PENDING_TEXT,
     QUEST_TRAINER as QUEST_TRAINER_TEXT,
     STAGE_FINISHED_ALERT,
+    STAGE_FINISHED_WAITING_ALERT,
     STAGE_NAMES,
     TASK_DONE,
     TASK_LABELS,
@@ -95,10 +98,7 @@ def _quest_block(view: MasteryView) -> str:
         )
         return QUEST_BREAKTHROUGH_TEXT.format(stage=view.stage, stage_name=stage_name, need=view.breakthrough_need, items=items)
     if view.status == QUEST_TRAINER:
-        text = QUEST_TRAINER_TEXT.format(
-            price=format_number(view.price or 0), bought=view.points_bought, free=view.points_free, stage_name=stage_name
-        )
-        return text
+        return QUEST_TRAINER_TEXT.format(free=view.points_free, next_stage=view.stage + 1)
     lines = []
     for task in view.tasks:
         label = TASK_LABELS[task.code]
@@ -127,12 +127,8 @@ def render_mastery(view: MasteryView):
     quest = _quest_block(view)
     if view.points_free:
         quest += FREE_POINTS_LINE.format(free=view.points_free)
-    investable = [m for m in MASTERIES if view.mastery[m] < view.stage] if view.points_free else []
-    markup = mastery_menu(
-        tom=view.status == QUEST_ACTIVE and view.tom_unlocked,
-        investable=investable,
-        shop=view.status == QUEST_TRAINER,
-    )
+    investable = [m for m in MASTERIES if view.mastery[m] < MASTERY_LEVEL_CAP] if view.points_free else []
+    markup = mastery_menu(tom=view.status == QUEST_ACTIVE and view.tom_unlocked, investable=investable)
     return MASTERY_SCREEN.format(tiers=tiers, quest_block=quest), markup
 
 
@@ -204,11 +200,21 @@ async def cb_mastery_invest(callback: CallbackQuery, session: AsyncSession) -> N
     if result.chain_complete:
         await callback.answer(CHAIN_COMPLETE_ALERT.format(label=label, tier=tier), show_alert=True)
     elif result.stage_finished:
-        await callback.answer(STAGE_FINISHED_ALERT.format(label=label, tier=tier), show_alert=True)
+        alert = STAGE_FINISHED_WAITING_ALERT if result.waiting else STAGE_FINISHED_ALERT
+        await callback.answer(alert.format(label=label, tier=tier), show_alert=True)
     else:
         await callback.answer(INVESTED_ALERT.format(label=label, tier=tier))
     text, markup = render_mastery(await get_view(session, callback.from_user.id))
     await safe_edit_text(callback.message, text, reply_markup=markup)
+
+
+async def send_breakthrough_pushes(bot: Bot, session: AsyncSession, moved: list[tuple[int, int]]) -> None:
+    """Пуш «стена пробита — ожидайте задание этапа» (2026-11-10: игрок должен знать, что дальше)."""
+    for user_id, stage in moved:
+        await notify_player(
+            bot, session, user_id, NOTIFY_MASTERY, PUSH_BREAKTHROUGH.format(stage=stage, stage_name=STAGE_NAMES.get(stage, "")),
+            reply_markup=open_mastery_menu(),
+        )
 
 
 async def send_quest_pushes(bot: Bot, session: AsyncSession, activated: list[tuple[int, int]]) -> None:

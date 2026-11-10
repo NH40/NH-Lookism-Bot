@@ -8,10 +8,10 @@
 2. Задания этапа: этап 1 — победить Тома; этап 2 — 10 личных тренировок, потом Том; этап 3 —
    3 PvP-победы нападающим и победа над игроком ±10% мощи, потом Том. Том открывается, когда
    выполнены все остальные задания этапа.
-3. Победил Тома → `trainer`: у тренера Тома Ли в магазине — 4 очка этапа за NHCoin.
-4. Очко вкладывается в любое мастерство, но не выше ступени этапа (в этапе 1 — до Стены),
-   поэтому фактически по одному на каждое из четырёх. Вложены все 4 — следующий этап снова
-   приходит через случайные 1–24 ч; после третьего — цепочка пройдена.
+3. Победил Тома → `trainer`: сразу выдаются 4 очка этапа (2026-11-10: покупка у тренера убрана).
+4. Очко вкладывается в любое мастерство до 3 уровня, в любом порядке (можно 3 в силу сразу).
+   Вложены все 4 — «прорыв» перед следующим этапом (`QUEST_BREAKTHROUGH`), потом ожидание
+   задания; после третьего — цепочка пройдена.
 
 Сам бой с Томом — `services/district/tom.py` (все бои живут в домене district); здесь —
 только состояние цепочки (`lock_quest_for_tom`, `mark_tom_defeated`).
@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bot.config.mastery import (
     EQUAL_WIN_POWER_PERCENT,
-    MASTERY_POINT_PRICE,
+    MASTERY_LEVEL_CAP,
     MASTERY_POINTS_PER_STAGE,
     MASTERY_BREAKTHROUGH_NEED,
     MASTERY_STAGES,
@@ -55,7 +55,6 @@ from bot.constant.mastery import (
     TASK_TRAININGS,
 )
 from bot.db.models.mastery_quest import MasteryQuest
-from bot.db.repositories import business as business_repo
 from bot.db.repositories import characteristic as char_repo
 from bot.db.repositories import mastery as mastery_repo
 from bot.services.build import capped, get_build
@@ -71,26 +70,16 @@ class TomLockedError(Exception):
     """Том ещё не открыт — сначала остальные задания этапа."""
 
 
-class TrainerLockedError(Exception):
-    """Тренер доступен только после победы над Томом на текущем этапе."""
-
-
-class PointsSoldOutError(Exception):
-    """Все 4 очка этапа уже куплены."""
-
-
-class NotEnoughCoinsError(Exception):
-    def __init__(self, cost: int, balance: int) -> None:
-        self.cost = cost
-        self.balance = balance
-
-
 class NoFreePointsError(Exception):
     pass
 
 
 class MasteryCappedError(Exception):
-    """Это мастерство уже на ступени текущего этапа — вкладывай в другое."""
+    """Это мастерство уже на 3 уровне — вкладывай в другое."""
+
+
+class QuestBusyError(Exception):
+    """Админ: задание этапа уже идёт (или цепочка пройдена)."""
 
 
 def _now() -> datetime:
@@ -151,17 +140,18 @@ async def _try_breakthrough(session: AsyncSession, user_id: int, quest: MasteryQ
     return True
 
 
-async def check_breakthroughs(session_factory: async_sessionmaker[AsyncSession]) -> int:
-    """Фоновый проход: у кого прорыв уже сделан — запустить ожидание задания. → сколько."""
+async def check_breakthroughs(session_factory: async_sessionmaker[AsyncSession]) -> list[tuple[int, int]]:
+    """Фоновый проход: у кого прорыв уже сделан — запустить ожидание задания.
+    → (user_id, этап) — им пуш «стена пробита, ожидайте задание»."""
     async with session_factory() as session:
         ids = await mastery_repo.list_breakthrough(session, MASTERY_SWEEP_BATCH)
-    moved = 0
+    moved = []
     for user_id in ids:
         async with session_factory() as session:
             quest = await mastery_repo.get(session, user_id, for_update=True)
             if quest is not None and await _try_breakthrough(session, user_id, quest):
                 await session.commit()
-                moved += 1
+                moved.append((user_id, quest.stage))
     return moved
 
 
@@ -260,7 +250,6 @@ class MasteryView:
     tom_unlocked: bool
     points_bought: int
     points_free: int
-    price: int | None
     available_in_seconds: int | None
     breakthrough: dict[str, bool] | None = None  # статус QUEST_BREAKTHROUGH — что уже сделано
     breakthrough_need: int = 0
@@ -285,7 +274,7 @@ async def get_view(session: AsyncSession, user_id: int) -> MasteryView:
             await session.commit()
         quest = await mastery_repo.get(session, user_id)
     if quest is None:
-        return MasteryView(mastery, None, 0, [], 0, False, 0, 0, None, None)
+        return MasteryView(mastery, None, 0, [], 0, False, 0, 0, None)
     in_progress = quest.status in (QUEST_ACTIVE, QUEST_TRAINER)
     return MasteryView(
         mastery=mastery,
@@ -296,7 +285,6 @@ async def get_view(session: AsyncSession, user_id: int) -> MasteryView:
         tom_unlocked=_tom_unlocked(quest),
         points_bought=quest.points_bought,
         points_free=quest.points_free,
-        price=MASTERY_POINT_PRICE.get(quest.stage) if quest.status == QUEST_TRAINER else None,
         available_in_seconds=(
             max(0, int((quest.available_at - _now()).total_seconds())) if quest.status == QUEST_PENDING else None
         ),
@@ -347,37 +335,18 @@ async def lock_quest_for_tom(session: AsyncSession, user_id: int) -> MasteryQues
 
 
 def mark_tom_defeated(quest: MasteryQuest) -> None:
-    """Том побеждён → у тренера можно покупать очки этапа. НЕ коммитит."""
+    """Том побеждён → сразу 4 очка этапа (покупка у тренера убрана 2026-11-10). НЕ коммитит."""
+    _grant_stage_points(quest)
+
+
+def _grant_stage_points(quest: MasteryQuest) -> None:
+    """Задания этапа закрыты: `trainer` + 4 очка. Повторно этап не выдаёт (`points_bought`)."""
     quest.status = QUEST_TRAINER
+    quest.points_free += max(0, MASTERY_POINTS_PER_STAGE - quest.points_bought)
+    quest.points_bought = MASTERY_POINTS_PER_STAGE
 
 
-# --- тренер и очки ---
-
-
-@dataclass(frozen=True, slots=True)
-class BuyResult:
-    stage: int
-    price: int
-    points_bought: int
-    points_free: int
-
-
-async def buy_point(session: AsyncSession, user_id: int) -> BuyResult:
-    """Одно очко мастерства у тренера Тома Ли за NHCoin. Строка цепочки под `FOR UPDATE`,
-    списание — условный UPDATE баланса (правило 1). Коммитит."""
-    quest = await mastery_repo.get(session, user_id, for_update=True)
-    if quest is None or quest.status != QUEST_TRAINER:
-        raise TrainerLockedError
-    if quest.points_bought >= MASTERY_POINTS_PER_STAGE:
-        raise PointsSoldOutError
-    price = MASTERY_POINT_PRICE[quest.stage]
-    if not await business_repo.spend_coins(session, user_id, price):
-        wallet = await business_repo.get_wallet(session, user_id)
-        raise NotEnoughCoinsError(cost=price, balance=wallet.nh_coins if wallet else 0)
-    quest.points_bought += 1
-    quest.points_free += 1
-    await session.commit()
-    return BuyResult(quest.stage, price, quest.points_bought, quest.points_free)
+# --- очки ---
 
 
 @dataclass(frozen=True, slots=True)
@@ -386,18 +355,18 @@ class InvestResult:
     new_tier: int
     stage_finished: bool
     chain_complete: bool
+    waiting: bool = False  # прорыв уже сделан — задание следующего этапа в пути
 
 
 async def invest_point(session: AsyncSession, user_id: int, mastery: str) -> InvestResult:
-    """Вкладывает очко в мастерство (не выше ступени этапа). Вложены все 4 очка этапа →
-    этап закрыт: следующий придёт через случайные 1–24 ч, после третьего — цепочка пройдена.
-    Коммитит."""
+    """Вкладывает очко в мастерство (до 3 уровня, в любом порядке). Вложены все 4 очка этапа →
+    этап закрыт: прорыв перед следующим, после третьего — цепочка пройдена. Коммитит."""
     if mastery not in MASTERIES:
         raise MasteryCappedError
     quest = await mastery_repo.get(session, user_id, for_update=True)
     if quest is None or quest.points_free <= 0:
         raise NoFreePointsError
-    if not await mastery_repo.bump_mastery(session, user_id, mastery, cap=quest.stage):
+    if not await mastery_repo.bump_mastery(session, user_id, mastery, cap=MASTERY_LEVEL_CAP):
         raise MasteryCappedError
     quest.points_free -= 1
     stage_finished = quest.points_bought >= MASTERY_POINTS_PER_STAGE and quest.points_free == 0
@@ -416,6 +385,56 @@ async def invest_point(session: AsyncSession, user_id: int, mastery: str) -> Inv
             quest.progress_trainings = quest.progress_pvp_wins = quest.progress_extras = 0
             quest.equal_win = False
             quest.points_bought = 0
+            # Достижения прорыва могут быть уже сделаны — тогда ожидание задания стартует сразу.
+            await _try_breakthrough(session, user_id, quest)
     await session.commit()
     new_tier = (await get_combat_profile(session, user_id)).mastery[mastery]
-    return InvestResult(mastery, new_tier, stage_finished, chain_complete)
+    return InvestResult(mastery, new_tier, stage_finished, chain_complete, quest.status == QUEST_PENDING)
+
+
+# --- админ (2026-11-10: «выдать квест, скипнуть квест, выдать очки мастерства») ---
+
+
+async def admin_give_quest(session: AsyncSession, user_id: int) -> int:
+    """Задание этапа — прямо сейчас: без ожидания и без прорыва. Нет цепочки — открывает этап 1.
+    Коммитит. → этап."""
+    quest = await mastery_repo.get(session, user_id, for_update=True)
+    if quest is None:
+        await mastery_repo.create_pending(session, user_id, _now())
+        quest = await mastery_repo.get(session, user_id, for_update=True)
+    if quest.status not in (QUEST_PENDING, QUEST_BREAKTHROUGH):
+        raise QuestBusyError
+    quest.status = QUEST_PENDING
+    quest.available_at = _now()
+    await session.flush()
+    await _activate(session, user_id, quest.stage)
+    await session.commit()
+    return quest.stage
+
+
+async def admin_skip_stage(session: AsyncSession, user_id: int) -> int:
+    """Засчитать задания текущего этапа и Тома: сразу 4 очка. Этап ещё не пришёл — сначала
+    выдаёт его. Коммитит. → этап."""
+    quest = await mastery_repo.get(session, user_id, for_update=True)
+    if quest is None or quest.status in (QUEST_PENDING, QUEST_BREAKTHROUGH):
+        await admin_give_quest(session, user_id)
+        quest = await mastery_repo.get(session, user_id, for_update=True)
+    if quest.status != QUEST_ACTIVE:
+        raise QuestBusyError
+    _grant_stage_points(quest)
+    await session.commit()
+    return quest.stage
+
+
+async def admin_give_points(session: AsyncSession, user_id: int, amount: int) -> int:
+    """± невложенные очки мастерства (не ниже 0). Нет цепочки — заводит её пройденной, чтобы
+    очки было куда вложить. Коммитит. → невложенных теперь."""
+    quest = await mastery_repo.get(session, user_id, for_update=True)
+    if quest is None:
+        await mastery_repo.create_pending(session, user_id, _now())
+        quest = await mastery_repo.get(session, user_id, for_update=True)
+        quest.status = QUEST_COMPLETE
+        quest.stage = MASTERY_STAGES
+    quest.points_free = max(0, quest.points_free + amount)
+    await session.commit()
+    return quest.points_free

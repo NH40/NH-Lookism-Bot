@@ -210,7 +210,7 @@ export interface MasteryData {
   points_bought: number;
   points_free: number;
   points_per_stage: number;
-  price: number | null;
+  level_cap: number;
   available_in_seconds: number | null;
   breakthrough?: { label: string; done: boolean }[];
   breakthrough_need?: number;

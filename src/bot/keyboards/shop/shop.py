@@ -5,7 +5,6 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.constant.mastery import CB_MASTERY_OPEN
 from bot.constant.profile import CB_PROFILE_OPEN
-from bot.constant.shop import CB_SHOP_BUY_MASTERY_POINT
 from bot.constant.genius import CB_GENIUS_ROLL
 from bot.constant.contract import CB_CONTRACT_OPEN
 from bot.constant.potion import CB_POTION_OPEN
@@ -21,16 +20,13 @@ from bot.texts.casino import BTN_CASINO
 from bot.texts.exchange import BTN_EXCHANGE
 from bot.texts.common import BTN_BACK_TO_PROFILE
 from bot.texts.genius import BTN_ROLL as BTN_ROLL_GENIUS
-from bot.texts.shop import BTN_BUY_POINT, BTN_TO_MASTERY
-from bot.utils.formatting import format_number
+from bot.texts.shop import BTN_TO_MASTERY
 
 
 def shop_menu(
-    *, buy_price: int | None, has_free_points: bool, extra_rows: list | None = None
+    *, has_free_points: bool, extra_rows: list | None = None
 ) -> InlineKeyboardMarkup:
     rows = []
-    if buy_price is not None:
-        rows.append([InlineKeyboardButton(text=BTN_BUY_POINT.format(price=format_number(buy_price)), callback_data=CB_SHOP_BUY_MASTERY_POINT)])
     if has_free_points:
         rows.append([InlineKeyboardButton(text=BTN_TO_MASTERY, callback_data=CB_MASTERY_OPEN)])
     rows.append([

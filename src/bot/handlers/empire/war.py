@@ -10,10 +10,9 @@ from aiogram.types import CallbackQuery
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.services.admin.live_config import cooldown_seconds
-from bot.constant.admin.live_config import KEY_CD_EMPIRE_WAR
+from bot.texts.district import FREE_ATTACK_LINE
 from bot.services.position_skill import journal_block
-from bot.config.empire import EMPIRE_WAR_ACCEPT_SECONDS
+from bot.config.empire import EMPIRE_WAR_ACCEPT_SECONDS, war_cooldown_seconds
 from bot.constant.empire import (
     CB_WAR_ACCEPT_PREFIX,
     CB_WAR_DECLARE_PREFIX,
@@ -127,7 +126,7 @@ async def cb_war_target(callback: CallbackQuery, session: AsyncSession) -> None:
             cities=target.cities,
             coins=format_number(target.nh_coins),
             window=format_countdown(EMPIRE_WAR_ACCEPT_SECONDS),
-            cooldown=format_countdown(cooldown_seconds(KEY_CD_EMPIRE_WAR)),
+            cooldown=format_countdown(war_cooldown_seconds(await _my_league(session, callback.from_user.id))),
         ),
         reply_markup=war_target_menu(target_id),
     )
@@ -203,6 +202,14 @@ async def cb_war_accept(callback: CallbackQuery, session: AsyncSession, redis: R
     await send_war_reports(callback.bot, session, outcome)
 
 
+async def _my_league(session: AsyncSession, user_id: int) -> int:
+    from sqlalchemy import select
+
+    from bot.db.models.user import User
+
+    return await session.scalar(select(User.league).where(User.id == user_id)) or 0
+
+
 async def send_war_reports(bot: Bot, session: AsyncSession, outcome: WarOutcome) -> None:
     """Итог войны — каждой стороне своя формулировка. Доставка best-effort (`utils/notify`)."""
     attacker, defender = esc(outcome.attacker_label), esc(outcome.defender_label)
@@ -237,6 +244,7 @@ async def send_war_reports(bot: Bot, session: AsyncSession, outcome: WarOutcome)
         outcome.attacker_id,
         NOTIFY_WAR_REPORT,
         WAR_REPORT.format(headline=(WAR_ATTACKER_WON if won else WAR_ATTACKER_LOST).format(defender=defender), **body)
+        + (FREE_ATTACK_LINE if outcome.free_attack else "")
         + journal_block(outcome.journal),
     )
     await notify_player(

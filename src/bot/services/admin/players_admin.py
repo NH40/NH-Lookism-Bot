@@ -315,3 +315,35 @@ async def set_phase(session: AsyncSession, user_id: int, phase: str) -> None:
         await session.execute(update(City).where(City.emperor_id == user_id).values(emperor_id=None))
         await session.execute(delete(EmperorTaxOverride).where(EmperorTaxOverride.emperor_id == user_id))
     await session.execute(update(User).where(User.id == user_id).values(phase=phase))
+
+
+# --- мастерство (2026-11-10: «выдать квест, скипнуть квест, выдать очки») ---
+
+MASTERY_POINT_ACTIONS: dict[str, int] = {"p1": 1, "p4": 4, "m1": -1}
+MASTERY_ACTIONS: tuple[str, ...] = ("quest", "skip", *MASTERY_POINT_ACTIONS)
+
+
+async def mastery_state(session: AsyncSession, user_id: int) -> dict:
+    """Статус цепочки, этап, невложенные очки, уровни — для экрана админа (бот и Mini App)."""
+    from bot.db.repositories import mastery as mastery_repo
+    from bot.services.characteristic.combat import get_combat_profile
+
+    quest = await mastery_repo.get(session, user_id)
+    return {
+        "status": quest.status if quest else None,
+        "stage": quest.stage if quest else 0,
+        "free": quest.points_free if quest else 0,
+        "levels": (await get_combat_profile(session, user_id)).mastery,
+    }
+
+
+async def mastery_action(session: AsyncSession, user_id: int, action: str) -> int:
+    """quest → этап задания; skip → засчитанный этап; p1/p4/m1 → невложенных очков теперь.
+    Коммитит (сервис мастерства). `QuestBusyError` — вызывающему."""
+    from bot.services.mastery import admin_give_points, admin_give_quest, admin_skip_stage
+
+    if action == "quest":
+        return await admin_give_quest(session, user_id)
+    if action == "skip":
+        return await admin_skip_stage(session, user_id)
+    return await admin_give_points(session, user_id, MASTERY_POINT_ACTIONS[action])

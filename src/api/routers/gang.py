@@ -95,8 +95,8 @@ async def get_my_gang(
     return GangOut(
         name=gang.name,
         phase=user.phase,
-        attack=CampOut(quantity=army.attack.quantity, power=army.attack.power),
-        defense=CampOut(quantity=army.defense.quantity, power=army.defense.power),
+        attack=CampOut(quantity=army.attack.quantity, power=int(army.attack.power)),
+        defense=CampOut(quantity=army.defense.quantity, power=int(army.defense.power)),
         cards_quantity=army.cards_quantity,
         squads=[
             SquadOut(

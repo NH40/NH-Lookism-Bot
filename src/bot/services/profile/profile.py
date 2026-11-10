@@ -85,7 +85,7 @@ async def get_profile(session: AsyncSession, user_id: int) -> ProfileView | None
         phase=user.phase,
         gang_name=gang.name if gang else None,
         clan_name=await _clan_name(session, user_id),
-        army_power=army.total_power,
+        army_power=int(army.total_power),  # мощь бывает дробной (бафы %), схема API — целое
         districts=territory.districts,
         influence=territory.influence,
         nh_coins=wallet.nh_coins,

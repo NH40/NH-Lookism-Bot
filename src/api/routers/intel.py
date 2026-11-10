@@ -121,7 +121,7 @@ async def get_intel(user_id: int = Depends(get_current_user_id), session: AsyncS
 
 
 def _camp(camp) -> CampOut | None:
-    return CampOut(power=camp.power, quantity=camp.quantity, top=list(camp.top)) if camp is not None else None
+    return CampOut(power=int(camp.power), quantity=camp.quantity, top=list(camp.top)) if camp is not None else None
 
 
 @router.get("/report", response_model=ReportOut)

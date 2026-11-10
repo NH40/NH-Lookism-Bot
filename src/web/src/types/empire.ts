@@ -45,6 +45,7 @@ export interface EmpireRuler {
   players: number;
   tax_percent: number;
   collected: number;
+  tribute_today?: number;
   treasury: number;
   holdings: number;
   overrides: EmpireOverride[];

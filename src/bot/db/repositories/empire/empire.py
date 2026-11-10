@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -135,6 +135,7 @@ class EmpireStats:
     players: int
     tax_percent: int
     collected: int
+    tribute_today: int  # дань младших императоров за сутки UTC (`services/empire/tribute`)
     nh_coins: int
     overrides: list[tuple[str | None, str | None, int]]  # (username, имя, ставка)
     overrides_total: int
@@ -154,7 +155,7 @@ async def empire_stats(
     )
     me = (
         await session.execute(
-            select(User.empire_tax_percent, User.empire_collected, User.nh_coins).where(User.id == emperor_id)
+            select(User.empire_tax_percent, User.empire_collected, User.nh_coins, User.tribute_got, User.tribute_day).where(User.id == emperor_id)
         )
     ).one()
     rows = await session.execute(
@@ -172,6 +173,7 @@ async def empire_stats(
     )
     return EmpireStats(
         cities=cities, players=players, tax_percent=me[0], collected=me[1], nh_coins=me[2],
+        tribute_today=me[3] if me[4] == datetime.now(timezone.utc).date() else 0,
         overrides=[tuple(r) for r in rows.all()], overrides_total=total,
         sabotage_total=sabotage_total, sabotage_success=sabotage_success,
     )

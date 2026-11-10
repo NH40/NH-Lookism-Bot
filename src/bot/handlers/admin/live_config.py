@@ -20,7 +20,7 @@ from bot.constant.admin.live_config import (
 )
 from bot.handlers.admin.common import guard
 from bot.config.admin.live_catalog import SECTIONS
-from bot.keyboards.admin.live_config import KEYS_PER_PAGE, back_to_key, duration_menu, key_menu, list_menu, sections_menu
+from bot.keyboards.admin.live_config import KEYS_PER_PAGE, back_to_key, duration_menu, key_menu, list_menu, sections_menu, subsections_menu
 from bot.services.admin import live_config, roles
 from bot.states.admin_roles import AdminConfigStates
 from bot.texts.admin.live_config import (
@@ -65,6 +65,14 @@ async def _show_sections(message) -> None:
 
 
 async def _show_list(message, section: str, page: int) -> None:
+    subs = live_config.subsections(section) if "." not in section else []
+    if len(subs) > 1:  # раздел с подразделами — сначала выбор подраздела
+        await safe_edit_text(
+            message, SECTION_SCREEN.format(title=SECTIONS.get(section, section)), reply_markup=subsections_menu(subs),
+        )
+        return
+    if len(subs) == 1:
+        section = subs[0][0]
     keys = live_config.keys_of(section)
     pages = max(1, -(-len(keys) // KEYS_PER_PAGE))
     page = min(max(page, 0), pages - 1)
@@ -72,8 +80,12 @@ async def _show_list(message, section: str, page: int) -> None:
         (live_config.sid(k), BTN_ROW.format(star=_star(k, long=False), title=live_config.LIVE_KEYS[k].title, value=_fmt(live_config.get(k))))
         for k in keys[page * KEYS_PER_PAGE:(page + 1) * KEYS_PER_PAGE]
     ]
-    title = CHANGED_TITLE if section == live_config.SECTION_CHANGED else SECTIONS.get(section, section)
-    await safe_edit_text(message, SECTION_SCREEN.format(title=title), reply_markup=list_menu(section, rows, page, pages))
+    top = live_config.top_of(section)
+    title = CHANGED_TITLE if section == live_config.SECTION_CHANGED else SECTIONS.get(top, top)
+    if live_config.group_title(section):
+        title = f"{title} → {live_config.group_title(section)}"
+    back = f"{CB_CONFIG_SECTION_PREFIX}{top}:0" if len(live_config.subsections(top)) > 1 and section != top else CB_CONFIG_LIST
+    await safe_edit_text(message, SECTION_SCREEN.format(title=title), reply_markup=list_menu(section, rows, page, pages, back=back))
 
 
 async def _show_key(message, key: str) -> None:

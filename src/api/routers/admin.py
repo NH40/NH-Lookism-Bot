@@ -348,7 +348,8 @@ async def get_config(user_id: int = Depends(get_current_user_id), session: Async
         keys.append({
             "key": key, "title": spec.title, "value": _num(live_config.get(key)), "default": _num(spec.default()),
             "min": _num(spec.min), "max": _num(spec.max), "integer": spec.type is int, "expiring": spec.expiring,
-            "overridden": entry is not None, "left_seconds": left, "section": spec.section,
+            "overridden": entry is not None, "left_seconds": left, "section": live_config.top_of(spec.section),
+            "group": live_config.group_title(spec.section), "group_code": spec.section,
             "shown": live_config.human(key, live_config.get(key)), "shown_default": live_config.human(key, spec.default()),
             "text_frozen": spec.text_frozen,
         })

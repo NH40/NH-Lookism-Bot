@@ -162,6 +162,7 @@ class RulerOut(BaseModel):
     players: int
     tax_percent: int
     collected: int
+    tribute_today: int = 0
     treasury: int
     holdings: int
     overrides: list[OverrideOut]
@@ -229,7 +230,7 @@ async def _ruler(session: AsyncSession, redis: Redis, user_id: int) -> RulerOut:
                 for r in view.sent
             ],
         ),
-        cities=stats.cities, players=stats.players, tax_percent=stats.tax_percent, collected=stats.collected,
+        cities=stats.cities, players=stats.players, tax_percent=stats.tax_percent, collected=stats.collected, tribute_today=stats.tribute_today,
         treasury=stats.nh_coins, holdings=holdings,
         overrides=[OverrideOut(username=u, name=_name(u, n), percent=p) for u, n, p in stats.overrides],
         overrides_total=stats.overrides_total, sabotage_total=stats.sabotage_total,

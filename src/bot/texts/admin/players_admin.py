@@ -60,6 +60,12 @@ BTN_TOGGLE_BODY = "👥 Второе тело: {state}"
 BTN_TOGGLE_PASS = "🎫 Премиум-пасс: {state}"
 BTN_TOGGLE_MONSTER = "👹 67 MONSTER: {state}"
 BTN_LEAGUE = "🏅 Лига"
+BTN_MASTERY = "🥋 Мастерство"
+BTN_MASTERY_QUEST = "📜 Выдать задание сейчас"
+BTN_MASTERY_SKIP = "⏭ Засчитать этап (+4 очка)"
+BTN_MASTERY_P1 = "+1 очко"
+BTN_MASTERY_P4 = "+4 очка"
+BTN_MASTERY_M1 = "−1 очко"
 BTN_AWAKENING = "⚡ Пробуждение"
 BTN_POTENTIAL = "💠 Потенциал"
 BTN_STATS = "💪 Характеристики"
@@ -82,6 +88,29 @@ DONE_BODY = "Второе тело: {state}"
 DONE_PASS = "Премиум-пасс: {state}"
 DONE_MONSTER = "67 MONSTER: {state}"
 DONE_LEAGUE = "Лига: {value}. Территория снята, страну игрок выбирает заново."
+DEV_MASTERY = (
+    "🥋 <b>Мастерство</b> · {name}\n"
+    "Цепочка: <b>{status}</b> · этап {stage}\n"
+    "Невложенных очков: <b>{free}</b>\n"
+    "{levels}"
+)
+MASTERY_STATUS_LABELS: dict[str | None, str] = {
+    None: "не открыта",
+    "pending": "ждёт задание",
+    "breakthrough": "стена (нужен прорыв)",
+    "active": "задание идёт",
+    "trainer": "Том побеждён, очки вкладываются",
+    "complete": "пройдена",
+}
+_DONE_MASTERY_POINTS = "Мастерство: невложенных очков теперь {value}."
+DONE_MASTERY: dict[str, str] = {
+    "quest": "Мастерство: выдано задание этапа {value}.",
+    "skip": "Мастерство: этап {value} засчитан, +4 очка.",
+    "p1": _DONE_MASTERY_POINTS,
+    "p4": _DONE_MASTERY_POINTS,
+    "m1": _DONE_MASTERY_POINTS,
+}
+MASTERY_BUSY = "Задание этапа уже идёт или цепочка пройдена."
 DEV_LEAGUE = "🏅 <b>Лига</b> · {name}\nСейчас: <b>{current}</b>, счёт {score}.\n⚠️ Смена лиги снимает районы, здания и трон."
 DONE_AWAKEN = "Пробуждение: {value}"
 DONE_POTENTIAL = "Потенциал: {value}"

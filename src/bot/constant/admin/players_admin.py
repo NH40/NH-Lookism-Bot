@@ -35,6 +35,7 @@ CB_DEV_AWAKEN = "adm:d:aw:"  # + level:uid
 CB_DEV_POTENTIAL = "adm:d:po:"  # + idx:uid
 CB_DEV_MONSTER = "adm:d:mo:"  # + uid
 CB_DEV_LEAGUE = "adm:d:lg:"  # + idx:uid
+CB_DEV_MASTERY = "adm:d:ms:"  # + действие:uid (view|quest|skip|p1|p4|m1)
 CB_DEV_STATS = "adm:d:st:"  # + uid — выбор характеристики
 CB_DEV_STAT_PICK = "adm:d:sr:"  # + stat:uid
 
@@ -81,6 +82,7 @@ AUDIT_DEV_AWAKENING = "dev_awakening"
 AUDIT_DEV_POTENTIAL = "dev_potential"
 AUDIT_DEV_MONSTER = "dev_monster"
 AUDIT_DEV_LEAGUE = "dev_league"
+AUDIT_DEV_MASTERY = "dev_mastery"
 AUDIT_DEV_STAT = "dev_stat_rank"
 AUDIT_BAN = "ban"
 AUDIT_UNBAN = "unban"

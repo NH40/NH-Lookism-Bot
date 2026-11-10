@@ -50,11 +50,18 @@ async def refresh_powers(session_factory: async_sessionmaker[AsyncSession], *, e
         else:
             since = datetime.now(timezone.utc) - timedelta(hours=TOP_POWER_ACTIVE_HOURS)
             ids = await top_repo.active_user_ids(session, since)
+    from sqlalchemy.exc import DBAPIError
+
     for start in range(0, len(ids), TOP_POWER_BATCH):
-        async with session_factory() as session:
-            values = [(uid, (await get_army_stats(session, uid)).total_power) for uid in ids[start : start + TOP_POWER_BATCH]]
-            await top_repo.set_powers(session, values)
-            await session.commit()
+        try:
+            async with session_factory() as session:
+                values = [(uid, (await get_army_stats(session, uid)).total_power) for uid in ids[start : start + TOP_POWER_BATCH]]
+                await top_repo.set_powers(session, values)
+                await session.commit()
+        except DBAPIError:
+            # Снимок мощи — кэш: столкнулась пачка с живой записью — обновится в следующий проход,
+            # остальные пачки не теряем (раньше один сбой обрывал весь проход).
+            log.warning("Power snapshot batch %d skipped", start, exc_info=True)
     await refresh_clan_powers(session_factory)
     return len(ids)
 

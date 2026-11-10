@@ -55,3 +55,13 @@ button.adm-item { cursor: pointer; }
 .adm-split { display: grid; gap: 10px; }
 .adm-tabs { grid-template-columns: repeat(3, 1fr); margin-bottom: 12px; }
 .adm-danger { border-color: #ff9fb0 !important; }
+
+/* Подраздел настроек на лету (2026-11-10) */
+.adm-group-title {
+  margin: 14px 2px 6px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--gold-2, #e9c46a);
+}

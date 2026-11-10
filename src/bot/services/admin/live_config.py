@@ -12,6 +12,7 @@
 так не меняются: логика новая, текст старый."""
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import importlib
 import logging
@@ -25,7 +26,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from bot.config.admin.live_catalog import SCALARS, SECTIONS, TABLES, TEXT_FROZEN
+from bot.config.admin.live_catalog import GROUP_OTHER, GROUPS, SCALARS, SECTIONS, TABLES, TEXT_FROZEN
 from bot.constant.admin.live_config import (
     AUDIT_CONFIG_RESET,
     AUDIT_CONFIG_SET,
@@ -35,7 +36,6 @@ from bot.constant.admin.live_config import (
     KEY_CD_CITY_MOVE,
     KEY_CD_COUNTRY_SWAP,
     KEY_CD_EMPIRE_ANNOUNCE,
-    KEY_CD_EMPIRE_WAR,
     KEY_CD_EXTRAS,
     KEY_CD_PERSONAL,
     KEY_CD_RECRUIT,
@@ -128,7 +128,6 @@ _COOLDOWN_KEYS = (
     LiveKey(KEY_CD_CITY_MOVE, "КД переезда между городами, мин", int, 0, _MINUTES_MAX, _cfg_minutes("bot.config.country", "CITY_MOVE_COOLDOWN_SECONDS"), section=SECTION_COOLDOWN),
     LiveKey(KEY_CD_COUNTRY_SWAP, "КД смены страны (переезд), мин", int, 0, _MINUTES_MAX, _cfg_minutes("bot.config.country", "COUNTRY_SWAP_COOLDOWN_SECONDS"), section=SECTION_COOLDOWN),
     LiveKey(KEY_CD_EMPIRE_ANNOUNCE, "КД объявления императора игрокам, мин", int, 0, _MINUTES_MAX, _cfg_minutes("bot.config.empire", "EMPIRE_ANNOUNCE_COOLDOWN_SECONDS"), section=SECTION_COOLDOWN),
-    LiveKey(KEY_CD_EMPIRE_WAR, "КД объявления войны императоров, мин", int, 0, _MINUTES_MAX, _cfg_minutes("bot.config.empire", "EMPIRE_WAR_COOLDOWN_SECONDS"), section=SECTION_SHIELD),
     LiveKey(KEY_CD_SWAP_PATH, "КД смены пути, мин", int, 0, _MINUTES_MAX, _cfg_minutes("bot.config.unique_path", "PATH_SWAP_COOLDOWN_SECONDS"), section=SECTION_COOLDOWN),
     LiveKey(KEY_CD_SWAP_TECH, "КД смены техники, мин", int, 0, _MINUTES_MAX, _cfg_minutes("bot.config.unique_technique", "TECHNIQUE_SWAP_COOLDOWN_SECONDS"), section=SECTION_COOLDOWN),
     LiveKey(KEY_CD_SWAP_GENIUS, "КД смены гениальности, мин", int, 0, _MINUTES_MAX, _cfg_minutes("bot.config.genius", "GENIUS_SWAP_COOLDOWN_SECONDS"), section=SECTION_COOLDOWN),
@@ -177,8 +176,33 @@ def _catalog_keys() -> list[LiveKey]:
     return keys
 
 
+def _grouped(spec: LiveKey) -> LiveKey:
+    """Раздел ключа → подраздел `раздел.N` по `GROUPS` (имя константы или ключа)."""
+    groups = GROUPS.get(spec.section)
+    if not groups:
+        return spec
+    name = spec.const or spec.key
+    for idx, (_, pattern) in enumerate(groups):
+        if re.search(pattern, name):
+            return dataclasses.replace(spec, section=f"{spec.section}.{idx}")
+    return dataclasses.replace(spec, section=f"{spec.section}.{len(groups)}")
+
+
+def top_of(section: str) -> str:
+    return section.split(".", 1)[0]
+
+
+def group_title(section: str) -> str:
+    """Название подраздела; у раздела без подразделов — пусто."""
+    top, _, idx = section.partition(".")
+    if not idx:
+        return ""
+    groups = GROUPS.get(top, ())
+    return groups[int(idx)][0] if int(idx) < len(groups) else GROUP_OTHER
+
+
 LIVE_KEYS: dict[str, LiveKey] = {
-    k.key: k
+    k.key: _grouped(k)
     for k in (
         LiveKey(KEY_BP_XP_MULT, "Множитель опыта пасса", float, 0.1, 10.0, lambda: 1.0, True),
         LiveKey(KEY_INCOME_MULT, "Множитель дохода бизнеса", float, 0.1, 10.0, lambda: 1.0, True),
@@ -281,14 +305,28 @@ def sections() -> list[tuple[str, str, int]]:
     """(код, название, сколько настроек) — разделы каталога в порядке показа."""
     counts: dict[str, int] = {}
     for spec in LIVE_KEYS.values():
-        counts[spec.section] = counts.get(spec.section, 0) + 1
+        top = top_of(spec.section)
+        counts[top] = counts.get(top, 0) + 1
     return [(code, title, counts[code]) for code, title in SECTIONS.items() if code in counts]
 
 
+def subsections(top: str) -> list[tuple[str, str, int]]:
+    """(код `раздел.N`, название, сколько) — подразделы раздела по порядку; пусто — их нет."""
+    counts: dict[str, int] = {}
+    for spec in LIVE_KEYS.values():
+        if "." in spec.section and top_of(spec.section) == top:
+            counts[spec.section] = counts.get(spec.section, 0) + 1
+    order = sorted(counts, key=lambda s: int(s.split(".")[1]))
+    return [(code, group_title(code), counts[code]) for code in order]
+
+
 def keys_of(section: str) -> list[str]:
+    """Ключи подраздела (`раздел.N`) или всего раздела (`раздел`)."""
     if section == SECTION_CHANGED:
         return [k for k in LIVE_KEYS if override(k) is not None]
-    return [k for k, spec in LIVE_KEYS.items() if spec.section == section]
+    if "." in section:
+        return [k for k, spec in LIVE_KEYS.items() if spec.section == section]
+    return [k for k, spec in LIVE_KEYS.items() if top_of(spec.section) == section]
 
 
 _DURATION_RE = re.compile(r"^(\d+(?:[.,]\d+)?)\s*(с|сек|s|м|мин|m|ч|h|д|d)$", re.IGNORECASE)
@@ -296,7 +334,9 @@ _UNIT_SECONDS = {"с": 1, "сек": 1, "s": 1, "м": 60, "мин": 60, "m": 60, 
 
 
 def _key_unit(key: str) -> int | None:
-    """Секунд в единице хранения ключа-длительности (сек / мин / ч), иначе None."""
+    """Секунд в единице хранения ключа-длительности (сек / мин / ч), иначе None. Ключ строки
+    таблицы (`ИМЯ|индекс`) — по имени таблицы."""
+    key = key.split("|", 1)[0]
     if key.endswith("_SECONDS"):
         return 1
     if key.endswith("_MINUTES"):

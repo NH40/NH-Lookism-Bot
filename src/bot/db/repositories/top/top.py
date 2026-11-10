@@ -44,10 +44,12 @@ async def onboarded_user_ids(session: AsyncSession) -> list[int]:
 
 
 async def set_powers(session: AsyncSession, values: list[tuple[int, int]]) -> None:
-    """Пачка снимков мощи одним executemany. НЕ коммитит."""
+    """Пачка снимков мощи одним executemany. НЕ коммитит. Строки — по возрастанию id: в разном
+    порядке пачка сталкивалась с другими записями в users (взаимоблокировка 2026-11-10)."""
     if values:
         await session.execute(
-            text("UPDATE users SET army_power_cache = :p WHERE id = :u"), [{"u": u, "p": p} for u, p in values]
+            text("UPDATE users SET army_power_cache = :p WHERE id = :u"),
+            [{"u": u, "p": int(p)} for u, p in sorted(values)],
         )
 
 

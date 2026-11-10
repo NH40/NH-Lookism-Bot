@@ -33,6 +33,7 @@ from bot.constant.admin.players_admin import (
     AUDIT_DEV_BLOODLINE,
     AUDIT_DEV_BODY,
     AUDIT_DEV_LEAGUE,
+    AUDIT_DEV_MASTERY,
     AUDIT_DEV_MONSTER,
     AUDIT_DEV_PASS,
     AUDIT_DEV_POTENTIAL,
@@ -335,10 +336,12 @@ async def get_dev(uid: int, user_id: int = Depends(get_current_user_id), session
     premium = await players_admin.premium_pass(session, uid)
     await session.commit()  # строка/сезон пасса могли создаться при чтении
     ranks = await players_admin.stat_ranks(session, uid)
+    mastery = await players_admin.mastery_state(session, uid)
     return {
         "name": _name_of(user), "systems": systems, "bloodlines": blood,
         "second_body": bool(user.second_body), "premium": premium, "awakening": user.awakening_level,
         "potential": user.potential, "monster": bool(user.monster_potential), "league": user.league, "league_score": user.league_score, "stats": {s: RANK_LADDER[i] for s, i in ranks.items()}, "phase": user.phase,
+        "mastery": {**mastery, "status_label": t.MASTERY_STATUS_LABELS.get(mastery["status"], mastery["status"])},
     }
 
 
@@ -396,6 +399,17 @@ async def post_dev(uid: int, body: DevIn, user_id: int = Depends(get_current_use
             raise bad("Неизвестная лига.")
         await promote(session, uid, body.level)
         action, details, notice = AUDIT_DEV_LEAGUE, {"league": body.level}, t.DONE_LEAGUE.format(value=LEAGUES[body.level].name)
+    elif a == "mastery":
+        from bot.services.mastery import QuestBusyError
+
+        if body.value not in players_admin.MASTERY_ACTIONS:
+            raise bad("Неизвестное действие мастерства.")
+        try:
+            notice = t.DONE_MASTERY[body.value].format(value=await players_admin.mastery_action(session, uid, body.value))
+        except QuestBusyError:
+            await session.rollback()
+            raise bad(t.MASTERY_BUSY)
+        action, details = AUDIT_DEV_MASTERY, {"action": body.value}
     elif a == "monster":
         on = await players_admin.toggle_monster(session, uid)
         action, details, notice = AUDIT_DEV_MONSTER, {"monster": on}, t.DONE_MONSTER.format(state=t.STATE_ON if on else t.STATE_OFF)

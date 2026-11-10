@@ -97,6 +97,7 @@ export interface AdminDev {
   name: string;
   monster: boolean;
   league: number;
+  mastery: { status: string | null; status_label: string; stage: number; free: number; levels: Record<string, number> };
   league_score: number;
   systems: Record<string, { owned: Record<string, number>; active: string | null }>;
   bloodlines: Record<string, { code: string | null; level: number }>;
@@ -146,6 +147,8 @@ export interface AdminConfigKey {
   overridden: boolean;
   left_seconds: number | null;
   section: string;
+  group: string;
+  group_code: string;
   shown: string;
   shown_default: string;
   text_frozen: boolean;

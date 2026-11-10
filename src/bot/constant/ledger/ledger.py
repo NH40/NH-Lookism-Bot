@@ -4,6 +4,7 @@ from __future__ import annotations
 # Причины, которые сервис задаёт явно. Остальное описывает источник: кнопка, команда, запрос Mini App.
 REASON_INCOME = "income"  # доход зданий (строки за час сливаются в одну)
 REASON_EMPEROR_TAX = "emperor_tax"  # налог и пассивный бонус императору (тоже сливаются)
+REASON_EMPEROR_TRIBUTE = "emperor_tribute"  # дань младших императоров той же страны
 REASON_MANAGER_BURN = "manager_burn"  # абсолют «Менеджер» сжёг монеты напавшего
 REASON_ELITE_LOOT = "elite_loot"  # родословная Элиты: победитель забрал монеты проигравшего
 REASON_SABOTAGE = "sabotage"  # кража из казны императора

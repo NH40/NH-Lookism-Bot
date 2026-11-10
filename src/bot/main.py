@@ -37,7 +37,7 @@ from bot.middlewares.throttling import ThrottlingMiddleware
 from bot.services.district import resolve_expired
 from bot.services.empire import resolve_expired_wars
 from bot.config.mastery import MASTERY_SWEEP_INTERVAL_SECONDS
-from bot.handlers.mastery import send_quest_pushes
+from bot.handlers.mastery import send_breakthrough_pushes, send_quest_pushes
 from bot.config.event import EVENT_TICK_SECONDS
 from bot.handlers.event import send_spawn_pushes
 from bot.handlers.school import school_push_text
@@ -86,10 +86,11 @@ async def _mastery_sweep_loop(bot: Bot, session_factory) -> None:
     открыв экран) и шлёт пуш. Падение одного прохода не останавливает цикл."""
     while True:
         try:
-            await check_breakthroughs(session_factory)  # прорыв сделан → пошло ожидание задания
+            moved = await check_breakthroughs(session_factory)  # прорыв сделан → пошло ожидание задания
             activated = await activate_due(session_factory)
-            if activated:
+            if moved or activated:
                 async with session_factory() as session:
+                    await send_breakthrough_pushes(bot, session, moved)
                     await send_quest_pushes(bot, session, activated)
         except Exception:
             log.exception("Mastery sweep failed")
@@ -144,6 +145,19 @@ async def _events_loop(bot: Bot, session_factory: async_sessionmaker[AsyncSessio
         except Exception:
             log.exception("Events loop failed")
         await asyncio.sleep(EVENT_TICK_SECONDS)
+
+
+async def _tribute_loop(session_factory: async_sessionmaker[AsyncSession]) -> None:
+    """Дань младших императоров старшим (`services/empire/tribute`)."""
+    from bot.config.empire import EMPIRE_TRIBUTE_SWEEP_SECONDS
+    from bot.services.empire.tribute import sweep as tribute_sweep
+
+    while True:
+        await asyncio.sleep(EMPIRE_TRIBUTE_SWEEP_SECONDS)
+        try:
+            await tribute_sweep(session_factory)
+        except Exception:
+            log.exception("Tribute sweep failed")
 
 
 async def _potion_loop(bot: Bot, session_factory: async_sessionmaker[AsyncSession]) -> None:
@@ -325,6 +339,7 @@ async def main() -> None:
         asyncio.create_task(_events_loop(bot, session_factory)),
         asyncio.create_task(_ultra_instinct_loop(session_factory, redis)),
         asyncio.create_task(_potion_loop(bot, session_factory)),
+        asyncio.create_task(_tribute_loop(session_factory)),
         asyncio.create_task(_poker_loop(bot, session_factory)),
         asyncio.create_task(_exchange_loop(bot, session_factory)),
         asyncio.create_task(_top_loop(bot, session_factory)),

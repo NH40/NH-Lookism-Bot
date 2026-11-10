@@ -82,6 +82,7 @@ def render_empire(stats: EmpireStats, incoming=None, incoming_label: str = ""):
         players=format_number(stats.players),
         coins=format_number(stats.nh_coins),
         collected=format_number(stats.collected),
+        tribute=format_number(stats.tribute_today),
         rate=stats.tax_percent,
         overrides_block=block,
         incoming_line=(

@@ -21,7 +21,7 @@ from bot.config.characteristic import (
     strength_mastery_power_percent,
     technique_mastery_multiplier,
 )
-from bot.config.mastery import MASTERY_POINTS_PER_STAGE, MASTERY_STAGES
+from bot.config.mastery import MASTERY_LEVEL_CAP, MASTERY_POINTS_PER_STAGE, MASTERY_STAGES
 from bot.constant.characteristic import MASTERIES, MASTERY_ENDURANCE, MASTERY_SPEED, MASTERY_STRENGTH
 from bot.db.repositories import business as business_repo
 from bot.db.repositories.user import get_by_id
@@ -29,12 +29,8 @@ from bot.services.district import BattleOnCooldownError, NoAttackersError, fight
 from bot.services.mastery import (
     MasteryCappedError,
     NoFreePointsError,
-    NotEnoughCoinsError,
-    PointsSoldOutError,
     QuestNotActiveError,
     TomLockedError,
-    TrainerLockedError,
-    buy_point,
     get_view,
     invest_point,
 )
@@ -49,7 +45,7 @@ from bot.texts.mastery import (
     TOM_LOCKED_ALERT,
 )
 from bot.texts.profile import MASTERY_LABELS, MASTERY_TIER_LABELS
-from bot.utils.formatting import format_countdown, format_number
+from bot.utils.formatting import format_countdown
 
 router = APIRouter(prefix="/api/mastery", tags=["mastery"])
 
@@ -83,7 +79,7 @@ class MasteryOut(BaseModel):
     points_bought: int
     points_free: int
     points_per_stage: int
-    price: int | None
+    level_cap: int
     available_in_seconds: int | None  # больше не отдаётся (2026-10-28: «четких границ нет»)
     breakthrough: list[dict] = []  # статус breakthrough: [{label, done}]
     breakthrough_need: int = 0
@@ -129,7 +125,7 @@ async def get_mastery(
             MasteryTierOut(
                 code=code, label=plain(MASTERY_LABELS[code]), tier=view.mastery[code],
                 tier_label=MASTERY_TIER_LABELS[view.mastery[code]], effect=_effect(code, view.mastery[code]),
-                can_invest=free and view.mastery[code] < view.stage,
+                can_invest=free and view.mastery[code] < MASTERY_LEVEL_CAP,
             )
             for code in MASTERIES
         ],
@@ -146,7 +142,7 @@ async def get_mastery(
         points_bought=view.points_bought,
         points_free=view.points_free,
         points_per_stage=MASTERY_POINTS_PER_STAGE,
-        price=view.price,
+        level_cap=MASTERY_LEVEL_CAP,
         available_in_seconds=None,
         breakthrough=[{"label": BREAKTHROUGH_LABELS[c], "done": d} for c, d in (view.breakthrough or {}).items()],
         breakthrough_need=view.breakthrough_need,
@@ -173,7 +169,7 @@ async def post_tom(
     except BattleOnCooldownError as exc:
         raise bad(f"Сражение ещё на кулдауне — через {format_countdown(exc.retry_after_seconds)}.")
     return {
-        "message": "Победа над Томом Ли! Тренер ждёт — покупай очки мастерства." if result.won else "Поражение — Том оказался сильнее.",
+        "message": "Победа над Томом Ли! Получено 4 очка мастерства — вкладывай." if result.won else "Поражение — Том оказался сильнее.",
         "won": result.won,
         "rounds": result.rounds,
         "attacker_power": result.attacker_power,
@@ -181,19 +177,6 @@ async def post_tom(
         "tom_power": result.tom_power,
         "tom_remaining_power": result.tom_remaining_power,
     }
-
-
-@router.post("/buy")
-async def post_buy(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
-    try:
-        result = await buy_point(session, user_id)
-    except TrainerLockedError:
-        raise bad("Тренер Том Ли откроется после победы над ним.")
-    except PointsSoldOutError:
-        raise bad("Все очки этого этапа уже куплены.")
-    except NotEnoughCoinsError as exc:
-        raise bad(f"Не хватает NHCoin: нужно {format_number(exc.cost)}, у тебя {format_number(exc.balance)}.")
-    return {"message": f"Куплено очко мастерства ({result.points_bought}/{MASTERY_POINTS_PER_STAGE})", "points_free": result.points_free}
 
 
 class InvestIn(BaseModel):
@@ -214,7 +197,11 @@ async def post_invest(
     if result.chain_complete:
         message = f"{label}: {tier}. Мастерство постигнуто!"
     elif result.stage_finished:
-        message = f"{label}: {tier}. Этап пройден — следующее задание придёт в течение суток."
+        message = (
+            f"{label}: {tier}. Этап пройден, стена уже пробита — ожидайте задание следующего этапа."
+            if result.waiting
+            else f"{label}: {tier}. Этап пройден! Перед следующим — стена: выполни одно из действий в списке."
+        )
     else:
         message = f"{label}: {tier}"
     return {"message": message}

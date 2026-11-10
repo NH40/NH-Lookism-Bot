@@ -115,9 +115,14 @@ export function ConfigSection({ meta }: { meta: AdminMeta }) {
   const [section, setSection] = useState("shield");
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
-  const keys = (data.data?.keys ?? []).filter((k) =>
-    q ? k.title.toLowerCase().includes(q) || k.key.toLowerCase().includes(q) : section === "_changed" ? k.overridden : k.section === section,
-  );
+  const groupOrder = (code: string) => Number(code.split(".")[1] ?? 0);
+  const keys = (data.data?.keys ?? [])
+    .filter((k) =>
+      q ? k.title.toLowerCase().includes(q) || k.key.toLowerCase().includes(q) : section === "_changed" ? k.overridden : k.section === section,
+    )
+    .map((k, i) => ({ k, i }))
+    .sort((a, b) => (a.k.section === b.k.section ? groupOrder(a.k.group_code) - groupOrder(b.k.group_code) : 0) || a.i - b.i)
+    .map(({ k }) => k);
   const changed = (data.data?.keys ?? []).filter((k) => k.overridden).length;
   return (
     <Screen status={data.status} error={data.error}>
@@ -141,8 +146,11 @@ export function ConfigSection({ meta }: { meta: AdminMeta }) {
           )}
           <div className="adm-list">
             {keys.length === 0 && <div className="adm-hint">Ничего не найдено.</div>}
-            {keys.map((k) => (
+            {keys.map((k, idx) => (
               <div key={k.key}>
+                {k.group && (idx === 0 || keys[idx - 1].group_code !== k.group_code) && (
+                  <div className="adm-group-title">{k.group}</div>
+                )}
                 <button type="button" className={`adm-item ${open === k.key ? "on" : ""}`} onClick={() => { setOpen(open === k.key ? null : k.key); setValue(String(k.value)); setHours(0); }}>
                   <div>
                     <b>{k.title}</b>

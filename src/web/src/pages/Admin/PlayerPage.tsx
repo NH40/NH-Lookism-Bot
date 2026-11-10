@@ -351,6 +351,15 @@ function DevTab({ uid, meta, onChange }: { uid: number; meta: AdminMeta; onChang
                 ))}
               </div>
             </Field>
+            <Field label={`Мастерство · ${d.mastery.status_label}, этап ${d.mastery.stage}, очков ${d.mastery.free} · уровни ${Object.values(d.mastery.levels).join("/")}`}>
+              <div className="grid-3" style={{ gap: 6 }}>
+                <button type="button" className="btn small" disabled={busy} onClick={() => dev({ action: "mastery", value: "quest" })}>Выдать задание</button>
+                <button type="button" className="btn small" disabled={busy} onClick={() => dev({ action: "mastery", value: "skip" })}>Засчитать этап</button>
+                <button type="button" className="btn ghost small" disabled={busy} onClick={() => dev({ action: "mastery", value: "p1" })}>+1 очко</button>
+                <button type="button" className="btn ghost small" disabled={busy} onClick={() => dev({ action: "mastery", value: "p4" })}>+4 очка</button>
+                <button type="button" className="btn ghost small" disabled={busy} onClick={() => dev({ action: "mastery", value: "m1" })}>−1 очко</button>
+              </div>
+            </Field>
             <Field label={`Потенциал · сейчас ${d.potential ?? "—"}`}>
               <div className="grid-3" style={{ gap: 6 }}>
                 {c.potentials.map((p) => (

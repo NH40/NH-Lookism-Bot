@@ -15,6 +15,7 @@ from bot.constant.admin.players_admin import (
     AUDIT_DEV_BLOODLINE,
     AUDIT_DEV_BODY,
     AUDIT_DEV_LEAGUE,
+    AUDIT_DEV_MASTERY,
     AUDIT_DEV_MONSTER,
     AUDIT_DEV_PASS,
     AUDIT_DEV_POTENTIAL,
@@ -35,6 +36,7 @@ from bot.constant.admin.players_admin import (
     CB_DEV_MENU,
     CB_DEV_MISC,
     CB_DEV_LEAGUE,
+    CB_DEV_MASTERY,
     CB_DEV_MONSTER,
     CB_DEV_PASS,
     CB_DEV_POTENTIAL,
@@ -281,6 +283,34 @@ async def cb_league(callback: CallbackQuery, session: AsyncSession) -> None:
     await promote(session, user.id, idx)
     await _commit(callback, session, AUDIT_DEV_LEAGUE, user.id, {"league": idx})
     await back_to_card(callback, session, user.id, t.DONE_LEAGUE.format(value=LEAGUES[idx].name))
+
+
+@router.callback_query(F.data.startswith(CB_DEV_MASTERY))
+async def cb_mastery(callback: CallbackQuery, session: AsyncSession) -> None:
+    from bot.services.mastery import QuestBusyError
+    from bot.texts.profile import MASTERY_LABELS, MASTERY_TIER_LABELS
+
+    opened = await _open(callback, session, CB_DEV_MASTERY)
+    if opened is None or len(opened[0]) != 1:
+        return
+    (action,), user = opened
+    if action in players_admin.MASTERY_ACTIONS:
+        try:
+            notice = t.DONE_MASTERY[action].format(value=await players_admin.mastery_action(session, user.id, action))
+        except QuestBusyError:
+            await session.rollback()
+            await callback.answer(t.MASTERY_BUSY, show_alert=True)
+            return
+        await _commit(callback, session, AUDIT_DEV_MASTERY, user.id, {"action": action})
+        await callback.answer(notice, show_alert=True)
+    else:
+        await callback.answer()
+    s = await players_admin.mastery_state(session, user.id)
+    levels = "\n".join(f"{MASTERY_LABELS[code]}: {MASTERY_TIER_LABELS[lvl]}" for code, lvl in s["levels"].items())
+    text = t.DEV_MASTERY.format(
+        name=name_of(user), status=t.MASTERY_STATUS_LABELS.get(s["status"], s["status"]), stage=s["stage"], free=s["free"], levels=levels,
+    )
+    await edit_screen(callback, text, kb.dev_mastery(user.id))
 
 
 @router.callback_query(F.data.startswith(CB_DEV_MONSTER))

@@ -24,14 +24,15 @@ def _chance(profile, *, won: bool, vs_bots: bool) -> float:
     return 1 - (1 - min(1.0, agility)) * (1 - skills)
 
 
-async def roll_free_attack(redis: Redis, user_id: int, profile, *, won: bool, vs_bots: bool) -> bool:
-    """Бросок «бой без КД» с учётом цепочки. Обновляет счётчик цепочки (best-effort)."""
+async def roll_free_attack(redis: Redis, user_id: int, profile, *, won: bool, vs_bots: bool, factor: float = 1.0) -> bool:
+    """Бросок «бой без КД» с учётом цепочки. Обновляет счётчик цепочки (best-effort).
+    `factor` — множитель шанса (война императоров — меньше 1)."""
     key = free_attack_chain(user_id)
     try:
         chain = int(await redis.get(key) or 0)
     except Exception:  # noqa: BLE001 — сбой Redis не должен ломать бой; без цепочки — без бонуса
         chain = 99
-    free = random.random() < _chance(profile, won=won, vs_bots=vs_bots) * FREE_ATTACK_CHAIN_DECAY ** chain
+    free = random.random() < _chance(profile, won=won, vs_bots=vs_bots) * factor * FREE_ATTACK_CHAIN_DECAY ** chain
     try:
         if free:
             await redis.set(key, chain + 1, ex=FREE_ATTACK_CHAIN_TTL_SECONDS)

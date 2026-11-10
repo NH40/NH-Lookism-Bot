@@ -32,7 +32,14 @@ def sections_menu(sections: list[tuple[str, str, int]], changed: int, changed_co
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def list_menu(section: str, rows: list[tuple[str, str]], page: int, pages: int) -> InlineKeyboardMarkup:
+def subsections_menu(subs: list[tuple[str, str, int]]) -> InlineKeyboardMarkup:
+    """Подразделы раздела: по одному в строке — названия длинные."""
+    keyboard = [[_btn(BTN_SECTION.format(title=title, count=count), f"{CB_CONFIG_SECTION_PREFIX}{code}:0")] for code, title, count in subs]
+    keyboard.append([_btn(BTN_BACK, CB_CONFIG_LIST)])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def list_menu(section: str, rows: list[tuple[str, str]], page: int, pages: int, *, back: str = CB_CONFIG_LIST) -> InlineKeyboardMarkup:
     """rows: [(короткий id, подпись)] — только текущая страница."""
     keyboard = [[_btn(label, f"{CB_CONFIG_KEY_PREFIX}{short}")] for short, label in rows]
     if pages > 1:
@@ -41,7 +48,7 @@ def list_menu(section: str, rows: list[tuple[str, str]], page: int, pages: int) 
         if page < pages - 1:
             nav.append(_btn("▶️", f"{CB_CONFIG_SECTION_PREFIX}{section}:{page + 1}"))
         keyboard.append(nav)
-    keyboard.append([_btn(BTN_BACK, CB_CONFIG_LIST)])
+    keyboard.append([_btn(BTN_BACK, back)])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 

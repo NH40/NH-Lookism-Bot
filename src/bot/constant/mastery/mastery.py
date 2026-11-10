@@ -7,7 +7,7 @@ from __future__ import annotations
 # Статус текущего этапа цепочки (`mastery_quests.status`).
 QUEST_PENDING = "pending"  # условие выполнено, задание придёт в случайный момент
 QUEST_ACTIVE = "active"  # задания этапа в работе
-QUEST_TRAINER = "trainer"  # Том побеждён — у тренера можно купить очки этапа
+QUEST_TRAINER = "trainer"  # Том побеждён — 4 очка этапа выданы, игрок их вкладывает (значение в БД прежнее)
 QUEST_COMPLETE = "complete"  # все три этапа пройдены
 QUEST_BREAKTHROUGH = "breakthrough"  # этап пройден — нужен «прорыв», чтобы пошло ожидание следующего
 

@@ -22,6 +22,7 @@ from bot.constant.admin.players_admin import (
     CB_DEV_MISC,
     CB_DEV_PASS,
     CB_DEV_LEAGUE,
+    CB_DEV_MASTERY,
     CB_DEV_MONSTER,
     CB_DEV_POTENTIAL,
     CB_DEV_STATS,
@@ -141,8 +142,22 @@ def dev_misc(uid: int, *, body: bool, premium: bool, monster: bool = False) -> I
         [_btn(t.BTN_TOGGLE_PASS.format(state=state(premium)), f"{CB_DEV_PASS}{uid}")],
         [_btn(t.BTN_TOGGLE_MONSTER.format(state=state(monster)), f"{CB_DEV_MONSTER}{uid}"), _btn(t.BTN_LEAGUE, f"{CB_DEV_LEAGUE}-1:{uid}")],
         [_btn(t.BTN_AWAKENING, f"{CB_DEV_AWAKEN}-1:{uid}"), _btn(t.BTN_POTENTIAL, f"{CB_DEV_POTENTIAL}-1:{uid}")],
-        [_btn(t.BTN_STATS, f"{CB_DEV_STATS}{uid}")],
+        [_btn(t.BTN_STATS, f"{CB_DEV_STATS}{uid}"), _btn(t.BTN_MASTERY, f"{CB_DEV_MASTERY}view:{uid}")],
         _back(f"{CB_DEV_MENU}{uid}"),
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def dev_mastery(uid: int) -> InlineKeyboardMarkup:
+    rows = [
+        [_btn(t.BTN_MASTERY_QUEST, f"{CB_DEV_MASTERY}quest:{uid}")],
+        [_btn(t.BTN_MASTERY_SKIP, f"{CB_DEV_MASTERY}skip:{uid}")],
+        [
+            _btn(t.BTN_MASTERY_P1, f"{CB_DEV_MASTERY}p1:{uid}"),
+            _btn(t.BTN_MASTERY_P4, f"{CB_DEV_MASTERY}p4:{uid}"),
+            _btn(t.BTN_MASTERY_M1, f"{CB_DEV_MASTERY}m1:{uid}"),
+        ],
+        _back(f"{CB_DEV_MISC}{uid}"),
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

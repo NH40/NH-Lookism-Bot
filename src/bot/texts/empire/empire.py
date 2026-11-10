@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from bot.config.empire import (
     EMPEROR_PASSIVE_BONUS_PERCENT,
+    EMPIRE_TRIBUTE_CAP_PERCENT,
+    EMPIRE_TRIBUTE_PERCENT,
     EMPIRE_TAX_MAX_PERCENT,
     EMPIRE_TAX_MIN_PERCENT,
     EMPIRE_WAR_TREASURY_MAX_PERCENT,
@@ -36,10 +38,13 @@ EMPIRE_SCREEN = (
     "🏙 Городов: <b>{cities}</b>\n"
     "👥 Игроков платят налог: <b>{players}</b>\n"
     "🪙 Казна (твой кошелёк NHCoin): <b>{coins}</b>\n"
-    "💰 Собрано с империи всего: <b>{collected}</b>\n━━━━━━━━━━━━━━━━━━\n"
+    "💰 Собрано с империи всего: <b>{collected}</b>\n"
+    "👑 Дань младших императоров сегодня: <b>{tribute}</b>\n━━━━━━━━━━━━━━━━━━\n"
     "📜 <b>Общий налог: {rate}%</b>\n"
     f"Налог игрок теряет — он уходит тебе. Сверху ты пассивно получаешь +{EMPEROR_PASSIVE_BONUS_PERCENT}% "
     "от дохода каждого игрока <i>(у него не вычитается)</i>.\n"
+    f"Императоры этой страны в младших лигах отдают тебе {EMPIRE_TRIBUTE_PERCENT}% своего налога "
+    f"(не больше {EMPIRE_TRIBUTE_CAP_PERCENT}% твоего налога за сутки).\n"
     "{overrides_block}"
     "{incoming_line}"
     "{sabotage_line}"

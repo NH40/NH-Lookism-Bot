@@ -12,11 +12,21 @@ BANNED_TEXT = "⛔️ Ваш аккаунт заблокирован."
 
 # Один и тот же UPDATE обслуживает и бан-чек, и трекинг активности (User.last_active_at —
 # "онлайн за 24ч" в статистике /admin) — не отдельным запросом на каждый апдейт (правило 4).
+# Он же держит актуальным юзернейм (2026-11-10: раньше обновлялся только при /start — сменивший
+# юзернейм в Telegram не находился по новому ни в обменах, ни в поиске). Старый юзернейм
+# возвращается, чтобы при смене снять новый у того, кто держал его раньше.
 _TOUCH_SQL = text(
     """
-    UPDATE users SET last_active_at = now() WHERE id = :user_id
-    RETURNING (is_banned OR COALESCE(banned_until > now(), false)) AS is_banned
+    WITH old AS (SELECT username FROM users WHERE id = :user_id)
+    UPDATE users SET last_active_at = now(), username = COALESCE(:username, users.username)
+    WHERE id = :user_id
+    RETURNING (is_banned OR COALESCE(banned_until > now(), false)) AS is_banned, (SELECT username FROM old) AS old_username
     """
+)
+# Юзернейм в Telegram уникален: если он был записан у другого игрока (тот сменил свой раньше и
+# с тех пор не заходил), снимаем — иначе поиск по @ находил бы не того.
+_FREE_USERNAME_SQL = text(
+    "UPDATE users SET username = NULL WHERE lower(username) = lower(:username) AND id <> :user_id"
 )
 
 
@@ -42,8 +52,10 @@ class BanCheckMiddleware(BaseMiddleware):
         if tg_user is None:
             return await handler(event, data)
 
-        result = await session.execute(_TOUCH_SQL, {"user_id": tg_user.id})
+        result = await session.execute(_TOUCH_SQL, {"user_id": tg_user.id, "username": tg_user.username})
         row = result.one_or_none()
+        if row is not None and tg_user.username and row.old_username != tg_user.username:
+            await session.execute(_FREE_USERNAME_SQL, {"username": tg_user.username, "user_id": tg_user.id})
         await session.commit()
 
         if row is not None and row.is_banned:

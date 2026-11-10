@@ -383,7 +383,6 @@ async def _resolve(session: AsyncSession, redis: Redis, war, resolution: str, *,
     if shield > 0:
         await redis.set(empire_war_shield(loser), "1", ex=shield)
     # Ловкость: вторая атака без КД — шанс ×EMPIRE_WAR_FREE_ATTACK_FACTOR (на императоре сложнее).
-    from bot.services.characteristic.combat import get_combat_profile
     from bot.services.district.free_attack import roll_free_attack
 
     free_attack = await roll_free_attack(

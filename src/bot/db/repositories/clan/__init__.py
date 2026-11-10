@@ -56,6 +56,8 @@ from bot.db.repositories.clan.clan import (  # noqa: F401
     settle_income_share,
     take_garrison_card,
     take_garrison_extra,
+    take_all_garrison_cards,
+    take_all_garrison_extras,
     take_share,
     top_ids,
     top_page,

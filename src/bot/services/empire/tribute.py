@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -53,8 +53,8 @@ _HOLDINGS_SQL = text(
 )
 
 
-def _today() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+def _today() -> date:
+    return datetime.now(timezone.utc).date()
 
 
 def plan(

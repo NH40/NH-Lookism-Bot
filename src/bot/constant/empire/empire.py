@@ -17,6 +17,26 @@ CB_EMPIRE_ANNOUNCE_SEND = "empire:announce:send"
 CB_EMPIRE_LOG_PREFIX = "empire:log:"
 """f"{CB_EMPIRE_LOG_PREFIX}{page}" — журнал объявлений у игрока."""
 
+# --- Ивенты императора (`empire_events.kind` / `status`) ---
+EVENT_COINS = "coins"  # раздача NHCoin
+EVENT_STATISTS = "statists"  # раздача статистов
+EVENT_FEAST = "feast"  # праздник: +% дохода подданным из фонда
+EVENT_HOLIDAY = "holiday"  # налоговые каникулы
+EVENT_DRILL = "drill"  # военные сборы: −% КД тренировок
+EVENT_TOURNAMENT = "tournament"  # турнир по победам в PvP
+EVENT_DAILY = "daily"  # ежедневный подарок NHCoin
+EVENT_KINDS: tuple[str, ...] = (EVENT_COINS, EVENT_STATISTS, EVENT_FEAST, EVENT_HOLIDAY, EVENT_DRILL, EVENT_TOURNAMENT, EVENT_DAILY)
+EVENT_ACTIVE = "active"
+EVENT_DONE = "done"
+LOCK_ACTION_EMPIRE_EVENT = "empire_event"
+
+CB_EVENTS_OPEN = "emev:open"  # император — список видов
+CB_EVENTS_KIND_PREFIX = "emev:k:"  # + kind — экран вида
+CB_EVENTS_HOURS_PREFIX = "emev:h:"  # + kind:hours — длительность (праздник/каникулы/сборы)
+CB_EVENTS_START_PREFIX = "emev:go:"  # + kind:hours — подтвердить запуск (каникулы/сборы)
+CB_EVENTS_SUBJECT = "emev:sub"  # подданный — ивенты его империи
+CB_EVENTS_CLAIM_PREFIX = "emev:c:"  # + event_id — забрать
+
 # Саботаж снизу — вид действия (ключ шансов в `config/empire`, `sabotage_logs.action`).
 SABOTAGE_STATISTS = "statists"
 SABOTAGE_UNIQUE = "unique"

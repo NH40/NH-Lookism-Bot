@@ -8,6 +8,8 @@
 from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from bot.constant.empire import CB_EVENTS_SUBJECT
+from bot.texts.empire.events import BTN_EVENTS
 
 from bot.constant.common import CB_MENU_CLANS, CB_MENU_DEVELOPMENT, CB_MENU_QUESTS, CB_MENU_SETTINGS, CB_MENU_SHOP
 from bot.constant.business import CB_BUSINESS_OPEN
@@ -65,7 +67,7 @@ def profile_menu(
     if emperor:
         rows.append([_btn(BTN_EMPIRE, CB_EMPIRE_OPEN)])
     # Саботаж — подданным чужого императора (игрок города, где император не он).
-    bottom = [_btn(BTN_SABOTAGE, CB_SABOTAGE_OPEN)] if under_emperor else []
+    bottom = [_btn(BTN_SABOTAGE, CB_SABOTAGE_OPEN), _btn(BTN_EVENTS, CB_EVENTS_SUBJECT)] if under_emperor else []
     # Журнал объявлений — всем жителям; император видит свои на экране империи.
     if under_emperor or not emperor:
         bottom.append(_btn(BTN_ANNOUNCE_LOG, f"{CB_EMPIRE_LOG_PREFIX}0"))

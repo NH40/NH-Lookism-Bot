@@ -21,6 +21,28 @@ EMPIRE_TRIBUTE_PERCENT = 10
 EMPIRE_TRIBUTE_CAP_PERCENT = 20
 EMPIRE_TRIBUTE_SWEEP_SECONDS = 600
 
+# --- Ивенты императора для подданных (пользователь 2026-11-10, `services/empire/events`).
+# Всё оплачивает император из NHCoin заранее: раздачи, подарок, праздник и турнир — перевод
+# подданным (остаток возвращается), сборы — монеты сгорают, каникулы — бесплатно (теряет налог).
+# Новых денег в игре не появляется. Числа — решение автора кода, все в настройках админки. ---
+EMPIRE_EVENT_CLAIM_HOURS = 24  # раздачи NHCoin и статистов: сколько можно забирать
+EMPIRE_EVENT_DURATIONS_HOURS: tuple[int, ...] = (6, 12, 24)  # праздник, каникулы, сборы — кнопки
+EMPIRE_EVENT_MAX_SLOTS = 1000  # раздачи: мест
+EMPIRE_EVENT_MIN_FUND = 1_000  # минимум фонда праздника и турнира, NHCoin
+EMPIRE_GIFT_COINS_PER_POWER = 10  # раздача статистов: NHCoin за 1 мощи статиста (контракт на сутки — 2)
+EMPIRE_FEAST_INCOME_PERCENT = 25  # праздник: +% к доходу подданных, выплачивается из фонда
+EMPIRE_DRILL_CD_PERCENT = 30  # сборы: −% к КД личной тренировки и тренировки статистов
+# Сборы: цена за одного подданного (заходил за сутки) за час — по лиге императора (2 поколение … Легенды).
+EMPIRE_DRILL_PRICE_PER_SUBJECT_HOUR: tuple[int, ...] = (500, 5_000, 200_000, 200_000, 3_000_000)
+EMPIRE_TOURNAMENT_HOURS = 24
+EMPIRE_TOURNAMENT_SHARES: tuple[int, ...] = (50, 30, 20)  # % фонда за 1–3 место по победам в PvP
+EMPIRE_DAILY_GIFT_MAX_DAYS = 7
+EMPIRE_EVENT_SWEEP_SECONDS = 60
+# Перезарядка вида ивента от запуска, ч.
+EMPIRE_EVENT_COOLDOWN_HOURS: dict[str, int] = {
+    "coins": 6, "statists": 6, "feast": 24, "holiday": 24, "drill": 24, "tournament": 24, "daily": 24,
+}
+
 # Объявления императора (пользователь 2026-11-06: раз в 4 часа, значение меняется в админке).
 EMPIRE_ANNOUNCE_COOLDOWN_SECONDS = 4 * 60 * 60
 EMPIRE_ANNOUNCE_MAX_CHARS = 1000

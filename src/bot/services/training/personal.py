@@ -46,7 +46,10 @@ async def train_personal(
     rng = rng or random
     key = personal_training_cooldown(user_id)
     profile = await get_combat_profile(session, user_id)
-    cooldown = profile.cooldown(cooldown_seconds(KEY_CD_PERSONAL), profile.eco.personal_cooldown)
+    from bot.services.empire.events import drill_reduction
+
+    # Военные сборы императора (−% КД) складываются с сокращением от систем развития.
+    cooldown = profile.cooldown(cooldown_seconds(KEY_CD_PERSONAL), profile.eco.personal_cooldown + await drill_reduction(session, user_id))
     if not await redis.set(key, "1", nx=True, ex=cooldown):
         raise TrainingOnCooldownError(retry_after_seconds=max(0, await redis.ttl(key)))
     await schedule_ready(redis, user_id, CD_PERSONAL, cooldown)

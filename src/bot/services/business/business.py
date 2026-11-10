@@ -262,13 +262,16 @@ class WalletView:
     tax: TaxContext | None = None  # кому и сколько платит игрок
 
 
-def _split(gross: int, tax: TaxContext | None, relief: float = 0.0) -> tuple[int, int]:
+def _split(gross: int, tax: TaxContext | None, relief: float = 0.0, holiday: float = 0.0) -> tuple[int, int]:
     """Доход игрока → (игроку, императору). Налог (10–50%) игрок теряет; пассивные +10%
     император получает сверху — у игрока они не вычитаются (пользователь 2026-10-01).
-    `relief` — доля налога, от которой игрока освобождает гений бизнеса."""
+    `relief` — доля налога, от которой игрока освобождает гений бизнеса; `holiday` — доля окна
+    начисления в налоговых каникулах императора (налог 0%, пассивные остаются)."""
     if tax is None or gross <= 0:
         return gross, 0
     taxed = gross * tax.percent // 100 if not relief else int(gross * tax.percent / 100 * (1 - capped(relief, 0.8)))
+    if holiday:
+        taxed = int(taxed * (1 - min(1.0, holiday)))
     return gross - taxed, taxed + gross * EMPEROR_PASSIVE_BONUS_PERCENT // 100
 
 
@@ -333,7 +336,18 @@ async def accrue(session: AsyncSession, user_id: int, *, now: datetime | None = 
     # «Резервный фонд» (Бизнесмен): хранилище было полным — сбор больше.
     if build_.positions is not None and minutes >= _cap_minutes(eco) and build_.positions.get("full_storage_bonus"):
         gross = int(gross * (1 + build_.positions.get("full_storage_bonus")))
-    amount, to_emperor = _split(gross, tax, eco.tax_relief)
+    effects = None
+    if tax is not None:  # ивенты императора: каникулы (налог 0) и праздник (+% из его фонда)
+        from bot.services.empire.events import income_effects
+
+        effects = await income_effects(session, tax.emperor_id, wallet.coins_accrued_at, new_accrued_at)
+    amount, to_emperor = _split(gross, tax, eco.tax_relief, effects.holiday_share if effects else 0.0)
+    feast_bonus = 0
+    if effects is not None and effects.feast_event_id is not None:
+        from bot.services.empire.events import take_feast
+
+        # Строки: игрок (уже под FOR UPDATE) → ивент → император — порядок как у ивентов.
+        feast_bonus = await take_feast(session, effects.feast_event_id, int(amount * effects.feast_percent / 100 * effects.feast_share))
     # Клан: владельцу и заму — по 1% сверху с дохода игрока (у игрока ничего не убывает), а
     # если игрок сам владелец/зам — забирает накопленную долю вместе со своим доходом.
     share = await clan_repo.settle_income_share(session, user_id, amount, CLAN_OWNER_SHARE, CLAN_DEPUTY_SHARE)
@@ -342,9 +356,15 @@ async def accrue(session: AsyncSession, user_id: int, *, now: datetime | None = 
         from bot.services.path_gauge import add as add_gauge
 
         await add_gauge(session, user_id, PATH_BUSINESS, amount / GAUGE_BUSINESS_COINS)
+    if feast_bonus:
+        from bot.constant.ledger import REASON_EMPIRE_EVENT
+        from bot.utils.log_context import coin_reason
+
+        with coin_reason(REASON_EMPIRE_EVENT):
+            await business_repo.add_coins(session, user_id, feast_bonus)
     if to_emperor:
         await empire_repo.credit_emperor(session, tax.emperor_id, to_emperor)
-    return amount + share
+    return amount + share + feast_bonus
 
 
 async def accrue_many(session: AsyncSession, user_ids: list[int]) -> None:

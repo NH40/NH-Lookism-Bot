@@ -23,6 +23,7 @@ from bot.db.models.battle_log import BattleLog  # noqa: F401
 from bot.db.models.error_log import ErrorLog  # noqa: F401
 from bot.db.models.player_ledger import PlayerLedger  # noqa: F401
 from bot.db.models.emperor_announcement import EmperorAnnouncement  # noqa: F401
+from bot.db.models.empire_event import EmpireEvent, EmpireEventClaim  # noqa: F401
 from bot.db.models.emperor_tax import EmperorTaxOverride  # noqa: F401
 from bot.db.models.sabotage_log import SabotageLog  # noqa: F401
 from bot.db.models.emperor_war import EmperorWar  # noqa: F401

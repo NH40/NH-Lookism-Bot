@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from bot.constant.empire import CB_EVENTS_OPEN
+from bot.texts.empire.events import BTN_EVENTS
 
 from bot.config.empire import EMPIRE_TAX_STEPS
 from bot.constant.empire import (
@@ -62,7 +64,7 @@ def empire_menu(current_rate: int, incoming_war_id: int | None = None) -> Inline
     rows = [
         _rate_row(current_rate, CB_EMPIRE_RATE_PREFIX),
         [_btn(BTN_PERSONAL, CB_EMPIRE_PERSONAL)],
-        [_btn(BTN_ANNOUNCE, CB_EMPIRE_ANNOUNCE)],
+        [_btn(BTN_ANNOUNCE, CB_EMPIRE_ANNOUNCE), _btn(BTN_EVENTS, CB_EVENTS_OPEN)],
     ]
     if incoming_war_id is not None:
         rows.append([_btn(BTN_WAR_ACCEPT, f"{CB_WAR_ACCEPT_PREFIX}{incoming_war_id}")])

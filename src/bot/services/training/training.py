@@ -224,7 +224,9 @@ async def train_extras(session: AsyncSession, redis: Redis, user_id: int, phase:
         # Все на максимуме — тренировать некого, КД не тратим (как и при пустой армии).
         return TrainResult(attempted=0, stage1=0, stage2=0, stage3=0)
 
-    cd = profile.cooldown(cooldown_seconds(KEY_CD_EXTRAS), profile.eco.extras_training_cooldown)
+    from bot.services.empire.events import drill_reduction
+
+    cd = profile.cooldown(cooldown_seconds(KEY_CD_EXTRAS), profile.eco.extras_training_cooldown + await drill_reduction(session, user_id))
     acquired = await redis.set(key, "1", nx=True, ex=cd)
     if not acquired:
         ttl = await redis.ttl(key)

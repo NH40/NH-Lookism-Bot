@@ -108,7 +108,7 @@ from bot.texts.empire import (
     WAR_NOT_EMPEROR_ALERT,
     WAR_NOT_FOUND_ALERT,
 )
-from bot.utils.formatting import esc, format_countdown
+from bot.utils.formatting import esc, format_countdown, format_number
 
 router = APIRouter(prefix="/api/empire", tags=["empire"])
 
@@ -540,3 +540,166 @@ async def post_sabotage(
     text = SABOTAGE_SUCCESS[result.action].format(**fields) if result.success else SABOTAGE_FAIL
     return SabotageOut(success=result.success, message=clean_label(text))
 
+
+
+# ---------------------------------------------------------------- ивенты императора (2026-11-10)
+
+
+class EventKindOut(BaseModel):
+    kind: str
+    title: str
+    about: str
+    active: dict | None
+    cooldown_seconds: int
+
+
+class SubjectEventOut(BaseModel):
+    id: int
+    kind: str
+    title: str
+    details: str
+    left_seconds: int
+    claimable: bool
+
+
+class EventsOut(BaseModel):
+    emperor: bool
+    kinds: list[EventKindOut] = []
+    subjects: int = 0
+    active_subjects: int = 0
+    durations: list[int] = []
+    drill_prices: dict[str, int] = {}
+    min_fund: int = 0
+    max_days: int = 0
+    events: list[SubjectEventOut] = []  # ивенты империи, где игрок — подданный
+
+
+def _left_seconds(until: datetime) -> int:
+    return max(0, int((until - datetime.now(timezone.utc)).total_seconds()))
+
+
+@router.get("/events", response_model=EventsOut)
+async def get_events(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> EventsOut:
+    from bot.config.empire import EMPIRE_DAILY_GIFT_MAX_DAYS, EMPIRE_EVENT_DURATIONS_HOURS, EMPIRE_EVENT_MIN_FUND
+    from bot.constant.empire import EVENT_STATISTS
+    from bot.services.empire import events as ev
+    from bot.services.empire.event_push import about, details
+    from bot.texts.empire.events import TITLES
+
+    out = EventsOut(emperor=False)
+    try:
+        await ev._ensure_emperor(session, user_id)
+        out.emperor = True
+    except ev.NotEmperorError:
+        pass
+    if out.emperor:
+        out.subjects, out.active_subjects = await ev.subject_counts(session, user_id)
+        out.durations = list(EMPIRE_EVENT_DURATIONS_HOURS)
+        out.drill_prices = {str(h): await ev.drill_price(session, user_id, h) for h in EMPIRE_EVENT_DURATIONS_HOURS}
+        out.min_fund, out.max_days = EMPIRE_EVENT_MIN_FUND, EMPIRE_DAILY_GIFT_MAX_DAYS
+        for v in await ev.kinds_view(session, user_id):
+            active = None
+            if v.active is not None:
+                a = v.active
+                active = {
+                    "left_seconds": _left_seconds(a.ends_at), "claims": a.claims, "pool": a.pool,
+                    "units": a.units if v.kind == EVENT_STATISTS else None,
+                }
+            out.kinds.append(EventKindOut(kind=v.kind, title=TITLES[v.kind], about=about(v.kind), active=active, cooldown_seconds=v.cooldown_seconds))
+    _, rows = await ev.subject_events(session, user_id)
+    out.events = [
+        SubjectEventOut(
+            id=row.id, kind=row.kind, title=TITLES[row.kind], details=clean_label(details(row.kind, row.params, slots=row.slots)),
+            left_seconds=_left_seconds(row.ends_at), claimable=ok,
+        )
+        for row, ok in rows
+    ]
+    return out
+
+
+class EventStartIn(BaseModel):
+    kind: str
+    hours: int = 0
+    amount: int = 0  # сумма на игрока / в день / фонд / приз
+    count: int = 0  # мест / дней / штук статистов на игрока
+    slots: int = 0  # мест (статисты)
+    rank: str = ""
+
+
+@router.post("/events/start", response_model=MessageOut)
+async def post_event_start(
+    body: EventStartIn,
+    user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> MessageOut:
+    from bot.cache.keys import action_lock
+    from bot.config.game import ACTION_LOCK_MS
+    from bot.constant.empire import (
+        EVENT_COINS, EVENT_DAILY, EVENT_DRILL, EVENT_FEAST, EVENT_HOLIDAY, EVENT_STATISTS, EVENT_TOURNAMENT, LOCK_ACTION_EMPIRE_EVENT,
+    )
+    from bot.services.empire import events as ev
+    from bot.services.empire.event_push import deliver_started, error_text
+    from bot.texts.empire.events import BUSY, STARTED, TITLES
+
+    key = action_lock(user_id, LOCK_ACTION_EMPIRE_EVENT)
+    if not await redis.set(key, "1", nx=True, px=ACTION_LOCK_MS):
+        raise bad(BUSY)
+    try:
+        if body.kind == EVENT_COINS:
+            started = await ev.start_coins(session, user_id, body.amount, body.count)
+        elif body.kind == EVENT_STATISTS:
+            started = await ev.start_statists(session, user_id, body.rank.strip().upper(), body.count, body.slots)
+        elif body.kind == EVENT_DAILY:
+            started = await ev.start_daily(session, user_id, body.amount, body.count)
+        elif body.kind == EVENT_TOURNAMENT:
+            started = await ev.start_tournament(session, user_id, body.amount)
+        elif body.kind == EVENT_FEAST:
+            started = await ev.start_feast(session, user_id, body.hours, body.amount)
+        elif body.kind == EVENT_DRILL:
+            started = await ev.start_drill(session, user_id, body.hours)
+        elif body.kind == EVENT_HOLIDAY:
+            started = await ev.start_holiday(session, user_id, body.hours)
+        else:
+            raise bad("Неизвестный ивент.")
+    except (ev.NotEmperorError, ev.EventActiveError, ev.EventCooldownError, ev.NotEnoughCoinsError, ev.NoSubjectsError, ev.BadParamsError) as exc:
+        await session.rollback()
+        raise bad(clean_label(error_text(exc, body.kind, body.hours)))
+    finally:
+        await redis.delete(key)
+    background(deliver_started(get_bot(), session_factory, started))
+    return MessageOut(message=clean_label(STARTED.format(title=TITLES[body.kind], cost=format_number(started.cost))))
+
+
+@router.post("/events/{event_id}/claim", response_model=MessageOut)
+async def post_event_claim(
+    event_id: int,
+    user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> MessageOut:
+    from bot.cache.keys import action_lock
+    from bot.config.game import ACTION_LOCK_MS
+    from bot.constant.empire import LOCK_ACTION_EMPIRE_EVENT
+    from bot.services.empire import events as ev
+    from bot.texts.empire import events as t
+
+    key = action_lock(user_id, LOCK_ACTION_EMPIRE_EVENT)
+    if not await redis.set(key, "1", nx=True, px=ACTION_LOCK_MS):
+        raise bad(t.BUSY)
+    try:
+        result = await ev.claim(session, user_id, event_id)
+    except ev.EventGoneError:
+        await session.rollback()
+        raise bad(t.GONE_ALERT)
+    except ev.AlreadyClaimedError:
+        await session.rollback()
+        raise bad(t.ALREADY_ALERT)
+    except ev.EventEmptyError:
+        await session.rollback()
+        raise bad(t.EMPTY_ALERT)
+    finally:
+        await redis.delete(key)
+    if result.rank:
+        return MessageOut(message=t.CLAIMED_UNITS.format(amount=format_number(result.amount), rank=result.rank))
+    return MessageOut(message=t.CLAIMED_COINS.format(amount=format_number(result.amount)))

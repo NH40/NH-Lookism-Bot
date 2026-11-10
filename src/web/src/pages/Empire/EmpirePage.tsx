@@ -6,6 +6,7 @@ import { BackHeader, Panel, Screen, StatRow, countdown, fmt, useCountdown, useTo
 import { ROUTE_MAP } from "../../constants/constants";
 import { Sheet } from "../../components/Sheet";
 import { useAction, useApi } from "../../hooks/useApi";
+import { EmperorEvents, SubjectEvents } from "./EmpireEvents";
 import "./Empire.css";
 
 // Империя — отдельный экран за кнопкой на «Карте» (пользователь 2026-10-14): император — налоги, персональные
@@ -299,7 +300,7 @@ function SubjectView({ subject, onChanged }: { subject: EmpireSubject; onChanged
 
 export function EmpirePage() {
   const { data, status, error, reload } = useApi<EmpireData>("/empire");
-  const [tab, setTab] = useState<"tax" | "war">("tax");
+  const [tab, setTab] = useState<"tax" | "war" | "events">("tax");
   const ruler = data?.ruler ?? null;
   return (
     <Screen status={status} error={error}>
@@ -316,20 +317,20 @@ export function EmpirePage() {
                 <div className="chip emp-chip"><span className="muted">Подданные</span><span className="disp" style={{ color: "var(--violet-2)" }}>{fmt(ruler.players)}</span></div>
                 <div className="chip emp-chip"><span className="muted">Казна</span><span className="disp" style={{ color: "var(--gold-2)" }}>{fmt(ruler.treasury)}</span></div>
               </div>
-              <div className="seg" role="tablist" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+              <div className="seg" role="tablist" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
                 <button type="button" role="tab" aria-selected={tab === "tax"} className={`pill ${tab === "tax" ? "on" : ""}`} style={{ minHeight: 44 }} onClick={() => setTab("tax")}>Налоги</button>
                 <button type="button" role="tab" aria-selected={tab === "war"} className={`pill ${tab === "war" ? "on" : ""}`} style={{ minHeight: 44 }} onClick={() => setTab("war")}>
                   Война{ruler.incoming ? " · !" : ""}
                 </button>
+                <button type="button" role="tab" aria-selected={tab === "events"} className={`pill ${tab === "events" ? "on" : ""}`} style={{ minHeight: 44 }} onClick={() => setTab("events")}>Ивенты</button>
               </div>
-              {tab === "tax" ? (
-                <TaxTab ruler={ruler} min={data.tax_min} max={data.tax_max} onChanged={reload} />
-              ) : (
-                <WarTab ruler={ruler} onChanged={reload} />
-              )}
+              {tab === "tax" && <TaxTab ruler={ruler} min={data.tax_min} max={data.tax_max} onChanged={reload} />}
+              {tab === "war" && <WarTab ruler={ruler} onChanged={reload} />}
+              {tab === "events" && <EmperorEvents />}
             </>
           )}
           {data.subject && <SubjectView subject={data.subject} onChanged={reload} />}
+          {data.subject && <SubjectEvents />}
           {(!ruler || data.subject) && <AnnouncementLog />}
         </div>
       )}

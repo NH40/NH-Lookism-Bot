@@ -8,3 +8,5 @@ class EmpireStates(StatesGroup):
     waiting_username = State()
     # Текст объявления игрокам империи.
     waiting_announcement = State()
+    # Параметры ивента императора (вид — в данных состояния).
+    waiting_event = State()

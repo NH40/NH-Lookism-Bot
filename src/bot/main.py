@@ -147,6 +147,23 @@ async def _events_loop(bot: Bot, session_factory: async_sessionmaker[AsyncSessio
         await asyncio.sleep(EVENT_TICK_SECONDS)
 
 
+async def _empire_events_loop(bot: Bot, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    """Ивенты императора: закрыть истёкшие (призы турнира, возврат остатка) и разослать итоги."""
+    from bot.config.empire import EMPIRE_EVENT_SWEEP_SECONDS
+    from bot.handlers.empire import send_event_results
+    from bot.services.empire.events import finish_due
+
+    while True:
+        try:
+            finished = await finish_due(session_factory)
+            if finished:
+                async with session_factory() as session:
+                    await send_event_results(bot, session, finished)
+        except Exception:
+            log.exception("Empire events sweep failed")
+        await asyncio.sleep(EMPIRE_EVENT_SWEEP_SECONDS)
+
+
 async def _tribute_loop(session_factory: async_sessionmaker[AsyncSession]) -> None:
     """Дань младших императоров старшим (`services/empire/tribute`)."""
     from bot.config.empire import EMPIRE_TRIBUTE_SWEEP_SECONDS
@@ -340,6 +357,7 @@ async def main() -> None:
         asyncio.create_task(_ultra_instinct_loop(session_factory, redis)),
         asyncio.create_task(_potion_loop(bot, session_factory)),
         asyncio.create_task(_tribute_loop(session_factory)),
+        asyncio.create_task(_empire_events_loop(bot, session_factory)),
         asyncio.create_task(_poker_loop(bot, session_factory)),
         asyncio.create_task(_exchange_loop(bot, session_factory)),
         asyncio.create_task(_top_loop(bot, session_factory)),

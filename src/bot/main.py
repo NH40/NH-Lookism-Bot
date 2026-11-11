@@ -164,6 +164,29 @@ async def _empire_events_loop(bot: Bot, session_factory: async_sessionmaker[Asyn
         await asyncio.sleep(EMPIRE_EVENT_SWEEP_SECONDS)
 
 
+async def _stagnation_loop(bot: Bot, session_factory: async_sessionmaker[AsyncSession], redis: Redis) -> None:
+    """Застой кругов: раз в сутки предупредить, что доход урезан, пока не начнёт нападать."""
+    from bot.cache.keys import stagnation_notified
+    from bot.config.game import STAGNATION_HOURS, STAGNATION_INCOME_PERCENT, STAGNATION_SWEEP_SECONDS
+    from bot.constant.settings import NOTIFY_WAR_REPORT
+    from bot.services.settings import notify_player
+    from bot.services.stagnation import find_stagnating
+
+    text_ = (
+        "⚠️ <b>Застой</b>: в твоей стране ещё есть районы ботов, а ты {hours} ч не нападал. "
+        "Доход урезан до {percent}%, пока снова не начнёшь бои за территорию."
+    ).format(hours=STAGNATION_HOURS, percent=STAGNATION_INCOME_PERCENT)
+    while True:
+        await asyncio.sleep(STAGNATION_SWEEP_SECONDS)
+        try:
+            for user_id in await find_stagnating(session_factory):
+                if await redis.set(stagnation_notified(user_id), "1", nx=True, ex=24 * 3600):
+                    async with session_factory() as session:
+                        await notify_player(bot, session, user_id, NOTIFY_WAR_REPORT, text_)
+        except Exception:
+            log.exception("Stagnation sweep failed")
+
+
 async def _tribute_loop(session_factory: async_sessionmaker[AsyncSession]) -> None:
     """Дань младших императоров старшим (`services/empire/tribute`)."""
     from bot.config.empire import EMPIRE_TRIBUTE_SWEEP_SECONDS
@@ -357,6 +380,7 @@ async def main() -> None:
         asyncio.create_task(_ultra_instinct_loop(session_factory, redis)),
         asyncio.create_task(_potion_loop(bot, session_factory)),
         asyncio.create_task(_tribute_loop(session_factory)),
+        asyncio.create_task(_stagnation_loop(bot, session_factory, redis)),
         asyncio.create_task(_empire_events_loop(bot, session_factory)),
         asyncio.create_task(_poker_loop(bot, session_factory)),
         asyncio.create_task(_exchange_loop(bot, session_factory)),

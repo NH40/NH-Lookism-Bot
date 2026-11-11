@@ -46,6 +46,11 @@ EMPIRE_EVENT_COOLDOWN_HOURS: dict[str, int] = {
     "coins": 6, "statists": 6, "feast": 24, "holiday": 24, "drill": 24, "tournament": 24, "daily": 24,
 }
 
+# Сложить империю (предложение Homka, пользователь 2026-11-12, `services/empire/abdicate`).
+EMPIRE_ABDICATE_MAX_CITIES = 10  # доступно, когда городов меньше
+EMPIRE_ABDICATE_COOLDOWN_DAYS = 7
+EMPIRE_ABDICATE_FINE_PERCENT = 10  # % NHCoin
+
 # Объявления императора (пользователь 2026-11-06: раз в 4 часа, значение меняется в админке).
 EMPIRE_ANNOUNCE_COOLDOWN_SECONDS = 4 * 60 * 60
 EMPIRE_ANNOUNCE_MAX_CHARS = 1000

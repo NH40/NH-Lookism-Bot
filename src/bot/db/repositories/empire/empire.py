@@ -35,9 +35,16 @@ class Subject:
     display_name: str | None
 
 
+def _is_emperor(user_id_column):
+    """У игрока есть хоть один город — он император (налог чужому не платит)."""
+    holder = City.__table__.alias("own")
+    return select(holder.c.id).where(holder.c.emperor_id == user_id_column).exists()
+
+
 async def get_tax_context(session: AsyncSession, user_id: int) -> TaxContext | None:
     """Император города игрока и его ставка для этого игрока (персональная, иначе общая) —
-    одним запросом. None — у города нет императора или игрок сам император."""
+    одним запросом. None — у города нет императора или игрок сам император (свой город или
+    живёт в городе чужого императора — 2026-11-12: император другому налог не платит)."""
     emperor = User.__table__.alias("emperor")
     row = (
         await session.execute(
@@ -55,7 +62,7 @@ async def get_tax_context(session: AsyncSession, user_id: int) -> TaxContext | N
                 EmperorTaxOverride,
                 (EmperorTaxOverride.emperor_id == City.emperor_id) & (EmperorTaxOverride.user_id == User.id),
             )
-            .where(User.id == user_id, City.emperor_id != user_id)
+            .where(User.id == user_id, City.emperor_id != user_id, ~_is_emperor(User.id))
         )
     ).one_or_none()
     if row is None:

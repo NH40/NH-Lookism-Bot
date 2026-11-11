@@ -18,7 +18,11 @@ async def list_subjects(session: AsyncSession, emperor_id: int, category: str) -
     rows = await session.execute(
         select(User.id, User.notify_muted.any(category))
         .join(City, City.id == User.city_id)
-        .where(City.emperor_id == emperor_id, User.id != emperor_id)
+        .where(
+            City.emperor_id == emperor_id, User.id != emperor_id,
+            # Императоры, живущие в его городе, — не подданные (2026-11-12).
+            ~select(City.__table__.c.id).where(City.__table__.c.emperor_id == User.id).correlate(User).exists(),
+        )
     )
     return [(user_id, bool(muted)) for user_id, muted in rows.all()]
 

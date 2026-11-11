@@ -703,3 +703,63 @@ async def post_event_claim(
     if result.rank:
         return MessageOut(message=t.CLAIMED_UNITS.format(amount=format_number(result.amount), rank=result.rank))
     return MessageOut(message=t.CLAIMED_COINS.format(amount=format_number(result.amount)))
+
+
+# ---------------------------------------------------------------- сложить империю (2026-11-12)
+
+
+class AbdicateOut(BaseModel):
+    cities: int
+    allowed: bool
+    cooldown_seconds: int
+    fine: int
+    max_cities: int
+    fine_percent: int
+    cd_days: int
+    countries: list[dict]
+
+
+@router.get("/abdicate", response_model=AbdicateOut)
+async def get_abdicate(
+    user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session), redis: Redis = Depends(get_redis),
+) -> AbdicateOut:
+    from bot.config.empire import EMPIRE_ABDICATE_COOLDOWN_DAYS, EMPIRE_ABDICATE_FINE_PERCENT, EMPIRE_ABDICATE_MAX_CITIES
+    from bot.services.empire import abdicate as svc
+
+    user = await require_user(session, user_id)
+    view = await svc.get_view(session, redis, user)
+    return AbdicateOut(
+        cities=view.cities, allowed=view.allowed, cooldown_seconds=view.cooldown_seconds, fine=view.fine,
+        max_cities=EMPIRE_ABDICATE_MAX_CITIES, fine_percent=EMPIRE_ABDICATE_FINE_PERCENT, cd_days=EMPIRE_ABDICATE_COOLDOWN_DAYS,
+        countries=[{"code": c, "name": n} for c, n in view.countries],
+    )
+
+
+class AbdicateIn(BaseModel):
+    country: str
+
+
+@router.post("/abdicate", response_model=MessageOut)
+async def post_abdicate(
+    body: AbdicateIn,
+    user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session), redis: Redis = Depends(get_redis),
+) -> MessageOut:
+    from bot.config.empire import EMPIRE_ABDICATE_MAX_CITIES
+    from bot.services.empire import abdicate as svc
+    from bot.texts.empire import abdicate as t
+
+    try:
+        done = await svc.abdicate(session, redis, user_id, body.country)
+    except svc.NotEmperorError:
+        raise bad(t.NOT_EMPEROR_ALERT)
+    except svc.TooManyCitiesError:
+        raise bad(t.TOO_MANY_ALERT.format(max_cities=EMPIRE_ABDICATE_MAX_CITIES))
+    except svc.AbdicateCooldownError as exc:
+        raise bad(t.COOLDOWN_ALERT.format(left=format_countdown(exc.seconds)))
+    except svc.AtWarError:
+        raise bad(t.AT_WAR_ALERT)
+    except svc.BadCountryError:
+        raise bad(t.BAD_COUNTRY_ALERT)
+    return MessageOut(message=clean_label(
+        t.DONE.format(cities=done.cities_lost, country=done.country_name, city=done.city_name, fine=format_number(done.fine))
+    ))

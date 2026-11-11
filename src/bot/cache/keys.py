@@ -103,6 +103,16 @@ def empire_war_cooldown(user_id: int) -> str:
     return f"cooldown:empire_war:{user_id}"
 
 
+def empire_abdicate_cooldown(user_id: int) -> str:
+    """Перезарядка «сложить империю» (`services/empire/abdicate`)."""
+    return f"cooldown:empire_abdicate:{user_id}"
+
+
+def stagnation_notified(user_id: int) -> str:
+    """Пуш о застое круга уже был — не чаще раза в сутки."""
+    return f"notified:stagnation:{user_id}"
+
+
 def empire_war_shield(user_id: int) -> str:
     """Щит императора после итога войны против него — на него нельзя напасть, пока ключ жив."""
     return f"shield:empire_war:{user_id}"

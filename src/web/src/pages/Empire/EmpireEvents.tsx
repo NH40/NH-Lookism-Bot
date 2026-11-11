@@ -134,3 +134,49 @@ export function SubjectEvents() {
     </Panel>
   );
 }
+
+type AbdicateData = {
+  cities: number;
+  allowed: boolean;
+  cooldown_seconds: number;
+  fine: number;
+  max_cities: number;
+  fine_percent: number;
+  cd_days: number;
+  countries: { code: string; name: string }[];
+};
+
+export function AbdicatePanel({ onDone }: { onDone: () => void }) {
+  const { data } = useApi<AbdicateData>("/empire/abdicate");
+  const { run, busy } = useAction(onDone);
+  const [country, setCountry] = useState("");
+  const [sure, setSure] = useState(false);
+  if (!data) return null;
+  return (
+    <Panel title="СЛОЖИТЬ ИМПЕРИЮ" tone="red" badgeMark="⚑">
+      <p className="emp-note" style={{ margin: "0 0 10px" }}>
+        Если тебя душат: города ({data.cities}) уходят ботам, районы и здания во владениях сгорают, ты становишься кругом и
+        уезжаешь в выбранную страну лиги. Прокачка остаётся. Штраф {data.fine_percent}% NHCoin (сейчас {fmt(data.fine)}), повторно — через {data.cd_days} дн.
+      </p>
+      {!data.allowed ? (
+        <p className="emp-note" style={{ margin: 0 }}>Доступно, когда городов меньше {data.max_cities}.</p>
+      ) : data.cooldown_seconds > 0 ? (
+        <p className="emp-note" style={{ margin: 0 }}>Перезарядка: {countdown(data.cooldown_seconds)}</p>
+      ) : (
+        <div style={{ display: "grid", gap: 8 }}>
+          <select className="emp-input" value={country} onChange={(e) => { setCountry(e.currentTarget.value); setSure(false); }}>
+            <option value="">Куда уехать…</option>
+            {data.countries.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+          </select>
+          {!sure ? (
+            <button className="btn block red" type="button" disabled={!country} onClick={() => setSure(true)}>Сложить империю</button>
+          ) : (
+            <button className="btn block red" type="button" disabled={busy || !country} onClick={() => run("/empire/abdicate", { country })}>
+              Точно? Отменить нельзя
+            </button>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+}

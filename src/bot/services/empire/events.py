@@ -111,9 +111,11 @@ def _now() -> datetime:
 
 
 async def emperor_of(session: AsyncSession, user_id: int) -> int | None:
-    """Император города игрока (None — города без императора или он сам себе император)."""
+    """Император города игрока (None — города без императора или игрок сам император: император
+    чужим подданным не считается — 2026-11-12)."""
     emperor = await session.scalar(text(
-        "SELECT c.emperor_id FROM users u JOIN cities c ON c.id = u.city_id WHERE u.id = :u"
+        "SELECT c.emperor_id FROM users u JOIN cities c ON c.id = u.city_id WHERE u.id = :u "
+        "AND NOT EXISTS (SELECT 1 FROM cities o WHERE o.emperor_id = u.id)"
     ), {"u": user_id})
     return emperor if emperor and emperor != user_id else None
 
@@ -131,7 +133,8 @@ async def subject_counts(session: AsyncSession, emperor_id: int) -> tuple[int, i
     """(все подданные, заходившие за сутки)."""
     row = (await session.execute(text(
         "SELECT count(*), count(*) FILTER (WHERE u.last_active_at > now() - interval '24 hours') "
-        "FROM users u JOIN cities c ON c.id = u.city_id WHERE c.emperor_id = :e AND u.id <> :e"
+        "FROM users u JOIN cities c ON c.id = u.city_id WHERE c.emperor_id = :e AND u.id <> :e "
+        "AND NOT EXISTS (SELECT 1 FROM cities o WHERE o.emperor_id = u.id)"
     ), {"e": emperor_id})).one()
     return int(row[0]), int(row[1])
 

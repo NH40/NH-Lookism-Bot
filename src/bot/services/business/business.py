@@ -275,6 +275,41 @@ def _split(gross: int, tax: TaxContext | None, relief: float = 0.0, holiday: flo
     return gross - taxed, taxed + gross * EMPEROR_PASSIVE_BONUS_PERCENT // 100
 
 
+_STAGNATION_SQL = None
+
+
+def _stagnation_sql():
+    from sqlalchemy import text as sql_text
+
+    from bot.constant.ledger import BATTLE_BOTS, BATTLE_CITY, BATTLE_PVP, BATTLE_THRONE
+
+    kinds = ", ".join(f"'{k}'" for k in (BATTLE_BOTS, BATTLE_CITY, BATTLE_PVP, BATTLE_THRONE))
+    return sql_text(f"""
+        SELECT u.phase = 'circle'
+           AND EXISTS (SELECT 1 FROM districts d JOIN cities c ON c.id = d.city_id
+                       WHERE c.country_code = u.country_code AND d.owner_id IS NULL)
+           AND NOT EXISTS (SELECT 1 FROM battle_log b WHERE b.attacker_id = u.id AND b.kind IN ({kinds})
+                           AND b.created_at > now() - make_interval(hours => :h))
+        FROM users u WHERE u.id = :u
+    """)
+
+
+async def stagnating(session: AsyncSession, user_id: int) -> bool:
+    """Круг застоялся: в стране есть районы ботов, а он `STAGNATION_HOURS` не нападал."""
+    global _STAGNATION_SQL
+    from bot.config.game import STAGNATION_HOURS
+
+    if _STAGNATION_SQL is None:
+        _STAGNATION_SQL = _stagnation_sql()
+    return bool(await session.scalar(_STAGNATION_SQL, {"u": user_id, "h": STAGNATION_HOURS}))
+
+
+async def _stagnation_factor(session: AsyncSession, user_id: int) -> float:
+    from bot.config.game import STAGNATION_INCOME_PERCENT
+
+    return STAGNATION_INCOME_PERCENT / 100 if await stagnating(session, user_id) else 1.0
+
+
 async def get_wallet(session: AsyncSession, user_id: int, *, now: datetime | None = None) -> WalletView | None:
     """Чистое чтение (без блокировок и записи) — для экрана бизнеса, профиля и Mini App."""
     now = now or _now()
@@ -295,6 +330,9 @@ async def get_wallet(session: AsyncSession, user_id: int, *, now: datetime | Non
         income_for(counts, wallet.business_level, minutes, _rng(user_id, wallet.coins_accrued_at, minutes)), eco, potion
     ) + int(eco.passive_income * minutes / 60)
     keep = 1 - tax.percent / 100 * (1 - capped(eco.tax_relief, 0.8)) if tax else 1
+    stagnation = await _stagnation_factor(session, user_id)
+    gross = int(gross * stagnation)
+    keep *= stagnation
     # Скорость «сейчас»: с активным зельем богатства и множителем админа — иначе экран
     # показывал бы доход без зелья, хотя начисление его учитывает (жалоба 2026-10-13).
     potion_now = await _wealth_potion_bonus(session, user_id, now - timedelta(seconds=1), now, eco.potion_power)
@@ -331,6 +369,8 @@ async def accrue(session: AsyncSession, user_id: int, *, now: datetime | None = 
     gross = _with_income(
         income_for(counts, wallet.business_level, minutes, _rng(user_id, wallet.coins_accrued_at, minutes)), eco, potion
     ) + int(eco.passive_income * minutes / 60)
+    # Застой круга (2026-11-12): страна не добрана, атак давно не было — доход урезан.
+    gross = int(gross * await _stagnation_factor(session, user_id))
     # Налог императору города игрока — в той же транзакции, что зачисление (правило 10).
     tax = await empire_repo.get_tax_context(session, user_id)
     # «Резервный фонд» (Бизнесмен): хранилище было полным — сбор больше.

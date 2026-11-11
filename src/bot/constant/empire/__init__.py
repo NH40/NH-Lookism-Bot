@@ -1,5 +1,8 @@
 """Публичное API домена empire (константы)."""
 from bot.constant.empire.empire import (  # noqa: F401
+    CB_EMPIRE_ABDICATE,
+    CB_EMPIRE_ABDICATE_TO_PREFIX,
+    CB_EMPIRE_ABDICATE_YES_PREFIX,
     CB_EVENTS_CLAIM_PREFIX,
     CB_EVENTS_HOURS_PREFIX,
     CB_EVENTS_KIND_PREFIX,

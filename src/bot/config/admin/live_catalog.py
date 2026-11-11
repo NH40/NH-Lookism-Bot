@@ -148,6 +148,11 @@ SCALARS: dict[str, tuple[str, str, str]] = {
     "EMPIRE_DRILL_CD_PERCENT": ("empire", "bot.config.empire.empire", "Ивенты: сборы, −% КД тренировок"),
     "EMPIRE_TOURNAMENT_HOURS": ("empire", "bot.config.empire.empire", "Ивенты: турнир длится, ч"),
     "EMPIRE_DAILY_GIFT_MAX_DAYS": ("empire", "bot.config.empire.empire", "Ивенты: подарок, максимум дней"),
+    "EMPIRE_ABDICATE_MAX_CITIES": ("empire", "bot.config.empire.empire", "Сложить империю: доступно меньше чем при городах"),
+    "EMPIRE_ABDICATE_COOLDOWN_DAYS": ("empire", "bot.config.empire.empire", "Сложить империю: перезарядка, дней"),
+    "EMPIRE_ABDICATE_FINE_PERCENT": ("empire", "bot.config.empire.empire", "Сложить империю: штраф, % NHCoin"),
+    "STAGNATION_HOURS": ("business", "bot.config.game.game", "Застой круга: часов без атак"),
+    "STAGNATION_INCOME_PERCENT": ("business", "bot.config.game.game", "Застой круга: % дохода"),
     "EMPIRE_TRIBUTE_PERCENT": ("empire", "bot.config.empire.empire", "Дань младших императоров, % их налога"),
     "EMPIRE_TRIBUTE_CAP_PERCENT": ("empire", "bot.config.empire.empire", "Дань: потолок за сутки, % своего налога"),
     "EMPEROR_PASSIVE_BONUS_PERCENT": ("empire", "bot.config.empire.empire", "Пассивный бонус императору, % от дохода жителей"),
@@ -297,6 +302,7 @@ GROUPS: dict[str, tuple[tuple[str, str], ...]] = {
         ("Сила статистов и влияние", r"^EXTRA_RANK|^INFLUENCE_"),
     ),
     "business": (
+        ("Застой кругов", r"^STAGNATION_"),
         ("Доход зданий", r"INCOME|BLACK_MARKET|_SHOP_|ACCRUAL|TRAINING_BONUS|PARLIAMENT_INFLUENCE"),
         ("Улучшения и цены", r"UPGRADE|CAPACITY|BUILD_COST"),
     ),
@@ -307,6 +313,7 @@ GROUPS: dict[str, tuple[tuple[str, str], ...]] = {
         ("Состав, рота, доли", r"MEMBERS|CREATE|IMAGE|GARRISON|SHARE"),
     ),
     "empire": (
+        ("Сложить империю", r"^EMPIRE_ABDICATE_"),
         ("Ивенты императора", r"^EMPIRE_(EVENT|GIFT|FEAST|DRILL|TOURNAMENT|DAILY)"),
         ("Налог и дань", r"TAX|TRIBUTE|PASSIVE"),
         ("Саботаж", r"^SABOTAGE_"),

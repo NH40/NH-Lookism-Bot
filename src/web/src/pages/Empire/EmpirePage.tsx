@@ -6,7 +6,7 @@ import { BackHeader, Panel, Screen, StatRow, countdown, fmt, useCountdown, useTo
 import { ROUTE_MAP } from "../../constants/constants";
 import { Sheet } from "../../components/Sheet";
 import { useAction, useApi } from "../../hooks/useApi";
-import { EmperorEvents, SubjectEvents } from "./EmpireEvents";
+import { AbdicatePanel, EmperorEvents, SubjectEvents } from "./EmpireEvents";
 import "./Empire.css";
 
 // Империя — отдельный экран за кнопкой на «Карте» (пользователь 2026-10-14): император — налоги, персональные
@@ -325,6 +325,7 @@ export function EmpirePage() {
                 <button type="button" role="tab" aria-selected={tab === "events"} className={`pill ${tab === "events" ? "on" : ""}`} style={{ minHeight: 44 }} onClick={() => setTab("events")}>Ивенты</button>
               </div>
               {tab === "tax" && <TaxTab ruler={ruler} min={data.tax_min} max={data.tax_max} onChanged={reload} />}
+              {tab === "tax" && <AbdicatePanel onDone={reload} />}
               {tab === "war" && <WarTab ruler={ruler} onChanged={reload} />}
               {tab === "events" && <EmperorEvents />}
             </>

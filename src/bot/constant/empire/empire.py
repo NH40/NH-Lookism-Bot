@@ -17,6 +17,11 @@ CB_EMPIRE_ANNOUNCE_SEND = "empire:announce:send"
 CB_EMPIRE_LOG_PREFIX = "empire:log:"
 """f"{CB_EMPIRE_LOG_PREFIX}{page}" — журнал объявлений у игрока."""
 
+# Сложить империю (`services/empire/abdicate`).
+CB_EMPIRE_ABDICATE = "empire:abd"
+CB_EMPIRE_ABDICATE_TO_PREFIX = "empire:abd:to:"  # + код страны — подтверждение
+CB_EMPIRE_ABDICATE_YES_PREFIX = "empire:abd:yes:"  # + код страны — выполнить
+
 # --- Ивенты императора (`empire_events.kind` / `status`) ---
 EVENT_COINS = "coins"  # раздача NHCoin
 EVENT_STATISTS = "statists"  # раздача статистов

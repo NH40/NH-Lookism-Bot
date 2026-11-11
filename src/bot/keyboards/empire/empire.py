@@ -69,6 +69,10 @@ def empire_menu(current_rate: int, incoming_war_id: int | None = None) -> Inline
     if incoming_war_id is not None:
         rows.append([_btn(BTN_WAR_ACCEPT, f"{CB_WAR_ACCEPT_PREFIX}{incoming_war_id}")])
     rows.append([_btn(BTN_WAR, f"{CB_WAR_LIST_PREFIX}0")])
+    from bot.constant.empire import CB_EMPIRE_ABDICATE
+    from bot.texts.empire.abdicate import BTN_ABDICATE
+
+    rows.append([_btn(BTN_ABDICATE, CB_EMPIRE_ABDICATE)])
     rows.append([_btn(BTN_BACK_TO_PROFILE, CB_PROFILE_OPEN)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

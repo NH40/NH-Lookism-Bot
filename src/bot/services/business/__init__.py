@@ -16,6 +16,7 @@ from bot.services.business.business import (  # noqa: F401
     WalletView,
     accrue,
     accrue_many,
+    stagnating,
     autobuild_for_crown,
     build,
     build_all,

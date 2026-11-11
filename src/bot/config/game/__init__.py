@@ -1,6 +1,9 @@
 """Публичное API домена game (конфиг)."""
 from bot.config.game.game import (  # noqa: F401
     ACTION_LOCK_MS,
+    STAGNATION_HOURS,
+    STAGNATION_INCOME_PERCENT,
+    STAGNATION_SWEEP_SECONDS,
     BATTLE_BASE_BLOCK,
     BATTLE_BASE_COUNTER,
     BATTLE_BASE_DODGE,

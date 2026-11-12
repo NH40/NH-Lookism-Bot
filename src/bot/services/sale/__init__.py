@@ -1,0 +1,22 @@
+"""Публичное API домена sale (сервис)."""
+from bot.services.sale.sale import (  # noqa: F401
+    SPECIAL_PRICES,
+    AlreadyBoughtError,
+    CannotBuyError,
+    NoSaleError,
+    NotEnoughDonateError,
+    SaleActiveError,
+    SaleBusyError,
+    SaleView,
+    TooManyChoicesError,
+    active,
+    apply_percent,
+    buy_special,
+    discount_percent,
+    discounted,
+    start,
+    stop,
+    toggle_choice,
+    topup_coins,
+    view,
+)

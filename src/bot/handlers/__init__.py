@@ -21,6 +21,7 @@ from bot.handlers.promo import router as promo_router
 from bot.handlers.top import router as top_router
 from bot.handlers.help import router as help_router
 from bot.handlers.donate import router as donate_router
+from bot.handlers.sale import router as sale_router
 from bot.handlers.payment import router as payment_router
 from bot.handlers.map import router as map_router
 from bot.handlers.district import router as district_router
@@ -76,6 +77,7 @@ def get_routers() -> list[Router]:
         top_router,
         help_router,
         donate_router,
+        sale_router,
         payment_router,
         map_router,
         district_router,

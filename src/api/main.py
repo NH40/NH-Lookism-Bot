@@ -25,6 +25,7 @@ from api.db import engine
 from api.push import close_bot
 from api.routers import admin
 from api.routers import payments
+from api.routers import sale
 from api.routers import admin_ops
 from api.routers import admin_players
 from api.routers import awakening
@@ -144,6 +145,7 @@ app.add_middleware(
 app.include_router(profile.router)
 app.include_router(battle_pass.router)
 app.include_router(img.router)
+app.include_router(sale.router)
 app.include_router(map_router.router)
 app.include_router(district.router)
 app.include_router(gang.router)

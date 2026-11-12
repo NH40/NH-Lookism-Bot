@@ -29,6 +29,7 @@ from bot.config.donate import (
 )
 from bot.config.game import ACTION_LOCK_MS
 from bot.constant.donate import KIND_GENIUS, KIND_PATH, KIND_TECHNIQUE, LOCK_ACTION_DONATE
+from bot.constant.sale import CAT_BODY, CAT_GENIUS, CAT_PATH, CAT_TECHNIQUE
 from bot.constant.genius import GENIUSES
 from bot.constant.unique_path import PATH_STAGE_OWNED, PATHS
 from bot.constant.unique_technique import TECHNIQUES
@@ -80,8 +81,26 @@ class MarketItem:
     next_price: int | None  # цена открытия (level 0) или следующего уровня; None — максимум
 
 
+_SALE_CATEGORY = {KIND_GENIUS: CAT_GENIUS, KIND_PATH: CAT_PATH, KIND_TECHNIQUE: CAT_TECHNIQUE}
+
+
 def unlock_price(kind: str) -> int:
     return _PRICES[kind][0]
+
+
+async def _sale_item(session: AsyncSession, user_id: int, item: MarketItem) -> MarketItem:
+    """Цена с учётом «пятницы» (`services/sale`)."""
+    if item.next_price is None:
+        return item
+    from bot.services.sale import discounted
+
+    price = await discounted(session, user_id, _SALE_CATEGORY[item.kind], item.next_price)
+    return MarketItem(item.kind, item.code, item.level, price)
+
+
+async def priced_item(session: AsyncSession, user_id: int, kind: str, code: str) -> MarketItem:
+    """Позиция маркета с ценой следующей покупки для игрока (со скидкой пятницы)."""
+    return await _sale_item(session, user_id, item_view(kind, code, await donate_repo.floor(session, user_id, kind, code)))
 
 
 def item_view(kind: str, code: str, level: int) -> MarketItem:
@@ -97,17 +116,21 @@ async def balance(session: AsyncSession, user_id: int) -> int:
 async def credit_payment(
     session: AsyncSession, user_id: int, charge_id: str, provider_id: str, amount_rub: int
 ) -> int | None:
-    """Зачислить успешный платёж (1 ₽ = 1 коин). → коины или None (повторная доставка). Коммитит."""
-    if not await donate_repo.insert_payment(session, user_id, charge_id, provider_id, amount_rub, amount_rub):
+    """Зачислить успешный платёж (1 ₽ = 1 коин; «пятницы» силы/золотая — больше коинов).
+    → коины или None (повторная доставка). Коммитит."""
+    from bot.services.sale import topup_coins
+
+    coins = await topup_coins(session, amount_rub)
+    if not await donate_repo.insert_payment(session, user_id, charge_id, provider_id, amount_rub, coins):
         await session.rollback()
         return None
     await session.commit()
-    return amount_rub
+    return coins
 
 
 async def market(session: AsyncSession, user_id: int, kind: str) -> list[MarketItem]:
     bought = await donate_repo.unlocks(session, user_id, kind)
-    return [item_view(kind, code, bought.get((kind, code), 0)) for code in CATALOG[kind]]
+    return [await _sale_item(session, user_id, item_view(kind, code, bought.get((kind, code), 0))) for code in CATALOG[kind]]
 
 
 async def _lock(redis: Redis, user_id: int) -> str:
@@ -131,8 +154,11 @@ async def buy_second_body(session: AsyncSession, redis: Redis, user_id: int) -> 
         body = await donate_repo.body_state(session, user_id)
         if body and body[0]:
             raise AlreadyBoughtError
-        if not await donate_repo.buy_second_body(session, user_id, live_get("second_body_price")):
-            raise NotEnoughDonateError(live_get("second_body_price"), await donate_repo.balance(session, user_id))
+        from bot.services.sale import discounted
+
+        price = await discounted(session, user_id, CAT_BODY, live_get("second_body_price"))
+        if not await donate_repo.buy_second_body(session, user_id, price):
+            raise NotEnoughDonateError(price, await donate_repo.balance(session, user_id))
         await session.commit()
     except Exception:
         await session.rollback()
@@ -167,7 +193,9 @@ async def buy_unlock(session: AsyncSession, redis: Redis, user_id: int, kind: st
     try:
         if not await donate_repo.add_unlock(session, user_id, kind, code):
             raise AlreadyBoughtError
-        await _spend(session, user_id, unlock_price(kind))
+        from bot.services.sale import discounted
+
+        await _spend(session, user_id, await discounted(session, user_id, _SALE_CATEGORY[kind], unlock_price(kind)))
         await _apply(session, user_id, kind, code, 1)
         await session.commit()
         return item_view(kind, code, 1)
@@ -189,7 +217,9 @@ async def buy_level(session: AsyncSession, redis: Redis, user_id: int, kind: str
             raise NotUnlockedError
         if current >= MAX_LEVEL:
             raise MaxLevelError
-        price = _PRICES[kind][1][current + 1]
+        from bot.services.sale import discounted
+
+        price = await discounted(session, user_id, _SALE_CATEGORY[kind], _PRICES[kind][1][current + 1])
         if not await donate_repo.bump_unlock(session, user_id, kind, code, current):
             raise AlreadyBoughtError  # параллельная покупка того же уровня
         await _spend(session, user_id, price)

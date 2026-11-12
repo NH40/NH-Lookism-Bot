@@ -293,7 +293,10 @@ async def buy_premium(session: AsyncSession, redis: Redis, user_id: int) -> None
     from bot.db.repositories import donate as donate_repo
     from bot.services.admin.live_config import get as live_get
 
-    price = live_get("bp_premium_price")
+    from bot.constant.sale import CAT_BP_PREMIUM
+    from bot.services.sale import discounted
+
+    price = await discounted(session, user_id, CAT_BP_PREMIUM, live_get("bp_premium_price"))
     key = await _lock(redis, user_id)
     try:
         season = await current_season(session)
@@ -339,7 +342,10 @@ async def buy_levels(session: AsyncSession, redis: Redis, user_id: int, count: i
         room = max(0, BP_MAIN_LEVELS - level)
         if room < BP_BUY_MIN_LEVELS or not BP_BUY_MIN_LEVELS <= count <= room:
             raise BadLevelCountError(BP_BUY_MIN_LEVELS, room)
-        price = count * BP_LEVEL_PRICE
+        from bot.constant.sale import CAT_BP_LEVELS
+        from bot.services.sale import discounted
+
+        price = await discounted(session, user_id, CAT_BP_LEVELS, count * BP_LEVEL_PRICE)
         if not await donate_repo.spend(session, user_id, price):
             raise NotEnoughDonateError(price, await donate_repo.balance(session, user_id))
         bp.xp = (level + count) * BP_LEVEL_XP + bp.xp % BP_LEVEL_XP

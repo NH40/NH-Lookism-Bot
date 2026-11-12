@@ -26,8 +26,9 @@ from bot.handlers.admin.live_config import router as _live_config
 from bot.handlers.admin.referral import router as _referral
 from bot.handlers.admin.quests import router as _quests
 from bot.handlers.admin.statists import router as _statists
+from bot.handlers.sale import admin_router as _sale
 
 router = Router(name="admin_root")
 router.message.filter(IsAdminFilter())
 router.callback_query.filter(IsAdminFilter())
-router.include_routers(_admin, _players, _give, _dev, _punish, _mass, _promo, _stats, _logs, _world, _events, _clans, _season, _roles, _patch, _live_config, _referral, _quests, _statists)
+router.include_routers(_admin, _players, _give, _dev, _punish, _mass, _promo, _stats, _logs, _world, _events, _clans, _season, _roles, _patch, _live_config, _referral, _quests, _statists, _sale)

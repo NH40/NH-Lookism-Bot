@@ -328,7 +328,10 @@ async def buy_donate_level(session: AsyncSession, redis: Redis, user_id: int) ->
         clan = await clan_repo.lock_clan(session, member.clan_id)
         if clan.donate_level >= len(CLAN_DONATE_LEVELS):
             raise ClanError("donate_max")
-        price = clan_donate_price(clan.donate_level + 1)
+        from bot.constant.sale import CAT_CLAN
+        from bot.services.sale import discounted
+
+        price = await discounted(session, user_id, CAT_CLAN, clan_donate_price(clan.donate_level + 1))
         if not await donate_repo.spend(session, user_id, price):
             raise ClanError("no_donate", price)
         await clan_repo.add_donate_purchase(session, clan.id, user_id, price)

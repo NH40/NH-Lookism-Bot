@@ -50,7 +50,6 @@ from bot.services.donate import (
     buy_level,
     buy_second_body,
     buy_unlock,
-    item_view,
     market,
 )
 from bot.services.gang import get_gang
@@ -132,7 +131,21 @@ def _method_text(amount_rub: int) -> str:
 
 
 async def _donate_text(session: AsyncSession, user_id: int) -> str:
-    return DONATE_SCREEN.format(balance=format_number(await balance(session, user_id)))
+    from bot.handlers.sale import banner
+
+    line, _ = await banner(session)  # идёт «пятница» — строка о ней
+    return DONATE_SCREEN.format(balance=format_number(await balance(session, user_id))) + line
+
+
+async def _donate_markup(session: AsyncSession):
+    """Меню доната + кнопка текущей «пятницы», если идёт."""
+    from bot.handlers.sale import banner
+
+    markup = donate_menu()
+    _, button = await banner(session)
+    if button is not None:
+        markup.inline_keyboard.insert(0, [button])
+    return markup
 
 
 @router.message(Command("donate"))
@@ -141,7 +154,7 @@ async def cmd_donate(message: Message, session: AsyncSession, state: FSMContext)
     if await get_gang(session, message.from_user.id) is None:
         await message.answer(NOT_ONBOARDED)
         return
-    await message.answer(await _donate_text(session, message.from_user.id), reply_markup=donate_menu())
+    await message.answer(await _donate_text(session, message.from_user.id), reply_markup=await _donate_markup(session))
 
 
 async def _guard(callback: CallbackQuery, session: AsyncSession) -> bool:
@@ -157,7 +170,7 @@ async def cb_donate(callback: CallbackQuery, session: AsyncSession, state: FSMCo
     if not await _guard(callback, session):
         return
     await callback.answer()
-    await safe_edit_text(callback.message, await _donate_text(session, callback.from_user.id), reply_markup=donate_menu())
+    await safe_edit_text(callback.message, await _donate_text(session, callback.from_user.id), reply_markup=await _donate_markup(session))
 
 
 @router.callback_query(F.data.startswith(CB_DONATE_PRESET_PREFIX))
@@ -372,7 +385,9 @@ def _parse(data: str, prefix: str) -> tuple[str, str] | None:
 
 async def _show_item(callback: CallbackQuery, session: AsyncSession, kind: str, code: str) -> None:
     user_id = callback.from_user.id
-    item = item_view(kind, code, await donate_repo.floor(session, user_id, kind, code))
+    from bot.services.donate.donate import priced_item
+
+    item = await priced_item(session, user_id, kind, code)
     if item.next_price is None:
         next_line = ITEM_MAX
     elif item.level == 0:

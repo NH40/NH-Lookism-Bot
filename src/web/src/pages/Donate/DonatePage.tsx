@@ -6,6 +6,7 @@ import type { DonateData } from "../../types";
 import { BackHeader, Panel, Screen, Spinner, fmt, useToast } from "../../components/ui";
 import { ROUTE_MARKET, ROUTE_MORE } from "../../constants";
 import { useApi } from "../../hooks/useApi";
+import { SalePanel } from "../Sale";
 import { getWebApp } from "../../telegram";
 
 type Method = "sbp" | "card";
@@ -127,6 +128,7 @@ export function DonatePage() {
       {data && (
         <div className="page">
           <BackHeader title="Донат" to={ROUTE_MORE} />
+          <SalePanel onChanged={reload} />
           <Panel title="Баланс" tone="violet">
             <div className="row">
               <div className="disp" style={{ fontSize: 28, fontWeight: 800, display: "flex", alignItems: "center", gap: 8 }}>

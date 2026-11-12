@@ -26,6 +26,7 @@ import { useApi } from "../../hooks/useApi";
 import { TextInput, useAdminMeta } from "./AdminKit";
 import { ConfigSection, LogsSection, PatchSection, RolesSection, StatsSection, SystemSection } from "./SectionsCore";
 import { ClansSection, EventsSection, MassSection, PromoSection, ReferralSection, SeasonSection, WorldSection } from "./SectionsOps";
+import { SaleAdminSection } from "../Sale";
 import "./Admin.css";
 
 const ICONS: Record<string, ReactNode> = {
@@ -36,6 +37,7 @@ const ICONS: Record<string, ReactNode> = {
   logs: <ScrollText size={18} />,
   world: <MapIcon size={18} />,
   events: <Sparkles size={18} />,
+  sale: <Ticket size={18} />,
   clans: <Shield size={18} />,
   season: <CalendarRange size={18} />,
   referral: <Link2 size={18} />,
@@ -53,6 +55,7 @@ const HINTS: Record<string, string> = {
   logs: "аудит, платежи, покупки",
   world: "города, районы, императоры",
   events: "боссы и учителя на карте",
+  sale: "скидки «пятницы» на 24 ч",
   clans: "земли, казна, владелец",
   season: "пасс и задания игрока",
   referral: "кампании и ссылки",
@@ -116,6 +119,8 @@ function SectionBody({ section, meta }: { section: string; meta: AdminMeta }) {
       return <WorldSection />;
     case "events":
       return <EventsSection meta={meta} />;
+    case "sale":
+      return <SaleAdminSection />;
     case "clans":
       return <ClansSection />;
     case "season":

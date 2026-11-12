@@ -42,6 +42,7 @@ SECTION_PATCH = "patch"  # патчи и вайп
 SECTION_CONFIG = "config"  # настройки на лету
 SECTION_REFERRAL = "referral"
 SECTION_SYSTEM = "system"  # бета-режим и техрежим
+SECTION_SALE = "sale"  # «пятницы» — скидки (2026-11-12)
 
 # Корень раздела: f"{CB_ADMIN_SECTION_PREFIX}{section}" — каждый раздел обрабатывает свой.
 CB_ADMIN_SECTION_PREFIX = "adm:s:"

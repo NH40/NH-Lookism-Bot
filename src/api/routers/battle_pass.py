@@ -167,6 +167,32 @@ async def post_claim_all(
     return {"message": f"Забрано уровней: {result.count}. {reward_text(result.reward)}"}
 
 
+class BuyLevelsIn(BaseModel):
+    count: int
+
+
+@router.post("/buy-levels")
+async def post_buy_levels(
+    body: BuyLevelsIn,
+    user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    from bot.services.battle_pass import BadLevelCountError, buy_levels
+    from bot.texts.battle_pass.battle_pass import LEVELS_BAD_ALERT, LEVELS_BOUGHT_ALERT
+
+    await _guard(session, user_id)
+    try:
+        done = await buy_levels(session, redis, user_id, body.count)
+    except BattlePassBusyError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, BUSY_ALERT)
+    except BadLevelCountError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, LEVELS_BAD_ALERT.format(min=exc.minimum, max=exc.maximum))
+    except NotEnoughDonateError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, PREMIUM_NOT_ENOUGH_ALERT.format(price=exc.price, balance=exc.balance))
+    return {"message": LEVELS_BOUGHT_ALERT.format(count=done.count, price=done.price, level=done.level)}
+
+
 @router.post("/buy-premium")
 async def post_buy_premium(
     user_id: int = Depends(get_current_user_id),

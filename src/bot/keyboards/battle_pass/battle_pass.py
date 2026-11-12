@@ -65,5 +65,23 @@ def pass_menu(page) -> InlineKeyboardMarkup:
         rows.append(claim)
     if not page.is_premium:
         rows.append([_btn(BTN_BUY_PREMIUM.format(price=live_get("bp_premium_price")), CB_BP_BUY_PREMIUM)])
-    rows.append([_btn(BTN_TO_QUESTS, CB_MENU_QUESTS)])
+    from bot.constant.battle_pass import CB_BP_LEVELS
+    from bot.texts.battle_pass.battle_pass import BTN_BUY_LEVELS
+
+    rows.append([_btn(BTN_BUY_LEVELS, CB_BP_LEVELS), _btn(BTN_TO_QUESTS, CB_MENU_QUESTS)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def levels_menu(room: int) -> InlineKeyboardMarkup:
+    """Пресеты покупки уровней (не больше, чем осталось до конца пасса)."""
+    from bot.config.battle_pass import BP_BUY_MIN_LEVELS, BP_BUY_PRESETS, BP_LEVEL_PRICE
+    from bot.constant.battle_pass import CB_BP_LEVELS_BUY_PREFIX, CB_BP_OPEN
+    from bot.texts.battle_pass.battle_pass import BTN_BACK_TO_PASS, BTN_LEVELS_PRESET
+
+    counts = [n for n in BP_BUY_PRESETS if BP_BUY_MIN_LEVELS <= n <= room]
+    if room >= BP_BUY_MIN_LEVELS and room not in counts and room < max(BP_BUY_PRESETS) * 2:
+        counts.append(room)  # «до конца пасса»
+    buttons = [_btn(BTN_LEVELS_PRESET.format(count=n, price=n * BP_LEVEL_PRICE), f"{CB_BP_LEVELS_BUY_PREFIX}{n}") for n in counts]
+    rows = [buttons[i : i + 2] for i in range(0, len(buttons), 2)]
+    rows.append([_btn(BTN_BACK_TO_PASS, CB_BP_OPEN)])
     return InlineKeyboardMarkup(inline_keyboard=rows)

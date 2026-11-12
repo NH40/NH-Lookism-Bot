@@ -12,6 +12,8 @@ from bot.constant.battle_pass import (
     CB_BP_CLAIM_ALL_PREFIX,
     CB_BP_CLAIM_PREFIX,
     CB_BP_BUY_PREMIUM,
+    CB_BP_LEVELS,
+    CB_BP_LEVELS_BUY_PREFIX,
     CB_BP_OPEN,
     CB_BP_PAGE_PREFIX,
     TRACKS,
@@ -168,6 +170,59 @@ async def cb_claim_all(callback: CallbackQuery, session: AsyncSession, redis: Re
         return
     await callback.answer(CLAIMED_ALL_ALERT.format(count=result.count, reward=reward_text(result.reward)), show_alert=True)
     await _show(callback, session, page_for_level(result.level))
+
+
+@router.callback_query(F.data == CB_BP_LEVELS)
+async def cb_levels(callback: CallbackQuery, session: AsyncSession) -> None:
+    from bot.config.battle_pass import BP_BUY_MIN_LEVELS, BP_LEVEL_PRICE, BP_MAIN_LEVELS
+    from bot.db.repositories import donate as donate_repo
+    from bot.keyboards.battle_pass.battle_pass import levels_menu
+    from bot.services.battle_pass.battle_pass import current_season, level_from_xp
+    from bot.db.repositories.battle_pass import battle_pass as bp_repo
+    from bot.texts.battle_pass.battle_pass import LEVELS_SCREEN
+    from bot.utils.safe_edit import safe_edit_text
+
+    if not await _guard(callback, session):
+        return
+    season = await current_season(session)
+    bp = await bp_repo.get(session, callback.from_user.id, season.id)
+    level = level_from_xp(bp.xp) if bp else 0
+    room = max(0, BP_MAIN_LEVELS - level)
+    await callback.answer()
+    await safe_edit_text(
+        callback.message,
+        LEVELS_SCREEN.format(
+            price=BP_LEVEL_PRICE, min=BP_BUY_MIN_LEVELS, level=level, room=room,
+            balance=await donate_repo.balance(session, callback.from_user.id),
+        ),
+        reply_markup=levels_menu(room),
+    )
+
+
+@router.callback_query(F.data.startswith(CB_BP_LEVELS_BUY_PREFIX))
+async def cb_levels_buy(callback: CallbackQuery, session: AsyncSession, redis: Redis) -> None:
+    from bot.services.battle_pass import BadLevelCountError, buy_levels
+    from bot.texts.battle_pass.battle_pass import LEVELS_BAD_ALERT, LEVELS_BOUGHT_ALERT
+
+    if not await _guard(callback, session):
+        return
+    raw = callback.data.removeprefix(CB_BP_LEVELS_BUY_PREFIX)
+    if not raw.isdigit():
+        await callback.answer()
+        return
+    try:
+        done = await buy_levels(session, redis, callback.from_user.id, int(raw))
+    except BattlePassBusyError:
+        await callback.answer(BUSY_ALERT)
+        return
+    except BadLevelCountError as exc:
+        await callback.answer(LEVELS_BAD_ALERT.format(min=exc.minimum, max=exc.maximum), show_alert=True)
+        return
+    except NotEnoughDonateError as exc:
+        await callback.answer(PREMIUM_NOT_ENOUGH_ALERT.format(price=exc.price, balance=exc.balance), show_alert=True)
+        return
+    await callback.answer(LEVELS_BOUGHT_ALERT.format(count=done.count, price=done.price, level=done.level), show_alert=True)
+    await _show(callback, session, page_for_level(done.level))
 
 
 @router.callback_query(F.data == CB_BP_BUY_PREMIUM)

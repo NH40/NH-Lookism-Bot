@@ -9,6 +9,8 @@ LOCK_ACTION_BP = "bp"
 
 CB_BP_OPEN = "bp:open"
 CB_BP_BUY_PREMIUM = "bp:buy"
+CB_BP_LEVELS = "bp:lv"  # экран покупки уровней
+CB_BP_LEVELS_BUY_PREFIX = "bp:lvb:"  # + число уровней
 CB_BP_PAGE_PREFIX = "bp:pg:"  # bp:pg:<страница>
 CB_BP_CLAIM_PREFIX = "bp:cl:"  # bp:cl:<ветка>:<уровень>
 CB_BP_CLAIM_ALL_PREFIX = "bp:all:"  # bp:all:<ветка>

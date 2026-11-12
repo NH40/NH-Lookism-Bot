@@ -311,6 +311,47 @@ async def buy_premium(session: AsyncSession, redis: Redis, user_id: int) -> None
         await redis.delete(key)
 
 
+class BadLevelCountError(Exception):
+    def __init__(self, minimum: int, maximum: int) -> None:
+        super().__init__(minimum, maximum)
+        self.minimum = minimum
+        self.maximum = maximum
+
+
+@dataclass(frozen=True, slots=True)
+class LevelsBought:
+    count: int
+    price: int
+    level: int
+
+
+async def buy_levels(session: AsyncSession, redis: Redis, user_id: int, count: int) -> LevelsBought:
+    """Купить `count` уровней пасса за донат-коины (пользователь 2026-11-12): опыт добавляется
+    напрямую, без дневного буста и множителя админа. Не дальше `BP_MAIN_LEVELS`. Коммитит."""
+    from bot.config.battle_pass import BP_BUY_MIN_LEVELS, BP_LEVEL_PRICE, BP_MAIN_LEVELS
+    from bot.db.repositories import donate as donate_repo
+
+    key = await _lock(redis, user_id)
+    try:
+        season = await current_season(session)
+        bp = await bp_repo.lock(session, user_id, season.id)
+        level = level_from_xp(bp.xp)
+        room = max(0, BP_MAIN_LEVELS - level)
+        if room < BP_BUY_MIN_LEVELS or not BP_BUY_MIN_LEVELS <= count <= room:
+            raise BadLevelCountError(BP_BUY_MIN_LEVELS, room)
+        price = count * BP_LEVEL_PRICE
+        if not await donate_repo.spend(session, user_id, price):
+            raise NotEnoughDonateError(price, await donate_repo.balance(session, user_id))
+        bp.xp = (level + count) * BP_LEVEL_XP + bp.xp % BP_LEVEL_XP
+        await session.commit()
+        return LevelsBought(count, price, level + count)
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
+        await redis.delete(key)
+
+
 async def set_premium(session: AsyncSession, user_id: int) -> None:
     """Открыть платную ветку на текущий сезон (донат/админ). НЕ коммитит."""
     season = await current_season(session)

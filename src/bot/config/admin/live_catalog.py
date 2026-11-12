@@ -151,6 +151,8 @@ SCALARS: dict[str, tuple[str, str, str]] = {
     "EMPIRE_ABDICATE_MAX_CITIES": ("empire", "bot.config.empire.empire", "Сложить империю: доступно меньше чем при городах"),
     "EMPIRE_ABDICATE_COOLDOWN_DAYS": ("empire", "bot.config.empire.empire", "Сложить империю: перезарядка, дней"),
     "EMPIRE_ABDICATE_FINE_PERCENT": ("empire", "bot.config.empire.empire", "Сложить империю: штраф, % NHCoin"),
+    "BP_LEVEL_PRICE": ("quest", "bot.config.battle_pass.battle_pass", "Пасс: цена уровня, донат-коины"),
+    "BP_BUY_MIN_LEVELS": ("quest", "bot.config.battle_pass.battle_pass", "Пасс: минимум уровней в покупке"),
     "GANG_RENAME_PRICE": ("general", "bot.config.game.game", "Смена названия банды, NHCoin"),
     "GANG_RENAME_COOLDOWN_DAYS": ("general", "bot.config.game.game", "Смена названия банды: раз в дней"),
     "STAGNATION_HOURS": ("business", "bot.config.game.game", "Застой круга: часов без атак"),

@@ -47,6 +47,16 @@ ALREADY_ALERT = "✅ Награда этого уровня уже получе�
 NOT_PREMIUM_ALERT = "💎 Платная ветка не открыта."
 NOTHING_ALERT = "Пока нечего забирать."
 CLAIMED_ALERT = "🎁 Получено: {reward}"
+BTN_BUY_LEVELS = "⬆️ Купить уровни"
+BTN_LEVELS_PRESET = "+{count} ур. — {price} 💎"
+BTN_BACK_TO_PASS = "◀️ К пассу"
+LEVELS_SCREEN = (
+    "⬆️ <b>Купить уровни пасса</b>\n"
+    "1 уровень — <b>{price}</b> 💎, минимум {min}. Сейчас уровень {level}, можно купить до {room}.\n"
+    "Донат-баланс: <b>{balance}</b> 💎."
+)
+LEVELS_BOUGHT_ALERT = "Куплено уровней: {count} (−{price} 💎). Теперь уровень {level} — забирай награды."
+LEVELS_BAD_ALERT = "Можно купить от {min} до {max} уровней."
 PREMIUM_BOUGHT_ALERT = "💎 Платная ветка открыта до конца сезона! Забирай награды."
 PREMIUM_ALREADY_ALERT = "Платная ветка уже открыта."
 PREMIUM_NOT_ENOUGH_ALERT = "Не хватает донат-коинов: нужно {price}, у тебя {balance}. Пополнить — /donate"

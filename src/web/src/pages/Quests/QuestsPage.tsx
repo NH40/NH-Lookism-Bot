@@ -98,6 +98,13 @@ function PassPanel({ data, reload, page, setPage }: {
           <Crown size={16} />Открыть премиум — {data.premium_price} <Gem size={14} />
         </button>
       )}
+      <div className="grid-2" style={{ gap: 6, marginTop: 8 }}>
+        {[10, 25, 50, 100].map((n) => (
+          <button key={n} className="btn small ghost" type="button" disabled={busy} onClick={() => run("/battle-pass/buy-levels", { count: n })}>
+            +{n} ур. — {n * 5} <Gem size={12} />
+          </button>
+        ))}
+      </div>
     </Panel>
   );
 }

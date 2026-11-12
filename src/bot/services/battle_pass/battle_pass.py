@@ -180,12 +180,26 @@ async def _lock(redis: Redis, user_id: int) -> str:
     return key
 
 
-async def _grant(session: AsyncSession, user_id: int, reward: dict[str, int]) -> None:
+async def _grant(session: AsyncSession, user_id: int, reward: dict[str, int]) -> dict[str, int]:
+    """Начислить награду. Часы дохода превращаются в монеты по доходу игрока сейчас.
+    → фактически начисленное (для сообщения игроку)."""
+    from bot.config.battle_pass import BP_COIN_HOUR_MIN, ITEM_COIN_HOURS
+    from bot.constant.resource import RES_COINS
+
+    reward = dict(reward)
+    hours = reward.pop(ITEM_COIN_HOURS, 0)
+    if hours:
+        from bot.services.business import get_wallet
+
+        wallet = await get_wallet(session, user_id)
+        per_hour = int(wallet.per_minute * 60) if wallet else 0
+        reward[RES_COINS] = reward.get(RES_COINS, 0) + hours * max(BP_COIN_HOUR_MIN, per_hour)
     for code, amount in reward.items():
         if code == ITEM_SCROLL:
             await bp_repo.add_skip_scrolls(session, user_id, amount)
         else:
             await grant(session, user_id, code, amount)
+    return reward
 
 
 def _hwm(bp: BattlePass, track: str) -> int:
@@ -233,7 +247,7 @@ async def claim_level(session: AsyncSession, redis: Redis, user_id: int, track: 
         elif not await bp_repo.add_claim(session, user_id, season.id, track, level):
             raise LevelAlreadyClaimedError
         reward = reward_for(track, level)
-        await _grant(session, user_id, reward)
+        reward = await _grant(session, user_id, reward)
         await session.flush()
         await _emit_claims(session, user_id, 1)
         await session.commit()
@@ -269,7 +283,7 @@ async def claim_all(session: AsyncSession, redis: Redis, user_id: int, track: st
             raise NothingToClaimError
         _set_hwm(bp, track, current)
         await bp_repo.drop_claims(session, user_id, season.id, track, current)
-        await _grant(session, user_id, total)
+        total = await _grant(session, user_id, total)
         await session.flush()
         await _emit_claims(session, user_id, count)
         await session.commit()

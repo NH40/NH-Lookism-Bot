@@ -47,6 +47,13 @@ BP_LEVELS_PER_PAGE = 5  # в боте — 2 строки по 5 ячеек (ка
 # задание развития (пользователь: «пропустить задание на подтверждение убеждений для пути и
 # тому подобное»).
 ITEM_SCROLL = "scroll"
+# Монеты — в часах дохода игрока (пользователь 2026-11-12: фиксированные 2 000 NHCoin ничего не
+# значат, когда торгуют миллионами и миллиардами). При клейме: часы × доход бизнеса в час (после
+# налога), не меньше `BP_COIN_HOUR_MIN` за час — новичку без бизнеса тоже есть что дать.
+ITEM_COIN_HOURS = "coin_hours"
+BP_COIN_HOUR_MIN = 10_000
+# Капли крови в платной ветке — ровно 12 за 500 уровней (каждый 40-й), пользователь 2026-11-12.
+BP_PREMIUM_BLOOD_EVERY = 40
 
 _FRAGMENTS = (RES_PATH_FRAGMENTS, RES_TECHNIQUE_FRAGMENTS, RES_GENIUS_FRAGMENTS)
 
@@ -56,25 +63,25 @@ def _base(level: int) -> dict[str, int]:
     reward: dict[str, int] = {}
     if level % 250 == 0:  # пользователь: «за каждый 250-й уровень — каплю крови»
         reward[RES_BLOOD] = 1
-        reward[RES_COINS] = 20_000
+        reward[ITEM_COIN_HOURS] = 12
     elif level % 100 == 0:
         reward[ITEM_SCROLL] = 1
         reward[RES_TICKETS] = 5
     elif level % 10 == 0:
         reward[RES_TICKETS] = 2
-        reward[_FRAGMENTS[(level // 10) % 3]] = 8
+        reward[_FRAGMENTS[(level // 10) % 3]] = 16  # ×2 — 2026-11-12
     else:
         step = level % 5
         if step == 1:
-            reward[RES_COINS] = 2_000
+            reward[ITEM_COIN_HOURS] = 1
         elif step == 2:
-            reward[_FRAGMENTS[level % 3]] = 3
+            reward[_FRAGMENTS[level % 3]] = 6
         elif step == 3:
             reward[RES_TICKETS] = 1
         elif step == 4:
             reward[RES_DEV_POINTS] = 2
         else:
-            reward[RES_COINS] = 3_500
+            reward[ITEM_COIN_HOURS] = 1
     return reward
 
 
@@ -84,7 +91,7 @@ def _loop(pos: int) -> dict[str, int]:
     if pos == BP_LOOP_LEVELS:
         return {ITEM_SCROLL: 1, RES_TICKETS: 3}
     if pos % 2:
-        return {_FRAGMENTS[(pos // 2) % 3]: 10}
+        return {_FRAGMENTS[(pos // 2) % 3]: 20}
     return {RES_TICKETS: 2} if pos % 4 == 2 else {RES_DEV_POINTS: 5}
 
 
@@ -106,9 +113,10 @@ def premium_reward(level: int) -> dict[str, int]:
         reward[ITEM_SCROLL] = 1 if pos in (5, BP_LOOP_LEVELS) else 0
         reward[RES_PATH_POINTS] = 20
         return {k: v for k, v in reward.items() if v}
-    reward = {k: v * 2 for k, v in _base(level).items() if k != ITEM_SCROLL}
-    if level % 250 == 0:
-        reward[RES_COINS] = 50_000
+    # кровь платной ветки — своя раскладка (`BP_PREMIUM_BLOOD_EVERY`), не удвоение бесплатной
+    reward = {k: v * 2 for k, v in _base(level).items() if k not in (ITEM_SCROLL, RES_BLOOD)}
+    if level % BP_PREMIUM_BLOOD_EVERY == 0:
+        reward[RES_BLOOD] = 1
     if level % 50 == 0:  # свиток — раз в 50 уровней (в бесплатной — раз в 100)
         reward[ITEM_SCROLL] = 1
     if level % 5 == 0:

@@ -60,14 +60,20 @@ LEVELS_BAD_ALERT = "Можно купить от {min} до {max} уровней
 PREMIUM_BOUGHT_ALERT = "💎 Платная ветка открыта до конца сезона! Забирай награды."
 PREMIUM_ALREADY_ALERT = "Платная ветка уже открыта."
 PREMIUM_NOT_ENOUGH_ALERT = "Не хватает донат-коинов: нужно {price}, у тебя {balance}. Пополнить — /donate"
+COIN_HOURS_LABEL = "🪙 {n} ч дохода"
 CLAIMED_ALL_ALERT = "🎁 Забрано уровней: {count}\n{reward}"
 
 
 def reward_text(reward: dict[str, int]) -> str:
     """«2 000 🪙, 1 🎫» — награда уровня (свиток — отдельный предмет, не ресурс)."""
-    from bot.config.battle_pass import ITEM_SCROLL
+    from bot.config.battle_pass import ITEM_COIN_HOURS, ITEM_SCROLL
     from bot.texts.resource import amount_label
 
-    return ", ".join(
-        f"{amount} {SCROLL_LABEL}" if code == ITEM_SCROLL else amount_label(code, amount) for code, amount in reward.items()
-    ) or "—"
+    def one(code: str, amount: int) -> str:
+        if code == ITEM_SCROLL:
+            return f"{amount} {SCROLL_LABEL}"
+        if code == ITEM_COIN_HOURS:
+            return COIN_HOURS_LABEL.format(n=amount)
+        return amount_label(code, amount)
+
+    return ", ".join(one(code, amount) for code, amount in reward.items()) or "—"

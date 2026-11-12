@@ -26,7 +26,10 @@ const RES_SHORT: Record<string, string> = {
 function Rewards({ items }: { items: RewardItem[] }) {
   const r = items[0];
   if (!r) return <small>—</small>;
-  const label = r.code === "scroll" ? (r.amount > 1 ? `${r.amount} свит.` : "свиток") : `${fmt(r.amount)} ${RES_SHORT[r.code] ?? ""}`;
+  const label =
+    r.code === "scroll" ? (r.amount > 1 ? `${r.amount} свит.` : "свиток")
+    : r.code === "coin_hours" ? `${r.amount} ч дохода`
+    : `${fmt(r.amount)} ${RES_SHORT[r.code] ?? ""}`;
   return <small>{label.trim()}</small>;
 }
 

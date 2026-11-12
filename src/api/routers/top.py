@@ -61,10 +61,16 @@ def _player(place: int, p, me: int, reward: str = "") -> TopPlayerOut:
 
 
 @router.get("", response_model=TopOut)
-async def top(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> TopOut:
-    view = await get_top(session, user_id)
+async def top(
+    league: int | None = None, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)
+) -> TopOut:
+    """`league` — вкладка лиги: список и место; награды — только в общем топе."""
+    view = await get_top(session, user_id, league)
     return TopOut(
-        players=[_player(i, p, user_id, reward_text(*player_reward(i))) for i, p in enumerate(view.players, start=1)],
+        players=[
+            _player(i, p, user_id, reward_text(*player_reward(i)) if league is None else "")
+            for i, p in enumerate(view.players, start=1)
+        ],
         clans=[
             TopClanOut(place=i, name=c.name, power=c.power, lands=c.lands, members=c.members, reward=reward_text(*clan_reward(i)))
             for i, c in enumerate(view.clans, start=1)

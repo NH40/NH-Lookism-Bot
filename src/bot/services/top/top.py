@@ -99,10 +99,11 @@ class TopView:
     season_ends_in: int | None  # секунд до конца сезона Battle Pass (итог месяца); None — сезона нет
 
 
-async def get_top(session: AsyncSession, user_id: int) -> TopView:
-    players = await top_repo.players_page(session, TOP_PAGE_SIZE, 0)
+async def get_top(session: AsyncSession, user_id: int, league: int | None = None) -> TopView:
+    """`league` — вкладка лиги (только список и место; награды считаются по общему топу)."""
+    players = await top_repo.players_page(session, TOP_PAGE_SIZE, 0, league)
     clans = [ClanRow(c.name, c.lands, n, c.power_cache) for c, n in await clan_repo.top_page(session, TOP_PAGE_SIZE, 0)]
-    mine = await top_repo.rank_of(session, user_id)
+    mine = await top_repo.rank_of(session, user_id, league)
     now = datetime.now(timezone.utc)
     season = await bp_repo.current_season(session, now)
     return TopView(

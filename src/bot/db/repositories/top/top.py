@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import and_, func, or_, select, text, update
+from sqlalchemy import and_, func, or_, select, text, true, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models.clan import Clan, ClanMember
@@ -58,14 +58,19 @@ async def reset_powers(session: AsyncSession) -> None:
     await session.execute(update(User).values(army_power_cache=0))
 
 
-async def players_page(session: AsyncSession, limit: int, offset: int) -> list[PlayerRow]:
+def _in_league(league: int | None):
+    return User.league == league if league is not None else true()
+
+
+async def players_page(session: AsyncSession, limit: int, offset: int, league: int | None = None) -> list[PlayerRow]:
+    """`league` — только эта лига (вкладки топа, 2026-11-12); None — общий топ (по нему награды)."""
     rows = await session.execute(
         select(
             User.id, func.coalesce(User.display_name, User.username, "Игрок"), User.phase, User.army_power_cache, Clan.name
         )
         .outerjoin(ClanMember, ClanMember.user_id == User.id)
         .outerjoin(Clan, Clan.id == ClanMember.clan_id)
-        .where(_listed())
+        .where(_listed(), _in_league(league))
         .order_by(User.army_power_cache.desc(), User.id)
         .limit(limit)
         .offset(offset)
@@ -77,15 +82,16 @@ async def count_players(session: AsyncSession) -> int:
     return int(await session.scalar(select(func.count(User.id)).where(_listed())) or 0)
 
 
-async def rank_of(session: AsyncSession, user_id: int) -> tuple[int, int] | None:
-    """→ (место, мощь-снимок) игрока в топе; None — его нет в списке (бан/не зарегистрирован)."""
-    me = await session.execute(select(User.army_power_cache).where(User.id == user_id, _listed()))
+async def rank_of(session: AsyncSession, user_id: int, league: int | None = None) -> tuple[int, int] | None:
+    """→ (место, мощь-снимок) игрока в топе (или в топе лиги); None — его нет в списке."""
+    me = await session.execute(select(User.army_power_cache).where(User.id == user_id, _listed(), _in_league(league)))
     power = me.scalar_one_or_none()
     if power is None:
         return None
     ahead = await session.scalar(
         select(func.count(User.id)).where(
-            _listed(), or_(User.army_power_cache > power, and_(User.army_power_cache == power, User.id < user_id))
+            _listed(), _in_league(league),
+            or_(User.army_power_cache > power, and_(User.army_power_cache == power, User.id < user_id)),
         )
     )
     return int(ahead or 0) + 1, int(power)

@@ -56,10 +56,13 @@ function AllPlayers() {
   );
 }
 
+const LEAGUE_NAMES = ["2 поколение", "1 поколение", "1.5 поколение", "0 поколение", "Легенды"];
+
 /** Топ игроков (мощь армии) и кланов (земли) с наградами сезона + список всех игроков. */
 export function TopPage() {
   const [tab, setTab] = useState<Tab>("players");
-  const { data, status, error } = useApi<TopData>("/top");
+  const [league, setLeague] = useState<number | null>(null);
+  const { data, status, error } = useApi<TopData>(league === null ? "/top" : `/top?league=${league}`);
   const season = useCountdown(data?.season_ends_in ?? 0);
   return (
     <div className="page">
@@ -87,8 +90,17 @@ export function TopPage() {
                   <div className="disp">{data.season_ends_in ? countdown(season) : "—"}</div>
                 </div>
               </div>
+              {tab === "players" && (
+                <div className="seg" role="tablist" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))", marginBottom: 8 }}>
+                  {[null, 0, 1, 2, 3, 4].map((l) => (
+                    <button key={String(l)} type="button" className={`pill ${league === l ? "on" : ""}`} onClick={() => setLeague(l)}>
+                      {l === null ? "Все" : LEAGUE_NAMES[l]}
+                    </button>
+                  ))}
+                </div>
+              )}
               {tab === "players" ? (
-                <Panel title="Топ игроков · мощь армии" tone="gold">
+                <Panel title={league === null ? "Топ игроков · мощь армии" : `Топ лиги ${LEAGUE_NAMES[league]} · награды — по общему`} tone="gold">
                   {data.players.length === 0 ? <div className="muted top-hint">Пока пусто.</div> : data.players.map((p) => <PlayerRow key={p.user_id} p={p} />)}
                   <div className="muted top-hint">Мощь обновляется раз в 10 минут. Награды — по итогу сезона (раз в месяц) и при вайпе.</div>
                 </Panel>

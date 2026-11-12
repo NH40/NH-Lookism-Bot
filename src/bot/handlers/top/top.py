@@ -45,7 +45,17 @@ def _reward(parts: tuple[int, int, int]) -> str:
     return REWARD_SUFFIX.format(reward=text) if text else ""
 
 
-def _render_top(view: TopView, tab: str) -> str:
+def _parse(data: str) -> tuple[str, int | None]:
+    """`top:p` — общий, `top:p:L` — лига L."""
+    from bot.config.league import LEAGUES
+
+    tab, _, raw = data.removeprefix(CB_TOP_PREFIX).partition(":")
+    tab = tab if tab in (TAB_PLAYERS, TAB_CLANS) else TAB_PLAYERS
+    league = int(raw) if raw.isdigit() and int(raw) < len(LEAGUES) else None
+    return tab, league if tab == TAB_PLAYERS else None
+
+
+def _render_top(view: TopView, tab: str, league: int | None = None) -> str:
     season_line = SEASON_LINE.format(countdown=format_countdown(view.season_ends_in)) if view.season_ends_in else ""
     if tab == TAB_CLANS:
         rows = [
@@ -57,9 +67,16 @@ def _render_top(view: TopView, tab: str) -> str:
         ]
         return TOP_CLANS_SCREEN.format(rows="\n".join(rows) or EMPTY_ROWS, season_line=season_line)
     rows = [
-        PLAYER_ROW.format(medal=_medal(i), name=esc(p.name), power=format_number(p.power), reward=_reward(player_reward(i)))
+        PLAYER_ROW.format(
+            medal=_medal(i), name=esc(p.name), power=format_number(p.power),
+            reward=_reward(player_reward(i)) if league is None else "",
+        )
         for i, p in enumerate(view.players, start=1)
     ]
+    if league is not None:
+        from bot.config.league import LEAGUES
+
+        rows.insert(0, f"🏅 <b>{LEAGUES[league].name}</b> · награды — по общему топу\n")
     return TOP_PLAYERS_SCREEN.format(
         rows="\n".join(rows) or EMPTY_ROWS,
         my_place=f"#{view.my_place}" if view.my_place else NOT_IN_TOP,
@@ -90,11 +107,10 @@ async def cmd_top(message: Message, session: AsyncSession) -> None:
 
 @router.callback_query(F.data.startswith(CB_TOP_PREFIX))
 async def cb_top(callback: CallbackQuery, session: AsyncSession) -> None:
-    tab = callback.data.removeprefix(CB_TOP_PREFIX)
-    tab = tab if tab in (TAB_PLAYERS, TAB_CLANS) else TAB_PLAYERS
+    tab, league = _parse(callback.data)
     await callback.answer()
-    view = await get_top(session, callback.from_user.id)
-    await safe_edit_text(callback.message, _render_top(view, tab), reply_markup=top_menu(tab))
+    view = await get_top(session, callback.from_user.id, league)
+    await safe_edit_text(callback.message, _render_top(view, tab, league), reply_markup=top_menu(tab, league))
 
 
 @router.message(Command("players"))

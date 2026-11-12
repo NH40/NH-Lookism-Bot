@@ -39,7 +39,7 @@ from bot.config.game import (
 from bot.config.characteristic import training_cap_with, training_level_cap
 from bot.constant.characteristic import RANK_INDEX, RANK_LADDER
 from bot.db.models.user import User
-from bot.db.repositories.extra import add_to_stack, list_stacks
+from bot.db.repositories.extra import add_to_stack, add_to_stacks, list_stacks, stack_key
 from bot.constant.dev_quest import TASK_TRAIN_EXTRAS
 from bot.services.dev_quest import emit as quest_event
 from bot.services.business import gym_training_bonus_percent
@@ -162,13 +162,16 @@ async def promote_rank(session: AsyncSession, user_id: int, rank: str, phase: st
     moved = 0
     if target != rank:
         cap = training_level_cap(rank)
+        deltas = {}
         for s in await list_stacks(session, user_id, for_update=True):
             if s.rank != rank or s.training_level < cap or s.quantity <= 0:
                 continue
-            common = {"user_id": user_id, "camp": s.camp, "school": s.school, "school_level": s.school_level, "stars": s.stars}
-            await add_to_stack(session, **common, rank=rank, training_level=s.training_level, quantity=-s.quantity)
-            await add_to_stack(session, **common, rank=target, training_level=0, quantity=s.quantity)
+            src = stack_key(user_id, s.camp, rank, s.stars, s.training_level, s.school, s.school_level)
+            dst = stack_key(user_id, s.camp, target, s.stars, 0, s.school, s.school_level)
+            deltas[src] = deltas.get(src, 0) - s.quantity
+            deltas[dst] = deltas.get(dst, 0) + s.quantity
             moved += s.quantity
+        await add_to_stacks(session, deltas)
     if not moved:
         await session.rollback()
         raise NothingToPromoteError

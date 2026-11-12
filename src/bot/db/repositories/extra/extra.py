@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,6 +46,43 @@ async def add_to_stack(
         )
     )
     await session.execute(stmt)
+
+
+# (user_id, camp, rank, stars, training_level, school, school_level)
+StackKey = tuple[int, str, str, int, int, str, int]
+
+_ADD_MANY_SQL = text(
+    """
+    INSERT INTO extras (user_id, camp, rank, stars, training_level, school, school_level, quantity)
+    SELECT * FROM unnest(
+        CAST(:u AS bigint[]), CAST(:c AS varchar[]), CAST(:r AS varchar[]), CAST(:s AS int[]),
+        CAST(:t AS int[]), CAST(:sc AS varchar[]), CAST(:sl AS int[]), CAST(:q AS bigint[])
+    )
+    ON CONFLICT (user_id, camp, rank, stars, training_level, school, school_level)
+    DO UPDATE SET quantity = extras.quantity + EXCLUDED.quantity
+    """
+)
+
+
+def stack_key(
+    user_id: int, camp: str, rank: str, stars: int = 0, training_level: int = 0, school: str = "", school_level: int = 0
+) -> StackKey:
+    return (user_id, camp, rank, stars, training_level, school, school_level)
+
+
+async def add_to_stacks(session: AsyncSession, deltas: dict[StackKey, int]) -> None:
+    """То же, что `add_to_stack`, но для многих стопок ОДНИМ запросом (хотфикс 2026-11-12: у
+    крупных игроков десятки тысяч стопок, и перевод лагеря запросом на стопку держал
+    транзакцию минутами, выедая весь пул соединений). Ключи разные по построению (dict), так
+    что `ON CONFLICT` не трогает одну строку дважды; сортировка — один порядок блокировок.
+    НЕ коммитит."""
+    rows = sorted((key, q) for key, q in deltas.items() if q)
+    if not rows:
+        return
+    u, c, r, s, t, sc, sl = (list(col) for col in zip(*(key for key, _ in rows)))
+    await session.execute(
+        _ADD_MANY_SQL, {"u": u, "c": c, "r": r, "s": s, "t": t, "sc": sc, "sl": sl, "q": [q for _, q in rows]}
+    )
 
 
 async def list_stacks(

@@ -140,7 +140,7 @@ async def district_card(
         kind="mine" if view.is_mine else "bot" if view.owner_id is None else "player",
         owner=view.owner_label, challenged=view.challenged,
         bot_rank=view.bot_rank, bot_quantity=view.bot_quantity, bot_power=view.bot_power,
-        attack_quantity=army.attack.quantity, attack_power=army.attack.power,
+        attack_quantity=army.attack.quantity, attack_power=round(army.attack.power),
         accept_window_minutes=max(1, round(window / 60)),
         can_act=reason is None, blocked_reason=reason,
         cooldown_seconds=await ttl_seconds(redis, battle_cooldown(user.id)),

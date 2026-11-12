@@ -10,7 +10,7 @@ from bot.constant.characteristic import RANK_INDEX
 from bot.constant.extra import CAMP_ATTACK, CAMP_DEFENSE, CAMPS, CONTRACT_SQUAD
 from bot.db.repositories import card as card_repo
 from bot.db.repositories import contract as contract_repo
-from bot.db.repositories.extra import add_to_stack, get_stack_for_update, list_stacks
+from bot.db.repositories.extra import add_to_stack, add_to_stacks, get_stack_for_update, list_stacks, stack_key
 from bot.services.build import get_build
 from bot.services.card import card_power
 from bot.services.characteristic import strength_power_multiplier
@@ -234,17 +234,15 @@ async def move_between_camps(session: AsyncSession, user_id: int, from_camp: str
         raise InvalidCampMoveError
     stacks = await list_stacks(session, user_id, camp=from_camp, for_update=True)
     moved_total = 0
+    deltas = {}
     for s in stacks:
         moved = s.quantity if percent == 100 else s.quantity * percent // 100
         if moved == 0:
             continue
         moved_total += moved
-        key = {
-            "user_id": user_id, "rank": s.rank, "stars": s.stars, "training_level": s.training_level,
-            "school": s.school, "school_level": s.school_level,
-        }
-        await add_to_stack(session, camp=from_camp, quantity=-moved, **key)
-        await add_to_stack(session, camp=to_camp, quantity=moved, **key)
+        deltas[stack_key(user_id, from_camp, s.rank, s.stars, s.training_level, s.school, s.school_level)] = -moved
+        deltas[stack_key(user_id, to_camp, s.rank, s.stars, s.training_level, s.school, s.school_level)] = moved
+    await add_to_stacks(session, deltas)  # одним запросом: стопок у игрока бывают десятки тысяч
     # Уники в армии распределяются по лагерям так же (подтверждено 2026-09-30) — быстрый
     # перевод доли армии двигает и их той же долей.
     for c in await card_repo.list_stacks(session, user_id, camp=from_camp, for_update=True):

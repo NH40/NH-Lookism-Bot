@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware
+from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError, TelegramRetryAfter
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
 from bot.config.admin import LOG_SLOW_BOT_MS
@@ -14,6 +15,9 @@ from bot.services.error_log import normalize, record_slow
 from bot.utils.log_context import reset_source, reset_user, set_source, set_user
 
 log = logging.getLogger(__name__)
+
+
+_BENIGN = ("query is too old", "query id is invalid", "message is not modified", "message to edit not found")
 
 
 def _describe(event: TelegramObject) -> str:
@@ -46,6 +50,13 @@ class LogContextMiddleware(BaseMiddleware):
             return await handler(event, data)
         except BattlesClosedError:  # ожидаемый отказ, его разбирает общий обработчик
             raise
+        except TelegramBadRequest as exc:
+            if not any(s in str(exc).lower() for s in _BENIGN):
+                log.exception("Ошибка обработки апдейта")
+                raise
+            log.warning("Telegram: %s", exc)  # игрок нажал давно или повторно — действие уже выполнено/не нужно
+        except (TelegramRetryAfter, TelegramNetworkError) as exc:
+            log.warning("Telegram: %s", exc)  # флуд-контроль или обрыв связи — временно, не баг
         except Exception:
             log.exception("Ошибка обработки апдейта")
             raise

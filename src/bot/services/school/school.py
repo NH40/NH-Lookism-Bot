@@ -45,7 +45,7 @@ from bot.constant.school import LOCK_ACTION_SCHOOL, SCHOOL_NONE, SCHOOLS
 from bot.db.models.development import UserSchool
 from bot.db.repositories import business as business_repo
 from bot.db.repositories import event as event_repo
-from bot.db.repositories.extra import add_to_stack, list_stacks
+from bot.db.repositories.extra import add_to_stacks, list_stacks, stack_key
 from bot.services.business import gym_training_bonus_percent
 from bot.services.characteristic import get_combat_profile
 from bot.services.dev_quest import QuestView, claim, emit, list_active, start
@@ -230,6 +230,7 @@ async def lesson(session: AsyncSession, redis: Redis, user_id: int, school: str,
         join_p = min(1.0, SCHOOL_JOIN_PERCENT / 100 + bonus)
         up_p = min(1.0, SCHOOL_LEVEL_UP_PERCENT / 100 + bonus)
         joined = leveled = 0
+        deltas = {}
         for s in students:
             covered = rng.binomialvariate(s.quantity, SCHOOL_COVERAGE_PERCENT / 100)
             if not covered:
@@ -241,13 +242,15 @@ async def lesson(session: AsyncSession, redis: Redis, user_id: int, school: str,
                 moved += rng.binomialvariate(covered - moved, (join_p if fresh else up_p) * min(1.0, profile.eco.extras_extra_roll))
             if not moved:
                 continue
-            base = {"user_id": user_id, "camp": s.camp, "rank": s.rank, "stars": s.stars, "training_level": s.training_level}
-            await add_to_stack(session, **base, quantity=-moved, school=s.school, school_level=s.school_level)
-            await add_to_stack(session, **base, quantity=moved, school=school, school_level=1 if fresh else s.school_level + 1)
+            src = stack_key(user_id, s.camp, s.rank, s.stars, s.training_level, s.school, s.school_level)
+            dst = stack_key(user_id, s.camp, s.rank, s.stars, s.training_level, school, 1 if fresh else s.school_level + 1)
+            deltas[src] = deltas.get(src, 0) - moved
+            deltas[dst] = deltas.get(dst, 0) + moved
             if fresh:
                 joined += moved
             else:
                 leveled += moved
+        await add_to_stacks(session, deltas)
         await emit(session, user_id, TASK_SCHOOL_LESSON)
         await bump_training_reps(session, user_id)
         await session.commit()

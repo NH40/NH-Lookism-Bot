@@ -146,7 +146,7 @@ async def get_city_view(
         id=v.city_id, name=v.name, districts=v.district_count, bots=v.bots, bot_quantity=v.bot_quantity,
         bot_rank=v.bot_rank, bot_power=v.bot_power,
         owners=[CityOwnerOut(owner_id=o.owner_id, label=o.label, districts=o.districts, is_mine=o.is_mine, challenged=o.challenged) for o in v.owners],
-        attack_quantity=army.attack.quantity, attack_power=army.attack.power, emperor=is_emperor(user.phase),
+        attack_quantity=army.attack.quantity, attack_power=round(army.attack.power), emperor=is_emperor(user.phase),
         cooldown_seconds=await ttl_seconds(redis, battle_cooldown(user_id)),
     )
 

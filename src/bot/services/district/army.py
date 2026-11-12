@@ -21,7 +21,7 @@ from bot.config.school import (
 from bot.db.models.extra import Extra
 from bot.db.repositories import card as card_repo
 from bot.db.repositories import contract as contract_repo
-from bot.db.repositories.extra import add_to_stack, list_stacks
+from bot.db.repositories.extra import add_to_stacks, list_stacks, stack_key
 from bot.services.card import card_power
 from bot.services.characteristic import get_combat_profile
 from bot.services.combat import CombatStack
@@ -81,6 +81,7 @@ async def load_camp(session: AsyncSession, user_id: int, camp: str, *, for_updat
 async def apply_losses(session: AsyncSession, user_id: int, camp: str, dead: dict) -> None:
     """Списывает погибших из стопок лагеря — статистов и уников (НЕ коммитит — шаг
     составной операции)."""
+    extras = {}
     for key, count in dead.items():
         if key[0] == _KIND_CONTRACT:
             await contract_repo.lose(session, key[1], count)
@@ -88,7 +89,6 @@ async def apply_losses(session: AsyncSession, user_id: int, camp: str, dead: dic
             await card_repo.add_to_stack(session, user_id=user_id, card_code=key[1], camp=camp, quantity=-count)
         else:
             _, rank, stars, training_level, school, school_level = key
-            await add_to_stack(
-                session, user_id=user_id, camp=camp, rank=rank, stars=stars, training_level=training_level,
-                quantity=-count, school=school, school_level=school_level,
-            )
+            k = stack_key(user_id, camp, rank, stars, training_level, school, school_level)
+            extras[k] = extras.get(k, 0) - count
+    await add_to_stacks(session, extras)  # все погибшие статисты — одним запросом

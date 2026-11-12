@@ -20,6 +20,7 @@ from bot.constant.dev_quest import (
 from bot.constant.unique_technique import (
     TECH_BEAST,
     TECH_BLADE_HANDS,
+    TECH_CQC,
     TECH_INVISIBLE,
     TECH_KYOKUSHIN,
     TECH_MA_TAESU,
@@ -28,6 +29,7 @@ from bot.constant.unique_technique import (
     TECH_NINJUTSU,
     TECH_ONE_STEP,
     TECH_OVERCOME,
+    TECH_SEIRIM,
     TECH_TAEKWONDO,
 )
 
@@ -195,6 +197,45 @@ LEVELS: dict[str, tuple[dict, ...]] = {
         _c(rapid_step=0.15, rapid_cap=1.0),
         _c(rapid_step=0.15, rapid_cap=2.0, ramp=0.08, ramp_cap=0.40, reduction=0.05),
     ),
+    # CQC (Менеджер Ким, пользователь 2026-11-12): стаки за убитых внутри боя, с ускорением (рост
+    # квадратичный), против толпы сильнее; крит, пробитие и кровотечение. Шкала CQC (`TECH_GAUGES`)
+    # копится между боями и даёт стартовые стаки. Числа — симуляцией движка: 10-й уровень ≈ ×1.21
+    # мощи с пустой шкалой и ×1.32 с полной (против толпы ×1.28/×1.48); техники 10 ур. — ×1.20–1.50.
+    TECH_CQC: (
+        _c(cqc=0.10, cqc_accel=0.5),
+        _c(bleed=0.05),
+        _c(cqc=0.10, cqc_accel=0.5),
+        _c(crit_chance=0.03, pierce=0.03),
+        _c(cqc=0.15, cqc_accel=0.5),
+        _c(bleed=0.05, bleed_linger=0.10),
+        _c(cqc=0.15, cqc_accel=0.5),
+        _c(crit_power=0.20),
+        _c(cqc=0.20, cqc_accel=0.5),
+        _c(cqc=0.30, cqc_accel=0.5, bleed=0.10, bleed_linger=0.10),
+    ),
+    # Сейрим (Сонджи Юк, пользователь 2026-11-12): сбивает стаки противника (отчаяние, CQC, разгон,
+    # рост от убитых…), захват — часть армии врага пропускает удар и получает бросок, оглушение в
+    # первом раунде, замедление (реакции, рывок и удар первым врага слабее). ≈ ×1.27 мощи; против
+    # стаковых техник сверх того (Полуночный меч ×1.23 → ×0.96 против Сейрима).
+    TECH_SEIRIM: (
+        _c(stack_break=0.15, block=0.02),
+        _c(grab_chance=0.15, grab_share=0.10, throw_power=0.10),
+        _c(stun_share=0.10, slow=0.05),
+        _c(stack_break=0.15, durability=0.05),
+        _c(grab_break=0.5, throw_power=0.10),
+        _c(slow=0.05, block=0.03),
+        _c(stack_break=0.15, grab_chance=0.10),
+        _c(stun_share=0.10, durability=0.05),
+        _c(grab_share=0.10, throw_power=0.10, slow=0.05),
+        _c(stack_break=0.15, grab_chance=0.10, grab_break=0.5, throw_power=0.10, slow=0.05),
+    ),
+}
+
+# Шкалы техник (как у путей, `config/path_gauge`): хранятся в `user_techniques.gauge`, потолок —
+# `GAUGE_CAP_PER_LEVEL` × уровень техники. Бафы — при полной шкале. CQC: стартовые стаки (бой
+# начинается так, будто эта доля врага уже убита) и кровотечение; растёт за убитых в боях.
+TECH_GAUGES: dict[str, dict] = {
+    TECH_CQC: {"cqc_start": 0.25, "bleed": 0.05},
 }
 
 # Квест учителя — задания в игре (пользователь: «у каждого учителя свой квест»).
@@ -210,6 +251,8 @@ TEACHER_QUESTS: dict[str, dict[str, int]] = {
     TECH_BLADE_HANDS: {TASK_WIN_PVP: 3, TASK_BOSS_WIN: 2, TASK_WIN_PVE: 3},
     TECH_MUAY_THAI: {TASK_WIN_PVE: 5, TASK_WIN_PVP: 2, TASK_TRAIN_EXTRAS: 3},
     TECH_MIDNIGHT: {TASK_BOSS_WIN: 2, TASK_WIN_PVP: 2, TASK_ROLL: 5},
+    TECH_CQC: {TASK_WIN_PVP: 3, TASK_WIN_PVE: 5, TASK_TRAIN_EXTRAS: 3},
+    TECH_SEIRIM: {TASK_WIN_PVE: 6, TASK_BOSS_WIN: 1, TASK_PERSONAL_TRAIN: 3},
 }
 
 TECHNIQUE_LEVEL_COST_PER_LEVEL = 20  # 2-й — 40, 10-й — 200; до 10-го — 1 080 фрагментов УТ

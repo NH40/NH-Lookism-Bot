@@ -187,14 +187,14 @@ LEVELS: dict[str, tuple[dict, ...]] = {
     PATH_SURE_HIT: (
         _c(sure_hit=0.10, attack=0.04),
         _c(crit_chance=0.04, pierce=0.05),
-        _c(sure_hit=0.08, durability=0.05),
+        _c(sure_hit=0.08, durability=0.05, cqc_accel=0.5),
         _c(pierce=0.08, attack=0.05),
         _c(sure_hit=0.10, block=0.03),
-        _c(attack=0.07, crit_power=0.25),
+        _c(attack=0.07, crit_power=0.25, cqc_boost=0.10),
         _c(sure_hit=0.10, reduction=0.05),
         _c(pierce=0.10, attack=0.07),
         _c(sure_hit=0.12, crit_chance=0.06),
-        _c(sure_hit=0.15, no_dodge=True, attack=0.12, pierce=0.12),
+        _c(sure_hit=0.15, no_dodge=True, attack=0.12, pierce=0.12, cqc_boost=0.15, cqc_accel=0.5),
     ),
     # Адаптация (путь Александровых): чем дольше бой, тем сильнее. Шкала хранится между боями и даёт
     # бафы и статистам, и уникам. С родословной Александровых шкала растёт быстрее и бьёт сильнее.

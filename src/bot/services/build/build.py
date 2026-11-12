@@ -235,6 +235,15 @@ async def _compute_build(session: AsyncSession, user_id: int) -> Build:
     if row.genius == GENIUS_MEDICINE and special.get("medicine_power"):
         effects[SOURCE_GENIUS] = _scaled(effects[SOURCE_GENIUS], 1 + special["medicine_power"])
 
+    # Шкала техники (CQC) — к её бафам, до усиления от родословной.
+    if row.technique_gauge:
+        from bot.services.path_gauge.path_gauge import technique_gauge_effect
+
+        base = effects[SOURCE_TECHNIQUE]
+        effects[SOURCE_TECHNIQUE] = LevelEffect(
+            combat=base.combat + technique_gauge_effect(row.technique, row.technique_gauge), eco=base.eco, special=base.special
+        )
+
     # Усиление активной техники родословной.
     effects[SOURCE_TECHNIQUE] = _scaled(effects[SOURCE_TECHNIQUE], _technique_power(row.technique, special))
 

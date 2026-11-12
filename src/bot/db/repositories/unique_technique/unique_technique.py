@@ -77,6 +77,21 @@ async def bump_level(session: AsyncSession, user_id: int, code: str, current: in
     return result.rowcount > 0
 
 
+async def get_gauge(session: AsyncSession, user_id: int, code: str) -> float:
+    return float(await session.scalar(select(UserTechnique.gauge).where(UserTechnique.user_id == user_id, UserTechnique.code == code)) or 0.0)
+
+
+async def add_gauge(session: AsyncSession, user_id: int, code: str, amount: float, cap_per_level: float) -> None:
+    """+к шкале техники, не выше потолка её уровня. НЕ коммитит."""
+    from sqlalchemy import func
+
+    await session.execute(
+        update(UserTechnique)
+        .where(UserTechnique.user_id == user_id, UserTechnique.code == code)
+        .values(gauge=func.least(UserTechnique.gauge + amount, UserTechnique.level * cap_per_level))
+    )
+
+
 async def delete_all(session: AsyncSession, user_id: int) -> None:
     """Сброс (удаление банды): все техники и активная."""
     await session.execute(delete(UserTechnique).where(UserTechnique.user_id == user_id))

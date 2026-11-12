@@ -165,6 +165,18 @@ async def _render_detail(session: AsyncSession, redis: Redis, user_id: int, code
         levels=levels,
         next_line=NEXT_LEVEL_LINE.format(cost=format_number(cost), have=format_number(view.fragments)) if cost else MAX_LEVEL_LINE,
     )
+    from bot.config.path_gauge import GAUGE_CAP_PER_LEVEL, GAUGE_MAX
+    from bot.config.unique_technique import TECH_GAUGES
+    from bot.db.repositories import unique_technique as tech_repo
+    from bot.texts.unique_technique.unique_technique import GAUGE_LINE
+
+    if code in TECH_GAUGES:
+        gauge = await tech_repo.get_gauge(session, user_id, code)
+        start = TECH_GAUGES[code].get("cqc_start", 0.0) * min(1.0, gauge / GAUGE_MAX)
+        text += GAUGE_LINE.format(
+            name=TECHNIQUE_NAMES[code], value=round(gauge), cap=round(min(GAUGE_MAX, level * GAUGE_CAP_PER_LEVEL)),
+            start=f"{start * 100:.0f}%",
+        )
     return text, technique_detail_menu(
         code, cost=cost, is_active=code == view.active, can_select=view.slots > 1, selected=code in view.selected
     )

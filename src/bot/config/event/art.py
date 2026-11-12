@@ -12,6 +12,7 @@ from bot.constant.school import SCHOOL_AGILITY, SCHOOL_SPEED, SCHOOL_STRENGTH, S
 from bot.constant.unique_technique import (
     TECH_BEAST,
     TECH_BLADE_HANDS,
+    TECH_CQC,
     TECH_INVISIBLE,
     TECH_KYOKUSHIN,
     TECH_MA_TAESU,
@@ -20,6 +21,7 @@ from bot.constant.unique_technique import (
     TECH_NINJUTSU,
     TECH_ONE_STEP,
     TECH_OVERCOME,
+    TECH_SEIRIM,
     TECH_TAEKWONDO,
 )
 
@@ -41,6 +43,8 @@ TECHNIQUE_TEACHER_ART: dict[str, str | None] = {
     TECH_MA_TAESU: None,
     TECH_ONE_STEP: None,
     TECH_MIDNIGHT: None,
+    TECH_CQC: "card/legend/ManagerKim_Path.png",
+    TECH_SEIRIM: None,
 }
 
 SCHOOL_TEACHER_ART: dict[str, str | None] = {
@@ -73,4 +77,6 @@ ART_ALIASES: dict[str, tuple[str, ...]] = {
     TECH_BLADE_HANDS: ("gandhiblade", "bladehands"),
     TECH_MUAY_THAI: ("muaythai",),
     TECH_MIDNIGHT: ("fullmoon",),
+    TECH_CQC: ("cqc",),
+    TECH_SEIRIM: ("seyrim", "seirim"),
 }

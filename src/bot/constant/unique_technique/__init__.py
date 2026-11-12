@@ -9,6 +9,7 @@ from bot.constant.unique_technique.unique_technique import (  # noqa: F401
     TECHNIQUES,
     TECH_BEAST,
     TECH_BLADE_HANDS,
+    TECH_CQC,
     TECH_INVISIBLE,
     TECH_KYOKUSHIN,
     TECH_MA_TAESU,
@@ -17,5 +18,6 @@ from bot.constant.unique_technique.unique_technique import (  # noqa: F401
     TECH_NINJUTSU,
     TECH_ONE_STEP,
     TECH_OVERCOME,
+    TECH_SEIRIM,
     TECH_TAEKWONDO,
 )

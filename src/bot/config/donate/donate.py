@@ -50,7 +50,9 @@ def full_price() -> int:
     )
 
 
-assert full_price() == 100_000, full_price()
+# Было ровно 100 000 на 11 техник; с CQC и Сейримом (2026-11-12) — 13 техник по той же лестнице,
+# «купить всё» = 105 452 (пользователь: цены не трогать).
+assert full_price() == 105_452, full_price()
 assert all(p > 0 for d in (GENIUS_LEVEL_PRICES, PATH_LEVEL_PRICES, TECHNIQUE_LEVEL_PRICES) for p in d.values())
 
 # Перенос доната LBP 1.3 (цены из `app/data/titles.py` 1.3 — git `93ad05f^`). Сумма = цена

@@ -51,6 +51,11 @@ from bot.config.game import (
     BATTLE_DAMAGE_VARIANCE,
     BATTLE_DESPAIR_RATIO_FOR_FULL,
     BATTLE_ABSORB_POWER_CAP,
+    BATTLE_BREAK_DECAY,
+    BATTLE_CQC_CAP,
+    BATTLE_CQC_CROWD_CAP,
+    BATTLE_GRAB_SHARE_MAX,
+    BATTLE_STUN_MAX,
     BATTLE_FIRST_STRIKE_MAX,
     BATTLE_GROW_ON_KILL_CAP,
     BATTLE_INFLUENCE_GAP_CAP,
@@ -225,6 +230,7 @@ class _Side:
         self.hp_bonus = 0.0  # прочность от динамики боя (разрыв, перевес, влияние)
         self.guard_bonus = 0.0  # гашение от динамики боя
         self.events: list[str] = []  # что сработало в этом раунде (журнал)
+        self.broken = 0.0  # доля стаков, сбитая Сейримом противника (затухает по раундам)
 
     def total_power(self) -> int:
         return round(sum(q * self.power[k] for k, q in self.alive.items()))
@@ -311,34 +317,71 @@ def _refresh_dynamics(side: _Side, opponent: _Side, m: CombatMods, round_number:
             side.power[key] *= 1 + m.endure_unique
 
 
+def _cqc_bonus(side: _Side, opponent: _Side, m: CombatMods) -> float:
+    """Стаки CQC: доля убитых противника (+стартовые), рост с ускорением, сильнее против толпы."""
+    if not m.cqc or not opponent.initial_quantity:
+        return 0.0
+    f = side.kills / opponent.initial_quantity + m.cqc_start
+    crowd = (opponent.initial_quantity / side.initial_quantity) ** 0.5 if side.initial_quantity else 1.0
+    crowd = min(BATTLE_CQC_CROWD_CAP, max(1.0, crowd))
+    return min(BATTLE_CQC_CAP, m.cqc * (1 + m.cqc_boost) * (f + m.cqc_accel * f * f)) * crowd
+
+
+def _seirim(side: _Side, opponent: _Side, m: CombatMods, round_number: int, rng: Random) -> tuple[float, float]:
+    """Сейрим стороны `side` против `opponent`: сбивает стаки, захват, оглушение в 1-м раунде.
+    → (доля армии противника, не бьющая в этом раунде; урон броском по противнику)."""
+    if not (m.stack_break or m.grab_chance or m.stun_share):
+        return 0.0, 0.0
+    boost = 1 + m.seirim_boost
+    hold = throw = 0.0
+    if m.stack_break:
+        kept = opponent.broken * BATTLE_BREAK_DECAY
+        opponent.broken = min(1.0, kept + min(1.0, m.stack_break * boost) * (1 - kept))
+    if m.stun_share and round_number == 1:
+        hold = min(BATTLE_STUN_MAX, m.stun_share * boost)
+        side.events.append(EVENT_STUN.format(p=round(hold * 100)))
+    if m.grab_chance and rng.random() < min(1.0, m.grab_chance * boost):
+        share = min(BATTLE_GRAB_SHARE_MAX, m.grab_share * boost)
+        hold = min(0.9, hold + share)
+        throw = opponent.total_power() * share * m.throw_power * boost
+        if m.grab_break:
+            opponent.broken = min(1.0, opponent.broken + min(1.0, m.grab_break * boost) * (1 - opponent.broken))
+        side.events.append(EVENT_GRAB.format(p=round(share * 100)))
+    return hold, throw
+
+
 def _attack_multiplier(side: _Side, opponent: _Side, m: CombatMods, round_number: int, rng: Random) -> float:
     mult = 1.0 + m.attack + m.cleave + side.hp_bonus
+    stacked = 0.0  # прибавки-стаки: их сбивает Сейрим противника (`side.broken`)
     if m.endure_attack:
-        mult += m.endure_attack * (round_number - 1)
+        stacked += m.endure_attack * (round_number - 1)
     if m.vs_stronger and _power_ratio(side, opponent) > 1:
         mult += m.vs_stronger * min(BATTLE_VS_STRONGER_CAP, math.log2(_power_ratio(side, opponent)))
     if m.absorb_power and side.initial_power:
-        mult += m.absorb_power * min(BATTLE_ABSORB_POWER_CAP, side.absorbed / side.initial_power)
+        stacked += m.absorb_power * min(BATTLE_ABSORB_POWER_CAP, side.absorbed / side.initial_power)
     if m.dodge_surge and side.initial_quantity:
-        mult += m.dodge_surge * min(1.0, side.dodged / side.initial_quantity)
+        stacked += m.dodge_surge * min(1.0, side.dodged / side.initial_quantity)
     if m.overcome:
         taken = min(BATTLE_OVERCOME_TAKEN_CAP, side.taken / side.initial_power) if side.initial_power else 0.0
         crowd = (opponent.initial_quantity / side.initial_quantity) ** 0.5 if side.initial_quantity else 1.0
-        mult += m.overcome * taken * min(BATTLE_OVERCOME_CROWD_CAP, max(1.0, crowd))
+        stacked += m.overcome * taken * min(BATTLE_OVERCOME_CROWD_CAP, max(1.0, crowd))
     if m.despair:
-        mult += m.despair * _despair_gauge(side, opponent, m)
+        stacked += m.despair * _despair_gauge(side, opponent, m)
     if m.adapt_bonus and side.lost_fraction() >= m.adapt_threshold:
         mult += m.adapt_bonus
     if m.rush and round_number <= m.rush_rounds:
-        mult += m.rush
+        mult += m.rush * (1 - min(1.0, opponent.mods.slow))  # замедление Сейрима
     if m.ramp:
-        mult += min(m.ramp_cap, m.ramp * (round_number - 1)) if m.ramp_cap else m.ramp * (round_number - 1)
+        stacked += min(m.ramp_cap, m.ramp * (round_number - 1)) if m.ramp_cap else m.ramp * (round_number - 1)
     if m.opening and round_number == 1:
-        mult += m.opening
+        mult += m.opening * (1 - min(1.0, opponent.mods.slow))
     if m.grow_on_kill and side.initial_quantity:
         # Рост от числа убитых относительно своей численности: толпа слабых кормит босса,
         # немногие сильные — нет (raw-notes: «против него должны быть эффективны сильные»).
-        mult += min(BATTLE_GROW_ON_KILL_CAP, m.grow_on_kill * side.kills / side.initial_quantity)
+        stacked += min(BATTLE_GROW_ON_KILL_CAP, m.grow_on_kill * side.kills / side.initial_quantity)
+    if m.cqc:
+        stacked += _cqc_bonus(side, opponent, m)
+    mult += stacked * (1 - min(1.0, side.broken))
     if m.crit_chance:
         mult *= 1 + min(1.0, m.crit_chance) * (BATTLE_CRIT_BASE_BONUS + m.crit_power) * rng.uniform(0.5, 1.5)
     return max(0.0, mult)
@@ -349,7 +392,7 @@ def _reactions(defender: _Side, attacker_mods: CombatMods, chaos: bool) -> Comba
     подавление атакующего (и хаос), под общими потолками."""
     c, m = defender.chances, defender.mods
     dodge, block, counter, flee = c.dodge + m.dodge, c.block + m.block, c.counter + m.counter, c.flee + m.flee
-    suppress = min(1.0, attacker_mods.suppress + (BATTLE_CHAOS_SUPPRESS if chaos else 0.0))
+    suppress = min(1.0, attacker_mods.suppress + attacker_mods.slow + (BATTLE_CHAOS_SUPPRESS if chaos else 0.0))
     raw_dodge = dodge
     if suppress:
         dodge, block, counter, flee = (x * (1 - suppress) for x in (dodge, block, counter, flee))
@@ -565,7 +608,8 @@ def _extra_attacks(attacker: _Side, defender: _Side, damage: float, m: CombatMod
     Тхэквондо: удар проходит ещё по целям. → урон контратак обратно."""
     counter = 0.0
     if m.rapid_step:
-        extra = min(m.rapid_cap, m.rapid_step * (round_number - 1))
+        # разгон — тоже стаки: Сейрим противника сбивает его (`attacker.broken`)
+        extra = min(m.rapid_cap, m.rapid_step * (round_number - 1)) * (1 - min(1.0, attacker.broken))
         whole = int(extra) + (1 if rng.random() < extra - int(extra) else 0)
         for _ in range(whole):
             counter += _hit(attacker, defender, damage, m, chaos, rng)
@@ -589,7 +633,7 @@ def _phantom(side: _Side, opponent: _Side, m: CombatMods, round_number: int, rng
     chance = m.phantom_chance + BATTLE_PHANTOM_ROUND_CHANCE * (round_number - 1)
     if rng.random() >= chance:
         return
-    damage = side.total_power() * m.phantom_power * (1 + m.phantom_growth * side.phantom_stacks)
+    damage = side.total_power() * m.phantom_power * (1 + m.phantom_growth * side.phantom_stacks * (1 - min(1.0, side.broken)))
     side.phantom_stacks += 1
     _, kills = _apply_plain_damage(opponent, damage, rng, _armor(opponent, m)[1])
     side.kills += kills
@@ -744,6 +788,8 @@ EVENT_RAPID = "{n} атаки за ход"
 EVENT_MULTI = "удар по {n} целям"
 EVENT_PHANTOM = "невидимый удар №{n}: убито {kills}"
 EVENT_REVIVE = "павшие встали и ударили: {n}"
+EVENT_GRAB = "Сейрим: захват {p}% армии и бросок"
+EVENT_STUN = "Сейрим: оглушение {p}% армии"
 
 
 def _despair(side: _Side, opponent: _Side, won: bool, rng: Random) -> tuple[str, ...]:
@@ -781,10 +827,10 @@ def simulate_battle(
 
     a_first = d_first = 0
     if a.mods.first_strike:
-        a_first = _first_strike(d, a.mods.first_strike, rng)
+        a_first = _first_strike(d, a.mods.first_strike * (1 - min(1.0, d.mods.slow)), rng)
         a.kills += a_first
     if d.mods.first_strike:
-        d_first = _first_strike(a, d.mods.first_strike, rng)
+        d_first = _first_strike(a, d.mods.first_strike * (1 - min(1.0, a.mods.slow)), rng)
         d.kills += d_first
     a_pre = d_pre = 0
     if a.mods.pre_strike_share and a.mods.pre_strike_power:
@@ -822,6 +868,11 @@ def simulate_battle(
         if am != _ZERO or dm != _ZERO:
             damage_to_d *= _attack_multiplier(a, d, am, round_number, rng)
             damage_to_a *= _attack_multiplier(d, a, dm, round_number, rng)
+        # Сейрим: сбить стаки противника, захват (часть его армии пропускает удар) и оглушение.
+        a_hold, a_throw = _seirim(a, d, am, round_number, rng)
+        d_hold, d_throw = _seirim(d, a, dm, round_number, rng)
+        damage_to_a *= 1 - a_hold
+        damage_to_d *= 1 - d_hold
         a_chaos = bool(am.chaos) and rng.random() < am.chaos
         d_chaos = bool(dm.chaos) and rng.random() < dm.chaos
         if a_chaos:
@@ -837,6 +888,10 @@ def simulate_battle(
             counter_to_d += _extra_attacks(d, a, damage_to_a, dm, d_chaos, round_number, rng)
         _apply_plain_damage(a, counter_to_a, rng, _armor(a, dm)[1])
         _apply_plain_damage(d, counter_to_d, rng, _armor(d, am)[1])
+        for side, opponent, throw, m in ((a, d, a_throw, am), (d, a, d_throw, dm)):
+            if throw:
+                _, kills = _apply_plain_damage(opponent, throw, rng, _armor(opponent, m)[1])
+                side.kills += kills
 
         _releases(a, d, am, round_number, rng)
         _releases(d, a, dm, round_number, rng)

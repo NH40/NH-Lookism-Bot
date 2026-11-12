@@ -58,13 +58,13 @@ LEVELS: dict[str, tuple[dict, ...]] = {
         _e(army_power=0.05),
         _c(crit_power=0.20),
         _c(pre_strike_share=0.10, pre_strike_power=0.30),
-        _s({"pierce": 0.05}, {"army_power": 0.05}),
+        _s({"pierce": 0.05, "seirim_boost": 0.10}, {"army_power": 0.05}),
         _c(opening=0.20),
         _s({"pre_strike_share": 0.10, "pre_strike_power": 0.15}, {"army_power": 0.07}),
         _c(durability=0.08),
-        _c(crit_chance=0.05, pre_strike_share=0.10),
+        _c(crit_chance=0.05, pre_strike_share=0.10, seirim_boost=0.10),
         _e(army_power=0.08),
-        _s({"pierce": 0.10, "pre_strike_share": 0.10, "pre_strike_power": 0.30}, {"army_power": 0.12}),
+        _s({"pierce": 0.10, "pre_strike_share": 0.10, "pre_strike_power": 0.30, "seirim_boost": 0.15}, {"army_power": 0.12}),
     ),
     # Джинена: копирование (пути Копирования и Бесконечной техники, источники противника в бою) и гений
     # медицины: уровни дешевле, сила выше, зелья с дополнительным эффектом.
@@ -128,13 +128,13 @@ LEVELS: dict[str, tuple[dict, ...]] = {
         _c(counter=0.04, reflect=0.05),
         _c(adapt_threshold=0.35, adapt_bonus=0.25, endure_guard=0.01),
         _c(counter_power=0.10, endure_unique=0.03),
-        _c(counter=0.04, endure_attack=0.02),
+        _c(counter=0.04, endure_attack=0.02, cqc_boost=0.10),
         _c(adapt_bonus=0.25, adapt_guard=0.05),
         _c(reflect=0.05, endure_guard=0.01),
-        _c(endure_attack=0.02, counter=0.04, adapt_threshold=0.30),
+        _c(endure_attack=0.02, counter=0.04, adapt_threshold=0.30, cqc_accel=0.5),
         _s({"counter_power": 0.10, "endure_unique": 0.04}, adaptation_gauge_speed=0.50),
         _c(endure_guard=0.01, adapt_guard=0.05),
-        _s({"endure_attack": 0.04, "counter": 0.03, "counter_power": 0.20, "endure_unique": 0.05}, adaptation_gauge_boost=0.25),
+        _s({"endure_attack": 0.04, "counter": 0.03, "counter_power": 0.20, "endure_unique": 0.05, "cqc_boost": 0.15, "cqc_accel": 0.5}, adaptation_gauge_boost=0.25),
     ),
     # Куроды: ниндзя. Скрытность и безопасность, ложные данные для чужой разведки, разведка, шпионы и
     # саботаж сильнее, усиление техники Ниндзюцу.

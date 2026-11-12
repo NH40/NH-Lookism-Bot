@@ -2,6 +2,7 @@
 from bot.config.unique_technique.unique_technique import (  # noqa: F401
     LEVELS,
     TEACHER_QUESTS,
+    TECH_GAUGES,
     eased_quest,
     TECHNIQUE_LEVEL_COST_PER_LEVEL,
     TECHNIQUE_SWAP_COOLDOWN_SECONDS,

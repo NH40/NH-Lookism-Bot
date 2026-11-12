@@ -37,6 +37,8 @@ class UserTechnique(Base):
     obtained_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # Путь Бесконечной техники: игрок выбрал эту технику в дополнение к активной.
     selected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    # Шкала техники (`config/unique_technique.TECH_GAUGES`, сейчас только CQC): копится между боями.
+    gauge: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
 
 
 class UserGenius(Base):

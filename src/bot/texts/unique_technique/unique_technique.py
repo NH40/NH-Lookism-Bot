@@ -5,6 +5,7 @@ from __future__ import annotations
 from bot.constant.unique_technique import (
     TECH_BEAST,
     TECH_BLADE_HANDS,
+    TECH_CQC,
     TECH_INVISIBLE,
     TECH_KYOKUSHIN,
     TECH_MA_TAESU,
@@ -13,6 +14,7 @@ from bot.constant.unique_technique import (
     TECH_NINJUTSU,
     TECH_ONE_STEP,
     TECH_OVERCOME,
+    TECH_SEIRIM,
     TECH_TAEKWONDO,
 )
 
@@ -28,6 +30,8 @@ TECHNIQUE_NAMES: dict[str, str] = {
     TECH_BLADE_HANDS: "Руки-лезвия",
     TECH_MUAY_THAI: "Муай-тай",
     TECH_MIDNIGHT: "Полуночный меч",
+    TECH_CQC: "CQC",
+    TECH_SEIRIM: "Сейрим",
 }
 TEACHER_NAMES: dict[str, str] = {
     TECH_BEAST: "Том Ли",
@@ -41,6 +45,8 @@ TEACHER_NAMES: dict[str, str] = {
     TECH_BLADE_HANDS: "Джин Чан",
     TECH_MUAY_THAI: "Брэгдак",
     TECH_MIDNIGHT: "Банхо Ли",
+    TECH_CQC: "Менеджер Ким",
+    TECH_SEIRIM: "Сонджи Юк",
 }
 INFINITE_LINE = "\n♾ <b>Бесконечная техника:</b> одновременно {slots} (с активной). Выбраны: {selected}"
 INFINITE_AUTO = "самые прокачанные"
@@ -59,7 +65,10 @@ TECHNIQUE_THEMES: dict[str, str] = {
     TECH_BLADE_HANDS: "Руки как лезвия: режут броню и оставляют глубокие кровотечения.",
     TECH_MUAY_THAI: "Взрывной муай-тай: на время становишься намного сильнее.",
     TECH_MIDNIGHT: "Разгон: с каждым раундом боец успевает больше атак и бьёт сильнее, на максимуме 8 атак за ход. Раскрывается в длинном бою.",
+    TECH_CQC: "Ближний бой спецназа: каждый убитый враг копит стаки, и чем дальше, тем быстрее они растут. Против толпы — ещё сильнее. Шкала CQC копится между боями: бой начинается уже со стаками.",
+    TECH_SEIRIM: "Захваты и броски: сбивает стаки врага (отчаяние, CQC, разгон), хватает часть армии — она пропускает удар и летит на землю, первый раунд оглушает, враг медленнее.",
 }
+GAUGE_LINE = "\n📊 <b>Шкала {name}:</b> {value}/{cap} — стартовые стаки {start}"
 
 
 def teacher_button_label(event) -> str:

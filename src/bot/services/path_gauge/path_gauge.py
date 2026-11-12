@@ -53,6 +53,16 @@ def gauge_effect(code: str | None, value: float, power: float = 1.0) -> tuple[Co
     return combat, eco, {key: v * k for key, v in spec.special.items()}
 
 
+def technique_gauge_effect(code: str | None, value: float) -> CombatMods:
+    """Бафы шкалы техники (`config/unique_technique.TECH_GAUGES`) при значении `value`."""
+    from bot.config.unique_technique import TECH_GAUGES
+
+    spec = TECH_GAUGES.get(code or "")
+    if not spec or value <= 0:
+        return NO_MODS
+    return CombatMods.of(spec).scale(min(1.0, value / GAUGE_MAX))
+
+
 async def add(session: AsyncSession, user_id: int, code: str, amount: float) -> None:
     """+к шкале пути, не выше потолка его уровня. НЕ коммитит."""
     if amount <= 0 or code not in PATH_GAUGES:
@@ -118,3 +128,11 @@ async def after_battle(session: AsyncSession, user_id: int, side, foe, won: bool
     for code in filter(None, (row.path, row.path2)):
         gain = _battle_gain(code, side, foe, won) * _speed(row, code) * (GAUGE_PVP_WEIGHT if pvp else 1.0)
         await add(session, user_id, code, min(GAUGE_MAX_PER_BATTLE, gain))
+    # Шкала CQC: за убитых (больше убил — больше шкалы), победа добавляет сверху.
+    from bot.config.unique_technique import TECH_GAUGES
+    from bot.db.repositories import unique_technique as tech_repo
+
+    if row.technique in TECH_GAUGES:
+        gain = (min(2.5, 2.5 * side.kills / side.initial_quantity) + (0.5 if won else 0.0)) * (GAUGE_PVP_WEIGHT if pvp else 1.0)
+        if gain > 0:
+            await tech_repo.add_gauge(session, user_id, row.technique, min(GAUGE_MAX_PER_BATTLE, gain), GAUGE_CAP_PER_LEVEL)

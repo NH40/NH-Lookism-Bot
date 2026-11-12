@@ -31,4 +31,5 @@ CB_GANG_POSITION_CLEAR_PREFIX = "gang:posclr:"
 
 # Удаление банды (полный сброс) — экран подтверждения и сама кнопка «Да».
 CB_GANG_DELETE_ASK = "gang:delask"
+CB_GANG_RENAME = "gang:rename"
 CB_GANG_DELETE_CONFIRM = "gang:delyes"

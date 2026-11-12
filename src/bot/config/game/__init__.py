@@ -1,6 +1,8 @@
 """Публичное API домена game (конфиг)."""
 from bot.config.game.game import (  # noqa: F401
     ACTION_LOCK_MS,
+    GANG_RENAME_COOLDOWN_DAYS,
+    GANG_RENAME_PRICE,
     STAGNATION_HOURS,
     STAGNATION_INCOME_PERCENT,
     STAGNATION_SWEEP_SECONDS,

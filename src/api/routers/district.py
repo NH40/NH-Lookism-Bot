@@ -208,11 +208,16 @@ async def attack(
 @router.post("/{district_id}/challenge", response_model=ChallengeOut)
 async def challenge(
     district_id: int,
+    confirm_clanmate: bool = False,
     user_id: int = Depends(get_current_user_id),
     session: AsyncSession = Depends(get_session),
     redis: Redis = Depends(get_redis),
 ) -> ChallengeOut:
+    from api.routers._common import require_clanmate_confirm
+    from bot.services.clan.clanmate import district_owner
+
     user = await require_user(session, user_id)
+    await require_clanmate_confirm(session, user_id, await district_owner(session, district_id), confirm_clanmate)
     try:
         issued = await issue_challenge(session, redis, user, district_id)
     except (DistrictNotFoundError, NotYourCityError, BotDistrictError):

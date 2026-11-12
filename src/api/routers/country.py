@@ -238,11 +238,15 @@ class MessageOut(BaseModel):
 async def post_city_challenge(
     city_id: int,
     body: ChallengeIn,
+    confirm_clanmate: bool = False,
     user_id: int = Depends(get_current_user_id),
     session: AsyncSession = Depends(get_session),
     redis: Redis = Depends(get_redis),
 ) -> MessageOut:
+    from api.routers._common import require_clanmate_confirm
+
     user = await require_user(session, user_id)
+    await require_clanmate_confirm(session, user_id, body.owner_id, confirm_clanmate)
     try:
         issued = await issue_city_challenge(session, redis, user, city_id, body.owner_id)
     except _CITY_ERRORS as exc:

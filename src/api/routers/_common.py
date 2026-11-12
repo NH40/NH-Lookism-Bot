@@ -54,6 +54,21 @@ def bad(text: str) -> HTTPException:
     return HTTPException(status.HTTP_400_BAD_REQUEST, text)
 
 
+async def require_clanmate_confirm(session: AsyncSession, attacker_id: int, target_id: int | None, confirmed: bool) -> None:
+    """Цель — соклановец и игрок ещё не подтвердил: 409 с кодом «clanmate» (Mini App спросит и
+    повторит запрос с `?confirm_clanmate=1`). Пользователь 2026-11-12."""
+    if confirmed:
+        return
+    from bot.services.clan.clanmate import clanmate_name
+
+    name = await clanmate_name(session, attacker_id, target_id)
+    if name:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"code": "clanmate", "message": f"{name} — твой соклановец. Точно напасть? Бой будет настоящим."},
+        )
+
+
 @asynccontextmanager
 async def telegram_bot() -> AsyncIterator[Bot]:
     """Короткоживущий Bot для пуша второй стороне (защитнику вызова, императору трона) —

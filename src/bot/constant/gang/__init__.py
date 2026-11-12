@@ -5,6 +5,7 @@ from bot.constant.gang.gang import (  # noqa: F401
     CB_GANG_BACK,
     CB_GANG_CAMP_MOVE_PREFIX,
     CB_GANG_DELETE_ASK,
+    CB_GANG_RENAME,
     CB_GANG_DELETE_CONFIRM,
     CB_GANG_LINEUP,
     CB_GANG_OPEN,

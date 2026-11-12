@@ -10,7 +10,8 @@ from bot.constant.help import CB_HELP_OPEN
 from bot.texts.help import BTN_HELP
 
 from bot.constant.common import CB_MENU_SETTINGS
-from bot.constant.gang import CB_GANG_DELETE_ASK
+from bot.constant.gang import CB_GANG_DELETE_ASK, CB_GANG_RENAME
+from bot.texts.gang.rename import BTN_RENAME
 from bot.constant.settings import CB_NOTIFY_ALL_OFF, CB_NOTIFY_ALL_ON, CB_NOTIFY_OPEN, CB_NOTIFY_TOGGLE_PREFIX, NOTIFY_CATEGORIES
 from bot.constant.profile import CB_PROFILE_OPEN
 from bot.texts.common import BTN_BACK_TO_PROFILE
@@ -34,6 +35,7 @@ def settings_menu() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text=BTN_DONATE, callback_data=CB_DONATE_OPEN)],
             [InlineKeyboardButton(text=BTN_NOTIFICATIONS, callback_data=CB_NOTIFY_OPEN)],
             [InlineKeyboardButton(text=BTN_HELP, callback_data=CB_HELP_OPEN)],
+            [InlineKeyboardButton(text=BTN_RENAME, callback_data=CB_GANG_RENAME)],
             [InlineKeyboardButton(text=BTN_DELETE_GANG, callback_data=CB_GANG_DELETE_ASK)],
             [InlineKeyboardButton(text=BTN_BACK_TO_PROFILE, callback_data=CB_PROFILE_OPEN)],
         ]

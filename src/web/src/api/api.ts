@@ -13,6 +13,14 @@ export class ApiError extends Error {
   }
 }
 
+/** Сервер ответил «цель — твой соклановец» (409, code=clanmate): спросить игрока. */
+function askConfirm(message: string): Promise<boolean> {
+  const tg = (window as unknown as { Telegram?: { WebApp?: { showConfirm?: (m: string, cb: (ok: boolean) => void) => void } } })
+    .Telegram?.WebApp;
+  if (tg?.showConfirm) return new Promise((resolve) => tg.showConfirm!(message, resolve));
+  return Promise.resolve(window.confirm(message));
+}
+
 async function request<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     method,
@@ -26,6 +34,13 @@ async function request<T>(method: "GET" | "POST", path: string, body?: unknown):
     let detail = response.statusText;
     try {
       const data = await response.json();
+      if (response.status === 409 && data.detail?.code === "clanmate") {
+        if (await askConfirm(data.detail.message)) {
+          const sep = path.includes("?") ? "&" : "?";
+          return request<T>(method, `${path}${sep}confirm_clanmate=1`, body);
+        }
+        throw new ApiError(409, "Отменено.");
+      }
       detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail ?? data);
     } catch {
       /* тело не JSON — оставляем statusText */

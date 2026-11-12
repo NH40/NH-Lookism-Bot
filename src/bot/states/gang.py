@@ -7,3 +7,5 @@ class GangStates(StatesGroup):
     waiting_name = State()
     # Своё число бойцов для переноса части отряда; в FSM-данных — rank/stars/level/from_camp.
     waiting_squad_amount = State()
+    # Новое название банды (смена за NHCoin).
+    waiting_rename = State()

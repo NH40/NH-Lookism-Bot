@@ -21,6 +21,8 @@ CITY_PAGE_SIZE = 8
 GANG_DELETE_CONFIRM_SECONDS = 30  # окно подтверждения удаления банды
 GANG_NAME_MIN_LENGTH = 3
 GANG_NAME_MAX_LENGTH = 64
+GANG_RENAME_PRICE = 10_000_000  # смена названия банды, NHCoin (пользователь 2026-11-12)
+GANG_RENAME_COOLDOWN_DAYS = 7
 
 # Кнопки перевода статистов между лагерями атаки/защиты на экране банды — какую долю
 # каждой стопки перекинуть (100 — ровно всех).

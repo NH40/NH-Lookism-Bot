@@ -157,6 +157,11 @@ def personal_training_cooldown(user_id: int) -> str:
     return f"cooldown:personal_training:{user_id}"
 
 
+def gang_rename_cooldown(user_id: int) -> str:
+    """Перезарядка смены названия банды (`services/gang/rename`)."""
+    return f"cooldown:gang_rename:{user_id}"
+
+
 def gang_delete_confirm(user_id: int) -> str:
     """Подтверждение удаления банды: флаг ставится экраном подтверждения (EX 30 с), кнопка
     «Да» работает только пока он жив — забытое открытым подтверждение само истекает."""

@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 from bot.keyboards.common import back_menu
+from bot.handlers.clan.clanmate import ask_clanmate
+from bot.services.clan.clanmate import city_emperor, clanmate_name, split_confirm
 
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
@@ -86,11 +88,15 @@ async def cb_sabotage_open(callback: CallbackQuery, session: AsyncSession, redis
 async def cb_sabotage_marked(callback: CallbackQuery, session: AsyncSession, redis: Redis) -> None:
     """Саботаж помеченного игрока (путь Сенсорики) — те же действия и КД, цель — метка."""
     user_id = callback.from_user.id
+    data, confirmed = split_confirm(callback.data)
     try:
-        action, raw_target = callback.data.removeprefix(CB_SABOTAGE_MARKED_PREFIX).split(":", 1)
+        action, raw_target = data.removeprefix(CB_SABOTAGE_MARKED_PREFIX).split(":", 1)
         target_id = int(raw_target)
     except ValueError:
         await callback.answer()
+        return
+    if not confirmed and (mate := await clanmate_name(session, user_id, target_id)):
+        await ask_clanmate(callback, mate, data)
         return
     try:
         result = await sabotage(session, redis, user_id, action, target_id=target_id)
@@ -119,7 +125,11 @@ async def cb_sabotage_do(callback: CallbackQuery, session: AsyncSession, redis: 
     if await get_gang(session, user_id) is None:
         await callback.answer(NOT_ONBOARDED, show_alert=True)
         return
-    action = callback.data.removeprefix(CB_SABOTAGE_DO_PREFIX)
+    data, confirmed = split_confirm(callback.data)
+    action = data.removeprefix(CB_SABOTAGE_DO_PREFIX)
+    if not confirmed and (mate := await clanmate_name(session, user_id, await city_emperor(session, user_id))):
+        await ask_clanmate(callback, mate, data)
+        return
     # Popup-тексты — без HTML.
     try:
         result = await sabotage(session, redis, user_id, action)

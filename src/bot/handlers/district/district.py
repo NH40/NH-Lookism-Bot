@@ -42,6 +42,8 @@ from bot.constant.district import (
 )
 from bot.db.models.user import User
 from bot.db.repositories.user import get_by_id
+from bot.handlers.clan.clanmate import ask_clanmate
+from bot.services.clan.clanmate import clanmate_name, district_owner, split_confirm
 from bot.keyboards.district import accept_menu, city_report_menu, district_menu, report_menu
 from bot.services.district import (
     BattleOnCooldownError,
@@ -256,7 +258,11 @@ async def cb_district_attack(callback: CallbackQuery, session: AsyncSession, red
     if user is None:
         await callback.answer(NOT_ONBOARDED, show_alert=True)
         return
-    district_id = int(callback.data.removeprefix(CB_DISTRICT_ATTACK_PREFIX))
+    data, confirmed = split_confirm(callback.data)
+    district_id = int(data.removeprefix(CB_DISTRICT_ATTACK_PREFIX))
+    if not confirmed and (mate := await clanmate_name(session, user.id, await district_owner(session, district_id))):
+        await ask_clanmate(callback, mate, data)
+        return
 
     # Popup-тексты — без HTML (Telegram не парсит разметку в алертах).
     try:
@@ -514,8 +520,12 @@ async def cb_city_challenge(callback: CallbackQuery, session: AsyncSession, redi
     if user is None:
         await callback.answer(NOT_ONBOARDED, show_alert=True)
         return
+    data, confirmed = split_confirm(callback.data)
     try:
-        city_raw, owner_raw = callback.data.removeprefix(CB_CITY_CHALLENGE_PREFIX).split(":")
+        city_raw, owner_raw = data.removeprefix(CB_CITY_CHALLENGE_PREFIX).split(":")
+        if not confirmed and (mate := await clanmate_name(session, user.id, int(owner_raw))):
+            await ask_clanmate(callback, mate, data)
+            return
         issued = await issue_city_challenge(session, redis, user, int(city_raw), int(owner_raw))
     except ValueError:
         await callback.answer()

@@ -438,10 +438,14 @@ class DeclareIn(BaseModel):
 @router.post("/war/declare", response_model=MessageOut)
 async def post_war_declare(
     body: DeclareIn,
+    confirm_clanmate: bool = False,
     user_id: int = Depends(get_current_user_id),
     session: AsyncSession = Depends(get_session),
     redis: Redis = Depends(get_redis),
 ) -> MessageOut:
+    from api.routers._common import require_clanmate_confirm
+
+    await require_clanmate_confirm(session, user_id, body.target_id, confirm_clanmate)
     try:
         issued = await declare_war(session, redis, user_id, body.target_id)
     except WarNotEmperorError:
@@ -514,13 +518,18 @@ class SabotageOut(BaseModel):
 @router.post("/sabotage", response_model=SabotageOut)
 async def post_sabotage(
     body: SabotageIn,
+    confirm_clanmate: bool = False,
     user_id: int = Depends(get_current_user_id),
     session: AsyncSession = Depends(get_session),
     redis: Redis = Depends(get_redis),
 ) -> SabotageOut:
+    from api.routers._common import require_clanmate_confirm
     from bot.handlers.empire.sabotage import _fields
+    from bot.services.clan.clanmate import city_emperor
 
     await require_user(session, user_id)
+    target = body.target_id or await city_emperor(session, user_id)
+    await require_clanmate_confirm(session, user_id, target, confirm_clanmate)
     try:
         result = await sabotage(session, redis, user_id, body.action, target_id=body.target_id)
     except UnknownSabotageError:

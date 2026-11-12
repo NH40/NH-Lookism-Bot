@@ -11,6 +11,8 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.texts.district import FREE_ATTACK_LINE
+from bot.handlers.clan.clanmate import ask_clanmate
+from bot.services.clan.clanmate import clanmate_name, split_confirm
 from bot.services.position_skill import journal_block
 from bot.config.empire import EMPIRE_WAR_ACCEPT_SECONDS, war_cooldown_seconds
 from bot.constant.empire import (
@@ -134,9 +136,13 @@ async def cb_war_target(callback: CallbackQuery, session: AsyncSession) -> None:
 
 @router.callback_query(F.data.startswith(CB_WAR_DECLARE_PREFIX))
 async def cb_war_declare(callback: CallbackQuery, session: AsyncSession, redis: Redis) -> None:
-    target_id = _parse_int(callback.data.removeprefix(CB_WAR_DECLARE_PREFIX))
+    data, confirmed = split_confirm(callback.data)
+    target_id = _parse_int(data.removeprefix(CB_WAR_DECLARE_PREFIX))
     if target_id is None:
         await callback.answer()
+        return
+    if not confirmed and (mate := await clanmate_name(session, callback.from_user.id, target_id)):
+        await ask_clanmate(callback, mate, data)
         return
     # Popup-тексты — без HTML.
     try:

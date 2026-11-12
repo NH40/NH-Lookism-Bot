@@ -5,6 +5,7 @@ from __future__ import annotations
 REASON_INCOME = "income"  # доход зданий (строки за час сливаются в одну)
 REASON_EMPEROR_TAX = "emperor_tax"  # налог и пассивный бонус императору (тоже сливаются)
 REASON_EMPEROR_TRIBUTE = "emperor_tribute"  # дань младших императоров той же страны
+REASON_GANG_RENAME = "gang_rename"  # смена названия банды
 REASON_EMPIRE_EVENT = "empire_event"  # ивенты императора: фонд, раздачи, призы, возврат
 REASON_MANAGER_BURN = "manager_burn"  # абсолют «Менеджер» сжёг монеты напавшего
 REASON_ELITE_LOOT = "elite_loot"  # родословная Элиты: победитель забрал монеты проигравшего

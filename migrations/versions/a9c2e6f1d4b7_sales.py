@@ -1,7 +1,7 @@
 """«Пятницы»: события скидок, выбор «избранных», разовые покупки.
 
 Revision ID: a9c2e6f1d4b7
-Revises: f4a8d1b6c3e9
+Revises: c8e2a5f9d1b3
 """
 from typing import Sequence, Union
 
@@ -10,7 +10,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "a9c2e6f1d4b7"
-down_revision: Union[str, None] = "f4a8d1b6c3e9"
+down_revision: Union[str, None] = "c8e2a5f9d1b3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

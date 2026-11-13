@@ -179,6 +179,7 @@ export interface TrainingResponse {
       price: number;
       fragments_cost: number;
       tasks: { label: string; done: number; need: number }[];
+      image?: string | null;
     }[];
     fragments: number;
     coins: number;

@@ -1,0 +1,32 @@
+.tq-wallet { display: flex; gap: 8px; margin-bottom: 10px; }
+.tq-wallet span { flex: 1; padding: 6px 10px; border-radius: 10px; font-size: 12px; font-weight: 700; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); }
+.tq-wallet b { color: #fff; }
+.tq-empty { font-size: 12px; font-weight: 600; }
+.tq-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin: 0 -4px 10px; padding-left: 4px; scrollbar-width: none; }
+.tq-strip::-webkit-scrollbar { display: none; }
+.tq-pick { flex: 0 0 92px; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 6px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.04); color: #fff; text-align: center; }
+.tq-pick.on { border-color: rgba(167, 139, 250, 0.9); background: rgba(167, 139, 250, 0.16); box-shadow: 0 0 14px rgba(167, 139, 250, 0.35); }
+.tq-pick b { font-size: 11px; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tq-pick small { font-size: 10px; color: rgba(255, 255, 255, 0.55); font-weight: 700; }
+.tq-thumb { width: 52px; height: 52px; border-radius: 12px; background: rgba(167, 139, 250, 0.25) center / cover no-repeat; }
+.tq-chip { font-style: normal; font-size: 9.5px; font-weight: 800; padding: 1px 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.65); }
+.tq-chip.quest { background: rgba(167, 139, 250, 0.3); color: #e6dcff; }
+.tq-chip.level { background: rgba(255, 209, 102, 0.3); color: #ffe08a; }
+.tq-chip.max { background: rgba(61, 220, 132, 0.25); color: #9ff0c0; }
+.tq-card { border-radius: 16px; overflow: hidden; border: 1px solid rgba(167, 139, 250, 0.3); background: rgba(14, 24, 62, 0.6); }
+.tq-banner { height: 130px; position: relative; background: linear-gradient(135deg, rgba(167, 139, 250, 0.45), rgba(14, 24, 62, 0.9)) center 20% / cover no-repeat; }
+.tq-banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 35%, rgba(10, 14, 40, 0.95)); }
+.tq-banner-text { position: absolute; left: 12px; bottom: 10px; z-index: 1; }
+.tq-banner-text b { display: block; font-size: 18px; font-weight: 800; }
+.tq-banner-text small { font-size: 11px; font-weight: 700; color: rgba(255, 255, 255, 0.7); }
+.tq-levels { display: flex; align-items: center; gap: 4px; padding: 10px 12px 2px; }
+.tq-levels i { flex: 1; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); }
+.tq-levels i.done { background: linear-gradient(90deg, #a78bfa, #c4b5fd); }
+.tq-levels i.next { background: rgba(167, 139, 250, 0.35); }
+.tq-levels span { margin-left: 6px; font-size: 11px; font-weight: 700; color: rgba(255, 255, 255, 0.7); white-space: nowrap; }
+.tq-hint { margin: 8px 12px; font-size: 12px; font-weight: 600; line-height: 1.4; color: rgba(255, 255, 255, 0.7); }
+.tq-card .btn { margin: 0 12px 12px; width: calc(100% - 24px); }
+.tq-stages { display: flex; justify-content: center; gap: 10px; padding-top: 10px; }
+.tq-stages span { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; border: 2px solid rgba(255, 255, 255, 0.15); color: rgba(255, 255, 255, 0.5); }
+.tq-stages .done { border-color: #3ddc84; background: rgba(61, 220, 132, 0.2); color: #9ff0c0; }
+.tq-stages .next { border-color: #a78bfa; color: #fff; box-shadow: 0 0 10px rgba(167, 139, 250, 0.6); }

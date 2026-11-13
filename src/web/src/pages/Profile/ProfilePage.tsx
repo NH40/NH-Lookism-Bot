@@ -1,4 +1,4 @@
-import { Award, ChevronUp, Coins, Crown, Crosshair, Dna, Eye, FlaskConical, Gem, Home, Lightbulb, Medal, Move, Route, Shield, Sparkles, Swords, Ticket, Trophy, Zap } from "lucide-react";
+import { Award, Coins, Crown, Crosshair, Dna, Eye, FlaskConical, Gem, Home, Lightbulb, Medal, Move, Route, Shield, Sparkles, Swords, Ticket, Trophy, Zap } from "lucide-react";
 import type { ReactNode } from "react";
 import type { ProfileDevItem, ProfileData } from "../../types";
 import { Bar, Chip, Panel, Screen, StatRow, countdown, fmt } from "../../components/ui";
@@ -30,58 +30,50 @@ function LeagueCard({ league: l }: { league: ProfileData["league"] }) {
   const done = Math.min(Math.max(l.score - l.floor, 0), need);
   return (
     <section className={`lg-card lg-${l.index}`}>
-      <div className="lg-top">
-        <div className="lg-ico">
-          <Icon size={24} />
-        </div>
-        <div className="lg-title">
-          <small>Лига</small>
-          <div className="disp lg-name">{l.name}</div>
-        </div>
-        <div className="lg-score">
-          <b className="disp">{fmt(l.score)}</b>
-          <small>счёт</small>
-        </div>
+      <div className="lg-ico">
+        <Icon size={18} />
       </div>
-      <div className="lg-ladder">
-        {l.ladder.map((name, i) => (
-          <span key={name} className={i === l.index ? "now" : i < l.index ? "done" : ""}>
-            <i />
-            <small>{name.replace(" поколение", "")}</small>
+      <div className="lg-main">
+        <div className="lg-row">
+          <span className="disp lg-name">{l.name}</span>
+          <span className="lg-dots">
+            {l.ladder.map((name, i) => (
+              <i key={name} title={name} className={i === l.index ? "now" : i < l.index ? "done" : ""} />
+            ))}
           </span>
-        ))}
-      </div>
-      {l.next_name !== null && l.next_score !== null ? (
-        <div className="lg-progress">
-          <div className="lg-bar">
-            <i style={{ width: `${need > 0 ? (done / need) * 100 : 0}%` }} />
-          </div>
-          <div className="lg-next">
-            <span>
-              <ChevronUp size={13} />
-              {done >= need ? `«${l.next_name}»: повышение в полночь по Москве` : `Дальше: «${l.next_name}»`}
-            </span>
-            <span>
-              {fmt(Math.min(l.score, l.next_score))} / {fmt(l.next_score)}
-            </span>
-          </div>
+          <b className="lg-score">{fmt(l.score)}</b>
         </div>
-      ) : (
-        <div className="lg-next lg-top-note">Высшая лига</div>
-      )}
-      <div className="lg-buffs">
-        {l.index > 0 ? (
+        {l.next_name !== null && l.next_score !== null ? (
           <>
-            <span>
-              <Coins size={13} /> +{l.income_percent}% дохода
-            </span>
-            <span>
-              <Swords size={13} /> +{l.power_percent}% атаки и прочности
-            </span>
+            <div className="lg-bar">
+              <i style={{ width: `${need > 0 ? (done / need) * 100 : 0}%` }} />
+            </div>
+            <div className="lg-next">
+              <span>{done >= need ? `«${l.next_name}» — в полночь по Москве` : `до «${l.next_name}»`}</span>
+              <span>
+                {fmt(Math.min(l.score, l.next_score))} / {fmt(l.next_score)}
+              </span>
+            </div>
           </>
         ) : (
-          <span className="off">Бафф появится со следующей лиги</span>
+          <div className="lg-next">
+            <span>Высшая лига</span>
+          </div>
         )}
+        <div className="lg-buffs">
+          {l.index > 0 ? (
+            <>
+              <span>
+                <Coins size={11} /> +{l.income_percent}% дохода
+              </span>
+              <span>
+                <Swords size={11} /> +{l.power_percent}% атаки и прочности
+              </span>
+            </>
+          ) : (
+            <span className="off">Бафф — со следующей лиги</span>
+          )}
+        </div>
       </div>
     </section>
   );

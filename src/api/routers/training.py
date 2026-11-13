@@ -87,6 +87,17 @@ class TechTaskOut(BaseModel):
     need: int
 
 
+def _tech_image(code: str) -> str | None:
+    """Путь картинки учителя техники относительно assets/ (`utils/event_art`)."""
+    from bot.constant.event import EVENT_TEACHER
+    from bot.utils.event_art import event_art_path
+
+    path = event_art_path(EVENT_TEACHER, code)
+    if path is None or "assets" not in path.parts:
+        return None
+    return "/".join(path.parts[path.parts.index("assets") + 1 :])
+
+
 class TechTrainingOut(BaseModel):
     code: str
     name: str
@@ -97,6 +108,7 @@ class TechTrainingOut(BaseModel):
     price: int
     fragments_cost: int
     tasks: list[TechTaskOut]
+    image: str | None = None  # картинка учителя (assets/…) — через /api/img
 
 
 class TechniquesOut(BaseModel):
@@ -161,7 +173,7 @@ async def _techniques(session: AsyncSession, user_id: int) -> TechniquesOut:
         tasks, progress = (r.quest.tasks, r.quest.progress) if r.quest else (r.tasks, {})
         items.append(TechTrainingOut(
             code=r.code, name=TECHNIQUE_NAMES[r.code], teacher=TEACHER_NAMES[r.code], level=r.level, next_level=r.next_level,
-            stage=r.stage, price=r.price, fragments_cost=r.fragments_cost,
+            stage=r.stage, price=r.price, fragments_cost=r.fragments_cost, image=_tech_image(r.code),
             tasks=[TechTaskOut(label=TASK_LABELS.get(t, t), done=min(progress.get(t, 0), n), need=n) for t, n in tasks.items()],
         ))
     return TechniquesOut(items=items, fragments=fragments, coins=coins)

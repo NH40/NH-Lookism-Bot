@@ -1,13 +1,12 @@
 import { useState } from "react";
+import { TechniquesPanel } from "./TechniquesPanel";
 import type { ExtrasResult, RanksResponse, TrainingResponse } from "../../types";
 import { BackHeader, Bar, Panel, Screen, countdown, fmt } from "../../components/ui";
-import { ROUTE_DEVELOPMENT, ROUTE_PLAY } from "../../constants/constants";
-import { useNavigate } from "react-router-dom";
+import { ROUTE_DEVELOPMENT } from "../../constants/constants";
 import { useAction, useApi } from "../../hooks/useApi";
 import "../../styles/development.css";
 
 export function TrainingPage() {
-  const navigate = useNavigate();
   const { data, status, error, reload } = useApi<TrainingResponse>("/training");
   const ranks = useApi<RanksResponse>("/training/ranks");
   const { run, busy } = useAction(() => {
@@ -162,53 +161,7 @@ export function TrainingPage() {
             </Panel>
           )}
 
-          {data.techniques && (
-            <Panel title="ТЕХНИКИ" tone="violet">
-              <div className="muted" style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.45, marginBottom: 8 }}>
-                Уровень техники: оплати тренировку у её учителя → выполни его квест → подними уровень за фрагменты.
-                Фрагментов: <b>{fmt(data.techniques.fragments)}</b> · NHCoin: <b>{fmt(data.techniques.coins)}</b>
-              </div>
-              {data.techniques.items.length === 0 && (
-                <div className="muted" style={{ fontSize: 12, fontWeight: 600 }}>Техник пока нет — их дают учителя на карте.</div>
-              )}
-              {data.techniques.items.map((t) => (
-                <div key={t.code} className="tr-tech">
-                  <div className="row">
-                    <div>
-                      <b>{t.name}</b>
-                      <div className="muted" style={{ fontSize: 11, fontWeight: 700 }}>учитель {t.teacher} · ур. {t.level}{t.next_level ? ` → ${t.next_level}` : ""}</div>
-                    </div>
-                    {t.stage === "max" && <span className="chip">макс</span>}
-                  </div>
-                  {(t.stage === "pay" || t.stage === "quest") && (
-                    <div className="tr-tasks">
-                      {t.tasks.map((k) => (
-                        <div key={k.label} className="stat">
-                          <span>{k.label}</span>
-                          <b>{t.stage === "quest" ? `${fmt(k.done)}/${fmt(k.need)}` : fmt(k.need)}</b>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {t.stage === "pay" && (
-                    <button className={`btn violet block ${data.techniques!.coins >= t.price ? "" : "off"}`} disabled={busy || data.techniques!.coins < t.price} onClick={() => run("/training/technique/pay", { code: t.code })}>
-                      Оплатить тренировку · {fmt(t.price)} NHCoin
-                    </button>
-                  )}
-                  {t.stage === "quest" && (
-                    <button className="btn violet block" onClick={() => navigate(`${ROUTE_PLAY}?ctx=t:${t.code}`)}>
-                      🎮 Пройти этапы занятия
-                    </button>
-                  )}
-                  {t.stage === "level" && (
-                    <button className={`btn gold block ${data.techniques!.fragments >= t.fragments_cost ? "" : "off"}`} disabled={busy || data.techniques!.fragments < t.fragments_cost} onClick={() => run("/training/technique/level", { code: t.code })}>
-                      Уровень {t.next_level} · {fmt(t.fragments_cost)} фрагментов
-                    </button>
-                  )}
-                </div>
-              ))}
-            </Panel>
-          )}
+          {data.techniques && <TechniquesPanel d={data.techniques} run={run} busy={busy} />}
 
           {last && (
             <div>

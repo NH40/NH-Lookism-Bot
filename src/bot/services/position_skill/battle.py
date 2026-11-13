@@ -30,6 +30,18 @@ from bot.texts.position_skill import (
     JOURNAL_RESULT_LOSS,
     JOURNAL_RESULT_WIN,
     JOURNAL_ROUND,
+    JOURNAL_ROUND_MINE,
+    JOURNAL_ROUND_FOE,
+    JOURNAL_LEFT,
+    JOURNAL_SIDES,
+    JOURNAL_EDGE_FOE,
+    JOURNAL_EDGE_MINE,
+    JOURNAL_SUMMARY,
+    JOURNAL_FLED,
+    JOURNAL_WHY_FOE_SKILLS,
+    JOURNAL_WHY_FOE_POWER,
+    SIDE_YOU_SKILLS,
+    SIDE_FOE_SKILLS,
     JOURNAL_SPY_BLOCKED,
     JOURNAL_SPY_FAIL,
     JOURNAL_SPY_OK,
@@ -146,21 +158,34 @@ def journal(result: BattleResult, spy: SpyOutcome = NO_SPY, *, viewer_is_attacke
     if pre:
         lines.append(JOURNAL_PRE)
         lines.extend(pre if viewer_is_attacker else [p for p in pre if not p.startswith("🕵️")])
+    me, foe = (result.attacker, result.defender) if viewer_is_attacker else (result.defender, result.attacker)
+    ratio = foe.initial_power / me.initial_power if me.initial_power else 1.0
+    edge = JOURNAL_EDGE_FOE.format(x=f"{ratio:.1f}") if ratio >= 1.15 else JOURNAL_EDGE_MINE.format(x=f"{1 / ratio:.1f}") if ratio and ratio <= 1 / 1.15 else ""
+    lines.insert(0, JOURNAL_SIDES.format(
+        my_q=format_number(me.initial_quantity), my_p=format_number(me.initial_power),
+        foe_q=format_number(foe.initial_quantity), foe_p=format_number(foe.initial_power), edge=edge,
+    ))
+    # Остаток в строю: стартовая численность минус выбитые до боя и потери по раундам.
+    my_left = me.initial_quantity - (foe_first + foe_pre)
+    foe_left = foe.initial_quantity - (me_first + me_pre)
+    my_fired_total = foe_fired_total = 0
     for r in result.log:
         mine = viewer_is_attacker
         dealt, taken = (r.attacker_damage, r.defender_damage) if mine else (r.defender_damage, r.attacker_damage)
         kills, lost = (r.attacker_kills, r.defender_kills) if mine else (r.defender_kills, r.attacker_kills)
         my_chaos, foe_chaos = (r.attacker_chaos, r.defender_chaos) if mine else (r.defender_chaos, r.attacker_chaos)
-        lines.append(JOURNAL_ROUND.format(
-            n=r.number, you=SIDE_YOU, dealt=format_number(dealt), chaos=JOURNAL_CHAOS if my_chaos else "",
-            foe=SIDE_FOE, taken=format_number(taken), foe_chaos=JOURNAL_CHAOS if foe_chaos else "",
-            kills=format_number(kills), lost=format_number(lost),
-        ))
+        my_left, foe_left = max(0, my_left - lost), max(0, foe_left - kills)
+        lines.append(JOURNAL_ROUND.format(n=r.number))
+        lines.append(JOURNAL_ROUND_MINE.format(dealt=format_number(dealt), chaos=JOURNAL_CHAOS if my_chaos else "", kills=format_number(kills)))
+        lines.append(JOURNAL_ROUND_FOE.format(taken=format_number(taken), foe_chaos=JOURNAL_CHAOS if foe_chaos else "", lost=format_number(lost)))
         my_fired, foe_fired = (r.attacker_fired, r.defender_fired) if mine else (r.defender_fired, r.attacker_fired)
+        my_fired_total += len(my_fired)
+        foe_fired_total += len(foe_fired)
         if my_fired:
-            lines.append(JOURNAL_FIRED.format(side=SIDE_YOU, names=", ".join(esc(n) for n in my_fired)))
+            lines.append(JOURNAL_FIRED.format(side=SIDE_YOU_SKILLS, names=", ".join(esc(n) for n in my_fired)))
         if foe_fired:
-            lines.append(JOURNAL_FIRED.format(side=SIDE_FOE, names=", ".join(esc(n) for n in foe_fired)))
+            lines.append(JOURNAL_FIRED.format(side=SIDE_FOE_SKILLS, names=", ".join(esc(n) for n in foe_fired)))
+        lines.append(JOURNAL_LEFT.format(mine=format_number(my_left), foe=format_number(foe_left)))
     my_after, foe_after = (result.attacker_after, result.defender_after) if viewer_is_attacker else (result.defender_after, result.attacker_after)
     if my_after:
         lines.append(JOURNAL_AFTER.format(side=SIDE_YOU, names=", ".join(esc(n) for n in my_after)))
@@ -168,6 +193,17 @@ def journal(result: BattleResult, spy: SpyOutcome = NO_SPY, *, viewer_is_attacke
         lines.append(JOURNAL_AFTER.format(side=SIDE_FOE, names=", ".join(esc(n) for n in foe_after)))
     won = result.attacker_won if viewer_is_attacker else not result.attacker_won
     lines.append((JOURNAL_RESULT_WIN if won else JOURNAL_RESULT_LOSS).format(rounds=result.rounds))
+
+    def pct(dead: int, total: int) -> str:
+        return f"{dead * 100 // total}%" if total else "0%"
+
+    summary = JOURNAL_SUMMARY.format(
+        my_dead=format_number(me.total_dead), my_q=format_number(me.initial_quantity), my_pct=pct(me.total_dead, me.initial_quantity),
+        foe_dead=format_number(foe.total_dead), foe_q=format_number(foe.initial_quantity), foe_pct=pct(foe.total_dead, foe.initial_quantity),
+    )
+    lines.append(summary + (JOURNAL_FLED.format(n=format_number(me.fled)) if me.fled else ""))
+    if not won:
+        lines.append(JOURNAL_WHY_FOE_SKILLS.format(foe=foe_fired_total, mine=my_fired_total) if foe_fired_total > my_fired_total else JOURNAL_WHY_FOE_POWER)
     return tuple(lines)
 
 

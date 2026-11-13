@@ -47,6 +47,7 @@ from bot.handlers.ultra_instinct import router as ultra_instinct_router
 from bot.handlers.unique_technique import router as unique_technique_router
 from bot.handlers.unique_path import router as unique_path_router
 from bot.handlers.bloodline import router as bloodline_router
+from bot.handlers.penguan import router as penguan_router
 from bot.handlers.development import router as development_router
 from bot.handlers.genius import router as genius_router
 from bot.handlers.awakening import router as awakening_router
@@ -103,6 +104,7 @@ def get_routers() -> list[Router]:
         unique_technique_router,
         unique_path_router,
         bloodline_router,
+        penguan_router,
         development_router,
         genius_router,
         awakening_router,

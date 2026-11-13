@@ -7,6 +7,7 @@ from bot.constant.bloodline import (
     BLOODLINE_ELITE,
     BLOODLINE_GAPRYONG,
     BLOODLINE_HANSU,
+    BLOODLINE_PENGUAN,
     BLOODLINE_JINCHEOL,
     BLOODLINE_JINYEONG,
     BLOODLINE_KURODA,
@@ -27,6 +28,7 @@ BLOODLINE_NAMES: dict[str, str] = {
     BLOODLINE_KURODA: "Куроды",
     BLOODLINE_JINCHEOL: "Джинчоля",
     BLOODLINE_HANSU: "Хансу",
+    BLOODLINE_PENGUAN: "Пеньгуан",
 }
 # Направления родословных — от пользователя (2026-10-02, `docs/design/development_systems.md`).
 BLOODLINE_DESCRIPTIONS: dict[str, str] = {
@@ -40,6 +42,7 @@ BLOODLINE_DESCRIPTIONS: dict[str, str] = {
     BLOODLINE_KURODA: "Ниндзя: скрытность, безопасность и ложные данные для чужой разведки. Разведка, шпионы и саботаж сильнее, усиливает технику Ниндзюцу.",
     BLOODLINE_JINCHEOL: "Игра через контракты: дешевле, вместе с купленными приходят бесплатные, часть выживших остаётся навсегда. Вербовка приводит больше бойцов и выше рангом.",
     BLOODLINE_HANSU: "Обучение: быстрее тренировки себя и статистов, занятия у учителей. Все техники сильнее, учатся дешевле и быстрее, часть заданий учителя засчитывается сама.",
+    BLOODLINE_PENGUAN: "Игра через доход: сила, влияние и доход растут от богатства — дохода, районов и городов. Подкуп, военная казна, золотая вербовка, конструктор статистов, выкуп павших и районов, монополия на бирже.",
 }
 SPECIAL_EFFECTS: dict[str, str] = {
     "copy_sources": "копирование в бою расширено",
@@ -55,6 +58,18 @@ SPECIAL_EFFECTS: dict[str, str] = {
     "training_kpd_boost": "КПД Пути тренировок сильнее на {p}",
     "adaptation_gauge_speed": "шкала адаптации растёт быстрее на {p}",
     "adaptation_gauge_boost": "шкала адаптации сильнее на {p}",
+    "pg_attack": "деньги — сила: +{p} к атаке за каждое очко богатства (доход, районы, города)",
+    "pg_influence": "+{p} к влиянию за каждое очко богатства",
+    "pg_land_income": "+{p} к доходу за каждые 10 своих районов",
+    "pg_city_income": "+{p} к доходу за каждый город империи",
+    "pg_bribe": "Подкуп: на час реакции врагов слабее на {p}",
+    "pg_chest": "Военная казна: на час +{p} к атаке",
+    "pg_recruit": "Золотая вербовка: на час +{p} бойцов за вербовку",
+    "pg_constructor": "конструктор статистов: до {p} мощи армии в сутки",
+    "pg_buyback": "выкуп павших: до {p} погибших последнего боя",
+    "pg_buyout": "выкуп района бота без боя",
+    "pg_monopoly": "монополия: комиссия биржи меньше на {p}",
+    "pg_monopoly_share": "{p} комиссии биржи подданных — императору",
 }
 DETAIL_SCREEN = (
     "🩸 <b>Родословная {name}</b> · ур. <b>{level}/10</b>\n"

@@ -155,6 +155,8 @@ class Build:
     absolutes: frozenset[str] = frozenset()
     # КПД Пути тренировок: тренировки быстрее и результативнее, очки пути — быстрее.
     training_kpd: float = 0.0
+    # Особые числа родословной Пеньгуана (`pg_*`): конструктор, выкупы, монополия (`services/penguan`).
+    pg: dict = field(default_factory=dict)
     # Влияние игрока со всеми бонусами (вербовка, контракты, бафы в бою).
     influence: int = 0
     # Активные пути (первый и второго тела): куда идёт шкала и что умеет игрок.
@@ -275,6 +277,17 @@ async def _compute_build(session: AsyncSession, user_id: int) -> Build:
             extra_eco_t = extra_eco_t + e.eco.scale(k)
         effects[SOURCE_TECHNIQUE] = LevelEffect(combat=base_t.combat + extra_combat_t, eco=base_t.eco + extra_eco_t, special=base_t.special)
 
+    # Пеньгуан: бафы от богатства и купленные временные — к эффекту его родословной.
+    pg = {k: v for k, v in special.items() if k.startswith("pg_")}
+    if pg:
+        from bot.constant.bloodline import BLOODLINE_PENGUAN
+        from bot.services.penguan import build_mods
+
+        source = SOURCE_BLOODLINE if row.bloodline == BLOODLINE_PENGUAN else SOURCE_BLOODLINE2
+        pg_combat, pg_eco = await build_mods(session, user_id, pg)
+        base = effects[source]
+        effects[source] = LevelEffect(combat=base.combat + pg_combat, eco=base.eco + pg_eco, special=base.special)
+
     combat_parts = {source: e.combat for source, e in effects.items()}
     # Гений оружия «нацелен на уникальные техники»: усиливает именно их боевые бафы.
     technique_power = sum(e.eco.technique_power for e in effects.values())
@@ -362,6 +375,7 @@ async def _compute_build(session: AsyncSession, user_id: int) -> Build:
         influence=await _influence(session, user_id, row, positions, eco),
         paths=tuple(filter(None, (row.path, row.path2))),
         security_off=security_off,
+        pg=pg,
     )
 
 

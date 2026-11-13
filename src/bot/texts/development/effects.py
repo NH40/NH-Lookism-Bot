@@ -98,6 +98,7 @@ COMBAT_PHRASES: dict[str, str] = {
 # Небоевые модификаторы (`services/build/mods.py`).
 ECO_PHRASES: dict[str, str] = {
     "army_power": "+{p} к мощи каждого бойца армии",
+    "contract_power": "наёмники по контракту сильнее на {p}",
     "income": "+{p} к доходу бизнеса",
     "build_discount": "постройка зданий дешевле на {p}",
     "upgrade_discount": "прокачка бизнеса дешевле на {p}",

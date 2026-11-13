@@ -80,6 +80,7 @@ class EconomyMods:
     # Магазин (контракты статистов, Джинчоль).
     contract_discount: float = 0.0
     contract_duration: float = 0.0
+    contract_power: float = 0.0  # Пеньгуан: наёмники сильнее
     contract_bonus: float = 0.0  # вместе с контрактом бесплатно приходит ещё эта доля бойцов
     contract_retain: float = 0.0  # эта доля выживших остаётся навсегда, когда контракт кончается
     # Системы развития.

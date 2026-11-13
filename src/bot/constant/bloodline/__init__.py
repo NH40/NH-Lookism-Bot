@@ -4,6 +4,7 @@ from bot.constant.bloodline.bloodline import (  # noqa: F401
     BLOODLINE_ELITE,
     BLOODLINE_GAPRYONG,
     BLOODLINE_HANSU,
+    BLOODLINE_PENGUAN,
     BLOODLINE_JINCHEOL,
     BLOODLINE_JINYEONG,
     BLOODLINE_KURODA,

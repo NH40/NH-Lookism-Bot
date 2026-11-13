@@ -14,6 +14,7 @@ from bot.constant.bloodline import (
     BLOODLINE_ELITE,
     BLOODLINE_GAPRYONG,
     BLOODLINE_HANSU,
+    BLOODLINE_PENGUAN,
     BLOODLINE_JINCHEOL,
     BLOODLINE_JINYEONG,
     BLOODLINE_KURODA,
@@ -179,6 +180,25 @@ LEVELS: dict[str, tuple[dict, ...]] = {
         _s(None, {"auto_tech_task": 1, "technique_quest_speed": 0.15, "tech_fragment_discount": 0.15, "dev_points": 0.25}, boost_all_techniques=0.08),
     ),
 }
+
+LEVELS[BLOODLINE_PENGUAN] = (
+    # Пеньгуана (пользователь 2026-11-13): игра через доход. Сила, влияние и доход растут от
+    # богатства (доход, районы, города — `services/penguan.wealth`); каждый уровень — своя механика.
+    _s(eco={"income": 0.05}, pg_attack=0.03),  # Деньги — сила: +атака от богатства
+    _e(contract_duration=0.5, contract_power=0.15),  # Золотые наёмники
+    _s(pg_bribe=0.08),  # Подкуп: на час реакции врага слабее
+    _s(pg_land_income=0.01, pg_city_income=0.02, pg_influence=0.02),  # Земля кормит, деньги — влияние
+    _s(pg_constructor=0.03),  # Конструктор статистов: до 3% мощи армии в сутки
+    _s(pg_chest=0.08, pg_bribe=0.04),  # Военная казна: на час +атака
+    _s(pg_recruit=0.5),  # Золотая вербовка: на час +50% бойцов
+    _s(pg_buyback=0.25),  # Выкуп павших: до 25% последнего боя
+    _s(pg_buyout=1),  # Выкуп района бота без боя
+    _s(  # Монополия и вершина: всё сильнее
+        eco={"income": 0.10},
+        pg_attack=0.03, pg_influence=0.02, pg_constructor=0.03, pg_buyback=0.15, pg_chest=0.07,
+        pg_bribe=0.08, pg_recruit=0.5, pg_monopoly=0.5, pg_monopoly_share=0.3,
+    ),
+)
 
 BLOODLINE_START_LEVEL = 1  # даётся при выборе
 

@@ -69,7 +69,11 @@ async def load_camp(session: AsyncSession, user_id: int, camp: str, *, for_updat
     # Наёмники по контракту воюют в своём лагере, пока контракт действует.
     for contract in await contract_repo.list_active(session, user_id, camp=camp, for_update=for_update):
         stacks.append(
-            CombatStack(key=(_KIND_CONTRACT, contract.id), unit_power=extra_unit_power(contract.rank, 0, 0), quantity=contract.quantity)
+            CombatStack(
+                key=(_KIND_CONTRACT, contract.id),
+                unit_power=extra_unit_power(contract.rank, 0, 0) * (1 + profile.eco.contract_power),  # Пеньгуан
+                quantity=contract.quantity,
+            )
         )
     # Сила игрока: +1% к мощи армии за ранг (raw-notes «Профиль») — на всех бойцах лагеря.
     multiplier = profile.power_percent / 100

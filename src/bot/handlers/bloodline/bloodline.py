@@ -117,6 +117,19 @@ async def cb_bloodline_view(callback: CallbackQuery) -> None:
 
 
 async def render_bloodline(session: AsyncSession, user_id: int):
+    """Экран родословной; у Пеньгуана сверху — вход в его механики."""
+    text, markup = await _render_bloodline(session, user_id)
+    if (await get_build(session, user_id)).pg:
+        from aiogram.types import InlineKeyboardButton
+
+        from bot.constant.penguan import CB_PG_OPEN
+        from bot.texts.penguan import BTN_PG
+
+        markup.inline_keyboard.insert(0, [InlineKeyboardButton(text=BTN_PG, callback_data=CB_PG_OPEN)])
+    return text, markup
+
+
+async def _render_bloodline(session: AsyncSession, user_id: int):
     state = await get_state(session, user_id)
     levels = "\n".join(
         (LEVEL_LINE_DONE if n <= state.level else LEVEL_LINE_LOCKED).format(n=n, effect=describe_level(spec, SPECIAL_EFFECTS))

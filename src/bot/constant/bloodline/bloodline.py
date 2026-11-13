@@ -12,6 +12,7 @@ BLOODLINE_SOPHIA = "sophia"
 BLOODLINE_KURODA = "kuroda"
 BLOODLINE_JINCHEOL = "jincheol"
 BLOODLINE_HANSU = "hansu"
+BLOODLINE_PENGUAN = "penguan"  # игра через доход (2026-11-13)
 BLOODLINES: tuple[str, ...] = (
     BLOODLINE_ELITE,
     BLOODLINE_MUJIN,
@@ -23,6 +24,7 @@ BLOODLINES: tuple[str, ...] = (
     BLOODLINE_KURODA,
     BLOODLINE_JINCHEOL,
     BLOODLINE_HANSU,
+    BLOODLINE_PENGUAN,
 )
 
 CB_BLOODLINE_LIST = "bloodline:list"

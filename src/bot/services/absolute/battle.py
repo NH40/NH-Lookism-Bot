@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config.absolute import ARIAN_BLOCK_SECONDS, MANAGER_COINS_BURN, MARISE_CLONE, MARISE_CLONE_CAP
 from bot.constant.absolute import ABS_MANAGER, ABS_MARISE
-from bot.constant.extra import CAMP_ATTACK
+from bot.constant.extra import CAMP_ATTACK, CAMP_DEFENSE
 from bot.constant.ledger import BATTLE_BOTS, BATTLE_PVP, REASON_ELITE_LOOT, REASON_MANAGER_BURN
 from bot.services.battle_log import record as record_battle
 from bot.db.models.user import User
@@ -23,9 +23,21 @@ from bot.utils.formatting import format_number
 _KIND_EXTRA = "x"  # ключ стопки статистов в бою (`services/district/army`)
 
 
+async def _remember_fallen(session: AsyncSession, user_id: int, camp: str, dead: dict) -> None:
+    """Пеньгуан: павшие для выкупа (`services/penguan.remember_fallen`)."""
+    if not dead:
+        return
+    from bot.services.penguan import remember_fallen
+
+    await remember_fallen(session, user_id, camp, dead)
+
+
 async def after_battle(session: AsyncSession, m, result, *, attacker_id: int, attacker_stacks=None,
                        defender_id: int | None = None, kind: str = "") -> tuple[str, ...]:
     lines: list[str] = []
+    await _remember_fallen(session, attacker_id, CAMP_ATTACK, result.attacker.dead)
+    if defender_id is not None:
+        await _remember_fallen(session, defender_id, CAMP_DEFENSE, result.defender.dead)
     attacker_abs = await active(session, attacker_id)
     defender_abs = frozenset() if defender_id is None or m.arian else await active(session, defender_id)
     if m.arian and defender_id is not None:

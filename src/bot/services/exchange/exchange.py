@@ -168,6 +168,18 @@ async def cancel_auction(session: AsyncSession, redis: Redis, user_id: int, auct
         await redis.delete(key)
 
 
+async def _pay_seller(session: AsyncSession, seller_id: int, res: str, price: int, fee: float) -> None:
+    """Продавцу — цена минус комиссия. Пеньгуан: своя комиссия меньше, а император-Пеньгуан получает
+    долю комиссии своих подданных (из комиссии — новых денег не появляется)."""
+    from bot.services.penguan import exchange_fee
+
+    fee, emperor_id, share = await exchange_fee(session, seller_id, fee)
+    commission = int(price * fee)
+    await grant(session, seller_id, res, price - commission)
+    if emperor_id is not None and int(commission * share) > 0:
+        await grant(session, emperor_id, res, int(commission * share))
+
+
 async def buy_lot(session: AsyncSession, redis: Redis, buyer_id: int, lot_id: int) -> Deal:
     key = await _lock(redis, buyer_id)
     try:
@@ -178,7 +190,7 @@ async def buy_lot(session: AsyncSession, redis: Redis, buyer_id: int, lot_id: in
             raise ExchangeError("own")
         if not await spend(session, buyer_id, lot.price_res, lot.price):
             raise ExchangeError("no_money", lot.price)
-        await grant(session, lot.seller_id, lot.price_res, lot.price - int(lot.price * EXCHANGE_LOT_COMMISSION))
+        await _pay_seller(session, lot.seller_id, lot.price_res, lot.price, EXCHANGE_LOT_COMMISSION)
         await give_item(session, buyer_id, lot.item_kind, lot.item_code, lot.amount)
         deal = Deal("lot", lot.item_kind, lot.item_code, lot.amount, lot.price_res, lot.price, lot.seller_id, buyer_id)
         await session.execute(delete(ExchangeLot).where(ExchangeLot.id == lot.id))
@@ -298,7 +310,7 @@ async def finish_auctions(session_factory: async_sessionmaker[AsyncSession]) -> 
                 # «Брокер» продавца (Бизнесмен): комиссия аукциона меньше.
                 seller_pos = (await get_build(session, a.seller_id)).positions
                 fee = EXCHANGE_AUCTION_COMMISSION * (1 - min(0.8, seller_pos.get("exchange_fee"))) if seller_pos is not None else EXCHANGE_AUCTION_COMMISSION
-                await grant(session, a.seller_id, a.price_res, a.current_bid - int(a.current_bid * fee))
+                await _pay_seller(session, a.seller_id, a.price_res, a.current_bid, fee)
                 deals.append(Deal("auction_sold", a.item_kind, a.item_code, a.amount, a.price_res, a.current_bid, a.seller_id, a.bidder_id))
             else:
                 await give_item(session, a.seller_id, a.item_kind, a.item_code, a.amount)

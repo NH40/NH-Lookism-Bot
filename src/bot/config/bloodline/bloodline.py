@@ -206,7 +206,7 @@ LEVELS[BLOODLINE_PENGUAN] = (
 # ~1.5 млн боёв). Умножают боевые числа уровней при загрузке (`config/development.scale_levels`): тексты и бой видят
 # одно и то же. Пользователь: слабое — сильнее, перекачанное — слабее, экономические специализации не трогать.
 BLOODLINE_BALANCE: dict[str, float] = {
-    BLOODLINE_MUJIN: 0.7,
+    BLOODLINE_MUJIN: 0.55,
     BLOODLINE_YAMAZAKI: 1.2,
     BLOODLINE_SOPHIA: 1.1,
     BLOODLINE_KURODA: 1.3,

@@ -73,18 +73,19 @@ def _s(combat: dict | None = None, eco: dict | None = None, **special) -> dict:
 
 LEVELS: dict[str, tuple[dict, ...]] = {
     # Преодоление: путь слабого против сильного. Чем сильнее противник, тем сильнее ты: разрыв мощи
+    # (2026-11-14, симуляция: без пробития урон слабого не проходил через прочность сильных билдов — пробитие по уровням)
     # закрывается по ходу боя, влияние усиливает армию, разница влияния — ещё раз. Шкала — за бои.
     PATH_OVERCOME: (
         _c(overcome=0.20, overcome_gap=0.10, overcome_gap_cap=0.75),
         _e(recruit_influence_cut=0.15, influence_bonus=0.05),
-        _c(influence_power=0.03, durability=0.05),
+        _c(influence_power=0.03, durability=0.05, pierce=0.05),
         _c(overcome=0.20, loss_save=0.04),
         _c(influence_gap=0.05, overcome_gap=0.05, overcome_gap_cap=0.75),
         _e(recruit_cap=50, influence_rank_cut=0.10),
-        _c(overcome=0.25, reduction=0.04),
+        _c(overcome=0.25, reduction=0.04, pierce=0.05),
         _c(influence_power=0.03, influence_gap=0.05),
-        _c(overcome_gap=0.10, overcome_gap_cap=1.5, durability=0.05),
-        _s({"overcome": 0.35, "attack": 0.05, "influence_power": 0.04}, {"recruit_cap": 100, "recruit_influence_cut": 0.15, "influence_bonus": 0.10}),
+        _c(overcome_gap=0.10, overcome_gap_cap=1.5, durability=0.05, pierce=0.05),
+        _s({"overcome": 0.35, "attack": 0.05, "influence_power": 0.04, "pierce": 0.10}, {"recruit_cap": 100, "recruit_influence_cut": 0.15, "influence_bonus": 0.10}),
     ),
     # Отчаяние: противоположность Преодоления. Побеждать слабых и сохранять себя: бафы против более
     # слабой армии, при победе выживает больше своих, ресурсы защищены. Шкала — за победы и убитых.
@@ -94,11 +95,11 @@ LEVELS: dict[str, tuple[dict, ...]] = {
         _c(despair=0.15, durability=0.05),
         _c(dominate=0.10, win_loss_save=0.06),
         _s({"loss_save": 0.05}, {"coin_protect": 0.25}),
-        _c(despair=0.20, reduction=0.05),
+        _c(despair=0.20, reduction=0.05, pierce=0.05),
         _c(dominate=0.15, attack=0.03),
         _s({"win_loss_save": 0.10}, {"coin_protect": 0.25}),
         _c(despair=0.20, dominate=0.10),
-        _c(despair=0.30, dominate=0.20, win_loss_save=0.16, durability=0.15, attack=0.10),
+        _c(despair=0.30, dominate=0.20, win_loss_save=0.16, durability=0.15, attack=0.10, pierce=0.10),
     ),
     # Отражение: шкала копится прямо в бою. Дошла до доли своей мощи — выброс; выбили половину и три
     # четверти армии — отдельный ответ. Между боями не хранится.
@@ -259,7 +260,7 @@ LEVELS: dict[str, tuple[dict, ...]] = {
 # ~1.5 млн боёв). Умножают боевые числа уровней при загрузке (`config/development.scale_levels`): тексты и бой видят
 # одно и то же. Пользователь: слабое — сильнее, перекачанное — слабее, экономические специализации не трогать.
 PATH_BALANCE: dict[str, float] = {
-    PATH_OVERCOME: 1.4,
+    PATH_OVERCOME: 1.25,
     PATH_DESPAIR: 1.8,
     PATH_REFLECTION: 1.2,
     PATH_ABSORPTION: 0.85,

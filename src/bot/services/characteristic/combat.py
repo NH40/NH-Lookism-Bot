@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config.absolute import KUROPATKA_REVIVE, OGURCHIK_ATTACK, OGURCHIK_REACTIONS, TABASKO_SUPPRESS
 from bot.constant.absolute import ABS_KUROPATKA, ABS_NIKITA, ABS_OGURCHIK, ABS_TABASKO
+from bot.config.game import BATTLE_PLAYER_BASE_HEAL
 from bot.services.combat.mods import CombatMods
 from bot.config.characteristic import (
     AGILITY_DODGE_PP_PER_RANK,
@@ -151,7 +152,7 @@ class CombatProfile:
             if spy_taken.special.get("disable_potions"):
                 total = total + self.build.potion_combat.scale(-1)
         absolutes = frozenset() if no_absolutes else self.build.absolutes
-        total = total + absolute_mods(absolutes)
+        total = total + absolute_mods(absolutes) + CombatMods(heal=BATTLE_PLAYER_BASE_HEAL)
         copy = positions.get("copy")
         if copy:  # «Адаптация»: копирует долю всех боевых источников противника
             battle = replace(

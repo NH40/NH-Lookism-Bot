@@ -40,7 +40,7 @@ export function OfferForm({ mode, cfg, onDone }: { mode: OfferMode; cfg: ExConfi
   return (
     <Panel title={TITLES[mode]} tone="gold" badgeMark={mode === "lot" ? "L" : mode === "auction" ? "A" : "T"}>
       <div className="muted ex-label">Что продаёшь</div>
-      <div className="grid-3">
+      <div className="grid-3 ex-picker">
         {cfg.resources.map((r) => (
           <button key={r.code} type="button" className={`pill ${item === "res:" + r.code ? "on" : ""}`} onClick={() => setItem("res:" + r.code)}>
             {r.label}

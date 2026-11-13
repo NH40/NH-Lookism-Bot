@@ -20,3 +20,6 @@
 .ex-trade { padding: 8px 0; border-bottom: 1px dashed var(--line-dash); display: flex; flex-direction: column; gap: 6px; }
 .ex-trade:last-child { border-bottom: none; }
 .ex-pager { font-size: 12px; font-weight: 700; }
+
+.ex-picker { max-height: 260px; overflow-y: auto; padding-right: 2px; }
+.ex-buy { min-height: 38px; font-size: 13px; margin-top: 8px; }

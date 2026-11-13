@@ -38,7 +38,7 @@ export function ClanHome({ data, clan, can, reload }: { data: ClanData; clan: Cl
 				<div className="chip clan-chip"><span className="muted">Казна</span><span className="disp" style={{ color: "var(--gold-2)" }}>{fmt(clan.treasury)}</span></div>
 				<div className="chip clan-chip"><span className="muted">Уровень</span><span className="disp" style={{ color: "var(--violet-2)" }}>{clan.donate_level}/{clan.max_donate_level}</span></div>
 			</div>
-			<div className="seg" role="tablist" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}>
+			<div className="seg" role="tablist" style={{ gridTemplateColumns: "repeat(6, minmax(0, 1fr))" }}>
 				{TABS.map((t) => (
 					<button key={t.code} type="button" role="tab" aria-selected={t.code === tab} className={`pill ${t.code === tab ? "on" : ""}`} style={{ minHeight: 44 }} onClick={() => setParams({ tab: t.code }, { replace: true })}>
 						{t.icon}

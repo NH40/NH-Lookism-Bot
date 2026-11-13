@@ -11,6 +11,11 @@ type Tech = Techs["items"][number];
 
 const STAGE_CHIP: Record<Tech["stage"], string> = { pay: "занятие", quest: "этапы", level: "уровень!", max: "макс" };
 
+/** Новое занятие — одно задание «этапы мини-игр» (3); старые квесты учителя — список заданий. */
+function isMinigame(t: Tech): boolean {
+  return t.tasks.length === 1 && t.tasks[0].need <= 3;
+}
+
 function stagesDone(t: Tech): [number, number] {
   const k = t.tasks[0];
   return k ? [k.done, k.need] : [0, 3];
@@ -65,7 +70,20 @@ export function TechniquesPanel({ d, run, busy }: { d: Techs; run: (path: string
                 </button>
               </>
             )}
-            {t.stage === "quest" && (() => {
+            {t.stage === "quest" && !isMinigame(t) && (
+              <>
+                <div className="tq-tasks">
+                  {t.tasks.map((k) => (
+                    <div key={k.label} className="stat">
+                      <span>{k.label}</span>
+                      <b>{fmt(k.done)}/{fmt(k.need)}</b>
+                    </div>
+                  ))}
+                </div>
+                <p className="tq-hint">Старое задание учителя — выполняется в игре, не сгорает.</p>
+              </>
+            )}
+            {t.stage === "quest" && isMinigame(t) && (() => {
               const [done, need] = stagesDone(t);
               return (
                 <>

@@ -30,3 +30,4 @@
 .tq-stages span { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; border: 2px solid rgba(255, 255, 255, 0.15); color: rgba(255, 255, 255, 0.5); }
 .tq-stages .done { border-color: #3ddc84; background: rgba(61, 220, 132, 0.2); color: #9ff0c0; }
 .tq-stages .next { border-color: #a78bfa; color: #fff; box-shadow: 0 0 10px rgba(167, 139, 250, 0.6); }
+.tq-tasks { padding: 4px 12px 0; }

@@ -3,12 +3,14 @@ import type { GuideData } from "../../types";
 import { BackHeader, Panel, Screen } from "../../components/ui";
 import { ROUTE_MORE } from "../../constants";
 import { useApi } from "../../hooks/useApi";
+import { imgUrl } from "../../api/api";
 import "./Guide.css";
 
 // Гайд — те же разделы и тексты, что /help в боте (HTML бота: <b>, <i>, переносы строк).
 export function GuidePage() {
   const { data, status, error } = useApi<GuideData>("/guide");
   const [code, setCode] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<string | null>(null);
   const current = data?.sections.find((s) => s.code === code) ?? data?.sections[0];
   return (
     <Screen status={status} error={error}>
@@ -24,7 +26,20 @@ export function GuidePage() {
           </div>
           <Panel title={current.title.toUpperCase()}>
             <div className="guide-body" dangerouslySetInnerHTML={{ __html: current.body.replace(/\n/g, "<br>") }} />
+            {!!current.images?.length && (
+              <div className="guide-sheets">
+                {current.images.map((p) => (
+                  <img key={p} src={imgUrl(p, 1280)} loading="lazy" alt="" onClick={() => setZoom(p)} />
+                ))}
+                <small className="muted">Нажми на картинку, чтобы открыть крупно.</small>
+              </div>
+            )}
           </Panel>
+          {zoom && (
+            <div className="guide-zoom" onClick={() => setZoom(null)}>
+              <img src={imgUrl(zoom, 1280)} alt="" />
+            </div>
+          )}
         </div>
       )}
     </Screen>

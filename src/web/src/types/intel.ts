@@ -40,5 +40,5 @@ export interface IntelData {
 }
 
 export interface GuideData {
-  sections: { code: string; title: string; body: string }[];
+  sections: { code: string; title: string; body: string; images?: string[] }[];
 }

@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/img", tags=["img"])
 
 ASSETS_DIR = Path(os.environ.get("ASSETS_DIR", "/app/assets")).resolve()
 THUMBS_DIR = Path(os.environ.get("THUMBS_DIR", "/app/thumbs")).resolve()
-_WIDTHS = (160, 320, 480, 720)  # фиксированный набор — нельзя забить диск произвольными размерами
+_WIDTHS = (160, 320, 480, 720, 1280)  # 1280 — листы гайда с мелким текстом  # фиксированный набор — нельзя забить диск произвольными размерами
 _CACHE = {"Cache-Control": "public, max-age=2592000, immutable"}
 
 

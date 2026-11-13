@@ -30,6 +30,7 @@ import {
   ROUTE_SHOP,
   ROUTE_TRAINING,
   ROUTE_MASTERY,
+  ROUTE_PLAY,
   ROUTE_TOP,
 } from "./constants";
 import { AdminPage, AdminPlayerPage, AdminSectionPage } from "./pages/Admin";
@@ -51,6 +52,7 @@ import { SettingsPage } from "./pages/Settings";
 import { ShopPage } from "./pages/Shop";
 import { TrainingPage } from "./pages/Training";
 import { MasteryPage } from "./pages/Mastery";
+import { MinigamePage } from "./pages/Minigame";
 import { EmpirePage } from "./pages/Empire";
 import { TravelPage } from "./pages/Travel";
 import { CountryPage } from "./pages/Country";
@@ -116,6 +118,7 @@ export function App() {
           <Route path={ROUTE_DEVELOPMENT} element={<DevelopmentPage />} />
           <Route path={ROUTE_TRAINING} element={<TrainingPage />} />
           <Route path={ROUTE_MASTERY} element={<MasteryPage />} />
+          <Route path={ROUTE_PLAY} element={<MinigamePage />} />
           <Route path={ROUTE_TOP} element={<TopPage />} />
           <Route path={ROUTE_QUESTS} element={<QuestsPage />} />
           <Route path={ROUTE_MORE} element={<MorePage />} />

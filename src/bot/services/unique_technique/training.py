@@ -17,8 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.db.repositories.unique_path import bump_training_reps
 from bot.services.build import get_build
 from bot.config.development import MAX_LEVEL
-from bot.config.unique_technique import eased_quest, tech_training_price, tech_training_quest, technique_level_cost
-from bot.constant.dev_quest import QUEST_TECH_LEVEL
+from bot.config.minigame import STAGES_PER_LEVEL
+from bot.config.unique_technique import tech_training_price, technique_level_cost
+from bot.constant.dev_quest import QUEST_TECH_LEVEL, TASK_MINIGAME
 from bot.db.repositories import business as business_repo
 from bot.db.repositories import unique_technique as tech_repo
 from bot.services.dev_quest import QuestView, list_active, start
@@ -95,7 +96,7 @@ async def list_trainings(session: AsyncSession, user_id: int) -> tuple[list[Tech
                 price=int(tech_training_price(nxt) * (1 - kpd)) if nxt else 0,
                 fragments_cost=technique_level_cost(nxt, fragment_discount) if nxt else 0,
                 quest=quests.get(_ref(code, nxt)) if nxt else None,
-                tasks=eased_quest(tech_training_quest(code, nxt), speed=speed + kpd / 2, skip=skip) if nxt else {},
+                tasks={TASK_MINIGAME: STAGES_PER_LEVEL} if nxt else {},
             )
         )
     return rows, fragments, wallet.nh_coins if wallet else 0
@@ -120,6 +121,13 @@ async def start_training(session: AsyncSession, user_id: int, code: str) -> Tech
         raise TrainingActiveError
     if not await start(session, user_id, QUEST_TECH_LEVEL, _ref(code, row.next_level), row.tasks):
         raise TrainingActiveError
+    # Бафы обучения (Хансу, путь тренировок): часть этапов мини-игр засчитана сразу, последний — всегда сам.
+    _, skip = quest_ease(await get_build(session, user_id))
+    if skip:
+        from bot.db.repositories import dev_quest as dq_repo
+
+        quest = await dq_repo.get_active_for_update(session, user_id, QUEST_TECH_LEVEL, _ref(code, row.next_level))
+        quest.progress = {TASK_MINIGAME: min(int(skip), STAGES_PER_LEVEL - 1)}
     if row.price and not await business_repo.spend_coins(session, user_id, row.price):
         await session.rollback()
         wallet = await business_repo.get_wallet(session, user_id)

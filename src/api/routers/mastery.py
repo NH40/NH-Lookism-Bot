@@ -152,31 +152,9 @@ async def get_mastery(
 
 
 @router.post("/tom")
-async def post_tom(
-    user_id: int = Depends(get_current_user_id),
-    session: AsyncSession = Depends(get_session),
-    redis: Redis = Depends(get_redis),
-) -> dict:
-    user = await _onboarded(session, user_id)
-    try:
-        result = await fight_tom(session, redis, user)
-    except QuestNotActiveError:
-        raise bad(QUEST_NOT_ACTIVE_ALERT)
-    except TomLockedError:
-        raise bad(TOM_LOCKED_ALERT)
-    except NoAttackersError:
-        raise bad(NO_ATTACKERS)
-    except BattleOnCooldownError as exc:
-        raise bad(f"Сражение ещё на кулдауне — через {format_countdown(exc.retry_after_seconds)}.")
-    return {
-        "message": "Победа над Томом Ли! Получено 4 очка мастерства — вкладывай." if result.won else "Поражение — Том оказался сильнее.",
-        "won": result.won,
-        "rounds": result.rounds,
-        "attacker_power": result.attacker_power,
-        "attacker_dead": result.attacker_dead,
-        "tom_power": result.tom_power,
-        "tom_remaining_power": result.tom_remaining_power,
-    }
+async def post_tom(user_id: int = Depends(get_current_user_id)) -> dict:
+    """Бой с Томом Ли заменён 4 мини-играми мастерства (`/api/minigame`, 2026-11-13)."""
+    raise bad("Том Ли заменён испытаниями мастерства — пройди 4 мини-игры.")
 
 
 class InvestIn(BaseModel):

@@ -12,7 +12,7 @@ from aiogram.enums import ChatType
 # Cache-Control — один и тот же URL после редеплоя может продолжать открывать СТАРЫЙ
 # index.html/JS, закэшированный клиентом раньше, чем на Caddy появился `no-cache`).
 # Приклеенный `?v=N` делает URL кнопки формально НОВЫМ при каждом бампе.
-MINI_APP_ASSET_VERSION = 12
+MINI_APP_ASSET_VERSION = 13
 
 
 def mini_app_url(base_url: str, *, view: str | None = None) -> str:
@@ -31,3 +31,8 @@ def resolve_mini_app_base_url(raw_url: str | None, chat_type: str) -> str | None
     if not raw_url or chat_type != ChatType.PRIVATE:
         return None
     return raw_url
+
+
+def play_url(base_url: str, ctx: str) -> str:
+    """Ссылка прямо на мини-игру (`/play?ctx=…`): Caddy отдаёт index.html на любой путь."""
+    return f"{base_url.rstrip('/')}/play?ctx={ctx}&v={MINI_APP_ASSET_VERSION}"

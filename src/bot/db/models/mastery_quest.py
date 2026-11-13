@@ -34,5 +34,7 @@ class MasteryQuest(Base):
     progress_extras: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")  # тренировки статистов
     progress_pvp_wins: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     equal_win: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    # Мини-игры вместо Тома Ли (2026-11-13): битовая маска пройденных — сила, скорость, выносливость, техника.
+    games_done: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     points_bought: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     points_free: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")

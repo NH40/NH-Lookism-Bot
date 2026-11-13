@@ -1,8 +1,9 @@
 import { Check, Lock, Plus, Shield, Swords, Zap, Gauge } from "lucide-react";
 import type { ReactNode } from "react";
 import type { MasteryData } from "../../types";
-import { BackHeader, Bar, Panel, Screen, StatRow, countdown, fmt, useCountdown } from "../../components/ui";
-import { ROUTE_DEVELOPMENT } from "../../constants/constants";
+import { BackHeader, Bar, Panel, Screen, StatRow, fmt } from "../../components/ui";
+import { ROUTE_DEVELOPMENT, ROUTE_PLAY } from "../../constants/constants";
+import { useNavigate } from "react-router-dom";
 import { useAction, useApi } from "../../hooks/useApi";
 import "./Mastery.css";
 
@@ -17,7 +18,7 @@ const ICONS: Record<string, ReactNode> = {
 export function MasteryPage() {
   const { data, status, error, reload } = useApi<MasteryData>("/mastery");
   const { run, busy } = useAction(reload);
-  const cd = useCountdown(data?.battle_cooldown_seconds ?? 0);
+  const navigate = useNavigate();
 
   return (
     <Screen status={status} error={error}>
@@ -91,14 +92,14 @@ export function MasteryPage() {
                 </div>
               ))}
               <div className="ms-tom">
-                <StatRow icon={<Swords size={16} color="#ff7a8a" />} label="Мощь Тома Ли" value={fmt(data.tom_power)} />
-                <div className="muted ms-note">Против Тома не работают блок и побег — бьётся лагерь атаки.</div>
+                <StatRow icon={<Swords size={16} color="#ff7a8a" />} label="Мощь испытаний" value={fmt(data.tom_power)} />
+                <div className="muted ms-note">4 мини-игры: сила, скорость, выносливость, техника — каждая +1 очко.</div>
                 <button
-                  className={`btn red block ${data.tom_unlocked && cd <= 0 ? "" : "off"}`}
-                  disabled={busy || !data.tom_unlocked || cd > 0}
-                  onClick={() => run("/mastery/tom")}
+                  className={`btn red block ${data.tom_unlocked ? "" : "off"}`}
+                  disabled={!data.tom_unlocked}
+                  onClick={() => navigate(`${ROUTE_PLAY}?ctx=m:all`)}
                 >
-                  {!data.tom_unlocked ? "Том откроется после остальных заданий" : cd > 0 ? `КД сражения ${countdown(cd)}` : "Сразиться с Томом Ли"}
+                  {data.tom_unlocked ? "🎮 Испытания мастерства" : "Испытания откроются после остальных заданий"}
                 </button>
               </div>
             </Panel>

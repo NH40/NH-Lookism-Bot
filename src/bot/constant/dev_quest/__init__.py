@@ -22,6 +22,7 @@ from bot.constant.dev_quest.dev_quest import (  # noqa: F401
     TASK_EXCHANGE_LIST,
     TASK_GARRISON,
     TASK_INCOME,
+    TASK_MINIGAME,
     TASK_PERSONAL_TRAIN,
     TASK_POKER_HAND,
     TASK_POTION,

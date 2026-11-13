@@ -38,6 +38,7 @@ TASK_STAT_INVEST = "stat_invest"  # поднять ранг характерис
 TASK_DEV_LEVEL = "dev_level"  # поднять уровень пути / техники / гениальности / родословной
 TASK_PVP_CHALLENGE = "pvp_call"  # бросить PvP-вызов
 TASK_BP_CLAIM = "bp_claim"  # забрать награду Battle Pass (за каждый уровень)
+TASK_MINIGAME = "minigame"  # этап мини-игры занятия техники (2026-11-13)
 TASK_INCOME = "income"  # заработать NHCoin бизнесом (n — сумма)
 TASKS: tuple[str, ...] = (
     TASK_WIN_PVE, TASK_WIN_PVP, TASK_BOSS_WIN, TASK_PERSONAL_TRAIN, TASK_TRAIN_EXTRAS,

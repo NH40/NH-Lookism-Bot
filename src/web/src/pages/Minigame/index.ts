@@ -1,0 +1,1 @@
+export { MinigamePage } from "./MinigamePage";

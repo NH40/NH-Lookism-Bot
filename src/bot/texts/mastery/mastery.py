@@ -50,7 +50,7 @@ TASK_TODO = "⬜ {label}"
 TASK_LOCKED = "🔒 {label} — после остальных заданий"
 TOM_HINT = "\n\n👊 Том Ли: мощь {power}. Против него не работают блок и побег — бьётся лагерь атаки."
 
-BTN_FIGHT_TOM = "⚔️ Сразиться с Томом Ли"
+BTN_FIGHT_TOM = "🎮 Испытания мастерства (4 мини-игры)"
 BTN_INVEST = "+ {label}"
 
 TOM_RESULT = (

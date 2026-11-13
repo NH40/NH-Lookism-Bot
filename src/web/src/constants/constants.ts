@@ -14,6 +14,7 @@ export const ROUTE_GUIDE = "/more/guide";
 export const ROUTE_DEVELOPMENT = "/development";
 export const ROUTE_TRAINING = "/development/training";
 export const ROUTE_MASTERY = "/development/mastery";
+export const ROUTE_PLAY = "/play"; // мини-игры: ?ctx=t:<техника> | m:all
 export const ROUTE_QUESTS = "/quests";
 export const ROUTE_MORE = "/more";
 export const ROUTE_SHOP = "/more/shop";

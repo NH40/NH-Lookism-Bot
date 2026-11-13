@@ -61,7 +61,7 @@ async def activate(session: AsyncSession, user_id: int, tom_power: int) -> bool:
             MasteryQuest.status == QUEST_PENDING,
             MasteryQuest.available_at <= func.now(),
         )
-        .values(status=QUEST_ACTIVE, tom_power=tom_power)
+        .values(status=QUEST_ACTIVE, tom_power=tom_power, games_done=0)
     )
     return result.rowcount > 0
 

@@ -1,11 +1,13 @@
 import { useState } from "react";
 import type { ExtrasResult, RanksResponse, TrainingResponse } from "../../types";
 import { BackHeader, Bar, Panel, Screen, countdown, fmt } from "../../components/ui";
-import { ROUTE_DEVELOPMENT } from "../../constants/constants";
+import { ROUTE_DEVELOPMENT, ROUTE_PLAY } from "../../constants/constants";
+import { useNavigate } from "react-router-dom";
 import { useAction, useApi } from "../../hooks/useApi";
 import "../../styles/development.css";
 
 export function TrainingPage() {
+  const navigate = useNavigate();
   const { data, status, error, reload } = useApi<TrainingResponse>("/training");
   const ranks = useApi<RanksResponse>("/training/ranks");
   const { run, busy } = useAction(() => {
@@ -193,7 +195,11 @@ export function TrainingPage() {
                       Оплатить тренировку · {fmt(t.price)} NHCoin
                     </button>
                   )}
-                  {t.stage === "quest" && <div className="muted" style={{ fontSize: 11, fontWeight: 700 }}>Квест учителя идёт — он не сгорает.</div>}
+                  {t.stage === "quest" && (
+                    <button className="btn violet block" onClick={() => navigate(`${ROUTE_PLAY}?ctx=t:${t.code}`)}>
+                      🎮 Пройти этапы занятия
+                    </button>
+                  )}
                   {t.stage === "level" && (
                     <button className={`btn gold block ${data.techniques!.fragments >= t.fragments_cost ? "" : "off"}`} disabled={busy || data.techniques!.fragments < t.fragments_cost} onClick={() => run("/training/technique/level", { code: t.code })}>
                       Уровень {t.next_level} · {fmt(t.fragments_cost)} фрагментов

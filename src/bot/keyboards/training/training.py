@@ -81,6 +81,11 @@ def tech_menu(code: str, stage: str, *, next_level: int | None, price: int, frag
     kb = []
     if stage == "pay":
         kb.append([InlineKeyboardButton(text=BTN_TECH_PAY.format(price=format_number(price)), callback_data=f"{CB_TRAIN_TECH_PAY_PREFIX}{code}")])
+    elif stage == "quest":
+        from bot.constant.training import CB_TRAIN_TECH_PLAY_PREFIX
+        from bot.texts.minigame import BTN_TECH_PLAY
+
+        kb.append([InlineKeyboardButton(text=BTN_TECH_PLAY, callback_data=f"{CB_TRAIN_TECH_PLAY_PREFIX}{code}")])
     elif stage == "level":
         kb.append([InlineKeyboardButton(
             text=BTN_TECH_LEVEL.format(next=next_level, fragments=format_number(fragments)), callback_data=f"{CB_TRAIN_TECH_LEVEL_PREFIX}{code}",

@@ -339,6 +339,16 @@ def mark_tom_defeated(quest: MasteryQuest) -> None:
     _grant_stage_points(quest)
 
 
+def grant_game_point(quest: MasteryQuest, bit: int) -> None:
+    """Мини-игра мастерства пройдена → +1 очко сразу; все 4 — этап закрыт (как победа над Томом). НЕ коммитит."""
+    quest.games_done |= bit
+    if quest.points_bought < MASTERY_POINTS_PER_STAGE:
+        quest.points_free += 1
+        quest.points_bought += 1
+    if quest.games_done == 0b1111:
+        _grant_stage_points(quest)
+
+
 def _grant_stage_points(quest: MasteryQuest) -> None:
     """Задания этапа закрыты: `trainer` + 4 очка. Повторно этап не выдаёт (`points_bought`)."""
     quest.status = QUEST_TRAINER

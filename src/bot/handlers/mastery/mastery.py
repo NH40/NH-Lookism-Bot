@@ -11,7 +11,6 @@ from aiogram.types import CallbackQuery
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.services.position_skill import journal_block
 from bot.constant.characteristic import MASTERIES
 from bot.constant.mastery import (
     CB_MASTERY_INVEST_PREFIX,
@@ -25,20 +24,15 @@ from bot.constant.mastery import (
     TASK_TOM,
 )
 from bot.config.mastery import MASTERY_LEVEL_CAP
-from bot.db.repositories.user import get_by_id
 from bot.keyboards.mastery import mastery_menu, open_mastery_menu
-from bot.services.district import BattleOnCooldownError, NoAttackersError, fight_tom
 from bot.services.gang import get_gang
 from bot.services.mastery import (
     MasteryCappedError,
     MasteryView,
     NoFreePointsError,
-    QuestNotActiveError,
-    TomLockedError,
     get_view,
     invest_point,
 )
-from bot.texts.district import BATTLE_COOLDOWN, NO_ATTACKERS
 from bot.texts.mastery import (
     CHAIN_COMPLETE_ALERT,
     FREE_POINTS_LINE,
@@ -51,7 +45,6 @@ from bot.texts.mastery import (
     QUEST_ACTIVE as QUEST_ACTIVE_TEXT,
     QUEST_COMPLETE as QUEST_COMPLETE_TEXT,
     QUEST_LOCKED,
-    QUEST_NOT_ACTIVE_ALERT,
     QUEST_PENDING as QUEST_PENDING_TEXT,
     QUEST_TRAINER as QUEST_TRAINER_TEXT,
     STAGE_FINISHED_ALERT,
@@ -64,10 +57,6 @@ from bot.texts.mastery import (
     TASK_TODO,
     TIER_LINE,
     TOM_HINT,
-    TOM_LOCKED_ALERT,
-    TOM_LOST,
-    TOM_RESULT,
-    TOM_WON,
 )
 from bot.texts.profile import MASTERY_LABELS, MASTERY_TIER_LABELS, NOT_ONBOARDED
 from bot.utils.formatting import format_countdown, format_number
@@ -154,37 +143,12 @@ async def cb_mastery_open(callback: CallbackQuery, session: AsyncSession) -> Non
 
 @router.callback_query(F.data == CB_MASTERY_TOM_FIGHT)
 async def cb_mastery_tom(callback: CallbackQuery, session: AsyncSession, redis: Redis) -> None:
-    user = await get_by_id(session, callback.from_user.id)
-    if user is None or user.city_id is None:
-        await callback.answer(NOT_ONBOARDED, show_alert=True)
-        return
-    # Popup-тексты — без HTML.
-    try:
-        result = await fight_tom(session, redis, user)
-    except QuestNotActiveError:
-        await callback.answer(QUEST_NOT_ACTIVE_ALERT, show_alert=True)
-        return
-    except TomLockedError:
-        await callback.answer(TOM_LOCKED_ALERT, show_alert=True)
-        return
-    except NoAttackersError:
-        await callback.answer(NO_ATTACKERS, show_alert=True)
-        return
-    except BattleOnCooldownError as exc:
-        await callback.answer(BATTLE_COOLDOWN.format(countdown=format_countdown(exc.retry_after_seconds)), show_alert=True)
-        return
-    await callback.answer()
-    await callback.message.answer(
-        TOM_RESULT.format(
-            headline=TOM_WON if result.won else TOM_LOST,
-            rounds=result.rounds,
-            power=format_number(result.attacker_power),
-            dead=format_number(result.attacker_dead),
-            tom_power=format_number(result.tom_power),
-            tom_left=format_number(result.tom_remaining_power),
-        ) + journal_block(result.journal),
-        reply_markup=open_mastery_menu(),
-    )
+    """Вместо боя с Томом Ли — 4 мини-игры мастерства в Mini App (пользователь 2026-11-13)."""
+    from bot.handlers.minigame import send_play
+    from bot.services.minigame import CTX_MASTERY
+    from bot.texts.minigame import PLAY_MASTERY
+
+    await send_play(callback, f"{CTX_MASTERY}:all", PLAY_MASTERY)
 
 
 @router.callback_query(F.data.startswith(CB_MASTERY_INVEST_PREFIX))

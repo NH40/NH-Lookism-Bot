@@ -10,7 +10,7 @@ from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config.development import MAX_LEVEL
-from bot.constant.training import CB_TRAIN_TECH_LEVEL_PREFIX, CB_TRAIN_TECH_OPEN, CB_TRAIN_TECH_PAY_PREFIX, CB_TRAIN_TECH_VIEW_PREFIX
+from bot.constant.training import CB_TRAIN_TECH_LEVEL_PREFIX, CB_TRAIN_TECH_OPEN, CB_TRAIN_TECH_PLAY_PREFIX, CB_TRAIN_TECH_PAY_PREFIX, CB_TRAIN_TECH_VIEW_PREFIX
 from bot.keyboards.training import tech_list_menu, tech_menu
 from bot.services.gang import get_gang
 from bot.services.unique_technique import (
@@ -94,6 +94,15 @@ async def _show_tech(callback: CallbackQuery, session: AsyncSession, code: str) 
         _, fragments, _ = await list_trainings(session, callback.from_user.id)
         text, markup = _render_tech(row, fragments)
     await safe_edit_text(callback.message, text, reply_markup=markup)
+
+
+@router.callback_query(F.data.startswith(CB_TRAIN_TECH_PLAY_PREFIX))
+async def cb_tech_play(callback: CallbackQuery) -> None:
+    from bot.handlers.minigame import send_play
+    from bot.services.minigame import CTX_TECH
+    from bot.texts.minigame import PLAY_TECH
+
+    await send_play(callback, f"{CTX_TECH}:{callback.data.removeprefix(CB_TRAIN_TECH_PLAY_PREFIX)}", PLAY_TECH)
 
 
 @router.callback_query(F.data == CB_TRAIN_TECH_OPEN)

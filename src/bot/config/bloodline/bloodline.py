@@ -10,6 +10,8 @@
 """
 from __future__ import annotations
 
+from bot.config.development.development import scale_levels
+
 from bot.constant.bloodline import (
     BLOODLINE_ELITE,
     BLOODLINE_GAPRYONG,
@@ -199,6 +201,18 @@ LEVELS[BLOODLINE_PENGUAN] = (
         pg_bribe=0.08, pg_recruit=0.5, pg_monopoly=0.5, pg_monopoly_share=0.3,
     ),
 )
+
+# Множители баланса — подобраны симуляцией 2026-11-14 (30 билдов уровня Никиты, турнир на настоящем движке боя,
+# ~1.5 млн боёв). Умножают боевые числа уровней при загрузке (`config/development.scale_levels`): тексты и бой видят
+# одно и то же. Пользователь: слабое — сильнее, перекачанное — слабее, экономические специализации не трогать.
+BLOODLINE_BALANCE: dict[str, float] = {
+    BLOODLINE_MUJIN: 0.7,
+    BLOODLINE_YAMAZAKI: 1.2,
+    BLOODLINE_SOPHIA: 1.1,
+    BLOODLINE_KURODA: 1.3,
+}
+LEVELS = scale_levels(LEVELS, BLOODLINE_BALANCE)
+
 
 BLOODLINE_START_LEVEL = 1  # даётся при выборе
 

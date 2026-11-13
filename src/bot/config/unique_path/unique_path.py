@@ -16,6 +16,8 @@
 """
 from __future__ import annotations
 
+from bot.config.development.development import scale_levels
+
 from bot.constant.unique_path import PATH_SOURCE_DAILY
 from bot.constant.dev_quest import (
     TASK_BOSS_WIN,
@@ -141,18 +143,18 @@ LEVELS: dict[str, tuple[dict, ...]] = {
         _s(memory_copy=0.20),
     ),
     # Бесконечная техника: несколько уникальных техник сразу. Сколько — решает шкала копирования
-    # (2, 3, 4, 5 техник, игрок выбирает сам), остальные изученные работают слабее.
+    # (2, 3, 4, 5 техник, игрок выбирает сам), выбранные работают на 6–25%, остальные изученные — нет.
     PATH_INFINITE: (
         _s(infinite_techniques=True),
         _c(dodge=0.02),
         _c(attack=0.03),
-        _s(infinite_power=0.05),
+        _s(infinite_power=0.02),
         _c(counter=0.03),
-        _s(infinite_rest=0.10),
+        _s(infinite_power=0.02),
         _c(dodge=0.02, attack=0.03),
-        _s(infinite_rest=0.05, infinite_power=0.05),
+        _s(infinite_power=0.02),
         _c(suppress=0.05),
-        _s(infinite_rest=0.05, infinite_power=0.10),
+        _s(infinite_power=0.03),
     ),
     # Предвидение: в бою уклонение, контратаки и побег, вне боя — разведка, шпионаж и безопасность.
     # Шкала открывает новые ступени разведки и прибавляет к боевым реакциям.
@@ -253,6 +255,22 @@ LEVELS: dict[str, tuple[dict, ...]] = {
     ),
 }
 
+# Множители баланса — подобраны симуляцией 2026-11-14 (30 билдов уровня Никиты, турнир на настоящем движке боя,
+# ~1.5 млн боёв). Умножают боевые числа уровней при загрузке (`config/development.scale_levels`): тексты и бой видят
+# одно и то же. Пользователь: слабое — сильнее, перекачанное — слабее, экономические специализации не трогать.
+PATH_BALANCE: dict[str, float] = {
+    PATH_OVERCOME: 1.4,
+    PATH_DESPAIR: 1.8,
+    PATH_REFLECTION: 1.2,
+    PATH_ABSORPTION: 0.85,
+    PATH_COPY: 0.8,
+    PATH_INFINITE: 0.8,
+    PATH_FORESIGHT: 1.1,
+    PATH_ADAPTATION: 1.15,
+}
+LEVELS = scale_levels(LEVELS, PATH_BALANCE)
+
+
 # «Подтверждение убеждений» приходит, когда сумма рангов четырёх характеристик (индексы в
 # RANK_LADDER) достигает порога — у кого потенциал выше, тому раньше (пользователь: «в
 # зависимости от потенциала и развития игрока»).
@@ -311,7 +329,9 @@ TRAINING_KPD_EXTRAS_PP = 20  # КПД 1.0 = +20 п.п. к шансам трен�
 
 # Путь Бесконечной техники (пользователь 2026-11-04): сколько техник активно одновременно решает
 # шкала копирования. Выбранные работают с этой силой (активная — 100%), уровни пути её поднимают.
-INFINITE_EXTRA_TECHNIQUE_POWER = 0.5
+# Симуляция 2026-11-14 (30 билдов уровня Никиты): при 70% у выбранных и 20% у остальных изученных путь стоил ×80 армии —
+# множители техник перемножаются. Теперь 6% + уровни (до 15%) + шкала (до 10%) = 25% на 10-м уровне, остальные не работают.
+INFINITE_EXTRA_TECHNIQUE_POWER = 0.06
 INFINITE_MIN_TECHNIQUES = 2
 INFINITE_MAX_TECHNIQUES = 5
 INFINITE_GAUGE_PER_TECHNIQUE = 33  # каждые 33 шкалы — ещё одна техника

@@ -6,4 +6,5 @@ from bot.config.development.development import (  # noqa: F401
     PATH_MEMORY_SIZE,
     PATH_MEMORY_WEIGHTS,
     awakening_multiplier,
+    scale_levels,
 )

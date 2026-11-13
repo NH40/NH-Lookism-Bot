@@ -8,6 +8,8 @@
 """
 from __future__ import annotations
 
+from bot.config.development.development import scale_levels
+
 from bot.constant.dev_quest import (
     TASK_BOSS_WIN,
     TASK_PERSONAL_TRAIN,
@@ -234,6 +236,26 @@ LEVELS: dict[str, tuple[dict, ...]] = {
 # Шкалы техник (как у путей, `config/path_gauge`): хранятся в `user_techniques.gauge`, потолок —
 # `GAUGE_CAP_PER_LEVEL` × уровень техники. Бафы — при полной шкале. CQC: стартовые стаки (бой
 # начинается так, будто эта доля врага уже убита) и кровотечение; растёт за убитых в боях.
+# Множители баланса — подобраны симуляцией 2026-11-14 (30 билдов уровня Никиты, турнир на настоящем движке боя,
+# ~1.5 млн боёв). Умножают боевые числа уровней при загрузке (`config/development.scale_levels`): тексты и бой видят
+# одно и то же. Пользователь: слабое — сильнее, перекачанное — слабее, экономические специализации не трогать.
+TECHNIQUE_BALANCE: dict[str, float] = {
+    TECH_INVISIBLE: 1.3,
+    TECH_NINJUTSU: 0.8,
+    TECH_OVERCOME: 1.3,
+    TECH_KYOKUSHIN: 0.75,
+    TECH_TAEKWONDO: 1.2,
+    TECH_MA_TAESU: 1.5,
+    TECH_ONE_STEP: 1.2,
+    TECH_BLADE_HANDS: 0.8,
+    TECH_MUAY_THAI: 1.1,
+    TECH_MIDNIGHT: 0.75,
+    TECH_CQC: 1.8,
+    TECH_SEIRIM: 1.3,
+}
+LEVELS = scale_levels(LEVELS, TECHNIQUE_BALANCE)
+
+
 TECH_GAUGES: dict[str, dict] = {
     TECH_CQC: {"cqc_start": 0.25, "bleed": 0.05},
 }

@@ -66,7 +66,7 @@ PATH_GAUGES: dict[str, GaugeSpec] = {
     # За бои с другими игроками. Сила копии растёт, Джинен ускоряет.
     PATH_COPY: GaugeSpec(combat={"attack": 0.15}, special={"memory_copy": 0.40}),
     # Та же шкала копирования: определяет, сколько техник активно (`config/unique_path`).
-    PATH_INFINITE: GaugeSpec(special={"infinite_power": 0.10}),
+    PATH_INFINITE: GaugeSpec(special={"infinite_power": 0.05}),  # было 0.10 — симуляция 2026-11-14
     # За бои и разведку: реакции в бою и ступени разведки, шпионажа и безопасности.
     PATH_FORESIGHT: GaugeSpec(
         combat={"dodge": 0.08, "counter": 0.08, "loss_save": 0.05},
@@ -86,6 +86,18 @@ PATH_GAUGES: dict[str, GaugeSpec] = {
     # За заработанные деньги: доход, пассивный доход, фрагменты.
     PATH_BUSINESS: GaugeSpec(eco={"income": 0.40, "passive_income": 3000, "fragment_bonus": 0.30}),
 }
+
+
+# Шкала усиливается вместе с путём (`config/unique_path.PATH_BALANCE`).
+def _balanced(gauges: dict[str, GaugeSpec]) -> dict[str, GaugeSpec]:
+    from dataclasses import replace
+
+    from bot.config.unique_path.unique_path import PATH_BALANCE
+
+    return {code: replace(g, combat={f: round(v * PATH_BALANCE.get(code, 1.0), 4) for f, v in g.combat.items()}) for code, g in gauges.items()}
+
+
+PATH_GAUGES = _balanced(PATH_GAUGES)
 
 
 def gauge_cap(level: int) -> float:

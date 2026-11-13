@@ -54,6 +54,7 @@ from bot.config.game import (
     BATTLE_BREAK_DECAY,
     BATTLE_CQC_CAP,
     BATTLE_CQC_CROWD_CAP,
+    BATTLE_COPY_MAX,
     BATTLE_GRAB_SHARE_MAX,
     BATTLE_STUN_MAX,
     BATTLE_FIRST_STRIKE_MAX,
@@ -523,7 +524,9 @@ def _heal(side: _Side, opponent: _Side, rng: Random) -> None:
     if m.heal_vs_weak and side.avg_unit_power() > 0:
         weakness = max(0.0, min(1.0, 1 - opponent.avg_unit_power() / max(side.initial_avg, 1e-9)))
         fraction += m.heal_vs_weak * weakness
-    fraction = min(BATTLE_HEAL_MAX, fraction)
+    # Общий потолок с «павшие встали и ударили» (техника Преодоления): оба поднимают из тех же павших раунда, вместе —
+    # не больше `BATTLE_HEAL_MAX` (симуляция 2026-11-14: сумма давала Муджину с техникой Преодоления ×6 армии).
+    fraction = min(BATTLE_HEAL_MAX - min(BATTLE_REVIVE_STRIKE_MAX, max(0.0, m.revive_strike)), fraction)
     if fraction <= 0:
         return
     for key, count in side.round_dead.items():
@@ -690,7 +693,7 @@ def _copied(build: BattleBuild, opponent: BattleBuild) -> CombatMods:
     if not build.copy_sources or not build.copy_strength:
         return CombatMods()
     picked = [mods for source, mods in opponent.by_source if source in build.copy_sources]
-    return sum_mods(picked).scale(build.copy_strength)
+    return sum_mods(picked).scale(min(BATTLE_COPY_MAX, build.copy_strength))
 
 
 def _loss_save(side: _Side, opponent: _Side) -> float:

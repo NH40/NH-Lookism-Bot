@@ -11,6 +11,8 @@
 """
 from __future__ import annotations
 
+from bot.config.development.development import scale_levels
+
 from bot.constant.genius import (
     GENIUS_BUSINESS,
     GENIUS_CHARISMA,
@@ -125,13 +127,13 @@ LEVELS: dict[str, tuple[dict, ...]] = {
     # Гений медицины (2026-10-04): кроме боевой медицины — зелья. Открывает тиры III–VII,
     # удешевляет, продлевает и усиливает зелья, даёт слоты авто-зелий (`config/potion`).
     GENIUS_MEDICINE: (
-        _ce({"loss_save": 0.03}, {"potion_tier": 3, "potion_discount": 0.03}),
+        _ce({"loss_save": 0.03}, {"potion_tier": 5, "potion_discount": 0.03}),
         _ce({"heal": 0.03}, {"potion_discount": 0.03, "potion_duration": 0.05}),
-        _ce({"loss_save": 0.03}, {"potion_tier": 4, "potion_discount": 0.03}),
+        _ce({"loss_save": 0.03}, {"potion_discount": 0.03}),
         _ce({"heal": 0.03}, {"potion_discount": 0.03, "potion_duration": 0.05, "potion_power": 0.05}),
-        _ce({"durability": 0.05}, {"potion_tier": 5, "potion_discount": 0.03}),
+        _ce({"durability": 0.05}, {"potion_tier": 6, "potion_discount": 0.03}),
         _ce({"loss_save": 0.04}, {"potion_auto": 1, "potion_discount": 0.03, "potion_duration": 0.05}),
-        _ce({"heal": 0.04}, {"potion_tier": 6, "potion_discount": 0.03, "potion_power": 0.05}),
+        _ce({"heal": 0.04}, {"potion_discount": 0.03, "potion_power": 0.05}),
         _ce({"reduction": 0.03}, {"potion_auto": 2, "potion_discount": 0.03, "potion_duration": 0.05}),
         _ce({"loss_save": 0.05}, {"potion_discount": 0.03, "potion_power": 0.05}),
         _ce({"heal": 0.06, "loss_save": 0.05}, {"potion_tier": 7, "potion_auto": 3, "potion_discount": 0.03, "potion_duration": 0.10, "potion_power": 0.10}),
@@ -163,6 +165,18 @@ LEVELS: dict[str, tuple[dict, ...]] = {
 }
 
 # Прокачка: цена следующего уровня во фрагментах гениальности (уровень 1 — даром).
+# Множители баланса — подобраны симуляцией 2026-11-14 (30 билдов уровня Никиты, турнир на настоящем движке боя,
+# ~1.5 млн боёв). Умножают боевые числа уровней при загрузке (`config/development.scale_levels`): тексты и бой видят
+# одно и то же. Пользователь: слабое — сильнее, перекачанное — слабее, экономические специализации не трогать.
+GENIUS_BALANCE: dict[str, float] = {
+    GENIUS_WEAPONS: 1.6,
+    GENIUS_TACTICS: 1.6,
+    GENIUS_MEDICINE: 0.7,
+    GENIUS_OBSERVATION: 1.3,
+}
+LEVELS = scale_levels(LEVELS, GENIUS_BALANCE)
+
+
 GENIUS_LEVEL_COST_PER_LEVEL = 15  # 2-й — 30, 10-й — 150; до 10-го — 810 фрагментов
 
 

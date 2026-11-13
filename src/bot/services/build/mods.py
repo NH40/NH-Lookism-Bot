@@ -92,7 +92,7 @@ class EconomyMods:
     blood_bonus: float = 0.0  # +доля капель крови
     medicine_discount: float = 0.0  # скидка на уровни гения медицины (Джинен)
     # Зелья (гений медицины, `config/potion`).
-    potion_tier: int = 0  # открытый тир зелий (I–II доступны всем)
+    potion_tier: int = 0  # открытый тир зелий (I–IV доступны всем, `POTION_BASE_MAX_TIER`)
     potion_discount: float = 0.0  # зелья дешевле
     potion_duration: float = 0.0  # зелья действуют дольше
     potion_power: float = 0.0  # эффекты зелий сильнее

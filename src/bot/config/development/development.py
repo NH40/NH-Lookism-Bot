@@ -33,3 +33,24 @@ OVERCOME_RESONANCE: dict[int, dict[str, dict[str, float]]] = {
 PATH_MEMORY_SIZE = 5
 # Доля способностей противника из памяти по свежести: прошлый — 3/5, позапрошлый — 2/5 …
 PATH_MEMORY_WEIGHTS: tuple[float, ...] = (0.6, 0.4, 0.3, 0.2, 0.1)
+
+
+# Боевые поля, которые задают не силу, а порог/потолок/длительность, — множители баланса их не трогают.
+_UNSCALED = frozenset({
+    "rush_rounds", "overcome_gap_cap", "ramp_cap", "rapid_cap", "adapt_threshold", "reflect_burst_at", "reflect_every", "no_dodge",
+})
+
+
+def scale_levels(levels: dict[str, tuple[dict, ...]], scales: dict[str, float]) -> dict[str, tuple[dict, ...]]:
+    """Множители баланса (подобраны симуляцией) к боевым числам уровней: `{код: множитель}`. Применяются при
+    загрузке конфига, поэтому тексты уровней и бой видят одни и те же числа."""
+    out = dict(levels)
+    for code, k in scales.items():
+        if code not in out or k == 1:
+            continue
+        out[code] = tuple(
+            {**spec, "combat": {f: (round(v * k, 4) if isinstance(v, float) and f not in _UNSCALED else v)
+                                for f, v in spec.get("combat", {}).items()}} if spec.get("combat") else spec
+            for spec in out[code]
+        )
+    return out

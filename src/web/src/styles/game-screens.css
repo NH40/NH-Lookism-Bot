@@ -79,7 +79,7 @@
 .pick-name { font-size: 13px; font-weight: 800; }
 .pick-sub { font-size: 11px; font-weight: 700; color: var(--muted); }
 
-.reveal-art { width: 100%; max-width: 300px; margin: 0 auto 12px; border-radius: 8px; overflow: hidden; border: 1px solid var(--gold); box-shadow: 0 0 20px rgba(245, 185, 66, 0.35); background: rgba(2, 8, 24, 0.8); }
+.reveal-art { flex: none; align-self: center; width: 82%; max-width: 320px; margin: 0 auto 12px; border-radius: 8px; overflow: hidden; border: 1px solid var(--gold); box-shadow: 0 0 20px rgba(245, 185, 66, 0.35); background: rgba(2, 8, 24, 0.8); }
 .reveal-art img { width: 100%; height: auto; max-height: 52vh; object-fit: contain; display: block; }
 /* Карточка уника в шторке — арт целиком (2026-11-14: раньше миниатюра 44×56 с обрезкой). */
 .card-hero { max-width: 280px; margin: 0 auto 10px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: rgba(2, 8, 24, 0.8); }

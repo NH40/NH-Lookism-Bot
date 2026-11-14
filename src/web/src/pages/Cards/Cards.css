@@ -33,3 +33,48 @@
 .abs-text { margin-top: 4px; font-size: 13px; font-weight: 700; line-height: 1.45; }
 .abs-choices { margin-top: 10px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .abs-choices .pill { min-height: 38px; font-size: 11px; }
+
+
+/* 2026-11-14 (пользователь): большие вертикальные карты по 3 в ряд, как в карточных играх. */
+.cgrid .ccard { height: auto; aspect-ratio: 2 / 3; }
+.cgrid .ccard img { object-position: 50% 0; }
+.cgrid .ccard .cap { font-size: 11px; padding: 18px 5px 5px; }
+.cgrid .ccard .cap div { font-family: var(--font-mono); font-size: 10.5px; }
+.cgrid .ccard .pos, .cgrid .ccard .free { font-size: 9px; }
+
+/* Карточка уника: арт целиком. Ширина явная — в шторке (flex-колонка) блок без ширины схлопывался в ноль. */
+.sheet .card-hero { flex: none; width: 82%; max-width: 340px; align-self: center; margin: 0 auto 12px; border-radius: 8px; overflow: hidden;
+  border: 2px solid #7fd4ff; box-shadow: 0 0 22px rgba(127, 212, 255, 0.3); background: rgba(2, 8, 24, 0.8); }
+.sheet .card-hero.r-gold { border-color: #f5c96a; box-shadow: 0 0 22px rgba(245, 201, 106, 0.35); }
+.sheet .card-hero.r-violet { border-color: #d6c2ff; box-shadow: 0 0 22px rgba(214, 194, 255, 0.3); }
+.sheet .card-hero.r-green { border-color: #8ff0b8; box-shadow: 0 0 22px rgba(143, 240, 184, 0.3); }
+.sheet .card-hero img { display: block; width: 100%; height: auto; max-height: none; object-fit: contain; }
+.cd-head { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 6px; text-align: center; }
+.cd-rarity { padding: 2px 10px; border-radius: 3px; font-family: var(--font-display); font-size: 11px; font-weight: 800; letter-spacing: 0.1em;
+  text-transform: uppercase; color: #bfe6ff; border: 1px solid rgba(127, 212, 255, 0.5); background: rgba(127, 212, 255, 0.1); }
+.cd-rarity.r-gold { color: #f5c96a; border-color: rgba(245, 201, 106, 0.6); background: rgba(245, 201, 106, 0.1); }
+.cd-rarity.r-violet { color: #d6c2ff; border-color: rgba(214, 194, 255, 0.6); background: rgba(214, 194, 255, 0.1); }
+.cd-rarity.r-green { color: #8ff0b8; border-color: rgba(143, 240, 184, 0.6); background: rgba(143, 240, 184, 0.1); }
+.cd-power { display: flex; align-items: baseline; gap: 6px; }
+.cd-power small { font-size: 11px; font-weight: 700; color: var(--muted); }
+.cd-power b { font-family: var(--font-mono); font-size: 24px; font-weight: 800; color: #fff; text-shadow: 0 0 14px rgba(127, 212, 255, 0.6); }
+.cd-camps { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.cd-camps span { padding: 4px 9px; border-radius: 4px; font-size: 11.5px; font-weight: 700; color: var(--muted); background: var(--card); border: 1px solid var(--line-soft); }
+.cd-camps b { color: var(--text); font-family: var(--font-mono); }
+
+/* Выбор на позицию — сетка по 3 карты с мощью. */
+.pick-grid { flex: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.pcard { position: relative; aspect-ratio: 2 / 3; padding: 0; overflow: hidden; border-radius: 6px; border: 1px solid #7fd4ff;
+  background: rgba(14, 24, 62, 0.8); color: var(--text); cursor: pointer; text-align: left; }
+.pcard.r-gold { border-color: #f5c96a; } .pcard.r-violet { border-color: #d6c2ff; } .pcard.r-green { border-color: #8ff0b8; }
+.pcard:active { transform: scale(0.97); }
+.pcard:disabled { opacity: 0.5; }
+.pcard img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
+.pcard-power { position: absolute; top: 4px; right: 4px; padding: 1px 6px; border-radius: 4px; font-family: var(--font-mono); font-size: 10.5px;
+  font-weight: 800; color: var(--gold-2); background: rgba(2, 4, 12, 0.85); }
+.pcard-skills { position: absolute; top: 4px; left: 4px; padding: 1px 5px; border-radius: 4px; font-size: 9px; font-weight: 800; color: #bfe6ff;
+  background: rgba(2, 4, 12, 0.85); }
+.pcard-cap { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; padding: 18px 5px 5px;
+  background: linear-gradient(180deg, transparent, rgba(2, 4, 12, 0.95)); }
+.pcard-cap b { font-size: 11px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pcard-cap small { font-size: 9.5px; font-weight: 700; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

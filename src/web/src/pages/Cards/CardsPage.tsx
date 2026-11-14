@@ -238,7 +238,7 @@ export function CardsPage() {
             ))}
           </div>
 
-          <div className="grid-4">
+          <div className="grid-3 cgrid">
             {shown.map((c) => {
               const pos = c.positions.map((p) => shortLabel(labels[p] ?? p));
               return (
@@ -272,14 +272,16 @@ export function CardsPage() {
 
       {openedCard && (
         <Sheet title={openedCard.name} onClose={() => setOpened(null)}>
-          {openedCard.image && <div className="card-hero"><img src={imgUrl(openedCard.image, 480)} alt={openedCard.name} /></div>}
-          <div className="pick-row" style={{ cursor: "default" }}>
-            <div style={{ flex: 1 }}>
-              <div className="pick-name">{openedCard.rarity_label} · мощь {fmt(openedCard.power)}</div>
-              <div className="pick-sub">
-                ⚔️ в атаке {openedCard.attack} · 🛡 в защите {openedCard.defense}
-                {openedCard.placed.length ? ` · на позициях ${openedCard.placed.length}` : ""}
-              </div>
+          {openedCard.image && (
+            <div className={`card-hero ${RARITY_TONE[openedCard.rarity] ?? ""}`}><img src={imgUrl(openedCard.image, 640)} alt={openedCard.name} /></div>
+          )}
+          <div className="cd-head">
+            <span className={`cd-rarity ${RARITY_TONE[openedCard.rarity] ?? ""}`}>{openedCard.rarity_label}</span>
+            <div className="cd-power"><small>мощь</small><b>{fmt(openedCard.power)}</b></div>
+            <div className="cd-camps">
+              <span>⚔️ в атаке <b>{openedCard.attack}</b></span>
+              <span>🛡 в защите <b>{openedCard.defense}</b></span>
+              {openedCard.placed.length > 0 && <span>📍 на позициях <b>{openedCard.placed.length}</b></span>}
             </div>
           </div>
           {openedCard.absolute_perk ? (
@@ -332,17 +334,19 @@ export function CardsPage() {
               Нет подходящих карт. Крути уников на экране «Банда».
             </div>
           ) : (
-            choices.map((c) => (
-              <button key={c.code} className="pick-row" type="button" disabled={busy} onClick={() => assign(c.code)}>
-                <div className="pick-thumb">{c.image && <img src={imgUrl(c.image, 160)} alt="" loading="lazy" />}</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="pick-name">{c.name}</div>
-                  <div className="pick-sub">
-                    {c.rarity_label} · мощь {fmt(c.power)} · навыков {(c.skills[current.position] ?? []).length} · {c.free > 0 ? `свободно ${c.free}` : `переедет с «${labels[c.placed[0]] ?? c.placed[0]}»`}
-                  </div>
-                </div>
-              </button>
-            ))
+            <div className="pick-grid">
+              {choices.map((c) => (
+                <button key={c.code} className={`pcard ${RARITY_TONE[c.rarity] ?? ""}`} type="button" disabled={busy} onClick={() => assign(c.code)}>
+                  {c.image && <img src={imgUrl(c.image, 320)} alt={c.name} loading="lazy" />}
+                  <span className="pcard-power">{fmt(c.power)}</span>
+                  <span className="pcard-skills">навыков {(c.skills[current.position] ?? []).length}</span>
+                  <span className="pcard-cap">
+                    <b>{c.name}</b>
+                    <small>{c.free > 0 ? `свободно ${c.free}` : `с «${labels[c.placed[0]] ?? c.placed[0]}»`}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
           )}
         </Sheet>
       )}

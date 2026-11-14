@@ -49,3 +49,7 @@
 .lg-buffs { display: flex; flex-wrap: wrap; gap: 5px; }
 .lg-buffs span { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 3px; border: 1px solid rgba(var(--lg), 0.25); font-size: 10.5px; font-weight: 700; color: var(--lg-2); background: rgba(var(--lg), 0.12); }
 .lg-buffs .off { color: rgba(255, 255, 255, 0.5); background: rgba(255, 255, 255, 0.05); }
+
+/* Узкий экран (телефон): характеристики в одну колонку — «Infinity» не налезает на соседнюю (2026-11-14). */
+@media (max-width: 440px) { .pf-stats { grid-template-columns: minmax(0, 1fr); } }
+.pf-stats .stat b { white-space: nowrap; }

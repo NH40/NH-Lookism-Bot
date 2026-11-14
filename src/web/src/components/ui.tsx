@@ -3,6 +3,7 @@
 import { ChevronLeft, Loader2, ShieldAlert, AlertTriangle } from "lucide-react";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
 import type { LoadStatus } from "../hooks/useApi";
 
 type Tone = "blue" | "gold" | "violet" | "green" | "red";
@@ -122,11 +123,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={push}>
       {children}
-      <div className="toast-wrap" aria-live="polite">
-        {items.map((t) => (
-          <div key={t.id} className={`toast ${t.kind}`} style={{ whiteSpace: "pre-line" }}>{t.text}</div>
-        ))}
-      </div>
+      {createPortal(
+        <div className="toast-wrap" aria-live="polite">
+          {items.map((t) => (
+            <div key={t.id} className={`toast ${t.kind}`} style={{ whiteSpace: "pre-line" }}>{t.text}</div>
+          ))}
+        </div>,
+        document.body,
+      )}
     </ToastContext.Provider>
   );
 }

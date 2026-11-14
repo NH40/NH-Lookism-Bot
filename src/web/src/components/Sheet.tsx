@@ -1,14 +1,16 @@
 import { X } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
-/** Нижняя шторка (bottom sheet): затемнение + панель; закрывается тапом по фону, крестиком и Esc. */
+/** Нижняя шторка (bottom sheet): затемнение + панель; закрывается тапом по фону, крестиком и Esc. Рендерится в <body>
+ * (портал): иначе окно с анимацией/transform становилось рамкой для position: fixed и шторка пряталась внутри него. */
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-  return (
+  return createPortal(
     <div className="sheet-back" onClick={onClose} role="presentation">
       <div className="sheet" role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grip" />
@@ -20,6 +22,7 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

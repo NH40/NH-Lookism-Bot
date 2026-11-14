@@ -81,7 +81,9 @@ a { color: var(--cyan); }
   gap: 20px;
 }
 /* Окна открываются по очереди — «Система выводит окна». */
-.page > * { animation: sys-open 0.38s cubic-bezier(0.2, 0.9, 0.25, 1) both; }
+/* fill `backwards`, не `both`: с `both` браузер держит окно «анимированным» и после анимации, и оно становится рамкой для
+   position: fixed внутри — шторки (ввод своего числа и т.п.) открывались внутри окна, за экраном. */
+.page > * { animation: sys-open 0.38s cubic-bezier(0.2, 0.9, 0.25, 1) backwards; }
 .page > *:nth-child(2) { animation-delay: 0.04s; }
 .page > *:nth-child(3) { animation-delay: 0.08s; }
 .page > *:nth-child(4) { animation-delay: 0.12s; }
@@ -313,7 +315,7 @@ a { color: var(--cyan); }
 }
 .skeleton::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent, rgba(79, 216, 255, 0.18), transparent); transform: translateY(-100%); animation: sys-scan 1.3s ease-in-out infinite; }
 @keyframes sys-scan { to { transform: translateY(100%); } }
-.toast-wrap { position: fixed; left: 14px; right: 14px; bottom: calc(var(--nav-h) + 22px + env(safe-area-inset-bottom)); z-index: 40; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.toast-wrap { position: fixed; left: 14px; right: 14px; bottom: calc(var(--nav-h) + 22px + env(safe-area-inset-bottom)); z-index: 60; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
 .toast {
   position: relative; max-width: 520px; margin: 0 auto; width: 100%; padding: 26px 14px 12px;
   border: 1px solid var(--line); border-radius: 6px;
@@ -340,12 +342,13 @@ a { color: var(--cyan); }
 
 /* --- Поля ввода: терминал Системы --- */
 input, select, textarea { font-family: inherit; }
-.page input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .page select, .page textarea {
+.page input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .page select, .page textarea,
+.sheet input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .sheet select, .sheet textarea {
   border-radius: 5px; border: 1px solid var(--line-soft); background: rgba(2, 8, 24, 0.75); color: #fff;
   font-family: var(--font-mono); font-weight: 700; caret-color: var(--cyan);
 }
-.page input:focus, .page select:focus, .page textarea:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(79, 216, 255, 0.14), 0 0 14px rgba(79, 216, 255, 0.25); }
-.page input::placeholder, .page textarea::placeholder { color: var(--dim); }
+.page input:focus, .page select:focus, .page textarea:focus, .sheet input:focus, .sheet select:focus, .sheet textarea:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(79, 216, 255, 0.14), 0 0 14px rgba(79, 216, 255, 0.25); }
+.page input::placeholder, .page textarea::placeholder, .sheet input::placeholder { color: var(--dim); }
 
 @media (prefers-reduced-motion: reduce) {
   .spin, .skeleton::after, .toast, .page > *, .portrait::after { animation: none; }

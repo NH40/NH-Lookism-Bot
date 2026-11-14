@@ -87,12 +87,12 @@ class TechTaskOut(BaseModel):
     need: int
 
 
-def _tech_image(code: str) -> str | None:
-    """Путь картинки учителя техники относительно assets/ (`utils/event_art`)."""
+def _tech_image(code: str, kind: str | None = None) -> str | None:
+    """Путь картинки учителя (техники или школы — `kind`) относительно assets/ (`utils/event_art`)."""
     from bot.constant.event import EVENT_TEACHER
     from bot.utils.event_art import event_art_path
 
-    path = event_art_path(EVENT_TEACHER, code)
+    path = event_art_path(kind or EVENT_TEACHER, code)
     if path is None or "assets" not in path.parts:
         return None
     return "/".join(path.parts[path.parts.index("assets") + 1 :])
@@ -127,6 +127,7 @@ class SchoolOut(BaseModel):
     # locked: взятое задание учителя (его берут у учителя на карте); unlocked: цена покупки.
     quest: dict | None = None
     price: int = 0
+    image: str | None = None  # картинка учителя школы (assets/…) — через /api/img
 
 
 class TrainingOut(BaseModel):
@@ -294,6 +295,7 @@ async def _schools(session: AsyncSession, redis: Redis, user_id: int) -> list[Sc
     """Школы статистов (2026-10-13: занятия — в тренировках, покупка учителя — в магазине)."""
     from api.routers.development import _quest
     from bot.config.school import SCHOOL_TEACHER_PRICE
+    from bot.constant.event import EVENT_SCHOOL_TEACHER
     from bot.constant.school import SCHOOLS
     from bot.services.school import quests, shop_teachers
     from bot.texts.school import SCHOOL_EFFECTS, SCHOOL_NAMES, SCHOOL_TEACHERS
@@ -309,6 +311,7 @@ async def _schools(session: AsyncSession, redis: Redis, user_id: int) -> list[Sc
             cooldown=t.cooldown if t and t.owned else 0,
             quest=_quest(active.get(s), SCHOOL_TEACHERS[s]) if state == "locked" else None,
             price=SCHOOL_TEACHER_PRICE if state == "unlocked" else 0,
+            image=_tech_image(s, EVENT_SCHOOL_TEACHER),
         ))
     return out
 

@@ -187,7 +187,7 @@ export interface TrainingResponse {
   } | null;
   schools: {
     code: string; teacher: string; school: string; effect: string; state: "owned" | "unlocked" | "locked"; cooldown: number;
-    quest: DevQuest | null; price: number;
+    quest: DevQuest | null; price: number; image?: string | null;
   }[];
   school_lesson_price: number;
 }

@@ -1,0 +1,99 @@
+/* Страница банды (2026-11-14): шапка-статус, вкладки, лагеря, отряды, вербовка. Лёгкие эффекты — без фильтров. */
+.gg-hero {
+  position: relative; padding: 14px; border-radius: var(--r);
+  border: 1px solid rgba(79, 216, 255, 0.4);
+  background: linear-gradient(135deg, rgba(79, 216, 255, 0.14), transparent 50%), linear-gradient(180deg, var(--panel-top), var(--panel-bot));
+  box-shadow: 0 0 14px rgba(79, 216, 255, 0.14), 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+.gg-hero-top { display: flex; align-items: center; gap: 12px; }
+.gg-emblem {
+  width: 46px; height: 46px; flex: none; display: grid; place-items: center; color: #fff;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: linear-gradient(160deg, var(--cyan), #3b5bff);
+}
+.gg-hero-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gg-hero-name small { font-family: var(--font-mono); font-size: 9.5px; font-weight: 800; letter-spacing: 0.24em; color: var(--cyan); }
+.gg-hero-name b { font-family: var(--font-display); font-size: 21px; font-weight: 900; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 0 14px rgba(79, 216, 255, 0.4); }
+.gg-icon-btn { width: 38px; height: 38px; flex: none; display: grid; place-items: center; border-radius: 6px; border: 1px solid var(--line-soft); background: rgba(79, 216, 255, 0.08); color: var(--cyan-2); cursor: pointer; }
+.gg-icon-btn:active { transform: scale(0.95); }
+.gg-hero-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 14px 0 12px; }
+.gg-hero-stats div, .gg-rec-info div { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 5px; background: rgba(2, 8, 24, 0.55); border: 1px solid var(--line-dash); min-width: 0; }
+.gg-hero-stats small, .gg-rec-info small { font-size: 10px; font-weight: 700; color: var(--muted); }
+.gg-hero-stats b, .gg-rec-info b { font-family: var(--font-mono); font-size: 15px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gg-cyan { color: var(--cyan-2); }
+.gg-gold { color: var(--gold-2); }
+.gg-green { color: var(--green-2); }
+.gg-split { display: flex; height: 8px; border-radius: 2px; overflow: hidden; background: rgba(79, 216, 255, 0.12); }
+.gg-split-atk { background: linear-gradient(90deg, #c4123a, var(--red)); }
+.gg-split-def { flex: 1; background: linear-gradient(90deg, #1d6bff, var(--cyan)); }
+.gg-split-legend { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; font-weight: 700; }
+.gg-split-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.gg-split-legend .atk { color: var(--red-2); }
+.gg-split-legend .def { color: var(--cyan-2); }
+
+.gg-camps { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
+.gg-camp {
+  display: flex; flex-direction: column; gap: 3px; padding: 11px 12px; border-radius: 6px; text-align: left; color: inherit; cursor: pointer;
+  border: 1px solid rgba(255, 61, 98, 0.3); background: linear-gradient(180deg, rgba(255, 61, 98, 0.12), rgba(2, 8, 24, 0.5));
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.gg-camp.defense { border-color: rgba(79, 216, 255, 0.3); background: linear-gradient(180deg, rgba(79, 216, 255, 0.12), rgba(2, 8, 24, 0.5)); }
+.gg-camp.on { border-color: var(--red); box-shadow: 0 0 12px rgba(255, 61, 98, 0.3); }
+.gg-camp.defense.on { border-color: var(--cyan); box-shadow: 0 0 12px rgba(79, 216, 255, 0.3); }
+.gg-camp-title { display: flex; align-items: center; gap: 5px; font-family: var(--font-display); font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--red-2); }
+.gg-camp.defense .gg-camp-title { color: var(--cyan-2); }
+.gg-camp b { font-family: var(--font-mono); font-size: 19px; font-weight: 800; }
+.gg-camp small { font-size: 11px; font-weight: 600; color: var(--muted); }
+.gg-swap { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--line); background: rgba(79, 216, 255, 0.1); color: var(--cyan-2); cursor: pointer; transform: rotate(90deg); }
+.gg-swap:active { transform: rotate(90deg) scale(0.92); }
+.gg-move-label { margin: 12px 0 6px; font-size: 11.5px; font-weight: 700; color: var(--muted); }
+.gg-move { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.gg-move .pill { min-height: 40px; font-size: 12px; }
+
+.gg-sort { margin-bottom: 6px; }
+.gg-sort .pill { min-height: 32px; }
+.gg-empty { padding: 14px 4px; text-align: center; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.gg-sq { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px dashed var(--line-dash); }
+.gg-sq:last-of-type { border-bottom: 0; }
+.gg-rank {
+  width: 38px; height: 38px; flex: none; display: grid; place-items: center;
+  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+  font-family: var(--font-display); font-size: 12px; font-weight: 900; color: #cfe3ff; background: rgba(140, 170, 220, 0.18);
+}
+.gg-rank.hi { color: #1a0f00; background: linear-gradient(160deg, var(--gold-2), #c27c07); }
+.gg-rank.mid { color: #fff; background: linear-gradient(160deg, #a77bff, #5b2fd6); }
+.gg-rank.top { color: #fff; background: linear-gradient(160deg, #ff4d70, #8b2fe0); }
+.gg-rank.low { color: #fff; background: linear-gradient(160deg, var(--cyan), #1d6bff); }
+.gg-sq-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.gg-sq-name { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; font-family: var(--font-display); font-size: 13.5px; font-weight: 800; }
+.gg-stars { color: var(--gold-2); font-size: 11px; letter-spacing: 1px; }
+.gg-tag { padding: 1px 6px; border-radius: 3px; font-family: var(--font-body); font-size: 10px; font-weight: 800; color: var(--cyan-2); background: rgba(79, 216, 255, 0.1); }
+.gg-tag.school { color: var(--violet-2); background: rgba(167, 123, 255, 0.14); }
+.gg-sq-split { height: 4px; border-radius: 2px; overflow: hidden; background: rgba(79, 216, 255, 0.45); }
+.gg-sq-split i { display: block; height: 100%; background: var(--red); }
+.gg-sq-sub { font-size: 10.5px; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gg-sq-total { font-family: var(--font-mono); font-size: 14px; font-weight: 800; white-space: nowrap; }
+
+.gg-rec-info { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 12px; }
+.gg-hint { margin-top: 10px; font-size: 11.5px; font-weight: 600; line-height: 1.45; color: var(--muted); }
+.gg-tickets { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; color: var(--gold-2); }
+.gg-tickets .bar { margin: 5px 0 3px; }
+.gg-tickets small { font-size: 11px; font-weight: 600; }
+.gg-many { display: grid; grid-template-columns: auto auto auto auto 1fr; align-items: center; gap: 6px; margin-top: 10px; }
+.gg-many b { min-width: 34px; text-align: center; font-size: 15px; }
+.gg-many .btn.small { padding: 0 11px; }
+
+.gg-manage-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.gg-manage-row div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.gg-manage-row b { font-family: var(--font-display); font-size: 16px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gg-manage-row small { font-size: 11px; font-weight: 600; color: var(--muted); }
+
+.gg-rarities { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.gg-rarities span { padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: 700; color: var(--gold-2); background: rgba(255, 191, 60, 0.1); border: 1px solid rgba(255, 191, 60, 0.25); }
+.gg-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.gg-card { position: relative; aspect-ratio: 2 / 3; overflow: hidden; border-radius: 5px; border: 1px solid var(--line-soft); background: rgba(10, 24, 60, 0.7); }
+.gg-card img { width: 100%; height: 100%; object-fit: cover; }
+.gg-new, .gg-copies { position: absolute; top: 3px; padding: 1px 4px; border-radius: 3px; font-size: 9px; font-weight: 800; }
+.gg-new { left: 3px; color: #02160b; background: var(--green); }
+.gg-copies { right: 3px; color: var(--gold-2); background: rgba(2, 4, 12, 0.85); }
+.gg-card-name { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 4px 3px; font-size: 9px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: linear-gradient(transparent, rgba(2, 4, 12, 0.92)); }

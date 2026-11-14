@@ -84,6 +84,7 @@ export function Screen({ status, error, children }: { status: LoadStatus; error?
   if (status === "loading") {
     return (
       <div className="page">
+        <div className="sys-loading">◆ Система загружает данные…</div>
         <div className="skeleton" style={{ height: 110 }} />
         <div className="skeleton" style={{ height: 220 }} />
         <div className="skeleton" style={{ height: 160 }} />
@@ -91,13 +92,13 @@ export function Screen({ status, error, children }: { status: LoadStatus; error?
     );
   }
   if (status === "no-telegram") {
-    return <div className="state"><ShieldAlert size={28} />Открой приложение через Telegram — из бота.</div>;
+    return <div className="state"><ShieldAlert size={28} /><span className="sys-tag">[ СИСТЕМА ]</span>Открой приложение через Telegram — из бота.</div>;
   }
   if (status === "not-registered") {
-    return <div className="state"><AlertTriangle size={28} />Сначала нажми /start в боте и создай банду.</div>;
+    return <div className="state"><AlertTriangle size={28} /><span className="sys-tag">[ СИСТЕМА ]</span>Игрок не найден. Нажми /start в боте и создай банду.</div>;
   }
   if (status === "error") {
-    return <div className="state"><AlertTriangle size={28} />Не удалось загрузить.<span style={{ fontSize: 12 }}>{error}</span></div>;
+    return <div className="state"><AlertTriangle size={28} /><span className="sys-tag err">[ СИСТЕМА · ОШИБКА ]</span>Не удалось загрузить.<span style={{ fontSize: 12 }}>{error}</span></div>;
   }
   return <>{children}</>;
 }

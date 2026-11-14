@@ -4,6 +4,6 @@
 .guide-body b { font-weight: 800; }
 
 .guide-sheets { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
-.guide-sheets img { width: 100%; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.08); cursor: zoom-in; }
+.guide-sheets img { width: 100%; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.08); cursor: zoom-in; }
 .guide-zoom { position: fixed; inset: 0; z-index: 100; background: rgba(0, 0, 0, 0.92); overflow: auto; -webkit-overflow-scrolling: touch; }
 .guide-zoom img { width: 200%; max-width: none; display: block; }

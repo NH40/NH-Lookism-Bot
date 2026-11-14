@@ -1,16 +1,16 @@
-.cs-reel { height: 92px; border-radius: 12px; border: 1px solid rgba(245, 185, 66, 0.6); background: linear-gradient(180deg, #0b1230, #1a2a6a, #0b1230); display: flex; align-items: center; justify-content: center; font-size: 46px; box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.6); overflow: hidden; }
+.cs-reel { height: 92px; border-radius: 6px; border: 1px solid rgba(245, 185, 66, 0.6); background: linear-gradient(180deg, #0b1230, #1a2a6a, #0b1230); display: flex; align-items: center; justify-content: center; font-size: 46px; box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.6); overflow: hidden; }
 .cs-reel.spin { animation: cs-shake 0.18s linear infinite; filter: blur(0.6px); }
 .cs-reel.win { box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.6), 0 0 16px rgba(245, 185, 66, 0.8); }
 @keyframes cs-shake { 0% { transform: translateY(-4px); } 50% { transform: translateY(4px); } 100% { transform: translateY(-4px); } }
 .cs-note { text-align: center; margin: 8px 0; color: var(--gold-2, #f5c96a); font-size: 12px; font-weight: 600; line-height: 1.45; }
 .cs-note.win { color: var(--green); font-weight: 800; }
 .cs-table { gap: 6px; }
-.cs-sym { padding: 6px 4px; border-radius: 9px; border: 1px solid var(--line-soft); background: var(--card); text-align: center; font-size: 11px; font-weight: 800; }
+.cs-sym { padding: 6px 4px; border-radius: 6px; border: 1px solid var(--line-soft); background: var(--card); text-align: center; font-size: 11px; font-weight: 800; }
 .cs-sub { font-size: 10px; color: var(--muted); }
 .cs-presets { margin-top: 8px; gap: 6px; }
 .cs-pill { min-height: 36px; }
 .cs-custom { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin: 8px 0; }
-.cs-custom input, .cs-field select { min-height: 44px; border-radius: 10px; border: 1px solid var(--line-soft); background: var(--card); color: var(--text); font-family: var(--font-body); font-weight: 800; font-size: 14px; padding: 0 12px; width: 100%; min-width: 0; }
+.cs-custom input, .cs-field select { min-height: 44px; border-radius: 6px; border: 1px solid var(--line-soft); background: var(--card); color: var(--text); font-family: var(--font-body); font-weight: 800; font-size: 14px; padding: 0 12px; width: 100%; min-width: 0; }
 .cs-custom input:focus, .cs-field select:focus { outline: none; border-color: var(--cyan); }
 .cs-field { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; font-size: 11px; font-weight: 700; }
 .cs-label { font-size: 11px; font-weight: 700; margin: 10px 0 6px; }
@@ -42,7 +42,7 @@
 .pk-pot { text-align: center; font-size: 12px; font-weight: 700; color: var(--muted); }
 .pk-pot b { font-family: var(--font-display); color: var(--gold); font-size: 16px; }
 .pk-board { display: flex; justify-content: center; margin: 6px 0 10px; }
-.pk-seat { display: flex; justify-content: space-between; gap: 8px; padding: 7px 8px; border-radius: 10px; font-size: 12px; font-weight: 700; margin-top: 4px; border: 1px solid transparent; }
+.pk-seat { display: flex; justify-content: space-between; gap: 8px; padding: 7px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; margin-top: 4px; border: 1px solid transparent; }
 .pk-seat b { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .pk-seat span { color: var(--muted); text-align: right; }
 .pk-seat.turn { border-color: var(--cyan); background: rgba(80, 150, 255, 0.14); }

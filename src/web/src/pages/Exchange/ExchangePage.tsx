@@ -193,7 +193,7 @@ function LotRow({ lot, busy, onBuy }: { lot: ExLot; busy: boolean; onBuy: () => 
 					</button>
 				</div>
 			) : (
-				<button className="btn small block ex-buy" type="button" onClick={() => setConfirm(true)}>
+				<button className="btn ghost small block ex-buy" type="button" onClick={() => setConfirm(true)}>
 					<ShoppingCart size={16} /> Купить за {lot.price_full}
 				</button>
 			)}

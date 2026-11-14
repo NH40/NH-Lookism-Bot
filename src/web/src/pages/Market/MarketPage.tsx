@@ -91,7 +91,7 @@ function MarketRow({ item, maxLevel, busy, onBuy }: { item: MarketItem; maxLevel
         ))}
       </div>
       {item.next_price !== null ? (
-        <button className={`btn small ${owned ? "violet" : ""}`} type="button" disabled={busy} onClick={onBuy}>
+        <button className={`btn small ${owned ? "gold" : "violet"}`} type="button" disabled={busy} onClick={onBuy}>
           {owned ? `Ур. ${item.level + 1} за ${fmt(item.next_price)}` : `Открыть за ${fmt(item.next_price)}`} <Gem size={14} />
         </button>
       ) : (

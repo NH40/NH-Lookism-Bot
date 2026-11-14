@@ -4,7 +4,7 @@
 .ex-fields { margin-top: 10px; }
 .ex-field { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; font-size: 11px; font-weight: 700; }
 .ex-fields .ex-field { margin-top: 0; }
-.ex-field input, .ex-field select, .ex-bid input { min-height: 44px; border-radius: 10px; border: 1px solid var(--line-soft); background: var(--card); color: var(--text); font-family: var(--font-body); font-weight: 800; font-size: 14px; padding: 0 12px; width: 100%; min-width: 0; }
+.ex-field input, .ex-field select, .ex-bid input { min-height: 44px; border-radius: 6px; border: 1px solid var(--line-soft); background: var(--card); color: var(--text); font-family: var(--font-body); font-weight: 800; font-size: 14px; padding: 0 12px; width: 100%; min-width: 0; }
 .ex-field input:focus, .ex-field select:focus, .ex-bid input:focus { outline: none; border-color: var(--cyan); }
 .ex-hours { margin-top: 10px; }
 .ex-chip { flex-direction: column; align-items: flex-start; gap: 2px; }

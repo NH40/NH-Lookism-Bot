@@ -1,0 +1,65 @@
+/* Кредиты — окна Системы, тон банков — золото, долгов — фиолет/красный. */
+.bk-note { font-size: 12px; font-weight: 600; line-height: 1.45; color: var(--muted); }
+.bk-empty { padding: 14px 4px; text-align: center; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.bk-label { font-size: 11px; font-weight: 700; margin: 10px 0 6px; }
+.bk-bank {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px; margin-top: 8px; text-align: left; color: inherit; cursor: pointer;
+  border: 1px solid rgba(255, 191, 60, 0.22); border-radius: 6px;
+  background: linear-gradient(90deg, rgba(255, 191, 60, 0.08), rgba(4, 12, 32, 0.6) 60%);
+  transition: transform 0.08s ease, box-shadow 0.15s ease;
+}
+.bk-bank:active { transform: scale(0.985); box-shadow: 0 0 16px rgba(255, 191, 60, 0.25); }
+.bk-bank .ico-box { background: radial-gradient(circle at 30% 25%, rgba(255, 191, 60, 0.5), rgba(160, 90, 0, 0.15)); }
+.bk-bank-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.bk-bank-main b { font-family: var(--font-display); font-size: 14px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bk-bank-main small, .bk-bank-side small { font-size: 11px; font-weight: 600; color: var(--muted); }
+.bk-bank-side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.bk-rate { font-family: var(--font-mono); font-size: 16px; font-weight: 800; color: var(--gold-2); text-shadow: 0 0 10px rgba(255, 191, 60, 0.6); }
+.bk-rate em { font-style: normal; font-size: 10px; color: var(--muted); text-shadow: none; margin-left: 2px; }
+.bk-field { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; font-size: 11px; font-weight: 700; }
+.bk-field input, .bk-field select { min-height: 42px; padding: 0 12px; font-size: 14px; width: 100%; }
+.bk-quick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 6px; }
+.bk-quick .pill, .bk-days .pill { min-height: 32px; }
+.bk-days { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; max-height: 150px; overflow-y: auto; }
+.bk-calc { margin: 12px 0; padding: 10px 12px; border-radius: 6px; border: 1px solid rgba(255, 191, 60, 0.3); background: rgba(255, 191, 60, 0.06); }
+.bk-calc div { display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 700; padding: 3px 0; }
+.bk-calc b { font-family: var(--font-mono); }
+.bk-calc small { display: block; margin-top: 4px; font-size: 11px; color: var(--muted); font-weight: 600; }
+.bk-gold { color: var(--gold-2); text-shadow: 0 0 10px rgba(255, 191, 60, 0.6); }
+.bk-loan-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.bk-loan-head span b { color: var(--text); }
+.bk-debt { font-family: var(--font-mono); font-size: 20px; font-weight: 800; color: #fff; text-shadow: 0 0 12px rgba(167, 123, 255, 0.8); }
+.bk-sub { margin-top: 6px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.bk-timer { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding: 7px 10px; border-radius: 4px; font-size: 12px; font-weight: 700; color: var(--cyan-2); background: rgba(79, 216, 255, 0.07); border-left: 2px solid var(--cyan); }
+.bk-timer b { font-family: var(--font-mono); margin-left: auto; }
+.bk-timer.red { color: var(--red-2); background: rgba(255, 61, 98, 0.08); border-left-color: var(--red); }
+.bk-repay { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; margin-top: 10px; }
+.bk-repay input { min-height: 34px; padding: 0 10px; min-width: 0; }
+.bk-hero { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0 10px; }
+.bk-hero span { font-family: var(--font-mono); font-size: 10px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+.bk-hero b { font-family: var(--font-mono); font-size: 28px; font-weight: 800; color: var(--gold-2); text-shadow: 0 0 16px rgba(255, 191, 60, 0.6); }
+.bk-debtor { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 2px; border-bottom: 1px dashed var(--line-dash); }
+.bk-debtor:last-child { border-bottom: 0; }
+.bk-debtor span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bk-debtor span b { font-size: 13px; font-weight: 800; }
+.bk-debtor small { font-size: 11px; color: var(--muted); font-weight: 600; }
+.bk-debtor.frozen small { color: var(--red-2); }
+
+/* Пеньгуан */
+.pg-wealth { display: flex; align-items: center; gap: 12px; }
+.pg-wealth .pg-points { font-family: var(--font-mono); font-size: 30px; font-weight: 800; color: var(--gold-2); text-shadow: 0 0 16px rgba(255, 191, 60, 0.7); }
+.pg-wealth small { font-size: 11px; color: var(--muted); font-weight: 700; }
+.pg-bonus { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.pg-bonus span { padding: 4px 9px; border-radius: 3px; font-size: 11.5px; font-weight: 800; color: var(--gold-2); background: rgba(255, 191, 60, 0.1); border: 1px solid rgba(255, 191, 60, 0.3); }
+.pg-buff { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px dashed var(--line-dash); }
+.pg-buff:last-child { border-bottom: 0; }
+.pg-buff-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pg-buff-main b { font-family: var(--font-display); font-size: 13.5px; font-weight: 800; }
+.pg-buff-main small { font-size: 11px; color: var(--muted); font-weight: 600; }
+.pg-buff-main .on { color: var(--green-2); font-weight: 800; }
+.pg-step { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 6px; padding: 7px 0; border-bottom: 1px dashed var(--line-dash); }
+.pg-step:last-of-type { border-bottom: 0; }
+.pg-step span { font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.pg-step b { min-width: 74px; text-align: center; font-family: var(--font-mono); font-size: 13px; font-weight: 800; }
+.pg-step .btn { min-width: 38px; padding: 0 10px; }
+.pg-buys { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }

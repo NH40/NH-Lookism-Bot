@@ -121,6 +121,8 @@ export interface Squad {
 
 export interface GangData {
   name: string;
+  rename_price?: number;
+  rename_cooldown_seconds?: number;
   phase: string;
   attack: { quantity: number; power: number };
   defense: { quantity: number; power: number };

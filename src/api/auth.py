@@ -60,7 +60,7 @@ async def get_current_user_id(request: Request, x_telegram_init_data: str = Head
     except (ValueError, KeyError, TypeError) as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Malformed user in initData") from exc
     # Заморозка банды за долг (`services/bank`): смотреть можно, действовать — нет (кроме погашения в боте).
-    if request.method != "GET" and await _frozen(user_id):
+    if request.method != "GET" and not request.url.path.startswith("/api/bank") and await _frozen(user_id):
         from bot.texts.bank import FROZEN_ALERT
 
         raise HTTPException(status.HTTP_403_FORBIDDEN, FROZEN_ALERT)

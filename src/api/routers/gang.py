@@ -16,7 +16,9 @@ from api.db import get_session
 from api.deps import get_redis
 from api.routers._common import bad, clean_label, require_user, ttl_seconds
 from bot.cache.keys import recruit_extra_cooldown
-from bot.config.game import GANG_CAMP_MOVE_PERCENTS
+from bot.config.game import GANG_CAMP_MOVE_PERCENTS, GANG_RENAME_PRICE
+from bot.services.gang.rename import RenameCooldownError, RenameNotEnoughError, rename_cooldown, rename_gang
+from bot.services.gang import InvalidGangNameError
 from bot.constant.extra import CAMP_ATTACK, CAMP_DEFENSE
 from bot.constant.extra import CONTRACT_SQUAD
 from bot.services.extra import InvalidCampMoveError, get_army_stats, list_army_squads, move_between_camps
@@ -66,6 +68,8 @@ class GangOut(BaseModel):
     recruit_select: int = 1
     influence: int = 0
     tickets: TicketsOut
+    rename_price: int = 0
+    rename_cooldown_seconds: int = 0
 
 
 class MoveIn(BaseModel):
@@ -114,6 +118,8 @@ async def get_my_gang(
         recruit_select=offer.select,
         influence=offer.influence,
         tickets=TicketsOut(count=tickets.count, cap=tickets.cap, next_in_seconds=tickets.next_in_seconds),
+        rename_price=GANG_RENAME_PRICE,
+        rename_cooldown_seconds=await rename_cooldown(redis, user.id),
     )
 
 
@@ -185,3 +191,32 @@ async def delete_confirm(
 
     await with_bot_session(_onboard)
     return DeleteOut(message="Банда удалена. Выбери страну в чате с ботом — меню уже там.")
+
+
+class RenameIn(BaseModel):
+    name: str
+
+
+class RenameOut(BaseModel):
+    message: str
+    name: str
+
+
+@router.post("/rename", response_model=RenameOut)
+async def rename(body: RenameIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
+                 redis: Redis = Depends(get_redis)) -> RenameOut:
+    """Смена названия банды — как «✏️ Переименовать банду» в боте."""
+    from bot.texts.gang import NAME_TOO_LONG, NAME_TOO_SHORT
+    from bot.texts.gang.rename import COOLDOWN, DONE, NOT_ENOUGH
+    from bot.utils.formatting import format_countdown, format_number
+
+    await require_user(session, user_id)
+    try:
+        name = await rename_gang(session, redis, user_id, body.name)
+    except InvalidGangNameError as exc:
+        raise bad(clean_label(NAME_TOO_SHORT if exc.reason == "too_short" else NAME_TOO_LONG))
+    except RenameCooldownError as exc:
+        raise bad(clean_label(COOLDOWN.format(left=format_countdown(exc.seconds))))
+    except RenameNotEnoughError:
+        raise bad(clean_label(NOT_ENOUGH.format(price=format_number(GANG_RENAME_PRICE))))
+    return RenameOut(message=clean_label(DONE.format(name=name, price=format_number(GANG_RENAME_PRICE))), name=name)

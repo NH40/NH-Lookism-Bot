@@ -1,4 +1,4 @@
-import { Dices, Shield, Swords, Ticket, Trash2, UserPlus } from "lucide-react";
+import { Dices, PenLine, Shield, Swords, Ticket, Trash2, UserPlus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { imgUrl } from "../../api";
@@ -161,6 +161,7 @@ export function GangPage() {
 
       {data && (
         <div className="page" style={{ paddingTop: 0 }}>
+          <RenamePanel name={data.name} price={data.rename_price ?? 0} cooldown={data.rename_cooldown_seconds ?? 0} reload={reload} />
           <Panel title="ОПАСНАЯ ЗОНА" tone="red" badgeMark="!">
             <p className="muted" style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, lineHeight: 1.45 }}>
               Сбросится весь прогресс: банда, районы и бизнес на них, статисты, уники, характеристики, мастерство, NHCoin.
@@ -243,5 +244,27 @@ export function GangPage() {
         </Sheet>
       )}
     </Screen>
+  );
+}
+
+
+/** Смена названия банды — как «✏️ Переименовать банду» в боте: цена в NHCoin, раз в неделю. */
+function RenamePanel({ name, price, cooldown, reload }: { name: string; price: number; cooldown: number; reload: () => void }) {
+  const { run, busy } = useAction(reload);
+  const [value, setValue] = useState("");
+  const left = useCountdown(cooldown);
+  return (
+    <Panel title="Название банды">
+      <div className="muted" style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
+        Сейчас: <b style={{ color: "var(--text)" }}>{name}</b> · смена — {fmt(price)} NHCoin, раз в неделю
+      </div>
+      <div className="qty-row" style={{ gridTemplateColumns: "minmax(0, 1fr) auto" }}>
+        <input className="mass-input" value={value} maxLength={64} placeholder="новое название" onChange={(e) => setValue(e.target.value)} />
+        <button type="button" className="btn small" disabled={busy || left > 0 || value.trim().length < 3}
+          onClick={async () => { if (await run("/gang/rename", { name: value.trim() })) setValue(""); }}>
+          <PenLine size={14} />{left > 0 ? countdown(left) : "Сменить"}
+        </button>
+      </div>
+    </Panel>
   );
 }

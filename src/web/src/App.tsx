@@ -31,7 +31,7 @@ import {
   ROUTE_TRAINING,
   ROUTE_MASTERY,
   ROUTE_PLAY,
-  ROUTE_TOP,
+  ROUTE_TOP, ROUTE_BANK, ROUTE_PENGUAN,
 } from "./constants";
 import { AdminPage, AdminPlayerPage, AdminSectionPage } from "./pages/Admin";
 import { BusinessPage } from "./pages/Business";
@@ -60,6 +60,7 @@ import { StatsPage } from "./pages/Stats";
 import { IntelPage } from "./pages/Intel";
 import { GuidePage } from "./pages/Guide";
 import { TopPage } from "./pages/Top";
+import { BankPage, PenguanPage } from "./pages/Bank";
 import { getWebApp } from "./telegram";
 
 const TOP_LEVEL = new Set([ROUTE_PROFILE, ROUTE_MAP, ROUTE_DEVELOPMENT, ROUTE_QUESTS, ROUTE_MORE]);
@@ -120,6 +121,8 @@ export function App() {
           <Route path={ROUTE_MASTERY} element={<MasteryPage />} />
           <Route path={ROUTE_PLAY} element={<MinigamePage />} />
           <Route path={ROUTE_TOP} element={<TopPage />} />
+          <Route path={ROUTE_BANK} element={<BankPage />} />
+          <Route path={ROUTE_PENGUAN} element={<PenguanPage />} />
           <Route path={ROUTE_QUESTS} element={<QuestsPage />} />
           <Route path={ROUTE_MORE} element={<MorePage />} />
           <Route path={ROUTE_SHOP} element={<ShopPage />} />

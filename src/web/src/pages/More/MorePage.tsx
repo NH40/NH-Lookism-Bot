@@ -1,4 +1,4 @@
-import { BookOpen, Briefcase, Dices, Eye, Gem, Gift, Repeat, Settings, ShieldCheck, ShoppingBag, Trophy, Users, VenetianMask } from "lucide-react";
+import { BookOpen, Briefcase, Dices, Landmark, Eye, Gem, Gift, Repeat, Settings, ShieldCheck, ShoppingBag, Trophy, Users, VenetianMask } from "lucide-react";
 import { useState } from "react";
 import { Sheet } from "../../components/Sheet";
 import { useAction } from "../../hooks/useApi";
@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { MoreData } from "../../types";
 import { Panel, Screen, fmt } from "../../components/ui";
-import { ROUTE_ADMIN, ROUTE_BUSINESS, ROUTE_CASINO, ROUTE_CLAN, ROUTE_DONATE, ROUTE_EXCHANGE, ROUTE_GANG, ROUTE_GUIDE, ROUTE_INTEL, ROUTE_MARKET, ROUTE_SETTINGS, ROUTE_SHOP, ROUTE_TOP } from "../../constants";
+import { ROUTE_ADMIN, ROUTE_BANK, ROUTE_BUSINESS, ROUTE_CASINO, ROUTE_CLAN, ROUTE_DONATE, ROUTE_EXCHANGE, ROUTE_GANG, ROUTE_GUIDE, ROUTE_INTEL, ROUTE_MARKET, ROUTE_SETTINGS, ROUTE_SHOP, ROUTE_TOP } from "../../constants";
 import { useApi } from "../../hooks/useApi";
 import "./More.css";
 
@@ -68,6 +68,7 @@ function MoreView({ d }: { d: MoreData }) {
         {tile(<Gem size={18} />, "Донат", `баланс ${fmt(d.donate_balance)} · пополнить`, ROUTE_DONATE, "gold")}
         {tile(<Trophy size={18} />, "Топ", "игроки, кланы, награды сезона", ROUTE_TOP, "gold")}
         {tile(<Repeat size={18} />, "Биржа", "лоты, аукцион, обмен", ROUTE_EXCHANGE)}
+        {tile(<Landmark size={18} />, "Кредиты", "банки игроков, займы, свой банк", ROUTE_BANK, "gold")}
         {tile(<Dices size={18} />, "Казино", "слоты, блэкджек, покер", ROUTE_CASINO)}
         {tile(
           <Briefcase size={18} />,

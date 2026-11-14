@@ -15,7 +15,7 @@ import type {
   TechniquesData,
 } from "../../types";
 import { Bar, Panel, Screen, countdown, fmt } from "../../components/ui";
-import { ROUTE_MASTERY, ROUTE_TRAINING } from "../../constants/constants";
+import { ROUTE_MASTERY, ROUTE_TRAINING, ROUTE_PENGUAN } from "../../constants/constants";
 import { useAction, useApi } from "../../hooks/useApi";
 import "../../styles/development.css";
 
@@ -430,6 +430,14 @@ function TechniquesTab({ d, max, post, busy }: { d: TechniquesData; max: number;
           busy={busy}
           subtitle={selected.code === d.active ? "Активна в бою" : "Не активна"}
         >
+          {d.gauges?.[selected.code] && (
+            <div style={{ margin: "8px 0" }}>
+              <div className="muted dev-note" style={{ marginBottom: 4 }}>
+                {d.gauges[selected.code].name}: {d.gauges[selected.code].value} / {d.gauges[selected.code].cap} (из {d.gauges[selected.code].max}) · {d.gauges[selected.code].note}
+              </div>
+              <Bar value={d.gauges[selected.code].value} max={d.gauges[selected.code].max} fill="gold" />
+            </div>
+          )}
           <Link to={ROUTE_TRAINING} className="btn block" style={{ marginTop: 8, textDecoration: "none" }}>
             Тренировка у учителя и уровень
           </Link>
@@ -610,6 +618,11 @@ function BloodTab({ d, max, post, busy }: { d: BloodData; max: number; post: Pos
         <ItemPanel title="РОДОСЛОВНАЯ" item={d.first} max={max} resource="Капли крови" have={drops} busy={busy} subtitle="Первое тело" onLevelUp={() => post("/bloodline/level-up")} />
       )}
       {d.ultra && <UltraPanel u={d.ultra} post={post} busy={busy} />}
+      {(d.first?.code === "penguan" || d.second?.code === "penguan") && (
+        <Link to={ROUTE_PENGUAN} className="btn gold block" style={{ textDecoration: "none" }}>
+          Пеньгуан: деньги — сила
+        </Link>
+      )}
       {d.free_change && (
         <Panel title="БЕСПЛАТНАЯ СМЕНА" tone="gold">
           <div className="muted" style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.45, marginBottom: 8 }}>

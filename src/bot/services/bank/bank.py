@@ -94,6 +94,22 @@ async def _lock(redis: Redis, user_id: int) -> str:
     return key
 
 
+def _locked(fn):
+    """Лок на клик (правило 2) на всю операцию; снимается сразу после неё — иначе «погасить часть» и следом «погасить всё»
+    упирались бы в 5-секундный лок. Сигнатура операций: (session, redis, user_id, ...)."""
+    import functools
+
+    @functools.wraps(fn)
+    async def wrapper(session, redis, user_id, *args, **kwargs):
+        key = await _lock(redis, user_id)
+        try:
+            return await fn(session, redis, user_id, *args, **kwargs)
+        finally:
+            await redis.delete(key)
+
+    return wrapper
+
+
 def _check_terms(rate: float, min_days: int, max_days: int) -> None:
     if not BANK_RATE_MIN - 1e-9 <= rate <= BANK_RATE_MAX + 1e-9:
         raise BankError("bad_rate")
@@ -169,11 +185,11 @@ async def lent_out(session: AsyncSession, bank_id: int) -> tuple[int, int]:
     return int(row[0]), int(row[1])
 
 
+@_locked
 async def create_bank(session: AsyncSession, redis: Redis, user_id: int, capital: int, rate: float, min_days: int, max_days: int) -> Bank:
     _check_terms(rate, min_days, max_days)
     if capital < BANK_MIN_CAPITAL:
         raise BankError("min_capital", BANK_MIN_CAPITAL)
-    await _lock(redis, user_id)
     if await get_bank(session, user_id) is not None:
         raise BankError("has_bank")
     with coin_reason(REASON_BANK):
@@ -186,10 +202,10 @@ async def create_bank(session: AsyncSession, redis: Redis, user_id: int, capital
     return bank
 
 
+@_locked
 async def add_capital(session: AsyncSession, redis: Redis, user_id: int, amount: int) -> int:
     if amount <= 0:
         raise BankError("bad_amount")
-    await _lock(redis, user_id)
     bank = await get_bank(session, user_id, for_update=True)
     if bank is None:
         raise BankError("no_bank")
@@ -202,10 +218,10 @@ async def add_capital(session: AsyncSession, redis: Redis, user_id: int, amount:
     return bank.capital
 
 
+@_locked
 async def withdraw(session: AsyncSession, redis: Redis, user_id: int, amount: int) -> int:
     if amount <= 0:
         raise BankError("bad_amount")
-    await _lock(redis, user_id)
     bank = await get_bank(session, user_id, for_update=True)
     if bank is None:
         raise BankError("no_bank")
@@ -220,10 +236,10 @@ async def withdraw(session: AsyncSession, redis: Redis, user_id: int, amount: in
     return bank.capital
 
 
+@_locked
 async def set_terms(session: AsyncSession, redis: Redis, user_id: int, rate: float, min_days: int, max_days: int) -> None:
     """Новые условия — только для новых кредитов; выданные живут по своим."""
     _check_terms(rate, min_days, max_days)
-    await _lock(redis, user_id)
     bank = await get_bank(session, user_id, for_update=True)
     if bank is None:
         raise BankError("no_bank")
@@ -231,9 +247,9 @@ async def set_terms(session: AsyncSession, redis: Redis, user_id: int, rate: flo
     await session.commit()
 
 
+@_locked
 async def close_bank(session: AsyncSession, redis: Redis, user_id: int) -> int:
     """Закрыть банк: только без открытых кредитов, свободный капитал — владельцу. → возвращено."""
-    await _lock(redis, user_id)
     bank = await get_bank(session, user_id, for_update=True)
     if bank is None:
         raise BankError("no_bank")
@@ -310,10 +326,10 @@ async def is_frozen(redis: Redis, user_id: int) -> bool:
     return bool(await redis.exists(key_frozen(user_id)))
 
 
+@_locked
 async def take_loan(session: AsyncSession, redis: Redis, user_id: int, bank_id: int, amount: int, days: int) -> BankLoan:
     if amount < BANK_MIN_LOAN:
         raise BankError("min_loan", BANK_MIN_LOAN)
-    await _lock(redis, user_id)
     if await is_frozen(redis, user_id):
         raise BankError("frozen")
     bank = await session.scalar(select(Bank).where(Bank.id == bank_id).with_for_update())
@@ -348,9 +364,9 @@ async def take_loan(session: AsyncSession, redis: Redis, user_id: int, bank_id: 
     return loan
 
 
+@_locked
 async def repay(session: AsyncSession, redis: Redis, user_id: int, loan_id: int, amount: int | None) -> tuple[BankLoan, int, bool]:
     """Погасить часть (`amount`) или весь долг (`None`). Замороженный долг тоже гасится здесь — заморозка снимается."""
-    await _lock(redis, user_id)
     loan = await session.scalar(select(BankLoan).where(BankLoan.id == loan_id))
     if loan is None or loan.borrower_id != user_id or loan.status not in LOAN_OPEN:
         raise BankError("no_loan")

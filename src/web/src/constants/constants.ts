@@ -26,6 +26,8 @@ export const ROUTE_SETTINGS = "/more/settings";
 export const ROUTE_EXCHANGE = "/more/exchange";
 export const ROUTE_CASINO = "/more/casino";
 export const ROUTE_TOP = "/more/top";
+export const ROUTE_BANK = "/more/bank"; // банки игроков и кредиты
+export const ROUTE_PENGUAN = "/development/penguan"; // родословная Пеньгуана
 // Админ-панель (только сотрудники; права разделов — с сервера, `/api/admin`).
 export const ROUTE_ADMIN = "/more/admin";
 export const ROUTE_ADMIN_SECTION = "/more/admin/s/:section";

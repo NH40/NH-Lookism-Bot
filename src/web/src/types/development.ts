@@ -72,6 +72,7 @@ export interface TechniquesData {
   quests: (DevQuest & { code: string })[];
   slots: number;
   selected: string[];
+  gauges?: Record<string, { name: string; value: number; cap: number; max: number; note?: string }>;
 }
 
 export interface GeniusData {

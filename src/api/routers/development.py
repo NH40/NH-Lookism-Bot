@@ -242,9 +242,20 @@ async def _techniques_tab(session: AsyncSession, redis: Redis, user_id: int) -> 
         {**_quest(q, f"{t_tech.TECHNIQUE_NAMES[q.ref]} ({t_tech.TEACHER_NAMES[q.ref]})"), "code": q.ref}
         for q in view.quests
     ]
+    # Шкала техники (CQC): растёт от убитых и побед, даёт стартовые стаки — как строка на экране техники в боте.
+    from bot.config.path_gauge import GAUGE_CAP_PER_LEVEL
+    from bot.db.repositories import unique_technique as tech_repo
+
+    gauges = {}
+    for c, lv in view.owned.items():
+        if c in tech_cfg.TECH_GAUGES:
+            value = await tech_repo.get_gauge(session, user_id, c)
+            start = tech_cfg.TECH_GAUGES[c].get("cqc_start", 0.0) * min(1.0, value / GAUGE_MAX)
+            gauges[c] = {"name": f"Шкала {t_tech.TECHNIQUE_NAMES[c]}", "value": round(value, 1), "cap": min(GAUGE_MAX, lv * GAUGE_CAP_PER_LEVEL),
+                         "max": GAUGE_MAX, "note": f"стартовые стаки {start * 100:.0f}%"}
     return {
         "active": view.active, "fragments": view.fragments, "swap_cooldown": view.swap_cooldown,
-        "owned": owned, "quests": quests, "slots": view.slots, "selected": list(view.selected),
+        "owned": owned, "quests": quests, "slots": view.slots, "selected": list(view.selected), "gauges": gauges,
     }
 
 

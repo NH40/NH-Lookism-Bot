@@ -1,0 +1,23 @@
+"""Публичное API домена bank (сервис)."""
+from bot.services.bank.bank import (  # noqa: F401
+    BankError,
+    BankRow,
+    Notice,
+    accrue,
+    add_capital,
+    bank_card,
+    close_bank,
+    create_bank,
+    frozen_debt,
+    get_bank,
+    is_frozen,
+    issued_loans,
+    lent_out,
+    list_banks,
+    my_loans,
+    repay,
+    set_terms,
+    sweep,
+    take_loan,
+    withdraw,
+)

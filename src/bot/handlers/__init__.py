@@ -59,6 +59,7 @@ from bot.handlers.contract import router as contract_router
 from bot.handlers.potion import router as potion_router
 from bot.handlers.storage import router as storage_router
 from bot.handlers.deposit import router as deposit_router
+from bot.handlers.bank import router as bank_router
 from bot.handlers.casino import router as casino_router
 from bot.handlers.poker import router as poker_router
 from bot.handlers.exchange import router as exchange_router
@@ -116,6 +117,7 @@ def get_routers() -> list[Router]:
         potion_router,
         storage_router,
         deposit_router,
+        bank_router,
         casino_router,
         poker_router,
         exchange_router,

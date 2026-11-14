@@ -23,6 +23,7 @@ from bot.constant.ledger import (
     REASON_MANAGER_BURN,
     REASON_SABOTAGE,
     REASON_WAR_TREASURY,
+    REASON_BANK,
 )
 from bot.utils.formatting import esc, format_number as n
 
@@ -114,6 +115,7 @@ _REASONS = {
     REASON_ELITE_LOOT: "Элита: добыча в бою",
     REASON_SABOTAGE: "Саботаж: кража из казны",
     REASON_WAR_TREASURY: "Казна в войне или бою за трон",
+    REASON_BANK: "Банк: капитал, кредит, погашение, конфискация",
 }
 _SOURCES = {
     "adm": "Админка", "admin": "Админка", "biz": "Бизнес", "business": "Бизнес", "clan": "Клан", "ex": "Биржа", "exchange": "Биржа",

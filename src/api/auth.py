@@ -10,7 +10,7 @@ import json
 import time
 from urllib.parse import parse_qsl
 
-from fastapi import Header, HTTPException, status
+from fastapi import Header, HTTPException, Request, status
 
 from bot.config.settings import get_settings
 from bot.utils.log_context import set_user
@@ -47,7 +47,7 @@ def _validate_init_data(init_data: str) -> dict[str, str]:
     return pairs
 
 
-async def get_current_user_id(x_telegram_init_data: str = Header(alias="X-Telegram-Init-Data")) -> int:
+async def get_current_user_id(request: Request, x_telegram_init_data: str = Header(alias="X-Telegram-Init-Data")) -> int:
     pairs = _validate_init_data(x_telegram_init_data)
     user_raw = pairs.get("user")
     if not user_raw:
@@ -57,6 +57,20 @@ async def get_current_user_id(x_telegram_init_data: str = Header(alias="X-Telegr
         user = json.loads(user_raw)
         user_id = int(user["id"])
         set_user(user_id)  # для журналов
-        return user_id
     except (ValueError, KeyError, TypeError) as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Malformed user in initData") from exc
+    # Заморозка банды за долг (`services/bank`): смотреть можно, действовать — нет (кроме погашения в боте).
+    if request.method != "GET" and await _frozen(user_id):
+        from bot.texts.bank import FROZEN_ALERT
+
+        raise HTTPException(status.HTTP_403_FORBIDDEN, FROZEN_ALERT)
+    return user_id
+
+
+async def _frozen(user_id: int) -> bool:
+    if user_id in get_settings().admin_ids:
+        return False
+    from api.deps import get_redis
+    from bot.constant.bank import key_frozen
+
+    return bool(await (await get_redis()).exists(key_frozen(user_id)))

@@ -28,6 +28,7 @@ from bot.handlers.district import send_pvp_reports
 from bot.handlers.empire import send_war_reports
 from bot.logging_setup import setup_logging
 from bot.middlewares.ban_check import BanCheckMiddleware
+from bot.middlewares.bank_freeze import BankFreezeMiddleware
 from bot.middlewares.beta_gate import BetaGateMiddleware
 from bot.middlewares.log_context import LogContextMiddleware
 from bot.middlewares.command_state_reset import CommandStateResetMiddleware
@@ -251,6 +252,22 @@ async def _exchange_loop(bot: Bot, session_factory: async_sessionmaker[AsyncSess
         await asyncio.sleep(EXCHANGE_SWEEP_SECONDS)
 
 
+async def _bank_loop(bot: Bot, session_factory: async_sessionmaker[AsyncSession], redis: Redis) -> None:
+    """Банки игроков: просроченные кредиты → конфискация и заморозка, замороженные → доход в долг или удаление банды."""
+    from bot.config.bank import BANK_SWEEP_SECONDS
+    from bot.handlers.bank import send_pushes as send_bank_pushes
+    from bot.services.bank import sweep as bank_sweep
+
+    while True:
+        try:
+            notices = await bank_sweep(session_factory, redis)
+            if notices:
+                await send_bank_pushes(bot, notices)
+        except Exception:
+            log.exception("Bank sweep failed")
+        await asyncio.sleep(BANK_SWEEP_SECONDS)
+
+
 async def _ultra_instinct_loop(session_factory: async_sessionmaker[AsyncSession], redis: Redis) -> None:
     """Автоматика Ультра инстинкта (родословная Ямадзаки): вербовка, тренировки, крутка —
     за игрока, теми же сервисами и с теми же КД. Не может быть ленивой: смысл способности —
@@ -352,6 +369,7 @@ async def main() -> None:
     tech_mw = TechModeMiddleware(redis, settings.admin_ids)
     beta_mw = BetaGateMiddleware(redis, settings.admin_ids)
     ban_mw = BanCheckMiddleware()
+    freeze_mw = BankFreezeMiddleware(redis, settings.admin_ids)
     command_state_reset_mw = CommandStateResetMiddleware()
 
     # Порядок важен: throttle_mw — самый внешний, отсекает спам ДО открытия сессии БД.
@@ -366,6 +384,8 @@ async def main() -> None:
         # Бета-режим — после техрежима (тот строже) и после db (нужна сессия для is_admin).
         observer.outer_middleware(beta_mw)
         observer.outer_middleware(ban_mw)
+        # Заморозка за долг — после бана: забаненному не важно, заморожен ли он.
+        observer.outer_middleware(freeze_mw)
     # Только Message — у callback_query команд не бывает.
     dp.message.outer_middleware(command_state_reset_mw)
 
@@ -379,6 +399,7 @@ async def main() -> None:
         asyncio.create_task(_events_loop(bot, session_factory)),
         asyncio.create_task(_ultra_instinct_loop(session_factory, redis)),
         asyncio.create_task(_potion_loop(bot, session_factory)),
+        asyncio.create_task(_bank_loop(bot, session_factory, redis)),
         asyncio.create_task(_tribute_loop(session_factory)),
         asyncio.create_task(_stagnation_loop(bot, session_factory, redis)),
         asyncio.create_task(_empire_events_loop(bot, session_factory)),

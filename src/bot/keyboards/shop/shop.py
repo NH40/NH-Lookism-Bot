@@ -10,6 +10,8 @@ from bot.constant.contract import CB_CONTRACT_OPEN
 from bot.constant.potion import CB_POTION_OPEN
 from bot.constant.storage import CB_STORAGE_OPEN
 from bot.constant.deposit import CB_DEPOSIT_OPEN
+from bot.constant.bank import CB_BANK_OPEN
+from bot.texts.bank import BTN_BANKS
 from bot.constant.casino import CB_CASINO_OPEN
 from bot.constant.exchange import CB_EXCHANGE_OPEN
 from bot.texts.contract import BTN_CONTRACTS
@@ -37,6 +39,7 @@ def shop_menu(
         InlineKeyboardButton(text=BTN_STORAGE, callback_data=CB_STORAGE_OPEN),
         InlineKeyboardButton(text=BTN_DEPOSITS, callback_data=CB_DEPOSIT_OPEN),
     ])
+    rows.append([InlineKeyboardButton(text=BTN_BANKS, callback_data=CB_BANK_OPEN)])
     rows.append([
         InlineKeyboardButton(text=BTN_EXCHANGE, callback_data=CB_EXCHANGE_OPEN),
         InlineKeyboardButton(text=BTN_CASINO, callback_data=CB_CASINO_OPEN),

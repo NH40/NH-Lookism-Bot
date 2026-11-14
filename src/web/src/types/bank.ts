@@ -4,38 +4,49 @@ export interface BankRow {
   id: number;
   owner: string;
   capital: number;
-  rate: number;
-  rate_label: string;
+  fixed_rate: number | null;
+  hourly_rate: number | null;
+  penalty_rate: number;
   min_days: number;
   max_days: number;
   open_loans: number;
-  lent_total: number;
 }
 
 export interface LoanRow {
   id: number;
   name: string;
+  status: "pending" | "offered" | "active" | "frozen" | "slave" | string;
+  kind: "fixed" | "hourly" | "daily" | string;
+  rate: number;
+  penalty_rate: number;
   amount: number;
   debt: number;
   principal: number;
   interest: number;
+  penalty: number;
   paid: number;
-  rate_label: string;
   days: number;
-  frozen: boolean;
+  terms: string | null;
   due_in: number;
   frozen_in: number;
+  offer_in: number;
 }
 
-export interface MyBank {
+export interface BankTeam {
+  is_owner: boolean;
+  owner: string;
   capital: number;
   lent: number;
+  reserved: number;
   open_loans: number;
-  rate: number;
-  rate_label: string;
+  fixed_rate: number | null;
+  hourly_rate: number | null;
+  penalty_rate: number;
   min_days: number;
   max_days: number;
   earned: number;
+  members: { id: number; name: string }[];
+  apps: LoanRow[];
   loans: LoanRow[];
 }
 
@@ -44,10 +55,13 @@ export interface BankHome {
   more: boolean;
   page: number;
   loans: LoanRow[];
-  my_bank: MyBank | null;
+  team: BankTeam | null;
   coins: number;
   frozen: boolean;
-  limits: { rate_min: number; rate_max: number; days_min: number; days_max: number; min_capital: number; min_loan: number; freeze_days: number };
+  limits: {
+    fixed_min: number; fixed_max: number; hourly_min: number; hourly_max: number; penalty_max: number; days_min: number; days_max: number;
+    min_capital: number; min_loan: number; freeze_days: number; slave_share: number; members_max: number;
+  };
 }
 
 export interface PenguanBuff {

@@ -1,25 +1,38 @@
-import { Banknote, ChevronLeft, ChevronRight, Landmark, Lock, PiggyBank, Plus, Settings2, Snowflake, Trash2, Wallet } from "lucide-react";
+import { Banknote, Check, ChevronLeft, ChevronRight, FileSignature, Landmark, Lock, PiggyBank, Plus, Settings2, Snowflake, Trash2, UserMinus, UserPlus, Users, Wallet, X } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import type { BankHome, BankRow, LoanRow } from "../../types";
+import type { BankHome, BankRow, BankTeam, LoanRow } from "../../types";
 import { BackHeader, Bar, Chip, Panel, Screen, StatRow, countdown, fmt, useCountdown } from "../../components/ui";
 import { Sheet } from "../../components/Sheet";
 import { ROUTE_MORE } from "../../constants";
 import { useAction, useApi } from "../../hooks/useApi";
 import "./Bank.css";
 
+// Кредиты — банки v2 (2026-11-14): заявка → банк одобряет → договор → подпись; фикс и почасовой; участники банка.
 type Tab = "banks" | "loans" | "mine";
+type Kind = "fixed" | "hourly";
 
 const num = (v: string) => Math.floor(Number(v.replace(/\D/g, ""))) || 0;
+const pct = (r: number | null | undefined) => (r == null ? "—" : `${+(r * 100).toFixed(2)}%`);
+const KIND_NAME: Record<string, string> = { fixed: "фикс", hourly: "почасовой", daily: "в день" };
 
-/** Банки игроков и кредиты — как «💳 Кредиты» в боте: список банков, мои кредиты, мой банк. */
+function kindsLabel(fixed: number | null, hourly: number | null): string {
+  const parts = [];
+  if (fixed != null) parts.push(`фикс +${pct(fixed)}`);
+  if (hourly != null) parts.push(`${pct(hourly)}/ч`);
+  return parts.join(" · ") || "—";
+}
+
+/** Кредиты — как «💳 Кредиты» в боте: банки, мои кредиты и договоры, мой банк. */
 export function BankPage() {
   const [page, setPage] = useState(0);
   const { data, status, error, reload } = useApi<BankHome>(`/bank?page=${page}`);
   const [params] = useSearchParams();
   const initial = params.get("tab");
   const [tab, setTab] = useState<Tab>(initial === "loans" || initial === "mine" ? initial : "banks");
-  const shownTab: Tab = data?.frozen ? "loans" : tab;
+  const shown: Tab = data?.frozen ? "loans" : tab;
+  const offers = data?.loans.filter((l) => l.status === "offered").length ?? 0;
+  const apps = data?.team?.apps.length ?? 0;
   return (
     <Screen status={status} error={error}>
       {data && (
@@ -27,27 +40,26 @@ export function BankPage() {
           <BackHeader title="Кредиты" subtitle="банки игроков" to={ROUTE_MORE} />
           {data.frozen && (
             <Panel title="Банда заморожена" tone="red">
-              <div className="bk-note">
-                Долг не вернули к сроку. Всё заблокировано, весь доход уходит в долг. Погаси кредит — иначе банда удалится.
-              </div>
+              <div className="bk-note">Долг не вернули к сроку. Всё заблокировано, весь доход уходит в долг, капает пеня. Погаси кредит — иначе рабство.</div>
             </Panel>
           )}
           <div className="grid-2">
             <Chip icon={<Wallet size={18} />} value={fmt(data.coins)} label="NHCoin на счёте" variant="gold" />
-            <Chip icon={<Banknote size={18} />} value={fmt(data.loans.reduce((s, l) => s + l.debt, 0))} label="твой долг" variant={data.loans.length ? "violet" : undefined} />
+            <Chip icon={<Banknote size={18} />} value={fmt(data.loans.filter((l) => ["active", "frozen", "slave"].includes(l.status)).reduce((s, l) => s + l.debt, 0))}
+              label="твой долг" variant="violet" />
           </div>
           {!data.frozen && (
             <div className="seg" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
-              <button type="button" className={`pill ${shownTab === "banks" ? "on" : ""}`} onClick={() => setTab("banks")}>Банки</button>
-              <button type="button" className={`pill ${shownTab === "loans" ? "on" : ""}`} onClick={() => setTab("loans")}>
-                Мои кредиты{data.loans.length ? ` · ${data.loans.length}` : ""}
+              <button type="button" className={`pill ${shown === "banks" ? "on" : ""}`} onClick={() => setTab("banks")}>Банки</button>
+              <button type="button" className={`pill ${shown === "loans" ? "on" : ""}`} onClick={() => setTab("loans")}>
+                Мои кредиты{offers ? ` · ✍️${offers}` : data.loans.length ? ` · ${data.loans.length}` : ""}
               </button>
-              <button type="button" className={`pill ${shownTab === "mine" ? "on" : ""}`} onClick={() => setTab("mine")}>Мой банк</button>
+              <button type="button" className={`pill ${shown === "mine" ? "on" : ""}`} onClick={() => setTab("mine")}>Мой банк{apps ? ` · 📨${apps}` : ""}</button>
             </div>
           )}
-          {shownTab === "banks" && <BanksTab data={data} page={page} setPage={setPage} reload={reload} />}
-          {shownTab === "loans" && <LoansTab data={data} reload={reload} />}
-          {shownTab === "mine" && <MineTab data={data} reload={reload} />}
+          {shown === "banks" && <BanksTab data={data} page={page} setPage={setPage} reload={reload} />}
+          {shown === "loans" && <LoansTab data={data} reload={reload} />}
+          {shown === "mine" && <MineTab data={data} reload={reload} />}
         </div>
       )}
     </Screen>
@@ -56,12 +68,13 @@ export function BankPage() {
 
 function BanksTab({ data, page, setPage, reload }: { data: BankHome; page: number; setPage: (p: number) => void; reload: () => void }) {
   const [pick, setPick] = useState<BankRow | null>(null);
+  const L = data.limits;
   return (
     <>
       <Panel title="Банки игроков">
         <div className="bk-note" style={{ marginBottom: 10 }}>
-          Ставка — процент в день от остатка долга, сначала самые дешёвые. Не вернул к сроку: долг заберут монетами → статистами → зданиями,
-          не хватило — заморозка на {data.limits.freeze_days} дн., потом удаление банды.
+          Подаёшь заявку → банк одобряет → подписываешь договор → деньги на счёте. 📌 Фикс — сумма + процент один раз. ⏱ Почасовой — процент каждый час на остаток.
+          Не вернул к сроку: конфискация, заморозка на {L.freeze_days} дн. с пеней, потом рабство — {L.slave_share}% дохода банку.
         </div>
         {data.banks.length === 0 && <div className="bk-empty">Банков пока нет — создай свой во вкладке «Мой банк».</div>}
         {data.banks.map((b) => (
@@ -69,10 +82,10 @@ function BanksTab({ data, page, setPage, reload }: { data: BankHome; page: numbe
             <span className="ico-box"><Landmark size={18} /></span>
             <span className="bk-bank-main">
               <b>{b.owner}</b>
-              <small>{b.min_days}–{b.max_days} дн. · кредитов {b.open_loans}</small>
+              <small>{b.min_days}–{b.max_days} дн. · пеня {b.penalty_rate ? `${pct(b.penalty_rate)}/ч` : "нет"}</small>
             </span>
             <span className="bk-bank-side">
-              <b className="bk-rate">{b.rate_label}<em>/день</em></b>
+              <b className="bk-rate">{kindsLabel(b.fixed_rate, b.hourly_rate)}</b>
               <small>до {fmt(b.capital)}</small>
             </span>
           </button>
@@ -85,28 +98,39 @@ function BanksTab({ data, page, setPage, reload }: { data: BankHome; page: numbe
           </div>
         )}
       </Panel>
-      {pick && <TakeSheet bank={pick} minLoan={data.limits.min_loan} onClose={() => setPick(null)} reload={reload} />}
+      {pick && <ApplySheet bank={pick} minLoan={L.min_loan} onClose={() => setPick(null)} reload={reload} />}
     </>
   );
 }
 
-function TakeSheet({ bank, minLoan, onClose, reload }: { bank: BankRow; minLoan: number; onClose: () => void; reload: () => void }) {
+function ApplySheet({ bank, minLoan, onClose, reload }: { bank: BankRow; minLoan: number; onClose: () => void; reload: () => void }) {
   const { run, busy } = useAction(reload);
+  const kinds: Kind[] = (["fixed", "hourly"] as Kind[]).filter((k) => (k === "fixed" ? bank.fixed_rate : bank.hourly_rate) != null);
+  const [kind, setKind] = useState<Kind>(kinds[0] ?? "fixed");
   const [amount, setAmount] = useState("");
   const [days, setDays] = useState(bank.min_days);
+  const rate = (kind === "fixed" ? bank.fixed_rate : bank.hourly_rate) ?? 0;
   const a = num(amount);
-  const perDay = Math.max(1, Math.round(a * bank.rate));
   const valid = a >= minLoan && a <= bank.capital;
   const dayList = Array.from({ length: bank.max_days - bank.min_days + 1 }, (_, i) => bank.min_days + i);
+  const total = kind === "fixed" ? a + Math.max(1, Math.round(a * rate)) : a + Math.max(1, Math.round(a * rate)) * days * 24;
   const submit = async () => {
-    if (await run("/bank/take", { bank_id: bank.id, amount: a, days })) onClose();
+    if (await run("/bank/apply", { bank_id: bank.id, kind, amount: a, days })) onClose();
   };
   return (
     <Sheet title={`Банк ${bank.owner}`} onClose={onClose}>
-      <StatRow label="Ставка" value={`${bank.rate_label} в день`} />
+      {kinds.length > 1 && (
+        <div className="seg" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          {kinds.map((k) => (
+            <button key={k} type="button" className={`pill ${kind === k ? "on" : ""}`} onClick={() => setKind(k)}>
+              {k === "fixed" ? `📌 Фикс +${pct(bank.fixed_rate)}` : `⏱ ${pct(bank.hourly_rate)} в час`}
+            </button>
+          ))}
+        </div>
+      )}
       <StatRow label="Можно взять" value={`${fmt(minLoan)} – ${fmt(bank.capital)}`} />
       <label className="bk-field">
-        <span className="muted">Сумма кредита</span>
+        <span className="muted">Сумма</span>
         <input inputMode="numeric" value={amount} placeholder={String(minLoan)} onChange={(e) => setAmount(e.target.value.replace(/\D/g, ""))} />
       </label>
       <div className="bk-quick">
@@ -118,21 +142,46 @@ function TakeSheet({ bank, minLoan, onClose, reload }: { bank: BankRow; minLoan:
       </div>
       <div className="muted bk-label">Срок, дней</div>
       <div className="bk-days">
-        {dayList.map((d) => (
-          <button key={d} type="button" className={`pill ${days === d ? "on" : ""}`} onClick={() => setDays(d)}>{d}</button>
-        ))}
+        {dayList.map((d) => <button key={d} type="button" className={`pill ${days === d ? "on" : ""}`} onClick={() => setDays(d)}>{d}</button>)}
       </div>
       {valid && (
         <div className="bk-calc">
-          <div><span>Проценты в сутки</span><b>~{fmt(perDay)}</b></div>
-          <div><span>Вернуть в последний день</span><b className="bk-gold">{fmt(a + perDay * days)}</b></div>
-          <small>Первые сутки процентов — сразу. Гаси раньше — заплатишь меньше.</small>
+          <div><span>{kind === "fixed" ? "Проценты (один раз)" : "Проценты в час"}</span><b>{fmt(Math.max(1, Math.round(a * rate)))}</b></div>
+          <div><span>{kind === "fixed" ? "Вернуть" : "Если гасить в последний час"}</span><b className="bk-gold">{fmt(total)}</b></div>
+          <small>Банк рассмотрит заявку и пришлёт договор. Деньги — после подписи.</small>
         </div>
       )}
       <button type="button" className="btn gold block" disabled={busy || !valid} onClick={() => void submit()}>
-        <Banknote size={16} /> Взять {a ? fmt(a) : ""}
+        <FileSignature size={16} /> Подать заявку
       </button>
     </Sheet>
+  );
+}
+
+function ContractCard({ loan, reload }: { loan: LoanRow; reload: () => void }) {
+  const { run, busy } = useAction(reload);
+  const left = useCountdown(loan.offer_in);
+  const total = loan.kind === "fixed" ? loan.amount + Math.max(1, Math.round(loan.amount * loan.rate)) : 0;
+  return (
+    <Panel title={`Договор №${loan.id}`} tone="gold">
+      <div className="bk-contract">
+        <div className="bk-contract-title">🏦 КРЕДИТНЫЙ ДОГОВОР · {loan.kind === "fixed" ? "фиксированная ставка" : "почасовая ставка"}</div>
+        <StatRow label="Банк" value={loan.name} />
+        <StatRow label="Сумма" value={fmt(loan.amount)} />
+        <StatRow label="Ставка" value={loan.kind === "fixed" ? `+${pct(loan.rate)} один раз → ${fmt(total)}` : `${pct(loan.rate)} в час на остаток`} />
+        <StatRow label="Срок" value={`${loan.days} дн.`} />
+        <StatRow label="Пеня за просрочку" value={loan.penalty_rate ? `${pct(loan.penalty_rate)} в час` : "нет"} />
+        {loan.terms && <div className="bk-terms"><b>Условия банка</b>{loan.terms}</div>}
+        <div className="bk-note" style={{ marginTop: 8 }}>
+          Не вернул к сроку: конфискация (монеты → статисты → здания), заморозка с пеней, потом рабство — 90% дохода банку до полного погашения.
+        </div>
+      </div>
+      <div className="bk-timer"><Lock size={14} /> Подписать до: <b>{countdown(left)}</b></div>
+      <div className="grid-2" style={{ marginTop: 10 }}>
+        <button type="button" className="btn ghost" disabled={busy} onClick={() => run("/bank/decline", { loan_id: loan.id })}><X size={15} />Отказаться</button>
+        <button type="button" className="btn gold" disabled={busy || left <= 0} onClick={() => run("/bank/sign", { loan_id: loan.id })}><FileSignature size={15} />Подписать</button>
+      </div>
+    </Panel>
   );
 }
 
@@ -142,17 +191,21 @@ function LoanCard({ loan, reload }: { loan: LoanRow; reload: () => void }) {
   const due = useCountdown(loan.due_in);
   const frozenLeft = useCountdown(loan.frozen_in);
   const p = num(part);
+  const tone = loan.status === "frozen" || loan.status === "slave" ? "red" : "violet";
+  const title = loan.status === "frozen" ? "Долг · заморозка" : loan.status === "slave" ? "Долг · рабство" : `Кредит #${loan.id}`;
   return (
-    <Panel title={loan.frozen ? "Долг · заморозка" : `Кредит #${loan.id}`} tone={loan.frozen ? "red" : "violet"}>
+    <Panel title={title} tone={tone}>
       <div className="bk-loan-head">
-        <span>банк <b>{loan.name}</b> · {loan.rate_label}/день</span>
+        <span>банк <b>{loan.name}</b> · {KIND_NAME[loan.kind] ?? loan.kind} {pct(loan.rate)}</span>
         <b className="bk-debt">{fmt(loan.debt)}</b>
       </div>
-      <Bar value={loan.paid} max={loan.paid + loan.debt} fill={loan.frozen ? "red" : "violet"} />
-      <div className="bk-sub">погашено {fmt(loan.paid)} из {fmt(loan.paid + loan.debt)} · тело {fmt(loan.principal)}, проценты {fmt(loan.interest)}</div>
-      {loan.frozen ? (
-        <div className="bk-timer red"><Snowflake size={14} /> До удаления банды: <b>{countdown(frozenLeft)}</b></div>
-      ) : (
+      <Bar value={loan.paid} max={loan.paid + loan.debt} fill={tone === "red" ? "red" : "violet"} />
+      <div className="bk-sub">
+        погашено {fmt(loan.paid)} · тело {fmt(loan.principal)}, проценты {fmt(loan.interest)}{loan.penalty ? `, пеня ${fmt(loan.penalty)}` : ""}
+      </div>
+      {loan.status === "frozen" && <div className="bk-timer red"><Snowflake size={14} /> До рабства: <b>{countdown(frozenLeft)}</b></div>}
+      {loan.status === "slave" && <div className="bk-timer red"><Lock size={14} /> 90% дохода уходит банку, пока долг не закрыт</div>}
+      {loan.status === "active" && (
         <div className={`bk-timer ${due < 86400 ? "red" : ""}`}><Lock size={14} /> До срока: <b>{due > 0 ? countdown(due) : "срок вышел"}</b></div>
       )}
       <div className="bk-repay">
@@ -161,7 +214,8 @@ function LoanCard({ loan, reload }: { loan: LoanRow; reload: () => void }) {
           Погасить часть
         </button>
       </div>
-      <button type="button" className={`btn ${loan.frozen ? "red" : "green"} block`} style={{ marginTop: 8 }} disabled={busy} onClick={() => run("/bank/repay", { loan_id: loan.id })}>
+      <button type="button" className={`btn ${tone === "red" ? "red" : "green"} block`} style={{ marginTop: 8 }} disabled={busy}
+        onClick={() => run("/bank/repay", { loan_id: loan.id })}>
         Погасить всё · {fmt(loan.debt)}
       </button>
     </Panel>
@@ -169,62 +223,101 @@ function LoanCard({ loan, reload }: { loan: LoanRow; reload: () => void }) {
 }
 
 function LoansTab({ data, reload }: { data: BankHome; reload: () => void }) {
-  if (!data.loans.length) {
-    return <Panel title="Мои кредиты"><div className="bk-empty">Открытых кредитов нет. Возьми во вкладке «Банки».</div></Panel>;
-  }
-  return <>{data.loans.map((l) => <LoanCard key={l.id} loan={l} reload={reload} />)}</>;
+  const { run, busy } = useAction(reload);
+  const offered = data.loans.filter((l) => l.status === "offered");
+  const pending = data.loans.filter((l) => l.status === "pending");
+  const open = data.loans.filter((l) => ["active", "frozen", "slave"].includes(l.status));
+  if (!data.loans.length) return <Panel title="Мои кредиты"><div className="bk-empty">Кредитов и заявок нет. Подай заявку во вкладке «Банки».</div></Panel>;
+  return (
+    <>
+      {offered.map((l) => <ContractCard key={l.id} loan={l} reload={reload} />)}
+      {pending.length > 0 && (
+        <Panel title="Заявки">
+          {pending.map((l) => (
+            <div key={l.id} className="bk-debtor">
+              <span><b>банк {l.name}</b><small>{fmt(l.amount)} на {l.days} дн. · {KIND_NAME[l.kind]} · ждёт ответа банка</small></span>
+              <button type="button" className="btn ghost small" disabled={busy} onClick={() => run("/bank/cancel", { loan_id: l.id })}>Отозвать</button>
+            </div>
+          ))}
+        </Panel>
+      )}
+      {open.map((l) => <LoanCard key={l.id} loan={l} reload={reload} />)}
+    </>
+  );
 }
 
-function TermsFields({ rate, setRate, min, setMin, max, setMax, limits }: {
-  rate: string; setRate: (v: string) => void; min: number; setMin: (v: number) => void; max: number; setMax: (v: number) => void; limits: BankHome["limits"];
-}) {
+function TermsFields({ t, set, limits }: { t: TermsState; set: (t: TermsState) => void; limits: BankHome["limits"] }) {
   const days = Array.from({ length: limits.days_max - limits.days_min + 1 }, (_, i) => limits.days_min + i);
   return (
     <>
-      <label className="bk-field">
-        <span className="muted">Процент в день ({limits.rate_min * 100}–{limits.rate_max * 100}%)</span>
-        <input inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value.replace(",", ".").replace(/[^\d.]/g, ""))} />
-      </label>
+      <div className="bk-kind-row">
+        <label className="bk-toggle"><input type="checkbox" checked={t.fixedOn} onChange={(e) => set({ ...t, fixedOn: e.target.checked })} /> 📌 Фикс</label>
+        <input inputMode="decimal" disabled={!t.fixedOn} value={t.fixed} onChange={(e) => set({ ...t, fixed: e.target.value.replace(",", ".").replace(/[^\d.]/g, "") })} />
+        <span className="muted">% один раз (до {limits.fixed_max * 100}%)</span>
+      </div>
+      <div className="bk-kind-row">
+        <label className="bk-toggle"><input type="checkbox" checked={t.hourlyOn} onChange={(e) => set({ ...t, hourlyOn: e.target.checked })} /> ⏱ Почасовой</label>
+        <input inputMode="decimal" disabled={!t.hourlyOn} value={t.hourly} onChange={(e) => set({ ...t, hourly: e.target.value.replace(",", ".").replace(/[^\d.]/g, "") })} />
+        <span className="muted">% в час (до {limits.hourly_max * 100}%)</span>
+      </div>
+      <div className="bk-kind-row">
+        <span className="bk-toggle">⚖️ Пеня</span>
+        <input inputMode="decimal" value={t.penalty} onChange={(e) => set({ ...t, penalty: e.target.value.replace(",", ".").replace(/[^\d.]/g, "") })} />
+        <span className="muted">% в час в заморозку (до {limits.penalty_max * 100}%)</span>
+      </div>
       <div className="grid-2">
-        <label className="bk-field">
-          <span className="muted">Срок от, дн.</span>
-          <select value={min} onChange={(e) => setMin(Number(e.target.value))}>{days.map((d) => <option key={d} value={d}>{d}</option>)}</select>
-        </label>
-        <label className="bk-field">
-          <span className="muted">Срок до, дн.</span>
-          <select value={max} onChange={(e) => setMax(Number(e.target.value))}>{days.map((d) => <option key={d} value={d}>{d}</option>)}</select>
-        </label>
+        <label className="bk-field"><span className="muted">Срок от, дн.</span>
+          <select value={t.min} onChange={(e) => set({ ...t, min: Number(e.target.value) })}>{days.map((d) => <option key={d} value={d}>{d}</option>)}</select></label>
+        <label className="bk-field"><span className="muted">Срок до, дн.</span>
+          <select value={t.max} onChange={(e) => set({ ...t, max: Number(e.target.value) })}>{days.map((d) => <option key={d} value={d}>{d}</option>)}</select></label>
       </div>
     </>
   );
 }
 
+interface TermsState { fixedOn: boolean; fixed: string; hourlyOn: boolean; hourly: string; penalty: string; min: number; max: number }
+
+function termsFrom(team: BankTeam | null): TermsState {
+  const p = (r: number | null | undefined, d: string) => (r == null ? d : String(+(r * 100).toFixed(3)));
+  return {
+    fixedOn: team ? team.fixed_rate != null : true, fixed: p(team?.fixed_rate, "20"),
+    hourlyOn: team ? team.hourly_rate != null : true, hourly: p(team?.hourly_rate, "0.5"),
+    penalty: team ? String(+(team.penalty_rate * 100).toFixed(3)) : "1", min: team?.min_days ?? 1, max: team?.max_days ?? 7,
+  };
+}
+
+function termsBody(t: TermsState) {
+  return {
+    fixed_percent: t.fixedOn ? Number(t.fixed) || 0 : null, hourly_percent: t.hourlyOn ? Number(t.hourly) || 0 : null,
+    penalty_percent: Number(t.penalty) || 0, min_days: t.min, max_days: t.max,
+  };
+}
+
 function MineTab({ data, reload }: { data: BankHome; reload: () => void }) {
   const { run, busy } = useAction(reload);
-  const b = data.my_bank;
-  const [capital, setCapital] = useState("");
-  const [rate, setRate] = useState(b ? String(+(b.rate * 100).toFixed(2)) : "5");
-  const [min, setMin] = useState(b?.min_days ?? 3);
-  const [max, setMax] = useState(b?.max_days ?? 14);
-  const [move, setMove] = useState("");
-  const [sheet, setSheet] = useState<"terms" | "close" | null>(null);
+  const team = data.team;
   const L = data.limits;
-  const terms = { rate_percent: Number(rate) || 0, min_days: min, max_days: max };
+  const [capital, setCapital] = useState("");
+  const [terms, setTerms] = useState<TermsState>(termsFrom(team));
+  const [move, setMove] = useState("");
+  const [member, setMember] = useState("");
+  const [sheet, setSheet] = useState<"terms" | "close" | null>(null);
+  const [approve, setApprove] = useState<LoanRow | null>(null);
+  const [approveText, setApproveText] = useState("");
 
-  if (!b) {
+  if (!team) {
     return (
       <Panel title="Создать банк" tone="gold">
         <div className="bk-note" style={{ marginBottom: 10 }}>
-          Внеси капитал, поставь процент в день и срок. Проценты по кредитам капают в капитал банка, свободный капитал можно забрать в любой момент.
-          Не вернувших к сроку бот наказывает сам: конфискация в твой банк, заморозка и удаление банды.
+          Внеси капитал и задай условия. Проценты и пеня капают в капитал банка. Можно позвать до {L.members_max} участников — они пополняют капитал и одобряют заявки.
         </div>
         <label className="bk-field">
           <span className="muted">Капитал (от {fmt(L.min_capital)}, у тебя {fmt(data.coins)})</span>
           <input inputMode="numeric" value={capital} placeholder={String(L.min_capital)} onChange={(e) => setCapital(e.target.value.replace(/\D/g, ""))} />
         </label>
-        <TermsFields rate={rate} setRate={setRate} min={min} setMin={setMin} max={max} setMax={setMax} limits={L} />
-        <button type="button" className="btn gold block" style={{ marginTop: 10 }} disabled={busy || num(capital) < L.min_capital || min > max}
-          onClick={() => run("/bank/create", { capital: num(capital), ...terms })}>
+        <TermsFields t={terms} set={setTerms} limits={L} />
+        <button type="button" className="btn gold block" style={{ marginTop: 10 }} disabled={busy || num(capital) < L.min_capital || terms.min > terms.max}
+          onClick={() => run("/bank/create", { capital: num(capital), ...termsBody(terms) })}>
           <Plus size={16} /> Создать банк
         </button>
       </Panel>
@@ -233,55 +326,110 @@ function MineTab({ data, reload }: { data: BankHome; reload: () => void }) {
   const m = num(move);
   return (
     <>
-      <Panel title="Мой банк" tone="gold">
-        <div className="bk-hero">
-          <span>Свободный капитал</span>
-          <b>{fmt(b.capital)}</b>
-        </div>
-        <StatRow label="Выдано сейчас" value={`${fmt(b.lent)} · ${b.open_loans} кред.`} />
-        <StatRow label="Условия" value={`${b.rate_label}/день · ${b.min_days}–${b.max_days} дн.`} />
-        <StatRow label="Заработано процентов" value={fmt(b.earned)} />
-        <div className="bk-repay" style={{ marginTop: 10 }}>
+      <Panel title={team.is_owner ? "Мой банк" : `Банк ${team.owner}`} tone="gold">
+        <div className="bk-hero"><span>Свободный капитал</span><b>{fmt(team.capital)}</b></div>
+        <StatRow label="Выдано сейчас" value={`${fmt(team.lent)} · ${team.open_loans} кред.`} />
+        <StatRow label="В резерве под договоры" value={fmt(team.reserved)} />
+        <StatRow label="Условия" value={`${kindsLabel(team.fixed_rate, team.hourly_rate)} · ${team.min_days}–${team.max_days} дн.`} />
+        <StatRow label="Пеня" value={team.penalty_rate ? `${pct(team.penalty_rate)}/ч` : "нет"} />
+        <StatRow label="Заработано" value={fmt(team.earned)} />
+        <div className="bk-repay" style={{ marginTop: 10, gridTemplateColumns: team.is_owner ? undefined : "minmax(0, 1fr) auto" }}>
           <input inputMode="numeric" value={move} placeholder="сумма" onChange={(e) => setMove(e.target.value.replace(/\D/g, ""))} />
           <button type="button" className="btn green small" disabled={busy || m <= 0} onClick={async () => { if (await run("/bank/deposit", { amount: m })) setMove(""); }}>
             <PiggyBank size={14} /> Внести
           </button>
-          <button type="button" className="btn ghost small" disabled={busy || m <= 0} onClick={async () => { if (await run("/bank/withdraw", { amount: m })) setMove(""); }}>
-            Забрать
-          </button>
+          {team.is_owner && (
+            <button type="button" className="btn ghost small" disabled={busy || m <= 0} onClick={async () => { if (await run("/bank/withdraw", { amount: m })) setMove(""); }}>
+              Забрать
+            </button>
+          )}
         </div>
-        <div className="grid-2" style={{ marginTop: 10 }}>
-          <button type="button" className="btn ghost small" onClick={() => setSheet("terms")}><Settings2 size={14} /> Условия</button>
-          <button type="button" className="btn red small" onClick={() => setSheet("close")}><Trash2 size={14} /> Закрыть</button>
-        </div>
+        {team.is_owner ? (
+          <div className="grid-2" style={{ marginTop: 10 }}>
+            <button type="button" className="btn ghost small" onClick={() => { setTerms(termsFrom(team)); setSheet("terms"); }}><Settings2 size={14} /> Условия</button>
+            <button type="button" className="btn red small" onClick={() => setSheet("close")}><Trash2 size={14} /> Закрыть</button>
+          </div>
+        ) : (
+          <button type="button" className="btn ghost small block" style={{ marginTop: 10 }} disabled={busy} onClick={() => run("/bank/leave")}>Выйти из банка</button>
+        )}
       </Panel>
-      <Panel title={`Должники · ${b.loans.length}`}>
-        {b.loans.length === 0 && <div className="bk-empty">Кредитов пока не брали.</div>}
-        {b.loans.map((l) => (
-          <div key={l.id} className={`bk-debtor ${l.frozen ? "frozen" : ""}`}>
+
+      <Panel title={`Заявки · ${team.apps.length}`} tone="green">
+        {team.apps.length === 0 && <div className="bk-empty">Новых заявок нет.</div>}
+        {team.apps.map((l) => (
+          <div key={l.id} className="bk-app">
+            <div className="bk-debtor" style={{ borderBottom: 0, paddingBottom: 4 }}>
+              <span><b>{l.name}</b><small>{KIND_NAME[l.kind]} {pct(l.rate)} · на {l.days} дн.</small></span>
+              <b className="mono">{fmt(l.amount)}</b>
+            </div>
+            <div className="grid-2">
+              <button type="button" className="btn ghost small" disabled={busy} onClick={() => run("/bank/reject", { loan_id: l.id })}><X size={14} />Отклонить</button>
+              <button type="button" className="btn green small" disabled={busy} onClick={() => { setApprove(l); setApproveText(""); }}><Check size={14} />Одобрить</button>
+            </div>
+          </div>
+        ))}
+      </Panel>
+
+      <Panel title={`Должники · ${team.loans.length}`}>
+        {team.loans.length === 0 && <div className="bk-empty">Выданных кредитов нет.</div>}
+        {team.loans.map((l) => (
+          <div key={l.id} className={`bk-debtor ${l.status === "frozen" || l.status === "slave" ? "frozen" : ""}`}>
             <span>
               <b>{l.name}</b>
-              <small>{l.frozen ? "заморожен · удаление через " + countdown(l.frozen_in) : l.due_in ? "срок через " + countdown(l.due_in) : "срок вышел"}</small>
+              <small>{l.status === "frozen" ? "🧊 заморожен" : l.status === "slave" ? "⛓ в рабстве — 90% дохода в банк" : `срок через ${countdown(l.due_in)}`}</small>
             </span>
             <b className="mono">{fmt(l.debt)}</b>
           </div>
         ))}
       </Panel>
+
+      {team.is_owner && (
+        <Panel title={`Участники · ${team.members.length}/${L.members_max}`}>
+          <div className="bk-note" style={{ marginBottom: 8 }}>Пополняют капитал и одобряют заявки. Забрать деньги, менять условия и закрыть банк — только ты.</div>
+          {team.members.map((u) => (
+            <div key={u.id} className="bk-debtor">
+              <span><b><Users size={13} /> {u.name}</b></span>
+              <button type="button" className="btn ghost small" disabled={busy} onClick={() => run("/bank/members/remove", { user_id: u.id })}><UserMinus size={14} /></button>
+            </div>
+          ))}
+          {team.members.length < L.members_max && (
+            <div className="bk-repay" style={{ gridTemplateColumns: "minmax(0, 1fr) auto" }}>
+              <input value={member} placeholder="@ник игрока" onChange={(e) => setMember(e.target.value)} />
+              <button type="button" className="btn small" disabled={busy || member.trim().length < 2} onClick={async () => { if (await run("/bank/members/add", { username: member })) setMember(""); }}>
+                <UserPlus size={14} /> Добавить
+              </button>
+            </div>
+          )}
+        </Panel>
+      )}
+
+      {approve && (
+        <Sheet title={`Одобрить заявку #${approve.id}`} onClose={() => setApprove(null)}>
+          <StatRow label="Заёмщик" value={approve.name} />
+          <StatRow label="Сумма" value={fmt(approve.amount)} />
+          <StatRow label="Вид" value={`${KIND_NAME[approve.kind]} ${pct(approve.rate)}`} />
+          <label className="bk-field">
+            <span className="muted">Свои условия в договор (необязательно)</span>
+            <textarea rows={4} maxLength={500} value={approveText} onChange={(e) => setApproveText(e.target.value)} placeholder="Например: верни раньше — скидка 5%" />
+          </label>
+          <button type="button" className="btn green block" style={{ marginTop: 10 }} disabled={busy}
+            onClick={async () => { if (await run("/bank/approve", { loan_id: approve.id, terms: approveText || null })) setApprove(null); }}>
+            <FileSignature size={15} /> Одобрить и отправить договор
+          </button>
+        </Sheet>
+      )}
       {sheet === "terms" && (
         <Sheet title="Условия банка" onClose={() => setSheet(null)}>
-          <div className="bk-note">Новые условия — только для новых кредитов, выданные живут по своим.</div>
-          <TermsFields rate={rate} setRate={setRate} min={min} setMin={setMin} max={max} setMax={setMax} limits={L} />
-          <button type="button" className="btn block" disabled={busy || min > max} onClick={async () => { if (await run("/bank/terms", terms)) setSheet(null); }}>
-            Сохранить
-          </button>
+          <div className="bk-note">Новые условия — только для новых заявок.</div>
+          <TermsFields t={terms} set={setTerms} limits={L} />
+          <button type="button" className="btn block" style={{ marginTop: 10 }} disabled={busy || terms.min > terms.max}
+            onClick={async () => { if (await run("/bank/terms", termsBody(terms))) setSheet(null); }}>Сохранить</button>
         </Sheet>
       )}
       {sheet === "close" && (
         <Sheet title="Закрыть банк?" onClose={() => setSheet(null)}>
-          <div className="bk-note">Свободный капитал {fmt(b.capital)} вернётся на счёт. Закрыть можно, только когда все кредиты погашены.</div>
-          <button type="button" className="btn red block" disabled={busy} onClick={async () => { if (await run("/bank/close")) setSheet(null); }}>
-            Да, закрыть
-          </button>
+          <div className="bk-note">Свободный капитал {fmt(team.capital)} вернётся на счёт. Закрыть можно, когда нет кредитов и заявок.</div>
+          <button type="button" className="btn red block" style={{ marginTop: 10 }} disabled={busy} onClick={async () => { if (await run("/bank/close")) setSheet(null); }}>Да, закрыть</button>
         </Sheet>
       )}
     </>

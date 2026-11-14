@@ -262,7 +262,8 @@ async def _bank_loop(bot: Bot, session_factory: async_sessionmaker[AsyncSession]
         try:
             notices = await bank_sweep(session_factory, redis)
             if notices:
-                await send_bank_pushes(bot, notices)
+                async with session_factory() as session:
+                    await send_bank_pushes(bot, session, notices)
         except Exception:
             log.exception("Bank sweep failed")
         await asyncio.sleep(BANK_SWEEP_SECONDS)

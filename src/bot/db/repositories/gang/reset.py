@@ -46,6 +46,7 @@ _PROGRESS_STATEMENTS = (
     "DELETE FROM deposits WHERE user_id = :uid",
     # Банк игрока сгорает вместе с капиталом (как NHCoin); выданные им кредиты гасятся владельцу напрямую (bank_id → NULL).
     "DELETE FROM banks WHERE owner_id = :uid",
+    "DELETE FROM bank_members WHERE user_id = :uid",
     # Стек за покерным столом сгорает (иначе NHCoin проносили бы через сброс за столом);
     # игрок встаёт после текущей раздачи.
     "UPDATE poker_players SET stack = 0, leaving = true WHERE user_id = :uid",

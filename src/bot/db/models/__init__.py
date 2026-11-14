@@ -36,7 +36,7 @@ from bot.db.models.contract import StatistContract  # noqa: F401
 from bot.db.models.potion import UserPotion  # noqa: F401
 from bot.db.models.storage_cell import StorageCell  # noqa: F401
 from bot.db.models.deposit import Deposit  # noqa: F401
-from bot.db.models.bank import Bank, BankLoan  # noqa: F401
+from bot.db.models.bank import Bank, BankLoan, BankMember  # noqa: F401
 from bot.db.models.poker import PokerPlayer, PokerTable  # noqa: F401
 from bot.db.models.exchange import ExchangeAuction, ExchangeLot, ExchangeTrade  # noqa: F401
 from bot.db.models.clan import Clan, ClanBuilding, ClanContract, ClanDonatePurchase, ClanGarrisonCard, ClanGarrisonExtra, ClanIncomeShare, ClanJoinRequest, ClanLog, ClanMember, ClanMemberStat, ClanWar  # noqa: F401

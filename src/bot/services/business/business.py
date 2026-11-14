@@ -392,6 +392,10 @@ async def accrue(session: AsyncSession, user_id: int, *, now: datetime | None = 
     # если игрок сам владелец/зам — забирает накопленную долю вместе со своим доходом.
     share = await clan_repo.settle_income_share(session, user_id, amount, CLAN_OWNER_SHARE, CLAN_DEPUTY_SHARE)
     await business_repo.credit_accrual(session, user_id, amount=amount + share, accrued_at=new_accrued_at)
+    # Кредиты: должник в «рабстве» отдаёт банкиру долю дохода, пока долг не закрыт (`services/bank.slave_cut`).
+    from bot.services.bank import slave_cut
+
+    amount -= await slave_cut(session, user_id, amount + share)
     if PATH_BUSINESS in build_.paths:  # шкала Бизнесмена растёт от заработанных денег
         from bot.services.path_gauge import add as add_gauge
 

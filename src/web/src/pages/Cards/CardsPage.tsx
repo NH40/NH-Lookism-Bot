@@ -272,8 +272,8 @@ export function CardsPage() {
 
       {openedCard && (
         <Sheet title={openedCard.name} onClose={() => setOpened(null)}>
+          {openedCard.image && <div className="card-hero"><img src={imgUrl(openedCard.image, 480)} alt={openedCard.name} /></div>}
           <div className="pick-row" style={{ cursor: "default" }}>
-            <div className="pick-thumb">{openedCard.image && <img src={imgUrl(openedCard.image, 160)} alt="" />}</div>
             <div style={{ flex: 1 }}>
               <div className="pick-name">{openedCard.rarity_label} · мощь {fmt(openedCard.power)}</div>
               <div className="pick-sub">

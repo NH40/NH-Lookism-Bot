@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from bot.constant.help import CB_HELP_OPEN, CB_HELP_SECTION_PREFIX
-from bot.texts.help import BTN_BACK_TO_MENU, BTN_NEXT, BTN_PREV, HELP_SECTIONS
+from bot.constant.help import CB_HELP_IMAGES_PREFIX, CB_HELP_OPEN, CB_HELP_SECTION_PREFIX
+from bot.texts.help import BTN_BACK_TO_MENU, BTN_NEXT, BTN_PREV, HELP_IMAGE_SECTIONS, HELP_SECTIONS
 
 
 def _btn(text: str, callback_data: str) -> InlineKeyboardButton:
@@ -14,7 +14,13 @@ def _btn(text: str, callback_data: str) -> InlineKeyboardButton:
 def help_menu() -> InlineKeyboardMarkup:
     """Все разделы по два в ряд."""
     buttons = [_btn(label, f"{CB_HELP_SECTION_PREFIX}{code}") for code, label, _ in HELP_SECTIONS]
-    return InlineKeyboardMarkup(inline_keyboard=[buttons[i : i + 2] for i in range(0, len(buttons), 2)])
+    rows = [buttons[i : i + 2] for i in range(0, len(buttons), 2)]
+    images = [_btn(label, f"{CB_HELP_IMAGES_PREFIX}{code}") for code, label, _, _ in HELP_IMAGE_SECTIONS]
+    return InlineKeyboardMarkup(inline_keyboard=rows + [images[i : i + 2] for i in range(0, len(images), 2)])
+
+
+def back_menu() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[_btn(BTN_BACK_TO_MENU, CB_HELP_OPEN)]])
 
 
 def section_menu(code: str) -> InlineKeyboardMarkup:

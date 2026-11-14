@@ -6,6 +6,8 @@ from bot.texts.help.help import (  # noqa: F401
     BTN_PREV,
     HELP_MENU,
     HELP_SECTIONS,
+    HELP_IMAGE_SECTIONS,
+    HELP_IMAGES_MISSING,
     HELP_SECTION_BY_CODE,
     SEP,
 )

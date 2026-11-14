@@ -553,3 +553,13 @@ HELP_SECTIONS: tuple[tuple[str, str, str], ...] = (
 )
 
 HELP_SECTION_BY_CODE: dict[str, tuple[str, str, str]] = {s[0]: s for s in HELP_SECTIONS}
+
+
+# Разделы гайда картинками — те же листы, что в Mini App (`assets/guide/<prefix>-N.png`, `api/routers/guide`).
+HELP_IMAGE_SECTIONS: tuple[tuple[str, str, str, str], ...] = (
+    ("g_bloodlines", "🩸 Родословные · листы", "bloodlines", "Все родословные по уровням — что даёт каждый уровень и итог на 10-м."),
+    ("g_paths", "🛤 Пути · листы", "paths", "Все пути по уровням, их шкалы и что даёт шкала."),
+    ("g_techniques", "🥋 Техники · листы", "techniques", "Все уникальные техники по уровням и их учителя."),
+    ("g_genius", "🧠 Гениальность · листы", "genius", "Все гениальности по уровням."),
+)
+HELP_IMAGES_MISSING = "Картинки этого раздела пока не загружены — они есть в гайде Mini App."

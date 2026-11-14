@@ -74,13 +74,16 @@
 .pick-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 0; border: none; border-bottom: 1px dashed var(--line-dash); background: none; color: var(--text); text-align: left; cursor: pointer; min-height: 64px; }
 .pick-row:last-child { border-bottom: none; }
 .pick-row:disabled { opacity: 0.5; cursor: default; }
-.pick-thumb { width: 44px; height: 56px; flex: none; border-radius: 8px; overflow: hidden; border: 1px solid var(--line-soft); background: rgba(14, 24, 62, 0.8); }
-.pick-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 12%; display: block; }
+.pick-thumb { width: 64px; height: 96px; flex: none; border-radius: 6px; overflow: hidden; border: 1px solid var(--line-soft); background: rgba(14, 24, 62, 0.8); }
+.pick-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .pick-name { font-size: 13px; font-weight: 800; }
 .pick-sub { font-size: 11px; font-weight: 700; color: var(--muted); }
 
-.reveal-art { width: 62%; max-width: 220px; aspect-ratio: 3 / 4; margin: 0 auto 12px; border-radius: 14px; overflow: hidden; border: 1px solid var(--gold); box-shadow: 0 0 26px rgba(245, 185, 66, 0.45); background: rgba(14, 24, 62, 0.8); }
-.reveal-art img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 12%; display: block; }
+.reveal-art { width: 100%; max-width: 300px; margin: 0 auto 12px; border-radius: 8px; overflow: hidden; border: 1px solid var(--gold); box-shadow: 0 0 20px rgba(245, 185, 66, 0.35); background: rgba(2, 8, 24, 0.8); }
+.reveal-art img { width: 100%; height: auto; max-height: 52vh; object-fit: contain; display: block; }
+/* Карточка уника в шторке — арт целиком (2026-11-14: раньше миниатюра 44×56 с обрезкой). */
+.card-hero { max-width: 280px; margin: 0 auto 10px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: rgba(2, 8, 24, 0.8); }
+.card-hero img { width: 100%; height: auto; max-height: 48vh; object-fit: contain; display: block; }
 .emp-entry { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(245,185,66,.6); background: linear-gradient(180deg, rgba(60,44,12,.55), rgba(16,22,52,.92)); box-shadow: 0 0 16px rgba(245,185,66,.2); color: var(--text); text-decoration: none; }
 .emp-entry b { display: block; font-size: 15px; font-weight: 800; }
 .emp-entry small { display: block; font-size: 11px; font-weight: 700; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

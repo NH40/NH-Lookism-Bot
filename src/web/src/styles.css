@@ -77,17 +77,12 @@ a { color: var(--cyan); }
   mask-image: radial-gradient(120% 80% at 50% 0%, #000 30%, transparent 85%);
   -webkit-mask-image: radial-gradient(120% 80% at 50% 0%, #000 30%, transparent 85%);
 }
+/* Сканлайны — статичный слой под контентом (2026-11-14: анимированный полноэкранный слой со смешиванием цветов
+   перерисовывал экран каждый кадр и тормозил на слабых телефонах). */
 .app::after {
-  content: ""; position: fixed; inset: 0; z-index: 30; pointer-events: none;
-  background:
-    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.022) 0 1px, transparent 1px 3px),
-    linear-gradient(180deg, transparent 0%, rgba(120, 220, 255, 0.05) 50%, transparent 100%);
-  background-size: 100% 100%, 100% 260px;
-  background-repeat: repeat, no-repeat;
-  animation: sys-sweep 7s linear infinite;
-  mix-blend-mode: screen;
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0 1px, transparent 1px 3px);
 }
-@keyframes sys-sweep { from { background-position: 0 0, 0 -260px; } to { background-position: 0 0, 0 110vh; } }
 
 .page {
   max-width: 560px;
@@ -105,9 +100,8 @@ a { color: var(--cyan); }
 .page > *:nth-child(5) { animation-delay: 0.16s; }
 .page > *:nth-child(n + 6) { animation-delay: 0.2s; }
 @keyframes sys-open {
-  from { opacity: 0; transform: translateY(8px) scaleY(0.94); filter: brightness(1.8) saturate(0.6); }
-  60% { opacity: 1; filter: brightness(1.15); }
-  to { opacity: 1; transform: none; filter: none; }
+  from { opacity: 0; transform: translateY(8px) scaleY(0.96); }
+  to { opacity: 1; transform: none; }
 }
 
 .disp { font-family: var(--font-display); font-weight: 800; letter-spacing: 0.01em; }
@@ -142,13 +136,11 @@ a { color: var(--cyan); }
     inset 0 0 28px rgba(var(--tone), 0.07),
     0 14px 34px rgba(0, 0, 0, 0.45);
   padding: 26px 14px 14px;
-  backdrop-filter: blur(6px);
 }
 /* Светящиеся уголки рамки. */
 .panel::before, .panel::after {
   content: ""; position: absolute; width: 16px; height: 16px; pointer-events: none;
   border: 2px solid var(--tone-2);
-  filter: drop-shadow(0 0 4px rgba(var(--tone), 0.9));
 }
 .panel::before { top: -2px; left: -2px; border-right: 0; border-bottom: 0; border-top-left-radius: var(--r); }
 .panel::after { bottom: -2px; right: -2px; border-left: 0; border-top: 0; border-bottom-right-radius: var(--r); }
@@ -172,8 +164,7 @@ a { color: var(--cyan); }
 .panel.tone-violet { --tone: 167, 123, 255; --tone-2: var(--violet-2); }
 .panel.tone-green { --tone: 46, 232, 138; --tone-2: var(--green-2); }
 .panel.tone-red { --tone: 255, 61, 98; --tone-2: var(--red-2); }
-.panel.tone-red { animation-name: sys-open, sys-alert; animation-duration: 0.38s, 2.4s; animation-iteration-count: 1, infinite; animation-delay: 0s, 0.4s; }
-@keyframes sys-alert { 50% { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 61, 98, 0.32), inset 0 0 30px rgba(255, 61, 98, 0.12), 0 14px 34px rgba(0, 0, 0, 0.45); } }
+.panel.tone-red { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 26px rgba(255, 61, 98, 0.28), inset 0 0 28px rgba(255, 61, 98, 0.1), 0 14px 34px rgba(0, 0, 0, 0.45); }
 
 /* --- Полоса прогресса: сегменты Системы --- */
 .bar {
@@ -218,27 +209,20 @@ a { color: var(--cyan); }
   min-height: 46px; padding: 0 20px; border: 0; border-radius: 0;
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 50%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 50%),
     linear-gradient(100deg, var(--b1), var(--b2));
   color: var(--bt); font-family: var(--font-display); font-weight: 800; font-size: 13.5px; letter-spacing: 0.06em; text-transform: uppercase;
   line-height: 1.15; text-align: center; padding-block: 6px;
-  text-shadow: 0 0 10px rgba(255, 255, 255, 0.35);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28), inset 0 0 18px rgba(255, 255, 255, 0.14), inset 0 -3px 0 rgba(0, 0, 0, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2), inset 0 0 14px rgba(255, 255, 255, 0.06), inset 0 -3px 0 rgba(0, 0, 0, 0.22);
   cursor: pointer; text-decoration: none; transition: transform 0.08s ease, filter 0.15s ease;
   overflow: hidden;
 }
-.btn::after {
-  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background: linear-gradient(110deg, transparent 35%, rgba(255, 255, 255, 0.35) 50%, transparent 65%);
-  transform: translateX(-120%); animation: sys-shine 4.5s ease-in-out infinite;
-}
-@keyframes sys-shine { 0%, 70% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
+/* Бликов на кнопках нет (пользователь 2026-11-14: «режут глаза»). */
 .btn:active { transform: translateY(1px) scale(0.985); filter: brightness(1.18); }
 .btn:disabled, .btn.off {
   background: repeating-linear-gradient(135deg, rgba(90, 120, 170, 0.14) 0 6px, rgba(90, 120, 170, 0.08) 6px 12px);
   color: var(--dim); text-shadow: none; box-shadow: inset 0 0 0 1px rgba(120, 150, 200, 0.2); cursor: default;
 }
-.btn:disabled::after, .btn.off::after { display: none; }
 .btn.block { width: 100%; }
 .btn.gold { --b1: #ffcf5a; --b2: #c27c07; --bs: 255, 191, 60; --bt: #1a0f00; text-shadow: none; }
 .btn.red { --b1: #ff4d70; --b2: #a8102f; --bs: 255, 61, 98; }
@@ -249,7 +233,6 @@ a { color: var(--cyan); }
   color: var(--cyan-2);
   box-shadow: inset 0 0 0 1px rgba(79, 216, 255, 0.4), inset 0 0 14px rgba(79, 216, 255, 0.1);
 }
-.btn.ghost::after { display: none; }
 .btn.small { min-height: 34px; padding: 0 13px; font-size: 11px; --cut: 7px; letter-spacing: 0.06em; }
 
 /* --- Быстрые действия и плитки --- */
@@ -322,7 +305,6 @@ a { color: var(--cyan); }
   background: linear-gradient(180deg, rgba(8, 20, 50, 0.92), rgba(3, 8, 22, 0.96));
   border: 1px solid var(--line-soft); border-radius: 10px;
   box-shadow: 0 -1px 0 rgba(79, 216, 255, 0.4), 0 0 24px rgba(79, 216, 255, 0.12), 0 12px 30px rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(14px);
 }
 .nav::before { content: ""; position: absolute; left: 20%; right: 20%; top: -1px; height: 1px; background: linear-gradient(90deg, transparent, var(--cyan), transparent); box-shadow: 0 0 10px var(--cyan); }
 .tab {
@@ -384,7 +366,7 @@ input, select, textarea { font-family: inherit; }
 .page input::placeholder, .page textarea::placeholder { color: var(--dim); }
 
 @media (prefers-reduced-motion: reduce) {
-  .spin, .skeleton::after, .toast, .page > *, .app::after, .btn::after, .portrait::after, .panel.tone-red { animation: none; }
+  .spin, .skeleton::after, .toast, .page > *, .portrait::after { animation: none; }
   .bar > div { transition: none; }
 }
 

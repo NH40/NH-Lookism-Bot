@@ -57,31 +57,19 @@ button { font-family: inherit; }
 a { color: var(--cyan); }
 ::selection { background: rgba(79, 216, 255, 0.35); }
 
-/* --- Фон: глубина, сетка Системы, сканлайны, медленная световая волна --- */
-.app {
-  position: relative;
-  min-height: 100vh;
-  isolation: isolate;
-  background:
-    radial-gradient(120% 50% at 50% -8%, rgba(40, 140, 255, 0.32), transparent 62%),
-    radial-gradient(60% 35% at 100% 30%, rgba(140, 80, 255, 0.14), transparent 70%),
-    radial-gradient(60% 35% at 0% 70%, rgba(0, 200, 255, 0.08), transparent 70%),
-    linear-gradient(180deg, var(--bg-2) 0%, var(--bg-1) 50%, var(--bg-0) 100%) fixed;
-}
+/* --- Фон: один неподвижный слой (2026-11-14, лаги при прокрутке). Раньше фон был `background-attachment: fixed` +
+   маска + слой сканлайнов: на телефонах это перерисовывало весь экран со всеми тенями на каждом кадре прокрутки.
+   Теперь фон — отдельный fixed-слой на своём слое композитора: рисуется один раз, прокрутка его не трогает. */
+.app { position: relative; min-height: 100vh; isolation: isolate; background: var(--bg-1); }
 .app::before {
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  background-image:
-    linear-gradient(rgba(79, 216, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(79, 216, 255, 0.06) 1px, transparent 1px);
-  background-size: 34px 34px;
-  mask-image: radial-gradient(120% 80% at 50% 0%, #000 30%, transparent 85%);
-  -webkit-mask-image: radial-gradient(120% 80% at 50% 0%, #000 30%, transparent 85%);
-}
-/* Сканлайны — статичный слой под контентом (2026-11-14: анимированный полноэкранный слой со смешиванием цветов
-   перерисовывал экран каждый кадр и тормозил на слабых телефонах). */
-.app::after {
-  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  background: repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0 1px, transparent 1px 3px);
+  transform: translateZ(0); will-change: transform;
+  background:
+    linear-gradient(rgba(79, 216, 255, 0.045) 1px, transparent 1px) 0 0 / 34px 34px,
+    linear-gradient(90deg, rgba(79, 216, 255, 0.045) 1px, transparent 1px) 0 0 / 34px 34px,
+    radial-gradient(120% 50% at 50% -8%, rgba(40, 140, 255, 0.3), transparent 62%),
+    radial-gradient(60% 35% at 100% 30%, rgba(140, 80, 255, 0.12), transparent 70%),
+    linear-gradient(180deg, var(--bg-2) 0%, var(--bg-1) 50%, var(--bg-0) 100%);
 }
 
 .page {
@@ -127,14 +115,9 @@ a { color: var(--cyan); }
   border: 1px solid rgba(var(--tone), 0.38);
   border-radius: var(--r);
   background:
-    linear-gradient(180deg, rgba(var(--tone), 0.1), transparent 34%),
-    repeating-linear-gradient(180deg, rgba(var(--tone), 0.025) 0 1px, transparent 1px 4px),
+    linear-gradient(180deg, rgba(var(--tone), 0.11), transparent 34%),
     linear-gradient(180deg, var(--panel-top), var(--panel-bot));
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.5),
-    0 0 22px rgba(var(--tone), 0.14),
-    inset 0 0 28px rgba(var(--tone), 0.07),
-    0 14px 34px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 12px rgba(var(--tone), 0.14), 0 6px 16px rgba(0, 0, 0, 0.35);
   padding: 26px 14px 14px;
 }
 /* Светящиеся уголки рамки. */
@@ -164,14 +147,14 @@ a { color: var(--cyan); }
 .panel.tone-violet { --tone: 167, 123, 255; --tone-2: var(--violet-2); }
 .panel.tone-green { --tone: 46, 232, 138; --tone-2: var(--green-2); }
 .panel.tone-red { --tone: 255, 61, 98; --tone-2: var(--red-2); }
-.panel.tone-red { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 26px rgba(255, 61, 98, 0.28), inset 0 0 28px rgba(255, 61, 98, 0.1), 0 14px 34px rgba(0, 0, 0, 0.45); }
+.panel.tone-red { box-shadow: 0 0 14px rgba(255, 61, 98, 0.24), 0 6px 16px rgba(0, 0, 0, 0.35); }
 
 /* --- Полоса прогресса: сегменты Системы --- */
 .bar {
   position: relative; height: 9px; border-radius: 2px; overflow: hidden;
   background: rgba(79, 216, 255, 0.07); border: 1px solid rgba(79, 216, 255, 0.18);
 }
-.bar > div { position: relative; height: 100%; border-radius: 1px; transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); box-shadow: 0 0 10px currentColor; }
+.bar > div { position: relative; height: 100%; border-radius: 1px; transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .bar::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(90deg, transparent 0 9px, rgba(2, 4, 11, 0.85) 9px 11px); }
 .fill-blue { background: linear-gradient(90deg, #1d6bff, var(--cyan)); color: rgba(79, 216, 255, 0.6); }
 .fill-red { background: linear-gradient(90deg, #c4123a, var(--red)); color: rgba(255, 61, 98, 0.6); }
@@ -188,7 +171,7 @@ a { color: var(--cyan); }
   font-family: var(--font-display); font-size: 13.5px; font-weight: 800; color: #fff; letter-spacing: 0.01em;
 }
 .chip::before { content: ""; position: absolute; left: -1px; top: 8px; bottom: 8px; width: 2px; background: rgb(var(--tone)); box-shadow: 0 0 8px rgb(var(--tone)); }
-.chip svg { color: rgb(var(--tone)); filter: drop-shadow(0 0 4px rgba(var(--tone), 0.7)); flex: none; }
+.chip svg { color: rgb(var(--tone)); flex: none; }
 .chip small { display: block; color: var(--muted); font-family: var(--font-body); font-weight: 700; font-size: 10.5px; letter-spacing: 0.02em; }
 .chip .chip-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip.gold { --tone: 255, 191, 60; }
@@ -244,7 +227,7 @@ a { color: var(--cyan); }
   color: #dff3ff; font-family: var(--font-display); font-size: 11px; font-weight: 800; letter-spacing: 0.04em;
   text-decoration: none; cursor: pointer; transition: transform 0.08s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
-.qa svg { color: var(--cyan); filter: drop-shadow(0 0 6px rgba(79, 216, 255, 0.7)); }
+.qa svg { color: var(--cyan); }
 .qa:active { transform: scale(0.97); border-color: var(--line); box-shadow: 0 0 16px rgba(79, 216, 255, 0.3); }
 .tile {
   position: relative; display: flex; flex-direction: column; gap: 8px; padding: 13px; min-height: 96px;
@@ -254,7 +237,7 @@ a { color: var(--cyan); }
     rgba(4, 12, 32, 0.6);
   color: inherit; text-decoration: none; cursor: pointer; transition: transform 0.08s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
-.tile::after { content: ""; position: absolute; top: -1px; right: -1px; width: 12px; height: 12px; border-top: 2px solid var(--cyan); border-right: 2px solid var(--cyan); border-top-right-radius: 6px; filter: drop-shadow(0 0 4px var(--cyan)); opacity: 0.8; }
+.tile::after { content: ""; position: absolute; top: -1px; right: -1px; width: 12px; height: 12px; border-top: 2px solid var(--cyan); border-right: 2px solid var(--cyan); border-top-right-radius: 6px; opacity: 0.8; }
 .tile:active { transform: scale(0.98); border-color: var(--line); box-shadow: 0 0 18px rgba(79, 216, 255, 0.25); }
 .tile b { font-family: var(--font-display); font-size: 14px; font-weight: 800; letter-spacing: 0.01em; }
 .tile small { font-size: 11px; color: var(--muted); font-weight: 600; }
@@ -264,7 +247,6 @@ a { color: var(--cyan); }
   background: radial-gradient(circle at 30% 25%, rgba(79, 216, 255, 0.45), rgba(30, 110, 255, 0.12));
   color: #fff;
 }
-.ico-box svg { filter: drop-shadow(0 0 5px rgba(79, 216, 255, 0.9)); }
 
 /* --- Вкладки внутри экрана --- */
 .seg { display: grid; gap: 3px; padding: 3px; border-radius: 6px; background: rgba(2, 8, 24, 0.7); border: 1px solid var(--line-soft); }
@@ -304,7 +286,7 @@ a { color: var(--cyan); }
   padding: 5px;
   background: linear-gradient(180deg, rgba(8, 20, 50, 0.92), rgba(3, 8, 22, 0.96));
   border: 1px solid var(--line-soft); border-radius: 10px;
-  box-shadow: 0 -1px 0 rgba(79, 216, 255, 0.4), 0 0 24px rgba(79, 216, 255, 0.12), 0 12px 30px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 -1px 0 rgba(79, 216, 255, 0.4), 0 8px 20px rgba(0, 0, 0, 0.5);
 }
 .nav::before { content: ""; position: absolute; left: 20%; right: 20%; top: -1px; height: 1px; background: linear-gradient(90deg, transparent, var(--cyan), transparent); box-shadow: 0 0 10px var(--cyan); }
 .tab {
@@ -313,12 +295,12 @@ a { color: var(--cyan); }
   text-decoration: none; transition: color 0.15s ease, background 0.15s ease;
 }
 .tab.on { color: #fff; background: radial-gradient(80% 90% at 50% 100%, rgba(79, 216, 255, 0.28), transparent 70%); text-shadow: 0 0 10px rgba(79, 216, 255, 0.9); }
-.tab.on svg { color: var(--cyan); filter: drop-shadow(0 0 6px var(--cyan)); }
+.tab.on svg { color: var(--cyan); }
 .tab.on::after { content: ""; position: absolute; bottom: 2px; left: 30%; right: 30%; height: 2px; background: var(--cyan); box-shadow: 0 0 10px var(--cyan); border-radius: 2px; }
 
 /* --- Состояния экрана и уведомления Системы --- */
 .state { min-height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; color: var(--muted); font-weight: 700; padding: 24px; }
-.state svg { color: var(--cyan); filter: drop-shadow(0 0 8px var(--cyan)); }
+.state svg { color: var(--cyan); }
 .sys-tag { font-family: var(--font-mono); font-size: 11px; font-weight: 800; letter-spacing: 0.22em; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
 .sys-tag.err { color: var(--red); text-shadow: 0 0 10px var(--red); }
 .sys-loading { font-family: var(--font-mono); font-size: 11px; font-weight: 800; letter-spacing: 0.18em; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); animation: sys-blink 1.1s steps(2) infinite; }
@@ -336,7 +318,7 @@ a { color: var(--cyan); }
   position: relative; max-width: 520px; margin: 0 auto; width: 100%; padding: 26px 14px 12px;
   border: 1px solid var(--line); border-radius: 6px;
   background: linear-gradient(180deg, rgba(79, 216, 255, 0.12), transparent 40%), rgba(4, 12, 32, 0.96);
-  backdrop-filter: blur(10px); box-shadow: 0 0 26px rgba(79, 216, 255, 0.25), 0 12px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 16px rgba(79, 216, 255, 0.22), 0 8px 20px rgba(0, 0, 0, 0.5);
   font-size: 13px; font-weight: 700; animation: toast-in 0.28s cubic-bezier(0.2, 0.9, 0.25, 1);
 }
 .toast::before {
@@ -351,7 +333,7 @@ a { color: var(--cyan); }
 
 /* --- Портрет и арт --- */
 .portrait { position: relative; flex: none; border-radius: 50%; padding: 3px; background: conic-gradient(from 200deg, var(--cyan), #7b5cff, var(--cyan)); box-shadow: 0 0 24px rgba(79, 216, 255, 0.45); }
-.portrait::after { content: ""; position: absolute; inset: -7px; border-radius: 50%; border: 1px dashed rgba(79, 216, 255, 0.5); animation: spin 18s linear infinite; pointer-events: none; }
+.portrait::after { content: ""; position: absolute; inset: -7px; border-radius: 50%; border: 1px dashed rgba(79, 216, 255, 0.5); pointer-events: none; }
 .portrait img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; object-position: 50% 15%; background: #061230; display: block; }
 .art-card { position: relative; border-radius: var(--r); overflow: hidden; border: 1px solid var(--line-soft); box-shadow: 0 0 20px rgba(79, 216, 255, 0.12), 0 10px 26px rgba(0, 0, 0, 0.45); }
 .art-card img { display: block; width: 100%; height: 100%; object-fit: cover; }

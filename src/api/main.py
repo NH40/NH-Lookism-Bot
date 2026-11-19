@@ -95,6 +95,13 @@ async def lifespan(app: FastAPI):
     from bot.services.arena import set_session_factory as arena_sf
 
     arena_sf(session_factory)
+    from bot.services.arena import set_notifier
+    from bot.utils.notify import notify as _notify
+
+    async def _arena_push(uid: int, text: str) -> None:
+        await _notify(get_bot(), uid, text)
+
+    set_notifier(_arena_push)
     refresher = asyncio.create_task(refresh_loop(session_factory))
     sink = asyncio.create_task(run_sink(session_factory, get_bot))
     yield

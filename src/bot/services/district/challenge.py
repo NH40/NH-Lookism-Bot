@@ -412,7 +412,32 @@ async def _resolve(session: AsyncSession, redis: Redis, challenge_id: int, resol
         # менять нечего) и вреден: он экспайрит ORM-объекты вызывающего кода (см. тот же
         # комментарий в `issue_challenge`).
         return None
+    ctx = await challenge_context(session, challenge, resolution)
+    if isinstance(ctx, ChallengeOutcome):
+        return ctx
+    result = simulate_battle(ctx.stacks_a, ctx.stacks_d, attacker_chances=ctx.m.attacker, defender_chances=ctx.m.defender)
+    return await settle_challenge(session, redis, ctx, result)
 
+
+@dataclass(frozen=True, slots=True)
+class ChallengeFight:
+    """Подготовленный бой вызова (стопки под FOR UPDATE, matchup) — автобоем или онлайн (`services/arena`)."""
+
+    challenge: object
+    resolution: str
+    base: dict
+    row: object
+    is_city: bool
+    district_number: int
+    defender_camp: str
+    stacks_a: list
+    stacks_d: list
+    m: object
+
+
+async def challenge_context(session: AsyncSession, challenge, resolution: str):
+    """→ `ChallengeFight` или готовый `ChallengeOutcome` (аннулирован: защитнику нечего терять). Вызов уже взят."""
+    challenge_id = challenge.id
     is_city = challenge.scope == SCOPE_CITY
     attacker_label = await _label(session, challenge.attacker_id)
     defender_label = await _label(session, challenge.defender_id)
@@ -460,12 +485,16 @@ async def _resolve(session: AsyncSession, redis: Redis, challenge_id: int, resol
         scouted=await has_scout_report(session, challenge.attacker_id, challenge.defender_id),
         attacker_stacks=locked[challenge.attacker_id], defender_stacks=locked[challenge.defender_id],
     )
-    result = simulate_battle(
-        locked[challenge.attacker_id],
-        locked[challenge.defender_id],
-        attacker_chances=m.attacker,
-        defender_chances=m.defender,
-    )
+    return ChallengeFight(challenge, resolution, base, row, is_city, district_number, defender_camp,
+                          locked[challenge.attacker_id], locked[challenge.defender_id], m)
+
+
+async def settle_challenge(session: AsyncSession, redis: Redis, ctx: ChallengeFight, result) -> ChallengeOutcome:
+    """Итог боя вызова: потери обоих, захват, задания, журнал — один commit."""
+    challenge, resolution, base, row, is_city = ctx.challenge, ctx.resolution, ctx.base, ctx.row, ctx.is_city
+    challenge_id, district_number, defender_camp, m = challenge.id, ctx.district_number, ctx.defender_camp, ctx.m
+    attacker_label, defender_label = base["attacker_label"], base["defender_label"]
+    locked = {challenge.attacker_id: ctx.stacks_a, challenge.defender_id: ctx.stacks_d}
     await apply_losses(session, challenge.attacker_id, CAMP_ATTACK, result.attacker.dead)
     abs_lines = await after_battle(session, m, result, attacker_id=challenge.attacker_id, attacker_stacks=locked[challenge.attacker_id], defender_id=challenge.defender_id)
     await apply_losses(session, challenge.defender_id, defender_camp, result.defender.dead)

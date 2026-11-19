@@ -202,12 +202,18 @@ async def _tribute_loop(session_factory: async_sessionmaker[AsyncSession]) -> No
             log.exception("Tribute sweep failed")
 
 
-async def _arena_loop(session_factory: async_sessionmaker[AsyncSession], redis) -> None:
+async def _arena_loop(bot: Bot, session_factory: async_sessionmaker[AsyncSession], redis) -> None:
     """Онлайн-бои: раунды, у которых вышло время, разыгрываются автоатакой (игрок ушёл, никто не опрашивает)."""
     from bot.config.arena import ARENA_SWEEP_SECONDS
-    from bot.services.arena import set_session_factory, sweep
+    from bot.services.arena import set_notifier, set_session_factory, sweep
+    from bot.utils.notify import notify
 
     set_session_factory(session_factory)
+
+    async def _push(uid: int, text: str) -> None:
+        await notify(bot, uid, text)
+
+    set_notifier(_push)
     while True:
         try:
             await sweep(redis)
@@ -416,7 +422,7 @@ async def main() -> None:
         asyncio.create_task(_ultra_instinct_loop(session_factory, redis)),
         asyncio.create_task(_potion_loop(bot, session_factory)),
         asyncio.create_task(raid_loop(bot, session_factory)),
-        asyncio.create_task(_arena_loop(session_factory, redis)),
+        asyncio.create_task(_arena_loop(bot, session_factory, redis)),
         asyncio.create_task(_bank_loop(bot, session_factory, redis)),
         asyncio.create_task(_tribute_loop(session_factory)),
         asyncio.create_task(_stagnation_loop(bot, session_factory, redis)),

@@ -90,6 +90,28 @@ async def start_district(body: StartDistrictIn, user_id: int = Depends(get_curre
     return view(st, user_id)
 
 
+class StartChallengeIn(BaseModel):
+    challenge_id: int
+
+
+@router.post("/start/challenge")
+async def start_challenge(body: StartChallengeIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
+                          redis: Redis = Depends(get_redis)) -> dict:
+    """Защитник принимает вызов онлайн; просроченный — разрешается автобоем лагерем защиты (как раньше)."""
+    from bot.services.district.challenge import ChallengeNotFoundError
+
+    user = await require_user(session, user_id)
+    try:
+        st = await svc.start_challenge(session, redis, user, body.challenge_id)
+    except ChallengeNotFoundError:
+        raise bad("Вызов уже неактуален.")
+    except svc.ArenaError as exc:
+        raise bad(_ERRORS.get(exc.code, "Не вышло."))
+    if not isinstance(st, dict):  # автобой (просрочен) или аннулирован
+        return {"id": None, "status": "resolved", "won": not st.attacker_won}
+    return view(st, user_id)
+
+
 @router.get("/current")
 async def current(user_id: int = Depends(get_current_user_id), redis: Redis = Depends(get_redis)) -> dict:
     battle_id = await svc.current_of(redis, user_id)

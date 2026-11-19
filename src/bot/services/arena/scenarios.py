@@ -73,3 +73,79 @@ async def _finish_district(redis: Redis, st: dict, result) -> None:
 
 
 core.register_finisher(KIND_DISTRICT, _finish_district)
+
+
+# --- PvP: вызов за район / город, защитник принял (2026-11-19) ---
+
+KIND_CHALLENGE = "challenge"
+_NOTIFY: dict[str, object] = {}
+
+
+def set_notifier(fn) -> None:
+    """`fn(user_id, text)` — пуш итога боя (бот или API подставляют свой способ отправки)."""
+    _NOTIFY["fn"] = fn
+
+
+async def _notify(user_id: int | None, text: str) -> None:
+    fn = _NOTIFY.get("fn")
+    if fn is not None and user_id:
+        try:
+            await fn(user_id, text)
+        except Exception:  # noqa: BLE001 — пуш не должен ломать итог боя
+            pass
+
+
+async def start_challenge(session: AsyncSession, redis: Redis, defender, challenge_id: int):
+    """Защитник принимает вызов онлайн. Просрочен — как раньше, автобой лагерем защиты (→ `ChallengeOutcome`).
+    Иначе вызов берётся, бой идёт онлайн (→ состояние арены); нападающий не в сети — за него ходит автоатака."""
+    from bot.constant.district import RESOLUTION_ACCEPTED
+    from bot.db.repositories.district import challenge as challenge_repo
+    from bot.services.arena.sources import energy_for, perks_for
+    from bot.services.district.challenge import ChallengeFight, ChallengeNotFoundError, accept_challenge, challenge_context
+    from datetime import datetime, timezone
+
+    challenge = await challenge_repo.get(session, challenge_id)
+    if challenge is None or challenge.defender_id != defender.id:
+        raise ChallengeNotFoundError
+    if datetime.now(timezone.utc) >= challenge.expires_at:
+        return await accept_challenge(session, redis, defender, challenge_id)
+    for uid in (challenge.attacker_id, challenge.defender_id):
+        if await core.current_of(redis, uid):
+            raise core.ArenaError("in_battle")
+    claimed = await challenge_repo.claim(session, challenge_id, RESOLUTION_ACCEPTED)
+    if claimed is None:
+        raise ChallengeNotFoundError
+    ctx = await challenge_context(session, claimed, RESOLUTION_ACCEPTED)
+    if not isinstance(ctx, ChallengeFight):
+        return ctx  # аннулирован — защитнику уже нечего терять
+    a_id, d_id = claimed.attacker_id, claimed.defender_id
+    st = await core.create(
+        redis, kind=KIND_CHALLENGE, a_uid=a_id, d_uid=d_id, a_stacks=ctx.stacks_a, d_stacks=ctx.stacks_d,
+        a_chances=ctx.m.attacker, d_chances=ctx.m.defender, a_perks=await perks_for(session, a_id), d_perks=await perks_for(session, d_id),
+        a_auto=False, d_auto=False, a_name=ctx.base["attacker_label"], d_name=ctx.base["defender_label"],
+        meta={"challenge_id": challenge_id}, a_energy=await energy_for(session, a_id), d_energy=await energy_for(session, d_id),
+    )
+    await session.commit()  # вызов взят; блокировки стопок отпущены — бой идёт без транзакции
+    await _notify(a_id, f"⚔️ {ctx.base['defender_label']} принял твой вызов — бой идёт! Открой Mini App, иначе за тебя ходит автоатака.")
+    return st
+
+
+async def _finish_challenge(redis: Redis, st: dict, result) -> None:
+    from bot.constant.district import RESOLUTION_ACCEPTED
+    from bot.db.repositories.district import challenge as challenge_repo
+    from bot.services.district.challenge import ChallengeFight, challenge_context, settle_challenge
+
+    async with _SF["sf"]() as session:
+        challenge = await challenge_repo.get(session, st["meta"]["challenge_id"])
+        ctx = await challenge_context(session, challenge, RESOLUTION_ACCEPTED)
+        outcome = ctx if not isinstance(ctx, ChallengeFight) else await settle_challenge(session, redis, ctx, result)
+    won = bool(outcome.attacker_won)
+    st["report"] = {"won": won, "captured": outcome.captured, "districts": getattr(outcome, "captured_districts", 0)}
+    await core.save(redis, st)
+    a_text = f"🏁 Бой с {outcome.defender_label}: {'победа' if won else 'поражение'}" + (f", захвачено районов: {outcome.captured_districts}" if won and outcome.captured else "")
+    d_text = f"🏁 Бой с {outcome.attacker_label}: {'поражение' if won else 'победа'}" + (f", потеряно районов: {outcome.captured_districts}" if won and outcome.captured else "")
+    await _notify(st["a"]["uid"], a_text)
+    await _notify(st["d"]["uid"], d_text)
+
+
+core.register_finisher(KIND_CHALLENGE, _finish_challenge)

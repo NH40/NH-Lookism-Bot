@@ -202,6 +202,20 @@ async def _tribute_loop(session_factory: async_sessionmaker[AsyncSession]) -> No
             log.exception("Tribute sweep failed")
 
 
+async def _arena_loop(session_factory: async_sessionmaker[AsyncSession], redis) -> None:
+    """Онлайн-бои: раунды, у которых вышло время, разыгрываются автоатакой (игрок ушёл, никто не опрашивает)."""
+    from bot.config.arena import ARENA_SWEEP_SECONDS
+    from bot.services.arena import set_session_factory, sweep
+
+    set_session_factory(session_factory)
+    while True:
+        try:
+            await sweep(redis)
+        except Exception:
+            log.exception("Arena sweep failed")
+        await asyncio.sleep(ARENA_SWEEP_SECONDS)
+
+
 async def _potion_loop(bot: Bot, session_factory: async_sessionmaker[AsyncSession]) -> None:
     """Авто-зелья гения медицины: продлеваются в момент окончания, даже если игрок не заходит
     (эффект нужен в бою, который может начать противник). Раз в `POTION_AUTO_SWEEP_SECONDS`."""
@@ -402,6 +416,7 @@ async def main() -> None:
         asyncio.create_task(_ultra_instinct_loop(session_factory, redis)),
         asyncio.create_task(_potion_loop(bot, session_factory)),
         asyncio.create_task(raid_loop(bot, session_factory)),
+        asyncio.create_task(_arena_loop(session_factory, redis)),
         asyncio.create_task(_bank_loop(bot, session_factory, redis)),
         asyncio.create_task(_tribute_loop(session_factory)),
         asyncio.create_task(_stagnation_loop(bot, session_factory, redis)),

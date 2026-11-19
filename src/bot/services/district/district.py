@@ -222,10 +222,22 @@ async def _ensure_trained(session: AsyncSession, user_id: int) -> None:
     await ensure_not_locked(session, user_id)
 
 
-async def attack_district(session: AsyncSession, redis: Redis, user: User, district_id: int) -> AttackReport:
-    """Составная операция (правило 10): проверки → КД → бой → списание погибших → захват
-    → один commit. Все проверки, которые не должны тратить КД (чужой город, свой
-    район, пустой лагерь атаки), — ДО выставления КД в Redis."""
+@dataclass(frozen=True, slots=True)
+class AttackPrep:
+    """Подготовленная атака на район ботов: проверки пройдены, КД стоит. Бой — автобоем (`attack_district`)
+    или онлайн (`services/arena`), итог — `settle_attack`."""
+
+    row: object
+    stacks: list
+    defender: list
+    profile: object
+    matchup: object
+    cd_key: str
+
+
+async def prepare_attack(session: AsyncSession, redis: Redis, user: User, district_id: int) -> AttackPrep:
+    """Проверки → КД. Все проверки, которые не должны тратить КД (чужой город, свой район, пустой лагерь
+    атаки), — ДО выставления КД в Redis."""
     await ensure_battles_open(session, user.country_code)
     await _ensure_trained(session, user.id)
     row = await get_row(session, district_id)
@@ -258,7 +270,12 @@ async def attack_district(session: AsyncSession, redis: Redis, user: User, distr
     bot_rank, bot_quantity = _bot_army(city.district_count)
     defender = [CombatStack(key="bot", unit_power=extra_power_for_rank(bot_rank), quantity=bot_quantity)]
     m = matchup(profile, vs=(VS_DISTRICT,), defender_chances=base_chances(), attacker_stacks=stacks)
-    result = simulate_battle(stacks, defender, attacker_chances=m.attacker, defender_chances=m.defender)
+    return AttackPrep(row, stacks, defender, profile, m, key)
+
+
+async def settle_attack(session: AsyncSession, redis: Redis, user: User, prep: AttackPrep, result) -> AttackReport:
+    """Итог боя за район ботов: потери → захват → один commit (правило 10), затем КД / свободная атака."""
+    row, stacks, m, profile, key = prep.row, prep.stacks, prep.matchup, prep.profile, prep.cd_key
     await apply_losses(session, user.id, CAMP_ATTACK, result.attacker.dead)
     abs_lines = await after_battle(session, m, result, attacker_id=user.id, attacker_stacks=stacks)
 
@@ -307,3 +324,11 @@ async def attack_district(session: AsyncSession, redis: Redis, user: User, distr
         throne=throne,
         liberations=liberations,
     )
+
+
+async def attack_district(session: AsyncSession, redis: Redis, user: User, district_id: int) -> AttackReport:
+    """Составная операция (правило 10): проверки → КД → бой → списание погибших → захват → один commit."""
+    prep = await prepare_attack(session, redis, user, district_id)
+    m = prep.matchup
+    result = simulate_battle(prep.stacks, prep.defender, attacker_chances=m.attacker, defender_chances=m.defender)
+    return await settle_attack(session, redis, user, prep, result)

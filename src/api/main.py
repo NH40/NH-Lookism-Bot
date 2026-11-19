@@ -29,6 +29,7 @@ from api.routers import minigame, sale
 from api.routers import bank, penguan
 from api.routers import tutorial as tutorial_router
 from api.routers import raid as raid_router
+from api.routers import arena as arena_router
 from api.routers import admin_ops
 from api.routers import admin_players
 from api.routers import awakening
@@ -91,6 +92,9 @@ async def lifespan(app: FastAPI):
 
     setup_logging(get_settings().log_level, "api")
     await load_live_config(session_factory)
+    from bot.services.arena import set_session_factory as arena_sf
+
+    arena_sf(session_factory)
     refresher = asyncio.create_task(refresh_loop(session_factory))
     sink = asyncio.create_task(run_sink(session_factory, get_bot))
     yield
@@ -195,6 +199,7 @@ app.include_router(bank.router)
 app.include_router(penguan.router)
 app.include_router(tutorial_router.router)
 app.include_router(raid_router.router)
+app.include_router(arena_router.router)
 
 
 @app.get("/api/health")

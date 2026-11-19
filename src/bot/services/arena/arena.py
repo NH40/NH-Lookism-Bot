@@ -41,9 +41,10 @@ from bot.services.combat.mods import CombatMods
 ATTACK, DEFEND, PERK = "attack", "defend", "perk"
 SIDES = ("a", "d")
 STATUS_LIVE, STATUS_DONE = "live", "done"
+LIVE_SET = "arena:live"  # идущие бои — для фонового прохода по таймерам
 _DEFEND_MODS = CombatMods(reduction=ARENA_DEFEND_REDUCTION)
 
-Finisher = Callable[[dict, BattleResult], Awaitable[None]]
+Finisher = Callable[[Redis, dict, BattleResult], Awaitable[None]]
 _FINISHERS: dict[str, Finisher] = {}
 PERK_REGISTRY: dict[str, Perk] = dict(BASE_PERKS)
 
@@ -91,6 +92,10 @@ async def load(redis: Redis, battle_id: str) -> dict | None:
 
 async def _save(redis: Redis, st: dict) -> None:
     await redis.set(_key(st["id"]), json.dumps(st), ex=ARENA_TTL_SECONDS)
+    if st["status"] == STATUS_LIVE:
+        await redis.sadd(LIVE_SET, st["id"])
+    else:
+        await redis.srem(LIVE_SET, st["id"])
     for side in SIDES:
         uid = st[side]["uid"]
         if uid:
@@ -283,8 +288,13 @@ async def _play(redis: Redis, st: dict) -> dict:
         await _save(redis, st)
         fn = _FINISHERS.get(st["kind"])
         if fn is not None:
-            await fn(st, result)
-        return st
+            try:
+                await fn(redis, st, result)
+            except Exception:  # итог не применился — бой всё равно закрыт, ошибка в журнал
+                import logging
+
+                logging.getLogger(__name__).exception("Arena finisher %s failed", st["kind"])
+        return await load(redis, st["id"]) or st
     await _save(redis, st)
     return st
 
@@ -313,3 +323,21 @@ def perks_view(st: dict, side: str) -> list[PerkView]:
         p = PERK_REGISTRY[code]
         out.append(PerkView(code, p.name, p.about, p.cost, max(0, s["cd"].get(code, 0) - next_round), s["energy"] >= p.cost))
     return out
+
+
+async def save(redis: Redis, st: dict) -> None:
+    await _save(redis, st)
+
+
+async def sweep(redis: Redis) -> int:
+    """Фоновый проход: раунды, у которых вышло время, — разыграть. → сколько раундов сыграно."""
+    played = 0
+    for battle_id in list(await redis.smembers(LIVE_SET)):
+        st = await load(redis, battle_id)
+        if st is None:
+            await redis.srem(LIVE_SET, battle_id)
+            continue
+        if st["status"] == STATUS_LIVE and time.time() >= st["deadline"]:
+            await tick(redis, battle_id)
+            played += 1
+    return played

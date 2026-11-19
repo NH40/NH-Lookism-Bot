@@ -1,4 +1,5 @@
 import { ChevronRight, Flag, Home, Shield, Skull, Swords, Users } from "lucide-react";
+import { OnlineBattleButton } from "../../components/OnlineBattleButton";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { CityBattle, CityData, CityOwner, CountryData } from "../../types";
@@ -64,6 +65,7 @@ function CityView({ cityId }: { cityId: number }) {
                     {cd > 0 ? `Перерыв ${countdown(cd)}` : `Штурм ботов · ${data.bots} р-нов`}
                   </button>
                 )}
+                {!data.emperor && cd <= 0 && <OnlineBattleButton path="/arena/start/city" body={{ city_id: cityId }} disabled={busy} />}
               </>
             ) : (
               <p className="ct-note" style={{ margin: 0 }}>Ботов в городе не осталось.</p>

@@ -7,3 +7,4 @@ from bot.services.arena.sources import energy_for, perks_for  # noqa: F401,E402
 from bot.services.arena.scenarios import (  # noqa: F401,E402
     KIND_CHALLENGE, KIND_DISTRICT, set_notifier, set_session_factory, start_challenge, start_district,
 )
+from bot.services.arena.scenarios_pve import KIND_BOSS, KIND_CITY, KIND_RAID, KIND_WAR, start_boss, start_city, start_raid, start_war  # noqa: F401,E402

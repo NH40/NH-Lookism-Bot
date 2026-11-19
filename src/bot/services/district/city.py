@@ -175,12 +175,20 @@ async def get_city_owners(session: AsyncSession, user: User, city_id: int) -> Ci
     )
 
 
-async def attack_city_bots(session: AsyncSession, redis: Redis, user: User, city_id: int) -> CityBotReport:
-    """Составная операция (правило 10), тот же порядок, что `attack_district`: проверки
-    (не стоят КД) → КД `SET NX EX` по фазе → бой против суммарной армии ботов города →
-    потери → начисление бизнеса → захват ВСЕХ районов ботов одним UPDATE → проверка
-    перехода фазы → один commit."""
-    await ensure_battles_open(session, user.country_code)
+@dataclass(frozen=True, slots=True)
+class CityPrep:
+    city: object
+    stacks: list
+    defender: list
+    profile: object
+    matchup: object
+    cd_key: str
+
+
+async def prepare_city_bots(session: AsyncSession, redis: Redis, user: User, city_id: int, *, rebuild: bool = False) -> CityPrep:
+    """Проверки (не стоят КД) → КД по фазе (кроме `rebuild` — итог онлайн-боя) → армия ботов города."""
+    if not rebuild:
+        await ensure_battles_open(session, user.country_code)
     if is_emperor(user.phase):
         raise EmperorNoConquestError
     if not can_conquer_cities(user.phase):
@@ -194,18 +202,23 @@ async def attack_city_bots(session: AsyncSession, redis: Redis, user: User, city
         raise NoBotsInCityError
 
     stacks = await load_camp(session, user.id, CAMP_ATTACK, for_update=True)
-    if not stacks:
+    if not stacks and not rebuild:
         raise NoAttackersError
 
     key = battle_cooldown(user.id)
     profile = await get_combat_profile(session, user.id)
-    if not await redis.set(key, "1", nx=True, ex=profile.cooldown(battle_cooldown_seconds(user.phase), profile.eco.battle_cooldown)):
+    if not rebuild and not await redis.set(key, "1", nx=True, ex=profile.cooldown(battle_cooldown_seconds(user.phase), profile.eco.battle_cooldown)):
         raise BattleOnCooldownError(retry_after_seconds=max(0, await redis.ttl(key)))
 
     rank, quantity = _city_bot_army(city.district_count, bots)
     defender = [CombatStack(key="bot", unit_power=extra_power_for_rank(rank), quantity=quantity)]
     m = matchup(profile, vs=(VS_CITY,), defender_chances=base_chances(), attacker_stacks=stacks)
-    result = simulate_battle(stacks, defender, attacker_chances=m.attacker, defender_chances=m.defender)
+    return CityPrep(city, stacks, defender, profile, m, key)
+
+
+async def settle_city_bots(session: AsyncSession, redis: Redis, user: User, prep: CityPrep, result) -> CityBotReport:
+    """Потери → начисление → захват всех районов ботов → фаза → один commit → КД / свободная атака."""
+    city, stacks, profile, m, key, city_id = prep.city, prep.stacks, prep.profile, prep.matchup, prep.cd_key, prep.city.id
     await apply_losses(session, user.id, CAMP_ATTACK, result.attacker.dead)
     abs_lines = await after_battle(session, m, result, kind=BATTLE_CITY, attacker_id=user.id, attacker_stacks=stacks)
 
@@ -253,3 +266,10 @@ async def attack_city_bots(session: AsyncSession, redis: Redis, user: User, city
         throne=throne,
         liberations=liberations,
     )
+
+
+async def attack_city_bots(session: AsyncSession, redis: Redis, user: User, city_id: int) -> CityBotReport:
+    """Составная операция (правило 10), тот же порядок, что `attack_district`."""
+    prep = await prepare_city_bots(session, redis, user, city_id)
+    result = simulate_battle(prep.stacks, prep.defender, attacker_chances=prep.matchup.attacker, defender_chances=prep.matchup.defender)
+    return await settle_city_bots(session, redis, user, prep, result)

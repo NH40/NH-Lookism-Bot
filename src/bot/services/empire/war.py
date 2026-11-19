@@ -269,7 +269,8 @@ def _camp_power(camp) -> int:
     return int(sum(s.unit_power * s.quantity for s in camp))
 
 
-async def _resolve(session: AsyncSession, redis: Redis, war, resolution: str, *, rng: random.Random | None = None) -> WarOutcome:
+async def _resolve(session: AsyncSession, redis: Redis, war, resolution: str, *, rng: random.Random | None = None, result_override=None) -> WarOutcome:
+    """`result_override` — итог онлайн-боя (`services/arena`): армии те же, бой уже сыгран вождями."""
     rng = rng or random.Random()
     attacker_id, defender_id = war.attacker_id, war.defender_id
     labels = {"attacker_label": await _label(session, attacker_id), "defender_label": await _label(session, defender_id)}
@@ -301,7 +302,7 @@ async def _resolve(session: AsyncSession, redis: Redis, war, resolution: str, *,
             scouted=await has_scout_report(session, attacker_id, defender_id),
             attacker_stacks=camps[attacker_id], defender_stacks=camps[defender_id],
         )
-        result = simulate_battle(
+        result = result_override if result_override is not None else simulate_battle(
             camps[attacker_id], camps[defender_id], attacker_chances=m.attacker, defender_chances=m.defender, rng=rng,
         )
         abs_lines = await after_battle(session, m, result, kind=BATTLE_WAR, attacker_id=attacker_id, attacker_stacks=camps[attacker_id], defender_id=defender_id)
@@ -399,3 +400,23 @@ async def _resolve(session: AsyncSession, redis: Redis, war, resolution: str, *,
         city_names=names, treasury_taken=treasury, treasury_percent=percent, defender_demoted=demoted,
         businesses_taken=businesses, free_attack=free_attack, **labels,
     )
+
+
+async def war_fight(session: AsyncSession, war, accepted: bool = True):
+    """Армии и matchup войны для онлайн-боя (`services/arena`): лагеря атаки обоих вождей. → (стопки А, стопки Д, matchup)."""
+    attacker_id, defender_id = war.attacker_id, war.defender_id
+    camps = {uid: await load_camp(session, uid, CAMP_ATTACK, for_update=True) for uid in sorted((attacker_id, defender_id))}
+    m = matchup(
+        await get_combat_profile(session, attacker_id), await get_combat_profile(session, defender_id),
+        vs=(VS_WAR,), defender_role=ROLE_ATTACK, scouted=await has_scout_report(session, attacker_id, defender_id),
+        attacker_stacks=camps[attacker_id], defender_stacks=camps[defender_id],
+    )
+    return camps[attacker_id], camps[defender_id], m
+
+
+async def settle_war_online(session: AsyncSession, redis: Redis, war_id: int, result) -> WarOutcome | None:
+    """Итог онлайн-войны: вызывается финишером арены, война ещё pending (срок продлён на время боя)."""
+    war = await empire_repo.get_pending_for_update(session, war_id)
+    if war is None:
+        return None
+    return await _resolve(session, redis, war, WAR_ACCEPTED, result_override=result)

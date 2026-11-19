@@ -16,7 +16,72 @@ from bot.services import arena as svc
 
 router = APIRouter(prefix="/api/arena", tags=["arena"])
 
-_ERRORS = {"no_battle": "Бой уже закончен.", "not_yours": "Это не твой бой.", "in_battle": "Ты уже в бою — сначала доиграй его."}
+_ERRORS = {"no_battle": "Бой уже закончен.", "not_yours": "Это не твой бой.", "in_battle": "Ты уже в бою — сначала доиграй его.",
+           "no_army": "В лагере атаки нет статистов."}
+_START_ERRORS = {  # имя исключения сервиса → текст (босс, город, рейд, война)
+    "EventGoneError": "Босс уже ушёл.", "BossAlreadyDefeatedError": "Этого босса ты уже победил.",
+    "NotCityConquerorError": "Брать город целиком может только круг.", "CityNotInCountryError": "Город не найден.",
+    "NoBotsInCityError": "В городе не осталось районов у ботов.", "EmperorNoConquestError": "Император не захватывает районы.",
+    "NoAttackersError": "В лагере атаки нет статистов.", "RaidError": "Рейда сейчас нет.", "WarNotFoundError": "Война уже неактуальна.",
+}
+
+
+async def _start(coro, user_id: int) -> dict:
+    """Старт онлайн-боя: ошибки сервиса → 400 с текстом; бой начат → вид для игрока; автобой (просрочено) → итог."""
+    try:
+        st = await coro
+    except svc.ArenaError as exc:
+        raise bad(_ERRORS.get(exc.code, "Не вышло."))
+    except Exception as exc:  # noqa: BLE001
+        name = type(exc).__name__
+        if name == "BattleOnCooldownError":
+            raise bad(cooldown_text("Сражение", exc.retry_after_seconds))
+        if name in _START_ERRORS:
+            raise bad(_START_ERRORS[name])
+        raise
+    if not isinstance(st, dict):
+        return {"id": None, "status": "resolved"}
+    return view(st, user_id)
+
+
+class StartBossIn(BaseModel):
+    event_id: int
+
+
+class StartCityIn(BaseModel):
+    city_id: int
+
+
+class StartWarIn(BaseModel):
+    war_id: int
+
+
+@router.post("/start/boss")
+async def start_boss(body: StartBossIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
+                     redis: Redis = Depends(get_redis)) -> dict:
+    user = await require_user(session, user_id)
+    return await _start(svc.start_boss(session, redis, user, body.event_id), user_id)
+
+
+@router.post("/start/city")
+async def start_city(body: StartCityIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
+                     redis: Redis = Depends(get_redis)) -> dict:
+    user = await require_user(session, user_id)
+    return await _start(svc.start_city(session, redis, user, body.city_id), user_id)
+
+
+@router.post("/start/raid")
+async def start_raid(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
+                     redis: Redis = Depends(get_redis)) -> dict:
+    user = await require_user(session, user_id)
+    return await _start(svc.start_raid(session, redis, user), user_id)
+
+
+@router.post("/start/war")
+async def start_war(body: StartWarIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
+                    redis: Redis = Depends(get_redis)) -> dict:
+    await require_user(session, user_id)
+    return await _start(svc.start_war(session, redis, user_id, body.war_id), user_id)
 
 
 class StartDistrictIn(BaseModel):

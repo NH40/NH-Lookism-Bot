@@ -83,7 +83,7 @@ async def spawn(session_factory: async_sessionmaker[AsyncSession], rng: random.R
     return created
 
 
-async def _resolve(session: AsyncSession, raid: Raid, camp: str) -> RaidOutcome:
+async def _resolve(session: AsyncSession, raid: Raid, camp: str, result_override=None) -> RaidOutcome:
     """Бой рейда против лагеря игрока. НЕ проверяет статус — вызывающий держит строку под блокировкой. Коммитит."""
     from bot.constant.position_skill import VS_DISTRICT
     from bot.services.business import accrue
@@ -100,7 +100,7 @@ async def _resolve(session: AsyncSession, raid: Raid, camp: str) -> RaidOutcome:
     if stacks:
         profile = await get_combat_profile(session, uid)
         m = matchup(profile, vs=(VS_DISTRICT,), defender_chances=base_chances(), attacker_stacks=stacks)
-        result = simulate_battle(stacks, enemy, attacker_chances=m.attacker, defender_chances=m.defender)
+        result = result_override or simulate_battle(stacks, enemy, attacker_chances=m.attacker, defender_chances=m.defender)
         await apply_losses(session, uid, camp, result.attacker.dead)
         won, dead = result.attacker_won, result.attacker.total_dead
     rewards: dict[str, int] = {}
@@ -152,3 +152,19 @@ async def resolve_due(session_factory: async_sessionmaker[AsyncSession]) -> list
             if raid is not None:
                 out.append(await _resolve(session, raid, CAMP_DEFENSE))
     return out
+
+
+def raid_enemy(raid: Raid) -> list:
+    from bot.services.combat import CombatStack
+
+    return [CombatStack(key="raid", unit_power=max(1.0, raid.power / cfg.RAID_STACK_SIZE), quantity=cfg.RAID_STACK_SIZE)]
+
+
+async def settle_online(session: AsyncSession, raid_id: int, result) -> RaidOutcome | None:
+    """Итог онлайн-боя с рейдом (лагерь атаки): рейд ещё pending, срок сдвинут на время боя."""
+    from bot.constant.extra import CAMP_ATTACK
+
+    raid = await session.scalar(select(Raid).where(Raid.id == raid_id, Raid.status == STATUS_PENDING).with_for_update())
+    if raid is None:
+        return None
+    return await _resolve(session, raid, CAMP_ATTACK, result_override=result)

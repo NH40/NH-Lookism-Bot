@@ -10,6 +10,7 @@ import { Sheet } from "../../components/Sheet";
 import { Journal } from "../../components/Journal";
 import "../../styles/game-screens.css";
 import { RaidBanner } from "./RaidBanner";
+import { OnlineBattleButton } from "../../components/OnlineBattleButton";
 import { ArenaBanner } from "./ArenaBanner";
 
 type Outcome =
@@ -161,6 +162,7 @@ function EventCard({ event, onFight, onMeet, busy, bossCd }: {
           <button className={`btn red ${event.won || bossCd > 0 ? "off" : ""}`} type="button" style={{ marginTop: "auto", width: 140 }} disabled={busy || event.won || bossCd > 0} onClick={() => onFight(event)}>
             {event.won ? "Побеждён" : bossCd > 0 ? `КД ${countdown(bossCd)}` : "В бой"}
           </button>
+          {!event.won && bossCd <= 0 && <OnlineBattleButton path="/arena/start/boss" body={{ event_id: event.id }} label="Онлайн" disabled={busy} />}
         </div>
       </div>
     );

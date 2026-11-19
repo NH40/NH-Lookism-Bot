@@ -95,13 +95,25 @@ def boss_chances(code: str) -> CombatChances:
     return replace(base_chances(), build=BattleBuild(total=CombatMods.of(BOSS_MODS[code])))
 
 
-async def fight_boss(
-    session: AsyncSession, redis: Redis, user: User, event_id: int, rng: random.Random | None = None
-) -> BossFightResult:
-    """Составная операция (правило 10): событие живо → участие под `FOR UPDATE` → лагерь →
-    КД → бой → потери → (победа) награда → один commit."""
+@dataclass(frozen=True, slots=True)
+class BossPrep:
+    event: object
+    entry: object
+    stacks: list
+    boss: list
+    boss_power: int
+    profile: object
+    matchup: object
+    rng: random.Random
+
+
+async def prepare_boss(
+    session: AsyncSession, redis: Redis, user: User, event_id: int, rng: random.Random | None = None, *, rebuild: bool = False
+) -> BossPrep:
+    """Событие живо → участие под `FOR UPDATE` → лагерь → КД (кроме `rebuild` — итог онлайн-боя)."""
     rng = rng or random.Random()
-    await ensure_battles_open(session, user.country_code)
+    if not rebuild:
+        await ensure_battles_open(session, user.country_code)
     event = await event_repo.get_active(session, event_id, user.id)
     if event is None or event.kind != EVENT_BOSS:
         raise EventGoneError
@@ -109,17 +121,23 @@ async def fight_boss(
     if entry.won:
         raise BossAlreadyDefeatedError
     stacks = await load_camp(session, user.id, CAMP_ATTACK, for_update=True)
-    if not stacks:
+    if not stacks and not rebuild:
         raise NoAttackersError
 
     profile = await get_combat_profile(session, user.id)
-    key = boss_cooldown(user.id)
-    if not await redis.set(key, "1", nx=True, ex=profile.cooldown(battle_cooldown_seconds(user.phase), profile.eco.battle_cooldown)):
-        raise BattleOnCooldownError(retry_after_seconds=max(0, await redis.ttl(key)))
+    if not rebuild:
+        key = boss_cooldown(user.id)
+        if not await redis.set(key, "1", nx=True, ex=profile.cooldown(battle_cooldown_seconds(user.phase), profile.eco.battle_cooldown)):
+            raise BattleOnCooldownError(retry_after_seconds=max(0, await redis.ttl(key)))
 
     boss, boss_power = boss_army(event.code, stacks, user.phase)
     m = matchup(profile, vs=(VS_BOSS,), defender_chances=boss_chances(event.code), attacker_stacks=stacks, rng=rng)
-    result = simulate_battle(stacks, boss, attacker_chances=m.attacker, defender_chances=m.defender, rng=rng)
+    return BossPrep(event, entry, stacks, boss, boss_power, profile, m, rng)
+
+
+async def settle_boss(session: AsyncSession, user: User, prep: BossPrep, result) -> BossFightResult:
+    """Потери → (победа) награда → один commit."""
+    event, entry, stacks, m, rng, profile = prep.event, prep.entry, prep.stacks, prep.matchup, prep.rng, prep.profile
     await apply_losses(session, user.id, CAMP_ATTACK, result.attacker.dead)
     abs_lines = await after_battle(session, m, result, kind=BATTLE_BOSS, attacker_id=user.id, attacker_stacks=stacks)
     entry.attempts += 1
@@ -147,8 +165,17 @@ async def fight_boss(
         rounds=result.rounds,
         attacker_power=result.attacker.initial_power,
         attacker_dead=result.attacker.total_dead,
-        boss_power=boss_power,
+        boss_power=prep.boss_power,
         boss_remaining_power=result.defender.remaining_power,
         fragment_kind=fragment_kind,
         fragments=fragments,
     )
+
+
+async def fight_boss(
+    session: AsyncSession, redis: Redis, user: User, event_id: int, rng: random.Random | None = None
+) -> BossFightResult:
+    """Составная операция (правило 10): подготовка → бой → итог одним commit."""
+    prep = await prepare_boss(session, redis, user, event_id, rng)
+    result = simulate_battle(prep.stacks, prep.boss, attacker_chances=prep.matchup.attacker, defender_chances=prep.matchup.defender, rng=prep.rng)
+    return await settle_boss(session, user, prep, result)

@@ -1,4 +1,5 @@
 import { Crown, Eye, Megaphone, Shield, Swords } from "lucide-react";
+import { OnlineBattleButton } from "../../components/OnlineBattleButton";
 import { useCallback, useState } from "react";
 import { apiGet, ApiError } from "../../api";
 import type { EmpireAnnounce, EmpireAnnouncementLog, EmpireData, EmpireIncomingWar, EmpireRuler, EmpireSubject, EmpireSubjectRate, EmpireWarTarget, EmpireWarTargets, SabotageAction } from "../../types";
@@ -174,6 +175,7 @@ function IncomingWar({ war, onChanged }: { war: EmpireIncomingWar; onChanged: ()
       <button className="btn red block" type="button" disabled={busy || left <= 0} onClick={() => run("/empire/war/accept", { war_id: war.war_id })}>
         <Swords size={16} />Принять бой
       </button>
+      {left > 0 && <OnlineBattleButton path="/arena/start/war" body={{ war_id: war.war_id }} label="Принять онлайн: бой вождей" />}
     </Panel>
   );
 }

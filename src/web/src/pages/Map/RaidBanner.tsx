@@ -1,4 +1,5 @@
 import { Siren } from "lucide-react";
+import { OnlineBattleButton } from "../../components/OnlineBattleButton";
 import { Panel, countdown, fmt, useCountdown } from "../../components/ui";
 import { useAction, useApi } from "../../hooks/useApi";
 
@@ -18,6 +19,7 @@ export function RaidBanner() {
         Не ответишь — бьётся лагерь защиты. Поражение — районов ботам: {p.lose}.
       </div>
       <button type="button" className="btn red block" style={{ marginTop: 10 }} disabled={busy} onClick={() => run("/raid/fight")}>Встретить лагерем атаки</button>
+      <OnlineBattleButton path="/arena/start/raid" label="Встретить онлайн: перки и ходы" disabled={busy} />
     </Panel>
   );
 }

@@ -28,12 +28,18 @@ def _cum(table: dict, code: str, level: int) -> CombatMods:
     return mods
 
 
+# Усиление перков источника (этап 6, баланс симуляцией): пути и родословные с особыми механиками (не боевыми
+# модификаторами) не выравниваются множителем уровней — их уравнивает сила перков. Ключ «вид:код».
+PERK_BOOST: dict[str, float] = {}
+
+
 def _tier_perks(kind: str, table: dict, code: str, name: str, idx: int) -> list[Perk]:
     out = []
+    boost = PERK_BOOST.get(f"{kind}:{code}", 1.0)
     for t, level in enumerate(TIER_LEVELS):
         if level > len(table.get(code, ())):
             break
-        mods = _cum(table, code, level).scale(1.0 + 0.25 * t)
+        mods = _cum(table, code, level).scale((1.0 + 0.25 * t) * boost)
         has_mods = mods != CombatMods()
         top = t == len(TIER_LEVELS) - 1
         game = minigame = None
@@ -43,7 +49,7 @@ def _tier_perks(kind: str, table: dict, code: str, name: str, idx: int) -> list[
         out.append(Perk(
             code=f"{kind}:{code}:{t + 1}", name=f"{name} · {TIER_NAMES[t]}",
             about=("Вспышка силы источника на раунд" if has_mods else "Удар в стиле источника") + (" + мини-игра." if top else "."),
-            cost=2 + t, cooldown=2 + t // 2, self_mods=mods, damage=1.0 + 0.1 * t + (0 if has_mods else 0.15),
+            cost=2 + t, cooldown=2 + t // 2, self_mods=mods, damage=1.0 + (0.1 * t + (0 if has_mods else 0.15)) * boost,
             minigame=minigame, game=game, power=(0.8 if kind == "tech" else 0.5) if top else 0.0,
         ))
     return out

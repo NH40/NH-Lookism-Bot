@@ -269,6 +269,10 @@ PATH_BALANCE: dict[str, float] = {
     PATH_FORESIGHT: 1.1,
     PATH_ADAPTATION: 1.15,
 }
+# Онлайн-бой (2026-11-20, этап 6): подстройка симуляцией — 150 равных билдов × 30 соперников, автоатака с перками;
+# множители к прежнему балансу, чтобы доля побед каждого кода была около 50%.
+for _code, _k in {"overcome": 0.736, "despair": 0.617, "reflection": 0.438, "absorption": 0.944, "copy": 1.839, "infinite": 1.41, "foresight": 1.377, "sure_hit": 0.442, "adaptation": 0.687, "evasion": 0.584}.items():
+    PATH_BALANCE[_code] = round(PATH_BALANCE.get(_code, 1.0) * _k, 3)
 LEVELS = scale_levels(LEVELS, PATH_BALANCE)
 
 

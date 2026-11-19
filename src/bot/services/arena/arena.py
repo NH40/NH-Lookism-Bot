@@ -169,12 +169,28 @@ def _ready(side: dict, code: str, round_no: int) -> bool:
     return perk is not None and code in side["perks"] and side["energy"] >= perk.cost and side["cd"].get(code, 0) <= round_no
 
 
+_VALUE_FIELDS = {  # вклад поля модификаторов в «силу» перка для автоатаки (грубо, в долях урона)
+    "attack": 1.0, "durability": 0.6, "reduction": 1.0, "pierce": 0.5, "sure_hit": 0.5, "crit_chance": 0.8, "crit_power": 0.3,
+    "heal": 1.2, "multi_hit": 0.8, "dodge": 0.8, "block": 0.6, "suppress": 0.5, "bleed": 0.6, "first_strike": 1.0, "chaos": 1.0,
+}
+
+
+def perk_value(p: Perk) -> float:
+    """Оценка силы перка для автоатаки: прирост урона + взвешенные модификаторы + мини-игра (средне) — на единицу энергии."""
+    v = (p.damage - 1) + (1 - p.enemy_damage)
+    for name, w in _VALUE_FIELDS.items():
+        v += w * float(getattr(p.self_mods, name, 0) or 0) + 0.5 * w * float(getattr(p.enemy_mods, name, 0) or 0)
+    if p.minigame:
+        v += p.power * ARENA_AUTO_MINIGAME_SCORE
+    return v * p.ai_weight / max(1, p.cost) ** 0.5
+
+
 def ai_action(side: dict, round_no: int, own_power: float, enemy_power: float) -> dict:
     """Автоатака «нормального» уровня: перк, если хватает энергии (самый весомый из готовых), защита — когда
     сильно проигрываешь, иначе атака. Мини-игры — средний результат."""
     ready = [PERK_REGISTRY[c] for c in side["perks"] if _ready(side, c, round_no)]
     if ready:
-        best = max(ready, key=lambda p: (p.ai_weight * p.cost, p.code))
+        best = max(ready, key=lambda p: (perk_value(p), p.code))
         return {"kind": PERK, "perk": best.code, "score": ARENA_AUTO_MINIGAME_SCORE}
     if enemy_power and own_power < enemy_power * ARENA_AI_DEFEND_RATIO:
         return {"kind": DEFEND}

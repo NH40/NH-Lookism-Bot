@@ -253,6 +253,10 @@ TECHNIQUE_BALANCE: dict[str, float] = {
     TECH_CQC: 1.8,
     TECH_SEIRIM: 1.3,
 }
+# Онлайн-бой (2026-11-20, этап 6): подстройка симуляцией — 150 равных билдов × 30 соперников, автоатака с перками;
+# множители к прежнему балансу, чтобы доля побед каждого кода была около 50%.
+for _code, _k in {"beast": 1.368, "invisible": 0.695, "ninjutsu": 0.876, "overcome": 1.781, "kyokushin": 0.873, "taekwondo": 0.666, "ma_taesu": 1.826, "one_step": 1.774, "blade_hands": 0.814, "muay_thai": 1.149, "cqc": 0.949, "seirim": 0.589}.items():
+    TECHNIQUE_BALANCE[_code] = round(TECHNIQUE_BALANCE.get(_code, 1.0) * _k, 3)
 LEVELS = scale_levels(LEVELS, TECHNIQUE_BALANCE)
 
 

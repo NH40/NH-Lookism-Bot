@@ -211,6 +211,10 @@ BLOODLINE_BALANCE: dict[str, float] = {
     BLOODLINE_SOPHIA: 1.1,
     BLOODLINE_KURODA: 1.3,
 }
+# Онлайн-бой (2026-11-20, этап 6): подстройка симуляцией — 150 равных билдов × 30 соперников, автоатака с перками;
+# множители к прежнему балансу, чтобы доля побед каждого кода была около 50%.
+for _code, _k in {"mujin": 0.558, "jinyeong": 0.696, "gapryong": 2.379, "yamazaki": 0.38, "sophia": 0.618, "kuroda": 1.279, "jincheol": 1.691}.items():
+    BLOODLINE_BALANCE[_code] = round(BLOODLINE_BALANCE.get(_code, 1.0) * _k, 3)
 LEVELS = scale_levels(LEVELS, BLOODLINE_BALANCE)
 
 

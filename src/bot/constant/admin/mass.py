@@ -28,8 +28,11 @@ KEY_AMOUNT = "mass_amount"
 MODE_BROADCAST = "bc"
 MODE_GRANT = "gr"
 
-BROADCAST_BATCH_SIZE = 25
+# ~12 сообщений в секунду: лимит Telegram на бота ~30/с, остальное — ответам игрокам (2026-11-19: рассылка 25/с
+# съедала почти весь лимит, бот и Mini App «зависали» на время рассылки).
+BROADCAST_BATCH_SIZE = 12
 BROADCAST_BATCH_PAUSE_SECONDS = 1.0
+BROADCAST_SEND_GAP_SECONDS = 0.04
 BROADCAST_TEXT_LIMIT = 4096
 BROADCAST_CAPTION_LIMIT = 1024
 MASS_GRANT_MAX_AMOUNT = 1_000_000_000

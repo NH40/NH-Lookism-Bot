@@ -18,7 +18,7 @@ from __future__ import annotations
 from bot.services.country import ensure_battles_open
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 
 from redis.asyncio import Redis
@@ -116,6 +116,7 @@ class ChallengeIssued:
     accept_seconds: int
     defender_attack: CampStats
     defender_defense: CampStats
+    free_attack: bool = False  # Ловкость: КД на сражения не поставлен (2026-11-19 — раньше игрок этого не видел)
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,7 +200,7 @@ async def _start_cooldown(session: AsyncSession, redis: Redis, attacker: User) -
     return cd
 
 
-async def _after_issue(session: AsyncSession, redis: Redis, attacker_id: int, cd: int) -> None:
+async def _after_issue(session: AsyncSession, redis: Redis, attacker_id: int, cd: int) -> bool:
     """Вызов создан и закоммичен: Ловкость — шанс, что вызов не ставит КД (тает в цепочке,
     `services/district/free_attack`); иначе — пуш «готово» по окончании КД."""
     from bot.services.district.free_attack import roll_free_attack
@@ -207,8 +208,9 @@ async def _after_issue(session: AsyncSession, redis: Redis, attacker_id: int, cd
     profile = await get_combat_profile(session, attacker_id)
     if await roll_free_attack(redis, attacker_id, profile, won=False, vs_bots=False):
         await redis.delete(battle_cooldown(attacker_id))
-    else:
-        await schedule_ready(redis, attacker_id, CD_BATTLE, cd)
+        return True
+    await schedule_ready(redis, attacker_id, CD_BATTLE, cd)
+    return False
 
 
 async def issue_challenge(session: AsyncSession, redis: Redis, attacker: User, district_id: int) -> ChallengeIssued:
@@ -248,8 +250,8 @@ async def issue_challenge(session: AsyncSession, redis: Redis, attacker: User, d
     except BaseException:
         await redis.delete(battle_cooldown(attacker.id))
         raise
-    await _after_issue(session, redis, attacker.id, cd)
-    return issued
+    free = await _after_issue(session, redis, attacker.id, cd)
+    return replace(issued, free_attack=free)
 
 
 async def _create_district_challenge(session: AsyncSession, attacker: User, row, district_id: int, window: int) -> ChallengeIssued:
@@ -323,8 +325,8 @@ async def issue_city_challenge(
     except BaseException:
         await redis.delete(battle_cooldown(attacker.id))
         raise
-    await _after_issue(session, redis, attacker.id, cd)
-    return issued
+    free = await _after_issue(session, redis, attacker.id, cd)
+    return replace(issued, free_attack=free)
 
 
 async def _create_city_challenge(

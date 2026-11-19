@@ -4,6 +4,7 @@ from bot.db.repositories.business.business import (  # noqa: F401
     WalletRow,
     add_coins,
     bump_upgrade,
+    count_active_holdings,
     count_by_type,
     count_by_type_on_district,
     count_by_type_per_district,

@@ -583,11 +583,12 @@ class BuildAllResult:
     collected: int
 
 
-async def build_all(session: AsyncSession, user_id: int, type_: str, district_id: int | None = None) -> BuildAllResult:
+async def build_all(session: AsyncSession, user_id: int, type_: str, district_id: int | None = None, limit: int | None = None) -> BuildAllResult:
     """«Застроить всё»: каждое свободное место района `district_id` (или всех районов игрока)
     зданием `type_`, пока хватает NHCoin. Цена — та же `build_cost` на каждое здание (правило
     «первое кафе бесплатно» срабатывает максимум один раз — `owned_total` растёт по ходу).
-    Одно списание суммой и один INSERT пачкой под теми же локами, что у `build`; один commit."""
+    Одно списание суммой и один INSERT пачкой под теми же локами, что у `build`; один commit. `limit` — не больше
+    стольких зданий (2026-11-19: «строить сколько хочешь»)."""
     if type_ not in BUSINESS_TYPES:
         raise UnknownBusinessTypeError
     collected = await accrue(session, user_id)
@@ -610,6 +611,8 @@ async def build_all(session: AsyncSession, user_id: int, type_: str, district_id
     for district in districts:
         free = capacity - sum(per_district.get(district.id, {}).values())
         for _ in range(max(0, free)):
+            if limit is not None and len(items) >= limit:
+                break
             cost = build_cost(type_, discount, owned_total=owned_total)
             first_cost = cost if first_cost is None else first_cost
             if total + cost > balance:
@@ -619,6 +622,8 @@ async def build_all(session: AsyncSession, user_id: int, type_: str, district_id
             items.append((district.id, type_))
             touched.add(district.id)
         else:
+            continue
+        if limit is not None and len(items) >= limit:
             continue
         break
     if not items:
@@ -723,7 +728,7 @@ async def autobuild_for_crown(session: AsyncSession, user_id: int) -> int:
     return len(items)
 
 
-async def demolish_everywhere(session: AsyncSession, user_id: int, type_: str | None) -> int:
+async def demolish_everywhere(session: AsyncSession, user_id: int, type_: str | None, limit: int | None = None) -> int:
     """Снести всё (или все здания типа `type_`) сразу на всех районах игрока (пользователи
     2026-10-20: «кнопку сноса всех районов разом»). Как обычный снос — без возврата NHCoin,
     доход до сноса зачисляется по старому набору. Коммитит. → сколько снесено."""
@@ -731,7 +736,7 @@ async def demolish_everywhere(session: AsyncSession, user_id: int, type_: str | 
         raise UnknownBusinessTypeError
     await accrue(session, user_id)
     await business_repo.get_wallet(session, user_id, for_update=True)
-    removed = await business_repo.delete_on_owned_districts(session, user_id, type_)
+    removed = await business_repo.delete_on_owned_districts(session, user_id, type_, limit)
     if not removed:
         await session.rollback()
         raise NothingToDemolishError

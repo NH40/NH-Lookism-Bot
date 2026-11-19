@@ -100,10 +100,20 @@ def _owned_types(user_id: int):
     on_districts = (
         select(Business.type.label("type")).join(District, District.id == Business.district_id).where(District.owner_id == user_id)
     )
+    # Владение работает, только пока игрок — император города, откуда пришло здание (2026-11-19, баг «стака зданий»):
+    # круг, отбивший владения в бою за освобождение, но не коронованный, и император, потерявший город, дохода с них не
+    # получают. Старые владения без города (`origin_city_id` NULL) — у любого действующего императора.
+    origin = City.__table__.alias("origin_city")
+    is_emperor = select(City.id).where(City.emperor_id == user_id).exists()
     held = (
         select(Business.type.label("type"))
         .outerjoin(District, District.id == Business.district_id)
-        .where(Business.holder_id == user_id, or_(District.owner_id.is_(None), District.owner_id != user_id))
+        .outerjoin(origin, origin.c.id == Business.origin_city_id)
+        .where(
+            Business.holder_id == user_id,
+            or_(District.owner_id.is_(None), District.owner_id != user_id),
+            or_(origin.c.emperor_id == user_id, (Business.origin_city_id.is_(None)) & is_emperor),
+        )
     )
     return on_districts.union_all(held).subquery()
 
@@ -112,6 +122,15 @@ async def count_by_type(session: AsyncSession, user_id: int) -> dict[str, int]:
     owned = _owned_types(user_id)
     rows = await session.execute(select(owned.c.type, func.count()).group_by(owned.c.type))
     return {type_: count for type_, count in rows.all()}
+
+
+async def count_active_holdings(session: AsyncSession, user_id: int) -> int:
+    """Сколько зданий во владениях приносят доход (то же правило, что в `_owned_types`)."""
+    owned = _owned_types(user_id)
+    on_districts = await session.scalar(
+        select(func.count(Business.id)).join(District, District.id == Business.district_id).where(District.owner_id == user_id)
+    )
+    return int(await session.scalar(select(func.count()).select_from(owned)) or 0) - int(on_districts or 0)
 
 
 async def count_type(session: AsyncSession, user_id: int, type_: str) -> int:
@@ -198,11 +217,13 @@ async def delete_on_district(session: AsyncSession, district_id: int, type_: str
     return result.rowcount or 0
 
 
-async def delete_on_owned_districts(session: AsyncSession, user_id: int, type_: str | None) -> int:
+async def delete_on_owned_districts(session: AsyncSession, user_id: int, type_: str | None, limit: int | None = None) -> int:
     """Снести все здания (или все типа `type_`) на ВСЕХ районах игрока одним DELETE; владения
     императора не трогает. → сколько снесено. НЕ коммитит."""
     cond = Business.district_id.in_(select(District.id).where(District.owner_id == user_id))
     if type_ is not None:
         cond = cond & (Business.type == type_)
+    if limit is not None:  # снести не всё, а `limit` штук (последние построенные)
+        cond = Business.id.in_(select(Business.id).where(cond).order_by(Business.id.desc()).limit(max(0, limit)))
     result = await session.execute(delete(Business).where(cond))
     return result.rowcount or 0

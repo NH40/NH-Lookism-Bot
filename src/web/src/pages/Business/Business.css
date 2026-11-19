@@ -12,3 +12,7 @@
 .biz-item small { font-size: 11px; font-weight: 600; color: var(--muted); display: block; }
 .biz-cost { font-size: 12px; font-weight: 800; color: var(--gold-2); white-space: nowrap; }
 .biz-note { font-size: 11px; font-weight: 600; margin-top: 8px; text-align: center; }
+
+/* Сколько строить/сносить пачкой (2026-11-19). */
+.biz-count { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; font-size: 11.5px; font-weight: 700; }
+.biz-count input { width: 110px; min-height: 36px; padding: 0 10px; text-align: right; }

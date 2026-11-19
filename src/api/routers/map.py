@@ -159,13 +159,11 @@ def _event_out(e) -> MapEventOut:
 
 
 async def _empire(session: AsyncSession, user) -> EmpireOut:
-    from sqlalchemy import func, select
-
-    from bot.db.models.business import Business
+    from bot.db.repositories.business import count_active_holdings
     from bot.services.empire import get_overview
 
     stats = await get_overview(session, user.id)
-    holdings = int(await session.scalar(select(func.count(Business.id)).where(Business.holder_id == user.id)) or 0)
+    holdings = await count_active_holdings(session, user.id)
     return EmpireOut(cities=stats.cities, players=stats.players, tax_percent=stats.tax_percent, collected=stats.collected, holdings=holdings)
 
 

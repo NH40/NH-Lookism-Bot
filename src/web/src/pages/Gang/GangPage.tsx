@@ -124,7 +124,7 @@ function ArmyTab({ data, reload }: { data: GangData; reload: () => void }) {
         </div>
       </Panel>
 
-      <Panel title={`Отряды · ${data.squads.length}`}>
+      <Panel title={`Отряды · ${data.squads_total ?? data.squads.length}`}>
         <div className="seg gg-sort" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <button type="button" className={`pill ${sort === "power" ? "on" : ""}`} onClick={() => setSort("power")}>сильнейшие</button>
           <button type="button" className={`pill ${sort === "count" ? "on" : ""}`} onClick={() => setSort("count")}>многочисленные</button>
@@ -133,8 +133,11 @@ function ArmyTab({ data, reload }: { data: GangData; reload: () => void }) {
         {shown.map((sq) => <SquadRow key={`${sq.rank}-${sq.stars}-${sq.training_level}-${sq.school}-${sq.school_level}`} sq={sq} />)}
         {squads.length > SQUADS_SHOWN && (
           <button className="btn ghost small block" type="button" style={{ marginTop: 10 }} onClick={() => setAll(!all)}>
-            {all ? "Свернуть" : `Показать все (${squads.length})`}
+            {all ? "Свернуть" : `Показать ещё (${squads.length})`}
           </button>
+        )}
+        {(data.squads_total ?? 0) > squads.length && (
+          <div className="gg-hint">Показаны {squads.length} сильнейших отрядов из {fmt(data.squads_total ?? 0)}.</div>
         )}
       </Panel>
     </>

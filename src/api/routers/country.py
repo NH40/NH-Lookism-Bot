@@ -37,6 +37,7 @@ from bot.services.extra import get_army_stats
 from bot.services.phase import is_city_conqueror, is_emperor
 from bot.services.settings import notify_player
 from bot.texts.district import (
+    FREE_ATTACK_LINE,
     CITY_ALREADY_CHALLENGED,
     CITY_CHALLENGE_INCOMING,
     CITY_CHALLENGE_SENT,
@@ -260,6 +261,8 @@ async def post_city_challenge(
     async with telegram_bot() as bot:
         await notify_player(bot, session, issued.defender_id, NOTIFY_PVP_CALL, incoming, reply_markup=accept_menu(issued.challenge_id))
     sent = CITY_CHALLENGE_SENT.format(owner=issued.defender_label, window=window, city=issued.city_name, count=issued.districts)
+    if issued.free_attack:
+        sent += FREE_ATTACK_LINE
     return MessageOut(message=clean_label(sent).replace("Итог придёт сюда.", "Итог придёт в чат с ботом."))
 
 

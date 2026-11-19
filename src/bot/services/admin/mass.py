@@ -20,6 +20,7 @@ from bot.constant.admin.mass import (
     ACTIVE_7D_HOURS,
     ACTIVE_24H_HOURS,
     BROADCAST_BATCH_PAUSE_SECONDS,
+    BROADCAST_SEND_GAP_SECONDS,
     BROADCAST_BATCH_SIZE,
     FILTERS,
     FLT_ACTIVE_7D,
@@ -191,5 +192,6 @@ async def run_broadcast(
                 sent += 1
             else:
                 failed += 1
+            await asyncio.sleep(BROADCAST_SEND_GAP_SECONDS)  # ровный темп, без всплесков
         await asyncio.sleep(BROADCAST_BATCH_PAUSE_SECONDS)
     return sent, failed

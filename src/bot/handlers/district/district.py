@@ -372,6 +372,8 @@ async def _announce_challenge(callback: CallbackQuery, session: AsyncSession, is
     else:
         sent = CHALLENGE_SENT.format(number=issued.district_number, **common)
         incoming = CHALLENGE_INCOMING.format(number=issued.district_number, **army)
+    if issued.free_attack:
+        sent += FREE_ATTACK_LINE
     await callback.message.answer(sent, reply_markup=back_menu(CB_MAP_OPEN))
     await notify_player(
         callback.bot, session, issued.defender_id, NOTIFY_PVP_CALL, incoming, reply_markup=accept_menu(issued.challenge_id)

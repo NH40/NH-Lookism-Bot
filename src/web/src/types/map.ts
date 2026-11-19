@@ -128,6 +128,7 @@ export interface GangData {
   defense: { quantity: number; power: number };
   cards_quantity: number;
   squads: Squad[];
+  squads_total?: number;
   move_percents: number[];
   recruit_cooldown_seconds: number;
   recruit_ceiling_rank: string;

@@ -241,6 +241,7 @@ async def upgrade_business(
 class BuildAllIn(BaseModel):
     type: str
     district_id: int | None = None  # None — все районы
+    count: int | None = None  # None — сколько влезет и хватит денег
 
 
 class DemolishIn(BaseModel):
@@ -257,7 +258,7 @@ async def build_all_business(
 ) -> dict:
     lock = await _lock(redis, user_id)
     try:
-        result = await build_all(session, user_id, body.type, body.district_id)
+        result = await build_all(session, user_id, body.type, body.district_id, body.count if body.count and body.count > 0 else None)
     except UnknownBusinessTypeError:
         raise bad("Неизвестный тип здания.")
     except NotDistrictOwnerError:
@@ -300,6 +301,7 @@ async def demolish_business(
 
 class DemolishEverywhereIn(BaseModel):
     type: str | None = None  # None — снести всё
+    count: int | None = None  # None — все такие здания
 
 
 @router.post("/demolish-everywhere")
@@ -314,7 +316,7 @@ async def demolish_everywhere_endpoint(
 
     lock = await _lock(redis, user_id)
     try:
-        removed = await demolish_everywhere(session, user_id, body.type)
+        removed = await demolish_everywhere(session, user_id, body.type, body.count if body.count and body.count > 0 else None)
     except UnknownBusinessTypeError:
         raise bad("Неизвестный тип здания.")
     except NothingToDemolishError:

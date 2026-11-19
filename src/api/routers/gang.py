@@ -28,6 +28,9 @@ from bot.services.ticket import get_status
 from bot.texts.gang import CAMP_NOTHING_TO_MOVE
 from bot.texts.school import SCHOOL_NAMES
 
+# У крупных игроков отрядов больше 10 тысяч: весь список раздувал ответ и память API (2026-11-19, OOM 17.11).
+SQUADS_LIMIT = 300
+
 router = APIRouter(prefix="/api/gang", tags=["gang"])
 
 
@@ -61,6 +64,7 @@ class GangOut(BaseModel):
     defense: CampOut
     cards_quantity: int
     squads: list[SquadOut]
+    squads_total: int = 0  # всего отрядов; в `squads` — не больше `SQUADS_LIMIT` сильнейших
     move_percents: list[int]
     recruit_cooldown_seconds: int
     recruit_ceiling_rank: str
@@ -109,8 +113,9 @@ async def get_my_gang(
                 school_level=sq.school_level, unit_power=sq.unit_power, attack=sq.attack,
                 defense=sq.defense, total=sq.total,
             )
-            for sq in squads
+            for sq in sorted(squads, key=lambda q: -q.unit_power)[:SQUADS_LIMIT]
         ],
+        squads_total=len(squads),
         move_percents=list(GANG_CAMP_MOVE_PERCENTS),
         recruit_cooldown_seconds=await ttl_seconds(redis, recruit_extra_cooldown(user.id)),
         recruit_ceiling_rank=offer.ceiling,

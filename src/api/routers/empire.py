@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from redis.asyncio import Redis
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user_id
@@ -32,7 +31,7 @@ from bot.constant.admin.live_config import KEY_CD_EMPIRE_ANNOUNCE
 from bot.constant.empire import SABOTAGE_ACTIONS, WAR_ACCEPTED, WAR_FORFEIT, WAR_VOID
 from bot.constant.phase import PHASE_FIST
 from bot.constant.settings import NOTIFY_SABOTAGE, NOTIFY_WAR_CALL
-from bot.db.models.business import Business
+from bot.db.repositories.business import count_active_holdings
 from bot.db.repositories.empire import get_emperor as get_emperor_row
 from bot.db.repositories.user import get_by_id
 from bot.services.admin.live_config import cooldown_seconds
@@ -202,7 +201,7 @@ class EmpireOut(BaseModel):
 
 async def _ruler(session: AsyncSession, redis: Redis, user_id: int) -> RulerOut:
     stats = await get_overview(session, user_id)
-    holdings = int(await session.scalar(select(func.count(Business.id)).where(Business.holder_id == user_id)) or 0)
+    holdings = await count_active_holdings(session, user_id)
     incoming = None
     war = await get_incoming_war(session, user_id)
     if war is not None:

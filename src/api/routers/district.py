@@ -43,6 +43,7 @@ from bot.services.extra import get_army_stats
 from bot.services.settings import notify_player
 from bot.constant.settings import NOTIFY_PVP_CALL
 from bot.texts.district import (
+    FREE_ATTACK_LINE,
     CHALLENGE_INCOMING,
     CITY_CONQUEROR,
     DISTRICT_ALREADY_CHALLENGED,
@@ -256,6 +257,7 @@ async def challenge(
             )
     return ChallengeOut(
         message=f"Вызов брошен: район №{issued.district_number}, владелец {issued.defender_label}. "
-        f"У него {window} на принятие боя, иначе бой пройдёт против его лагеря защиты.",
+        f"У него {window} на принятие боя, иначе бой пройдёт против его лагеря защиты."
+        + (clean_label(FREE_ATTACK_LINE) if issued.free_attack else ""),
         district_number=issued.district_number, defender=issued.defender_label, accept_window_minutes=minutes,
     )

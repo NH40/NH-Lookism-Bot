@@ -13,6 +13,11 @@ export function BusinessPage() {
   const [confirmAll, setConfirmAll] = useState(false);
   // Снос во всех районах: тип (или "*" — всё), ожидающий второго нажатия.
   const [confirmEvery, setConfirmEvery] = useState<string | null>(null);
+  // Сколько строить кнопкой «Всё» и сносить кнопкой «Снести» (пусто — сколько влезет / все).
+  const [buildCount, setBuildCount] = useState("");
+  const [dropCount, setDropCount] = useState("");
+  const bn = Math.floor(Number(buildCount)) || 0;
+  const dn = Math.floor(Number(dropCount)) || 0;
   const everywhere = new Map<string, { name: string; count: number }>();
   for (const d of data?.district_list ?? []) {
     for (const b of d.buildings) {
@@ -26,7 +31,7 @@ export function BusinessPage() {
     const key = type ?? "*";
     if (confirmEvery !== key) return setConfirmEvery(key);
     setConfirmEvery(null);
-    await run("/business/demolish-everywhere", { type });
+    await run("/business/demolish-everywhere", { type, count: type && dn ? dn : null });
   };
   const selDistrict = data?.district_list.find((d) => d.id === sel) ?? null;
   const anyFree = selDistrict ? selDistrict.free > 0 : (data?.district_list.some((d) => d.free > 0) ?? false);
@@ -133,6 +138,10 @@ export function BusinessPage() {
           )}
           {everyTotal > 0 && (
             <Panel title="Снос во всех районах" tone="red">
+              <label className="biz-count">
+                <span className="muted">Сколько сносить кнопкой «Снести» (пусто — все)</span>
+                <input inputMode="numeric" value={dropCount} placeholder="все" onChange={(e) => setDropCount(e.target.value.replace(/\D/g, ""))} />
+              </label>
               {[...everywhere.entries()].map(([code, b]) => (
                 <div key={code} className="biz-item">
                   <div className="grow">
@@ -140,7 +149,7 @@ export function BusinessPage() {
                     <small>во всех районах ×{fmt(b.count)}</small>
                   </div>
                   <button className="btn red small" disabled={busy} onClick={() => demolishEvery(code)}>
-                    {confirmEvery === code ? "Точно?" : "Снести все"}
+                    {confirmEvery === code ? "Точно?" : dn ? `Снести ${fmt(Math.min(dn, b.count))}` : "Снести все"}
                   </button>
                 </div>
               ))}
@@ -151,6 +160,10 @@ export function BusinessPage() {
             </Panel>
           )}
           <Panel title="Постройка">
+            <label className="biz-count">
+              <span className="muted">Сколько строить кнопкой «Всё» (пусто — сколько влезет)</span>
+              <input inputMode="numeric" value={buildCount} placeholder="все" onChange={(e) => setBuildCount(e.target.value.replace(/\D/g, ""))} />
+            </label>
             {data.catalog.map((c) => {
               const afford = data.nh_coins >= c.cost;
               const ready = selDistrict !== null && selDistrict.free > 0 && afford;
@@ -174,9 +187,9 @@ export function BusinessPage() {
                   <button
                     className={`btn gold small ${readyAll ? "" : "off"}`}
                     disabled={busy || !readyAll}
-                    onClick={() => run("/business/build-all", { type: c.code, district_id: sel })}
+                    onClick={() => run("/business/build-all", { type: c.code, district_id: sel, count: bn || null })}
                   >
-                    Всё
+                    {bn ? `×${fmt(bn)}` : "Всё"}
                   </button>
                 </div>
               );

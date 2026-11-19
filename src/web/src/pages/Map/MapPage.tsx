@@ -9,6 +9,7 @@ import { useAction, useApi } from "../../hooks/useApi";
 import { Sheet } from "../../components/Sheet";
 import { Journal } from "../../components/Journal";
 import "../../styles/game-screens.css";
+import { RaidBanner } from "./RaidBanner";
 
 type Outcome =
   | { kind: "battle"; data: BattleResult }
@@ -237,6 +238,7 @@ export function MapPage() {
     <Screen status={status} error={error}>
       {data && (
         <div className="page">
+          <RaidBanner />
           <div className="map-hero">
             {data.city.art && <img src={imgUrl(data.city.art, 720)} alt={data.city.name} />}
             <div className="map-hero-over">

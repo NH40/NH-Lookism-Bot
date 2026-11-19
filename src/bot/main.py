@@ -62,6 +62,7 @@ from bot.services.mastery import activate_due, check_breakthroughs
 from bot.config.top import TOP_POWER_REFRESH_SECONDS
 from bot.services.top import refresh_powers, sweep_seasons
 from bot.handlers.league import league_loop
+from bot.handlers.raid import raid_loop
 from bot.services.error_log import run_sink
 from bot.utils.log_context import set_source
 from bot.services.cooldown import sweep as sweep_cooldown_pushes
@@ -400,6 +401,7 @@ async def main() -> None:
         asyncio.create_task(_events_loop(bot, session_factory)),
         asyncio.create_task(_ultra_instinct_loop(session_factory, redis)),
         asyncio.create_task(_potion_loop(bot, session_factory)),
+        asyncio.create_task(raid_loop(bot, session_factory)),
         asyncio.create_task(_bank_loop(bot, session_factory, redis)),
         asyncio.create_task(_tribute_loop(session_factory)),
         asyncio.create_task(_stagnation_loop(bot, session_factory, redis)),

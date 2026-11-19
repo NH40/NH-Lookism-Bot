@@ -5,6 +5,7 @@ from bot.constant.settings.settings import (  # noqa: F401
     CB_NOTIFY_OPEN,
     CB_NOTIFY_TOGGLE_PREFIX,
     NOTIFY_ARKHANGEL,
+    NOTIFY_RAID,
     NOTIFY_BOSS,
     NOTIFY_CATEGORIES,
     NOTIFY_CD_BATTLE,

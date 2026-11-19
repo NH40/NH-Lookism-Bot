@@ -5,6 +5,7 @@ from bot.constant.settings import (
     NOTIFY_CD_BATTLE,
     NOTIFY_CD_EXTRAS,
     NOTIFY_ARKHANGEL,
+    NOTIFY_RAID,
     NOTIFY_EMPEROR,
     NOTIFY_CD_PERSONAL,
     NOTIFY_BOSS,
@@ -53,6 +54,7 @@ NOTIFY_LABELS: dict[str, str] = {
     NOTIFY_CD_PERSONAL: "🧘 Личная тренировка готова",
     NOTIFY_CD_EXTRAS: "🏋 Тренировка статистов готова",
     NOTIFY_ARKHANGEL: "♾ Архангел: часовой доход",
+    NOTIFY_RAID: "🚨 Рейды на земли",
     NOTIFY_EMPEROR: "📜 Объявления императора",
 }
 NOTIFY_ON = "✅"

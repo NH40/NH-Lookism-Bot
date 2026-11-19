@@ -24,6 +24,7 @@ NOTIFY_CD_BATTLE = "cd_battle"  # КД сражений прошёл — мож�
 NOTIFY_CD_PERSONAL = "cd_personal"  # личная тренировка готова
 NOTIFY_CD_EXTRAS = "cd_extras"  # тренировка статистов готова
 NOTIFY_ARKHANGEL = "arkhangel"  # абсолют Архангел принёс часовой доход
+NOTIFY_RAID = "raid"  # рейды на твои земли: предупреждение и итог
 NOTIFY_EMPEROR = "emperor_msg"  # объявление императора земли, где живёт игрок
 
 NOTIFY_CATEGORIES: tuple[str, ...] = (
@@ -45,6 +46,7 @@ NOTIFY_CATEGORIES: tuple[str, ...] = (
     NOTIFY_CD_PERSONAL,
     NOTIFY_CD_EXTRAS,
     NOTIFY_ARKHANGEL,
+    NOTIFY_RAID,
     NOTIFY_EMPEROR,
 )
 

@@ -30,6 +30,8 @@ from bot.config.characteristic import (
     AGILITY_DODGE_PP_PER_RANK,
     AGILITY_FREE_ATTACK_PERCENT_PER_RANK,
     ENDURANCE_ABSORB_PERCENT_PER_RANK,
+    ENDURANCE_DURABILITY_PERCENT_PER_RANK,
+    ENDURANCE_VITALITY_PERCENT_PER_RANK,
     ENDURANCE_BLOCK_MULT_PERCENT_PER_RANK,
     REACTION_MAX,
     REACTIONS_TOTAL_MAX,
@@ -126,14 +128,20 @@ class CombatProfile:
         if total > REACTIONS_TOTAL_MAX:
             reactions = [x * REACTIONS_TOTAL_MAX / total for x in reactions]
         dodge, block, counter, flee = reactions
+        endurance = self.ranks[STAT_ENDURANCE]
+        parts = self._position_parts(role, vs, spy_cast, spy_taken, no_absolutes)
+        if endurance and "build" in parts:  # прочность выносливости — к ХП единиц
+            b = parts["build"]
+            parts["build"] = replace(b, total=b.total + CombatMods(durability=endurance * ENDURANCE_DURABILITY_PERCENT_PER_RANK / 100))
         return CombatChances(
             dodge=dodge,
             block=block,
             counter=counter,
             flee=flee,
-            loss_save=endurance_mastery_loss_save_percent(self.mastery[MASTERY_ENDURANCE]) / 100,
-            absorb=self.ranks[STAT_ENDURANCE] * ENDURANCE_ABSORB_PERCENT_PER_RANK / 100,
-            **self._position_parts(role, vs, spy_cast, spy_taken, no_absolutes),
+            loss_save=endurance_mastery_loss_save_percent(self.mastery[MASTERY_ENDURANCE]) / 100
+            + endurance * ENDURANCE_VITALITY_PERCENT_PER_RANK / 100,
+            absorb=endurance * ENDURANCE_ABSORB_PERCENT_PER_RANK / 100,
+            **parts,
         )
 
     def _position_parts(self, role, vs, spy_cast, spy_taken, no_absolutes=False) -> dict:

@@ -12,6 +12,12 @@ ARENA_TTL_SECONDS = 2 * 3600  # бой в Redis живёт не дольше
 ARENA_ENERGY_START = 2
 ARENA_ENERGY_REGEN = 1
 ARENA_ENERGY_MAX = 10
+# Энергия — четвёртая часть выносливости (2026-11-19): +1 к запасу за каждые 8 рангов выносливости, мастерство
+# выносливости — +1 к потолку за ступень и +1 к приросту с 3-й; Ямадзаки — +1 к приросту с 5-го уровня, +2 к запасу на 10-м.
+ARENA_ENERGY_RANKS_PER_START = 8
+ARENA_ENERGY_MASTERY_REGEN_TIER = 3
+ARENA_YAMAZAKI_REGEN_LEVEL = 5
+ARENA_YAMAZAKI_START_LEVEL = 10
 ARENA_DEFEND_DAMAGE = 0.6  # защита: свой урон ×0.6…
 ARENA_DEFEND_REDUCTION = 0.35  # …входящий гасится на 35%…
 ARENA_DEFEND_ENERGY = 1  # …и +1 энергии сверху

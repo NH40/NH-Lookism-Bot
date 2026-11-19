@@ -34,3 +34,24 @@ async def perks_for(session: AsyncSession, user_id: int) -> list[str]:
     codes += [f"mt:{c}" for c in learned]
     seen: set[str] = set()
     return [c for c in codes if c in PERK_REGISTRY and not (c in seen or seen.add(c))]
+
+
+async def energy_for(session: AsyncSession, user_id: int) -> tuple[int, int, int]:
+    """(запас на старте, прирост за раунд, потолок) — энергия из выносливости, её мастерства и Ямадзаки."""
+    from sqlalchemy import select
+
+    from bot.config import arena as cfg
+    from bot.constant.bloodline import BLOODLINE_YAMAZAKI
+    from bot.db.models.user import User
+
+    row = (await session.execute(select(
+        User.stat_endurance, User.mastery_endurance, User.bloodline, User.bloodline_level, User.bloodline2, User.bloodline2_level,
+    ).where(User.id == user_id))).one_or_none()
+    if row is None:
+        return cfg.ARENA_ENERGY_START, cfg.ARENA_ENERGY_REGEN, cfg.ARENA_ENERGY_MAX
+    endurance, mastery, b1, l1, b2, l2 = row
+    yama = max(l1 if b1 == BLOODLINE_YAMAZAKI else 0, l2 if b2 == BLOODLINE_YAMAZAKI else 0)
+    start = cfg.ARENA_ENERGY_START + int(endurance or 0) // cfg.ARENA_ENERGY_RANKS_PER_START + (2 if yama >= cfg.ARENA_YAMAZAKI_START_LEVEL else 0)
+    regen = cfg.ARENA_ENERGY_REGEN + (1 if (mastery or 0) >= cfg.ARENA_ENERGY_MASTERY_REGEN_TIER else 0) + (1 if yama >= cfg.ARENA_YAMAZAKI_REGEN_LEVEL else 0)
+    cap = cfg.ARENA_ENERGY_MAX + int(mastery or 0)
+    return min(start, cap), regen, cap

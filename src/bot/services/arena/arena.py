@@ -113,19 +113,21 @@ async def create(
     a_auto: bool, d_auto: bool,
     a_name: str, d_name: str,
     meta: dict | None = None,
+    a_energy: tuple[int, int, int] | None = None, d_energy: tuple[int, int, int] | None = None,
 ) -> dict:
     """Начать бой. `*_uid` None — бот/босс (всегда автоатака). Армии и билды снимаются на старте."""
     battle_id = secrets.token_hex(8)
 
-    def side(uid, perks, auto, name, stacks):
-        return {"uid": uid, "name": name, "auto": bool(auto or uid is None), "energy": ARENA_ENERGY_START, "cd": {},
+    def side(uid, perks, auto, name, stacks, energy):
+        start, regen, cap = energy or (ARENA_ENERGY_START, ARENA_ENERGY_REGEN, ARENA_ENERGY_MAX)
+        return {"uid": uid, "name": name, "auto": bool(auto or uid is None), "energy": start, "regen": regen, "emax": cap, "cd": {},
                 "perks": [p for p in perks if p in PERK_REGISTRY], "action": None, "pending_game": None,
                 "power": int(sum(s.unit_power * s.quantity for s in stacks))}
 
     st = {
         "id": battle_id, "kind": kind, "status": STATUS_LIVE, "round": 0, "seed": secrets.randbits(48),
         "deadline": time.time() + ARENA_ROUND_SECONDS, "log": [], "meta": meta or {},
-        "a": side(a_uid, a_perks, a_auto, a_name, a_stacks), "d": side(d_uid, d_perks, d_auto, d_name, d_stacks),
+        "a": side(a_uid, a_perks, a_auto, a_name, a_stacks, a_energy), "d": side(d_uid, d_perks, d_auto, d_name, d_stacks, d_energy),
         "snap": _pack((a_stacks, d_stacks, a_chances, d_chances)), "result": None,
     }
     await _save(redis, st)
@@ -266,7 +268,7 @@ async def _play(redis: Redis, st: dict) -> dict:
                 st[other]["pending_game"] = {"game": perk.game, "power": perk.power, "from": round_no, "score": 0.0}
         if code == DEFEND:
             s["energy"] += ARENA_DEFEND_ENERGY
-        s["energy"] = min(ARENA_ENERGY_MAX, s["energy"] + ARENA_ENERGY_REGEN)
+        s["energy"] = min(s.get("emax", ARENA_ENERGY_MAX), s["energy"] + s.get("regen", ARENA_ENERGY_REGEN))
         s["action"] = None
     st["log"].append({"a": {"code": a_code, "dmg": a_dmg}, "d": {"code": d_code, "dmg": d_dmg},
                       "kills": [entry_log.attacker_kills, entry_log.defender_kills] if entry_log else [0, 0]})

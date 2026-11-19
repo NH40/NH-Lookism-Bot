@@ -45,7 +45,16 @@ _DEFEND_MODS = CombatMods(reduction=ARENA_DEFEND_REDUCTION)
 
 Finisher = Callable[[dict, BattleResult], Awaitable[None]]
 _FINISHERS: dict[str, Finisher] = {}
-PERK_REGISTRY: dict[str, Perk] = dict(BASE_PERKS)  # этап 2 дополнит перками техник, путей, родословных…
+PERK_REGISTRY: dict[str, Perk] = dict(BASE_PERKS)
+
+
+def _load_sources() -> None:
+    from bot.config.arena.sources import build_source_perks
+
+    PERK_REGISTRY.update(build_source_perks())
+
+
+_load_sources()
 
 
 class ArenaError(Exception):

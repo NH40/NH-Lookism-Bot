@@ -43,6 +43,7 @@ class BankFreezeMiddleware(BaseMiddleware):
             return await handler(event, data)
         if isinstance(event, CallbackQuery):
             await event.answer(FROZEN_ALERT, show_alert=True)
-        elif isinstance(event, Message):
+        elif isinstance(event, Message) and event.chat.type == "private":
             await event.answer(FROZEN_MESSAGE, reply_markup=frozen_menu())
+        # В группах — молча (2026-11-20, пользователь: на каждое сообщение замороженного бот спамил в чат).
         return None

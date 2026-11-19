@@ -32,6 +32,9 @@ CB_PATH_OPEN = "path:open"
 CB_PATH_CLAIM_CONVICTION = "path:conviction"
 CB_PATH_CLAIM_PATH = "path:claim"  # «🎲 Пробудить путь» за фрагменты
 CB_PATH_LEVEL_UP = "path:up"
+CB_PATH_SLOTS = "path:slots"  # слоты Копирования
+CB_PATH_SLOT_TAKE_PREFIX = "path:stake:"  # + id памяти
+CB_PATH_SLOT_FREE_PREFIX = "path:sfree:"  # + номер слота
 CB_PATH_ACTIVATE_PREFIX = "path:act:"
 
 # Источник очков пути «ежедневный заход» (остальные источники — события `TASK_*` из

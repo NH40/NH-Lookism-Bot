@@ -1,4 +1,5 @@
 import { ChevronRight, Check, Droplet, Dumbbell, Mountain, Lightbulb, Lock, Plus, Sun, Swords, TrendingUp } from "lucide-react";
+import { CopySlots } from "./CopySlots";
 import { useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type {
@@ -238,6 +239,7 @@ function ItemPanel({
                   <span>{fmt(have)} / {fmt(cost)}</span>
                 </div>
                 <Bar value={have} max={cost} fill={tone === "violet" ? "violet" : "blue"} />
+                {item.next_frag ? <div className="muted" style={{ fontSize: 11, fontWeight: 700, marginTop: 4 }}>+ {fmt(item.next_frag)} фрагментов пути</div> : null}
               </>
             ) : (
               <div className="muted" style={{ fontSize: 12, fontWeight: 700 }}>Максимальный уровень</div>
@@ -372,6 +374,7 @@ function PathTab({ d, max, post, busy }: { d: PathData; max: number; post: Post;
               <Bar value={d.gauges[selected.code].value} max={d.gauges[selected.code].max} fill="gold" />
             </div>
           )}
+          {(selected.code === "copy" || selected.code === "infinite") && isActive && <CopySlots />}
           {selected.code === "training" && (isActive || isSecond) && (
             <div className="muted dev-note">
               🏋️ КПД тренировок: +{Math.round(d.training_kpd * 100)}% (потолок уровня +{Math.round(d.training_kpd_cap * 100)}%)

@@ -291,6 +291,8 @@ PATH_AWAKEN_FRAGMENTS = 100
 
 # Уровни пути — за очки пути. 2-й — 240, 10-й — 1 200; до 10-го — 6 480 очков.
 PATH_LEVEL_COST_PER_LEVEL = 120
+# 2026-11-19 (пользователь): уровень стоит ещё и фрагменты пути — 10 × уровень (до 10-го всего 540).
+PATH_LEVEL_FRAGMENTS_PER_LEVEL = 10
 
 # Очки пути за активность (начисляются, только пока путь пробуждён). Источник → (очки,
 # минимальный интервал между засчитанными событиями, сек). Защита от абуза — интервал на
@@ -318,6 +320,10 @@ PATH_POINT_SOURCES: dict[str, tuple[int, int]] = {
 
 def path_level_cost(next_level: int) -> int:
     return PATH_LEVEL_COST_PER_LEVEL * next_level
+
+
+def path_level_fragments(next_level: int) -> int:
+    return PATH_LEVEL_FRAGMENTS_PER_LEVEL * next_level
 
 
 # Путь тренировок (пользователь 2026-10-16): КПД всех тренировок растёт от дней на пути и от

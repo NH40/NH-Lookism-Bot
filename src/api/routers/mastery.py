@@ -183,3 +183,34 @@ async def post_invest(
     else:
         message = f"{label}: {tier}"
     return {"message": message}
+
+
+# --- техники мастерства (2026-11-19) ---
+
+class LearnIn(BaseModel):
+    mastery: str
+    code: str
+
+
+@router.get("/techniques")
+async def get_techniques(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    from bot.config.mastery.techniques import MASTERY_NAMES, MASTERY_TREES
+    from bot.services.mastery.techniques import view
+
+    trees, fragments = await view(session, user_id)
+    return {"fragments": fragments, "trees": [{
+        "mastery": t.mastery, "name": MASTERY_NAMES[t.mastery], "unlocked": t.unlocked, "next_tier": t.next_tier, "cost": t.cost,
+        "tiers": [[{"code": x.code, "name": x.name, "about": x.about, "learned": t.learned.get(i) == x.code} for x in techs]
+                  for i, techs in enumerate(MASTERY_TREES[t.mastery], 1)],
+    } for t in trees]}
+
+
+@router.post("/techniques/learn")
+async def post_learn(body: LearnIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    from bot.services.mastery.techniques import ERRORS, MasteryTechError, learn
+
+    try:
+        name = await learn(session, user_id, body.mastery, body.code)
+    except MasteryTechError as exc:
+        raise HTTPException(400, ERRORS.get(exc.code, "Не вышло.").format(value=exc.value))
+    return {"message": f"Изучено: {name}"}

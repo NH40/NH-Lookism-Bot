@@ -192,3 +192,50 @@ async def send_quest_pushes(bot: Bot, session: AsyncSession, activated: list[tup
             bot, session, user_id, NOTIFY_MASTERY, PUSH_QUEST.format(stage=stage, stage_name=STAGE_NAMES.get(stage, "")),
             reply_markup=open_mastery_menu(),
         )
+
+
+# --- техники мастерства (2026-11-19) ---
+
+async def _tree_screen(session: AsyncSession, user_id: int):
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    from bot.config.mastery.techniques import MASTERY_NAMES, MASTERY_TREES, tech_by_code
+    from bot.services.mastery.techniques import view
+
+    trees, fragments = await view(session, user_id)
+    lines = [f"🌳 <b>Техники мастерства</b> · фрагментов техник: {fragments}", "━━━━━━━━━━━━━━━━━━",
+             "<i>Ступень за ступенью — одна из трёх. Эффекты в бою — с обновлением битвы.</i>"]
+    rows = []
+    for t in trees:
+        got = ", ".join(tech_by_code(t.mastery, c)[1].name for _, c in sorted(t.learned.items())) or "—"
+        state = "🔒 после первого этапа стены" if not t.unlocked else (f"ступень {t.next_tier} — {t.cost} фрагм." if t.next_tier else "✅ всё изучено")
+        lines.append(f"\n<b>{MASTERY_NAMES[t.mastery]}</b>: {got}\n{state}")
+        if t.unlocked and t.next_tier:
+            for tech in MASTERY_TREES[t.mastery][t.next_tier - 1]:
+                rows.append([InlineKeyboardButton(text=f"{MASTERY_NAMES[t.mastery][:4]}. {tech.name}", callback_data=f"mastery:learn:{t.mastery}:{tech.code}")])
+    rows.append([InlineKeyboardButton(text="◀️ К мастерству", callback_data=CB_MASTERY_OPEN)])
+    return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+@router.callback_query(F.data == "mastery:tree")
+async def cb_tree(callback: CallbackQuery, session: AsyncSession) -> None:
+    await callback.answer()
+    text, markup = await _tree_screen(session, callback.from_user.id)
+    await callback.message.edit_text(text, reply_markup=markup)
+
+
+@router.callback_query(F.data.startswith("mastery:learn:"))
+async def cb_learn(callback: CallbackQuery, session: AsyncSession) -> None:
+    from bot.config.mastery.techniques import tech_by_code
+    from bot.services.mastery.techniques import ERRORS, MasteryTechError, learn
+
+    _, _, mastery, code = callback.data.split(":", 3)
+    found = tech_by_code(mastery, code)
+    try:
+        name = await learn(session, callback.from_user.id, mastery, code)
+    except MasteryTechError as exc:
+        await callback.answer(ERRORS.get(exc.code, "Не вышло.").format(value=exc.value), show_alert=True)
+        return
+    await callback.answer(f"Изучено: {name}" + (f" — {found[1].about}" if found else ""), show_alert=True)
+    text, markup = await _tree_screen(session, callback.from_user.id)
+    await callback.message.edit_text(text, reply_markup=markup)

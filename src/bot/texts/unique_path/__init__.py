@@ -22,6 +22,7 @@ from bot.texts.unique_path.unique_path import (  # noqa: F401
     NEXT_LEVEL_LINE,
     NOT_ENOUGH_ALERT,
     NOT_ENOUGH_FRAGMENTS_ALERT,
+    NOT_ENOUGH_FRAGMENTS_ALERT,
     NOT_OWNED_ALERT,
     NO_SECOND_BODY_ALERT,
     OWNED_LINE,

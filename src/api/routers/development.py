@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import get_current_user_id
 from api.db import get_session
 from api.deps import get_redis
-from api.routers._common import clean_label
+from api.routers._common import clean_label, require_user
 from api.routers.training import TrainingStatusOut, training_status
 from bot.config import awakening as awakening_cfg
 from bot.config import bloodline as bloodline_cfg
@@ -88,6 +88,7 @@ class ItemOut(BaseModel):
     level: int
     floor: int = 0  # купленный навсегда уровень (фиолетовый сегмент выше текущего)
     next_cost: int | None = None
+    next_frag: int | None = None  # путь: ещё и фрагменты пути
     levels: list[LevelOut]
 
 
@@ -199,10 +200,12 @@ async def _path_tab(session: AsyncSession, redis: Redis, user_id: int) -> dict:
     def item(code: str) -> dict:
         level = view.owned.get(code, 0)
         cost = path_cfg.path_level_cost(level + 1) if level < MAX_LEVEL else None
-        return _item(
+        out = _item(
             code, t_path.PATH_NAMES[code], t_path.PATH_THEMES[code], level, floors.get(code, 0), cost,
             path_cfg.LEVELS[code], t_path.SPECIAL_EFFECTS,
         )
+        out["next_frag"] = path_cfg.path_level_fragments(level + 1) if cost is not None else None
+        return out
 
     return {
         "stage": view.stage,  # 0 — копит ранги, 1 — квест убеждения, 2 — убеждение (фрагменты), 3 — путь есть
@@ -389,7 +392,7 @@ _PATH_ERRORS = (
     (path_svc.PathNotOwnedError, t_path.NOT_OWNED_ALERT),
     (path_svc.PathMaxLevelError, t_path.MAX_LEVEL_ALERT),
     (path_svc.NotEnoughFragmentsError, lambda e: t_path.NOT_ENOUGH_FRAGMENTS_ALERT.format(cost=e.cost, have=e.have)),
-    (path_svc.NotEnoughPointsError, lambda e: t_path.NOT_ENOUGH_ALERT.format(cost=e.cost, have=e.have)),
+    (path_svc.NotEnoughPointsError, lambda e: e.alert or t_path.NOT_ENOUGH_ALERT.format(cost=e.cost, have=e.have)),
     (path_svc.NoSecondBodyError, t_path.NO_SECOND_BODY_ALERT),
     (path_svc.SwapOnCooldownError, _cooldown_text(t_path.SWAP_COOLDOWN_ALERT)),
 )
@@ -713,3 +716,40 @@ async def post_awakening_confirm(
         ),
         "level": result.level,
     }
+
+
+# --- слоты Копирования (2026-11-19) ---
+
+class SlotIn(BaseModel):
+    memory_id: int | None = None
+    slot: int | None = None
+
+
+@router.get("/path/copy-slots")
+async def get_copy_slots(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    from bot.services.unique_path.copy_slots import state
+
+    await require_user(session, user_id)
+    st = await state(session, user_id)
+    name = lambda c: t_path.PATH_NAMES.get(c, c)  # noqa: E731
+    return {"active": st.active, "slots": st.slots,
+            "taken": [{"slot": s, "name": name(c), "level": lv} for s, c, lv in st.taken],
+            "memory": [{"id": i, "name": name(c), "level": lv, "copied": any(c == x for _, x, _ in st.taken)} for i, c, lv in st.memory]}
+
+
+@router.post("/path/copy-slots")
+async def post_copy_slot(body: SlotIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    from bot.handlers.unique_path.unique_path import COPY_SLOT_ERRORS
+    from bot.services.unique_path.copy_slots import CopySlotError, release, take
+
+    await require_user(session, user_id)
+    try:
+        if body.memory_id is not None:
+            await take(session, user_id, body.memory_id)
+            return {"message": "Путь занял слот."}
+        if body.slot is not None:
+            await release(session, user_id, body.slot)
+            return {"message": "Слот освобождён."}
+    except CopySlotError as exc:
+        raise HTTPException(400, COPY_SLOT_ERRORS.get(exc.code, "Не вышло."))
+    raise HTTPException(400, "Нечего делать.")

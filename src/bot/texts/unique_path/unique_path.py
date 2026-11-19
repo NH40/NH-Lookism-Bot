@@ -126,7 +126,7 @@ PATH_SCREEN = (
 )
 LEVEL_LINE_DONE = "✅ {n}. {effect}"
 LEVEL_LINE_LOCKED = "🔒 {n}. {effect}"
-NEXT_LEVEL_LINE = "⬆️ Следующий уровень — <b>{cost}</b> 🔷."
+NEXT_LEVEL_LINE = "⬆️ Следующий уровень — <b>{cost}</b> 🔷 + <b>{frag}</b> фрагментов пути."
 MAX_LEVEL_LINE = "🏆 <b>Максимальный уровень.</b>"
 OWNED_LINE = "\n\n🛤 <b>Другие твои пути:</b> {paths}"
 
@@ -145,6 +145,7 @@ PATH_AWAKENED = "🛤 Пробудился <b>{name}</b>!\n<i>{theme}</i>"
 QUEST_NOT_DONE_ALERT = "Квест ещё не выполнен."
 LEVEL_UP_ALERT = "{name}: уровень {level}"
 NOT_ENOUGH_ALERT = "Не хватает: нужно {cost} очков пути, у тебя {have}."
+NOT_ENOUGH_FRAGMENTS_ALERT = "Не хватает фрагментов пути: нужно {cost}, у тебя {have}."
 NOT_ENOUGH_FRAGMENTS_ALERT = "Не хватает фрагментов пути: нужно {cost}, у тебя {have}."
 WRONG_STAGE_ALERT = "Сейчас это недоступно — обнови экран пути."
 MAX_LEVEL_ALERT = "Уже максимальный уровень."

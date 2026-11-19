@@ -16,6 +16,7 @@ from bot.constant.unique_path import PATH_TRAINING
 from bot.services.build import get_build
 from bot.texts.unique_path import TRAINING_KPD_LINE, gauge_line
 from bot.config.unique_path import LEVELS, PATH_AWAKEN_FRAGMENTS
+from bot.config.unique_path.unique_path import PATH_LEVEL_COST_PER_LEVEL, PATH_LEVEL_FRAGMENTS_PER_LEVEL
 from bot.constant.unique_path import (
     CB_PATH_ACTIVATE2_PREFIX,
     CB_PATH_ACTIVATE_PREFIX,
@@ -31,6 +32,7 @@ from bot.constant.unique_path import (
     PATH_STAGE_NONE,
 )
 from bot.keyboards.unique_path import awaken_choice_menu, path_menu
+from bot.constant.unique_path import COPYING_PATHS, CB_PATH_SLOTS, CB_PATH_SLOT_FREE_PREFIX, CB_PATH_SLOT_TAKE_PREFIX
 from bot.services.gang import get_gang
 from bot.services.unique_path import (
     NoSecondBodyError,
@@ -120,7 +122,7 @@ async def render_path(session: AsyncSession, redis: Redis, user_id: int):
         theme=PATH_THEMES[view.active],
         levels=levels,
         points=format_number(view.points),
-        next_line=NEXT_LEVEL_LINE.format(cost=format_number(view.next_cost)) if view.next_cost else MAX_LEVEL_LINE,
+        next_line=NEXT_LEVEL_LINE.format(cost=format_number(view.next_cost), frag=format_number(view.next_cost // PATH_LEVEL_COST_PER_LEVEL * PATH_LEVEL_FRAGMENTS_PER_LEVEL)) if view.next_cost else MAX_LEVEL_LINE,
         owned_line=OWNED_LINE.format(paths=", ".join(PATH_NAMES[c] for c in others)) if others else "",
     )
     text += gauge_line(view.active, view.gauge, level)
@@ -138,6 +140,7 @@ async def render_path(session: AsyncSession, redis: Redis, user_id: int):
     return text, path_menu(
         cost=view.next_cost, others=others,
         cost2=view.next_cost2 if view.active2 else None, others2=others2,
+        copy_slots=view.active in COPYING_PATHS,
     )
 
 
@@ -237,7 +240,7 @@ async def _level_up(callback: CallbackQuery, session: AsyncSession, redis: Redis
         await callback.answer(MAX_LEVEL_ALERT, show_alert=True)
         return
     except NotEnoughPointsError as exc:
-        await callback.answer(NOT_ENOUGH_ALERT.format(cost=exc.cost, have=exc.have), show_alert=True)
+        await callback.answer(exc.alert or NOT_ENOUGH_ALERT.format(cost=exc.cost, have=exc.have), show_alert=True)
         return
     view = await get_view(session, redis, callback.from_user.id)
     await callback.answer(LEVEL_UP_ALERT.format(name=PATH_NAMES[view.active2 if slot == 2 else view.active], level=level))
@@ -282,3 +285,58 @@ async def cb_path_activate2(callback: CallbackQuery, session: AsyncSession, redi
     await callback.answer(ACTIVATED_ALERT.format(name=PATH_NAMES[code]))
     text, markup = await render_path(session, redis, callback.from_user.id)
     await safe_edit_text(callback.message, text, reply_markup=markup)
+
+
+# --- слоты Копирования (2026-11-19) ---
+
+async def _slots_screen(session: AsyncSession, user_id: int):
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    from bot.constant.unique_path import CB_PATH_OPEN, CB_PATH_SLOT_FREE_PREFIX, CB_PATH_SLOT_TAKE_PREFIX
+    from bot.services.unique_path.copy_slots import state
+
+    st = await state(session, user_id)
+    lines = [f"📋 <b>Слоты копирования</b> · {len(st.taken)}/{st.slots}", "━━━━━━━━━━━━━━━━━━"]
+    lines += [f"{s}. {PATH_NAMES.get(c, c)} · ур. {lv}" for s, c, lv in st.taken] or ["Слоты пусты."]
+    lines.append("\nКопируется только то, что в слотах. Новый противник ложится сам только в свободный слот. "
+                 "Слотов: 1, +1 на 4, 7 и 10 уровне пути.")
+    rows = [[InlineKeyboardButton(text=f"✖️ Освободить {s}", callback_data=f"{CB_PATH_SLOT_FREE_PREFIX}{s}")] for s, _, _ in st.taken]
+    copied = {c for _, c, _ in st.taken}
+    if len(st.taken) < st.slots:
+        rows += [[InlineKeyboardButton(text=f"➕ {PATH_NAMES.get(c, c)} · ур. {lv}", callback_data=f"{CB_PATH_SLOT_TAKE_PREFIX}{mid}")]
+                 for mid, c, lv in st.memory if c not in copied]
+    rows.append([InlineKeyboardButton(text="◀️ К пути", callback_data=CB_PATH_OPEN)])
+    return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+@router.callback_query(F.data == CB_PATH_SLOTS)
+async def cb_slots(callback: CallbackQuery, session: AsyncSession) -> None:
+    await callback.answer()
+    text, markup = await _slots_screen(session, callback.from_user.id)
+    await callback.message.edit_text(text, reply_markup=markup)
+
+
+@router.callback_query(F.data.startswith(CB_PATH_SLOT_TAKE_PREFIX) | F.data.startswith(CB_PATH_SLOT_FREE_PREFIX))
+async def cb_slot_action(callback: CallbackQuery, session: AsyncSession) -> None:
+    from bot.services.unique_path.copy_slots import CopySlotError, release, take
+
+    data = callback.data
+    try:
+        if data.startswith(CB_PATH_SLOT_TAKE_PREFIX):
+            await take(session, callback.from_user.id, int(data.removeprefix(CB_PATH_SLOT_TAKE_PREFIX)))
+        else:
+            await release(session, callback.from_user.id, int(data.removeprefix(CB_PATH_SLOT_FREE_PREFIX)))
+    except (CopySlotError, ValueError) as exc:
+        await callback.answer(COPY_SLOT_ERRORS.get(getattr(exc, "code", ""), "Не вышло."), show_alert=True)
+        return
+    await callback.answer()
+    text, markup = await _slots_screen(session, callback.from_user.id)
+    await callback.message.edit_text(text, reply_markup=markup)
+
+
+COPY_SLOT_ERRORS = {
+    "not_copying": "Слоты — только у пути Копирования или Бесконечной техники.",
+    "no_memory": "Этого противника уже нет в памяти.",
+    "already": "Этот путь уже копируется.",
+    "full": "Все слоты заняты — освободи один.",
+}

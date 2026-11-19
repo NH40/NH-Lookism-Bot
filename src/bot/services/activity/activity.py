@@ -26,6 +26,9 @@ async def remember_opponents(session: AsyncSession, a_id: int, b_id: int) -> Non
         path = await activity_repo.active_path(session, other)
         if path is not None:
             await activity_repo.remember(session, me, other, path, PATH_MEMORY_SIZE)
+            from bot.services.unique_path.copy_slots import auto_fill
+
+            await auto_fill(session, me, other, path)
 
 
 async def purge(session_factory: async_sessionmaker[AsyncSession]) -> None:

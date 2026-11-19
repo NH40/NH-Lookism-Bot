@@ -17,4 +17,5 @@ from bot.config.unique_path.unique_path import (  # noqa: F401
     TRAINING_KPD_PER_DAY,
     TRAINING_KPD_PER_REP,
     path_level_cost,
+    path_level_fragments,
 )

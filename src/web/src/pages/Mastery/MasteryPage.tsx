@@ -1,4 +1,5 @@
 import { Check, Lock, Plus, Shield, Swords, Zap, Gauge } from "lucide-react";
+import { MasteryTechniques } from "./MasteryTechniques";
 import type { ReactNode } from "react";
 import type { MasteryData } from "../../types";
 import { BackHeader, Bar, Panel, Screen, StatRow, fmt } from "../../components/ui";
@@ -26,6 +27,7 @@ export function MasteryPage() {
         <div className="page">
           <BackHeader title="Мастерство" backLabel="Развитие" to={ROUTE_DEVELOPMENT} />
 
+          <MasteryTechniques />
           <Panel title="Ступени">
             {data.tiers.map((t) => (
               <div key={t.code} className="ms-tier">

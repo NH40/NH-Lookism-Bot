@@ -28,6 +28,7 @@ export interface DevItem {
   level: number;
   floor: number;
   next_cost: number | null;
+  next_frag?: number | null;
   levels: DevLevel[];
 }
 

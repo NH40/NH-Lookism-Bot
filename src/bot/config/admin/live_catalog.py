@@ -229,6 +229,7 @@ SCALARS: dict[str, tuple[str, str, str]] = {
     "TOM_POWER_MIN": ("dev", "bot.config.mastery.mastery", "Том Ли: минимум мощи"),
     "PATH_AWAKEN_FRAGMENTS": ("dev", "bot.config.unique_path.unique_path", "Путь: фрагментов для пробуждения"),
     "PATH_LEVEL_COST_PER_LEVEL": ("dev", "bot.config.unique_path.unique_path", "Путь: цена уровня, шаг"),
+    "PATH_LEVEL_FRAGMENTS_PER_LEVEL": ("dev", "bot.config.unique_path.unique_path", "Путь: фрагменты за уровень, шаг"),
     "TRAINING_KPD_PER_DAY": ("dev", "bot.config.unique_path.unique_path", "Путь тренировок: КПД за день"),
     "TRAINING_KPD_PER_REP": ("dev", "bot.config.unique_path.unique_path", "Путь тренировок: КПД за тренировку"),
     "TRAINING_KPD_CAP_PER_LEVEL": ("dev", "bot.config.unique_path.unique_path", "Путь тренировок: потолок КПД за уровень"),

@@ -78,3 +78,30 @@ class UserSchool(Base):
     school: Mapped[str] = mapped_column(String(8), primary_key=True)
     owned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     unlocked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PathCopySlot(Base):
+    """Слоты пути Копирования (пользователь 2026-11-19): что копируется — видно, игрок сам занимает и освобождает;
+    новое копируется только в свободный слот. Число слотов растёт с уровнем пути."""
+
+    __tablename__ = "path_copy_slots"
+
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    slot: Mapped[int] = mapped_column(Integer, primary_key=True)
+    path_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    path_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    opponent_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    copied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class MasteryTechnique(Base):
+    """Техники мастерства (пользователь 2026-11-19): у каждого из 4 мастерств дерево 3 ступени × 3 техники,
+    на ступени выбирается одна. Эффекты подключатся в обновлении боя."""
+
+    __tablename__ = "mastery_techniques"
+
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    mastery: Mapped[str] = mapped_column(String(16), primary_key=True)
+    tier: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(32), nullable=False)
+    learned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

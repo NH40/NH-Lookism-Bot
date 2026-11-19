@@ -28,7 +28,7 @@ from bot.db.models.sale import SaleChoice, SaleEvent, SalePurchase  # noqa: F401
 from bot.db.models.emperor_tax import EmperorTaxOverride  # noqa: F401
 from bot.db.models.sabotage_log import SabotageLog  # noqa: F401
 from bot.db.models.emperor_war import EmperorWar  # noqa: F401
-from bot.db.models.development import BattleMemory, UserGenius, UserPath, UserSchool, UserTechnique  # noqa: F401
+from bot.db.models.development import BattleMemory, MasteryTechnique, PathCopySlot, UserGenius, UserPath, UserSchool, UserTechnique  # noqa: F401
 from bot.db.models.map_event import MapEvent, MapEventEntry  # noqa: F401
 from bot.db.models.activity import ActivityLog, PlayerMark  # noqa: F401
 from bot.db.models.dev_quest import DevQuest  # noqa: F401

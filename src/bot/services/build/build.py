@@ -34,7 +34,6 @@ from bot.config.awakening import LEVELS as AWAKENING_LEVELS
 from bot.config.bloodline import LEVELS as BLOODLINE_LEVELS
 from bot.config.development import (
     OVERCOME_RESONANCE,
-    PATH_MEMORY_SIZE,
     PATH_MEMORY_WEIGHTS,
     awakening_multiplier,
 )
@@ -175,9 +174,12 @@ def _resonance(row: BuildRow) -> int:
 
 
 async def _memory_copies(session: AsyncSession, user_id: int) -> list[CombatMods]:
-    """Боевые способности путей последних противников (без копирующих путей — без рекурсии)."""
+    """Боевые способности путей в слотах Копирования (без копирующих путей — без рекурсии). 2026-11-19: раньше —
+    5 последних противников автоматически, теперь игрок сам решает, что лежит в слотах."""
+    from bot.services.unique_path.copy_slots import taken
+
     copies = []
-    for code, level in await build_repo.list_memory(session, user_id, PATH_MEMORY_SIZE):
+    for _, code, level in await taken(session, user_id):
         if code in COPYING_PATHS:
             continue
         copies.append(level_effect(PATH_LEVELS, code, level).combat)

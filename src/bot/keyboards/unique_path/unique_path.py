@@ -37,9 +37,13 @@ def _btn(text: str, callback_data: str) -> InlineKeyboardButton:
 
 def path_menu(
     *, claim_conviction: bool = False, awaken_cost: int | None = None, cost: int | None = None, others: list[str] | None = None,
-    cost2: int | None = None, others2: list[str] | None = None,
+    cost2: int | None = None, others2: list[str] | None = None, copy_slots: bool = False,
 ) -> InlineKeyboardMarkup:
     rows = []
+    if copy_slots:
+        from bot.constant.unique_path import CB_PATH_SLOTS
+
+        rows.append([_btn("📋 Слоты копирования", CB_PATH_SLOTS)])
     if claim_conviction:
         rows.append([_btn(BTN_CLAIM_CONVICTION, CB_PATH_CLAIM_CONVICTION)])
     if awaken_cost is not None:

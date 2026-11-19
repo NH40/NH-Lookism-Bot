@@ -34,6 +34,7 @@ from bot.config.unique_path import (
     CONVICTION_RANK_SUM,
     PATH_AWAKEN_FRAGMENTS,
     path_level_cost,
+    path_level_fragments,
 )
 from bot.constant.activity import ACT_DEVELOPMENT
 from bot.constant.dev_quest import QUEST_CONVICTION, TASK_DEV_LEVEL
@@ -76,9 +77,19 @@ class NotEnoughFragmentsError(Exception):
 
 
 class NotEnoughPointsError(Exception):
+    alert: str | None = None  # свой текст (фрагменты)
+
     def __init__(self, cost: int, have: int) -> None:
         super().__init__(cost, have)
         self.cost, self.have = cost, have
+
+
+class PathLevelFragmentsError(NotEnoughPointsError):
+    def __init__(self, cost: int, have: int) -> None:
+        from bot.texts.unique_path import NOT_ENOUGH_FRAGMENTS_ALERT
+
+        super().__init__(cost, have)
+        self.alert = NOT_ENOUGH_FRAGMENTS_ALERT.format(cost=cost, have=have)
 
 
 class NoSecondBodyError(Exception):
@@ -255,6 +266,14 @@ async def level_up(session: AsyncSession, user_id: int, slot: int = 1) -> int:
     cost = path_level_cost(current + 1)
     if not await path_repo.spend_points(session, user_id, cost):
         raise NotEnoughPointsError(cost, await path_repo.get_points(session, user_id))
+    from bot.constant.resource import RES_PATH_FRAGMENTS
+    from bot.services.resource import balance, spend
+
+    fragments = path_level_fragments(current + 1)
+    if not await spend(session, user_id, RES_PATH_FRAGMENTS, fragments):
+        have = await balance(session, user_id, RES_PATH_FRAGMENTS)
+        await session.rollback()
+        raise PathLevelFragmentsError(fragments, have)
     if not await path_repo.bump_level(session, user_id, active, current):
         await session.rollback()
         raise PathMaxLevelError

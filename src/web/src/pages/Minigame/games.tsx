@@ -1,4 +1,5 @@
 import { type ReactElement, useEffect, useRef, useState } from "react";
+import { NEW_GAMES, VARIANT_NAMES } from "./games2";
 
 /** Параметры от сервера (`bot/config/minigame.params`). */
 export type P = Record<string, number>;
@@ -406,4 +407,13 @@ export const GAMES: Record<string, { name: string; hint: string; C: (p: GameProp
   mash: { name: "Шквал", hint: "Бей как можно быстрее", C: Mash },
   reaction: { name: "Реакция", hint: "Дождись сигнала — и сразу бей", C: Reaction },
   track: { name: "Цель", hint: "Попадай по движущейся мишени", C: Track },
+  ...NEW_GAMES,
 };
+
+/** Игра по коду «механика~вариант» (вариант — в названии). */
+export function gameOf(code: string) {
+  const [base, variant] = code.split("~");
+  const g = GAMES[base];
+  if (!g) return undefined;
+  return variant ? { ...g, name: `${g.name} · ${VARIANT_NAMES[variant] ?? variant}` } : g;
+}

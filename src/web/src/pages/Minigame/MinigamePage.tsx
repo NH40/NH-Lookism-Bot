@@ -4,7 +4,7 @@ import { apiPost } from "../../api/api";
 import { BackHeader, Panel, Screen } from "../../components/ui";
 import { ROUTE_MASTERY, ROUTE_TRAINING } from "../../constants/constants";
 import { useApi } from "../../hooks/useApi";
-import { GAMES, type P } from "./games";
+import { gameOf, type P } from "./games";
 import "./Minigame.css";
 
 interface Stage {
@@ -60,7 +60,7 @@ export function MinigamePage() {
 
   const back = mastery ? ROUTE_MASTERY : ROUTE_TRAINING;
   if (run) {
-    const g = GAMES[run.game];
+    const g = gameOf(run.game)!;
     return (
       <div className="page">
         <BackHeader title={g.name} backLabel="Сдаться" to={back} />
@@ -80,8 +80,8 @@ export function MinigamePage() {
             {data.stages.map((s, i) => (
               <div key={i} className="mg-stage">
                 <div className="grow">
-                  <b>{mastery ? MASTERY_NAMES[i] : `Этап ${i + 1}`}</b> · {GAMES[s.game]?.name}
-                  <small className="muted">{GAMES[s.game]?.hint}</small>
+                  <b>{mastery ? MASTERY_NAMES[i] : `Этап ${i + 1}`}</b> · {gameOf(s.game)?.name}
+                  <small className="muted">{gameOf(s.game)?.hint}</small>
                 </div>
                 {s.done ? (
                   <span className="chip">✅</span>

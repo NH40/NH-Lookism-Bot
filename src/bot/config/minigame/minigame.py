@@ -1,8 +1,12 @@
 """Мини-игры занятий техники и финала мастерства (конфиг, пользователь 2026-11-13).
 
-8 типов игр; у каждой техники свой порядок из 8, уровень = 3 фиксированных этапа, сложность
-растёт с уровнем (`d` от 0 до 1). Мастерство вместо Тома Ли — 4 игры, по одной на мастерство.
-Параметры уходят клиенту (Mini App) как есть; сервер проверяет время и правдоподобный счёт.
+Уровень техники = 3 фиксированных этапа, сложность растёт с уровнем (`d` от 0 до 1). Мастерство вместо Тома
+Ли — 4 игры, по одной на мастерство. Параметры уходят клиенту (Mini App) как есть; сервер проверяет время и
+правдоподобный счёт.
+
+2026-11-19 (пользователь): у каждой техники 8 СВОИХ игр, без повторов между техниками. 21 механика × варианты
+(быстрый, плотный, точный, долгий, жёсткий): пары «механика~вариант» раздаются техникам по их профилю, каждая
+пара достаётся одной технике.
 """
 from __future__ import annotations
 
@@ -16,24 +20,73 @@ from bot.constant.unique_technique import (
 G_DOTS, G_RHYTHM, G_COMBO, G_DODGE, G_CHARGE, G_MASH, G_REACTION, G_TRACK = (
     "dots", "rhythm", "combo", "dodge", "charge", "mash", "reaction", "track",
 )
+G_ORDER, G_ARROWS, G_WHACK, G_COUNT, G_PAIRS, G_STANCE, G_BREATH, G_AIM, G_PARRY, G_CHAIN, G_HOLD, G_GONOGO, G_SPLIT = (
+    "order", "arrows", "whack", "count", "pairs", "stance", "breath", "aim", "parry", "chain", "hold", "gonogo", "split",
+)
+ALL_GAMES: tuple[str, ...] = (
+    G_DOTS, G_RHYTHM, G_COMBO, G_DODGE, G_CHARGE, G_MASH, G_REACTION, G_TRACK,
+    G_ORDER, G_ARROWS, G_WHACK, G_COUNT, G_PAIRS, G_STANCE, G_BREATH, G_AIM, G_PARRY, G_CHAIN, G_HOLD, G_GONOGO, G_SPLIT,
+)
 STAGES_PER_LEVEL = 3
+GAMES_PER_TECH = 8
 
-# Порядок игр техники: первые — её «профиль» (скорость, сила, техника…), они чаще в ранних уровнях.
-_SPEED = (G_DOTS, G_REACTION, G_TRACK, G_DODGE, G_RHYTHM, G_COMBO, G_MASH, G_CHARGE)
-_POWER = (G_MASH, G_CHARGE, G_RHYTHM, G_REACTION, G_DODGE, G_TRACK, G_COMBO, G_DOTS)
-_SKILL = (G_COMBO, G_RHYTHM, G_DODGE, G_TRACK, G_CHARGE, G_DOTS, G_REACTION, G_MASH)
-_GRIT = (G_DODGE, G_CHARGE, G_MASH, G_RHYTHM, G_COMBO, G_REACTION, G_DOTS, G_TRACK)
-TECH_GAMES: dict[str, tuple[str, ...]] = {
-    TECH_INVISIBLE: _SPEED, TECH_CQC: _SPEED, TECH_ONE_STEP: _SPEED, TECH_MIDNIGHT: _SPEED,
-    TECH_MA_TAESU: _POWER, TECH_KYOKUSHIN: _POWER, TECH_MUAY_THAI: _POWER, TECH_BEAST: _POWER,
-    TECH_TAEKWONDO: _SKILL, TECH_NINJUTSU: _SKILL, TECH_BLADE_HANDS: _SKILL, TECH_SEIRIM: _SKILL,
-    TECH_OVERCOME: _GRIT,
+V_BASE, V_FAST, V_DENSE, V_PRECISE, V_LONG, V_TOUGH, V_SPRINT = "", "fast", "dense", "precise", "long", "tough", "sprint"
+VARIANTS: tuple[str, ...] = (V_BASE, V_FAST, V_DENSE, V_PRECISE, V_LONG, V_TOUGH, V_SPRINT)
+_PROFILE: dict[str, tuple[str, ...]] = {  # профиль техники — какие механики ей ближе (первые — чаще)
+    "speed": (G_DOTS, G_REACTION, G_CHAIN, G_SPLIT, G_ARROWS, G_TRACK, G_PARRY, G_DODGE, G_GONOGO, G_WHACK),
+    "power": (G_MASH, G_CHARGE, G_HOLD, G_BREATH, G_WHACK, G_RHYTHM, G_AIM, G_REACTION, G_PARRY, G_CHAIN),
+    "skill": (G_COMBO, G_ORDER, G_PAIRS, G_STANCE, G_COUNT, G_ARROWS, G_RHYTHM, G_AIM, G_TRACK, G_SPLIT),
+    "grit": (G_DODGE, G_HOLD, G_PARRY, G_BREATH, G_GONOGO, G_CHARGE, G_COUNT, G_MASH, G_STANCE, G_ORDER),
 }
+_TECH_PROFILE: tuple[tuple[str, str], ...] = (
+    (TECH_INVISIBLE, "speed"), (TECH_MA_TAESU, "power"), (TECH_TAEKWONDO, "skill"), (TECH_OVERCOME, "grit"),
+    (TECH_CQC, "speed"), (TECH_KYOKUSHIN, "power"), (TECH_NINJUTSU, "skill"), (TECH_ONE_STEP, "speed"),
+    (TECH_MUAY_THAI, "power"), (TECH_BLADE_HANDS, "skill"), (TECH_MIDNIGHT, "speed"), (TECH_BEAST, "power"), (TECH_SEIRIM, "skill"),
+)
+_FALLBACK = (G_COMBO, G_RHYTHM, G_DODGE, G_TRACK, G_CHARGE, G_DOTS, G_REACTION, G_MASH)
+
+
+def _variant_ok(game: str, variant: str) -> bool:
+    """Вариант должен реально менять игру — иначе это повтор."""
+    keys = set(_base_params(game, 0.5))
+    if variant == V_FAST:
+        return any(k.endswith("_ms") for k in keys) or "speed" in keys
+    if variant == V_DENSE:
+        return bool(keys & {"count", "rounds", "strikes"})
+    if variant == V_PRECISE:
+        return bool(keys & {"zone", "band", "size"})
+    return True
+
+
+def _assign() -> dict[str, tuple[str, ...]]:
+    pool = {(g, v) for g in ALL_GAMES for v in VARIANTS if _variant_ok(g, v)}
+    out: dict[str, tuple[str, ...]] = {}
+    for tech, profile in _TECH_PROFILE:
+        order = _PROFILE[profile] + tuple(g for g in ALL_GAMES if g not in _PROFILE[profile])
+        picks: list[str] = []
+        for strict in (True, False):  # сначала разные механики; не хватило — второй вариант той же
+            for g in order:
+                if len(picks) == GAMES_PER_TECH:
+                    break
+                if strict and any(x.split("~")[0] == g for x in picks):
+                    continue
+                v = next((v for v in VARIANTS if (g, v) in pool), None)
+                if v is None:
+                    continue
+                pool.discard((g, v))
+                picks.append(f"{g}~{v}" if v else g)
+        out[tech] = tuple(picks)
+    return out
+
+
+TECH_GAMES: dict[str, tuple[str, ...]] = {}
 
 
 def tech_stages(code: str, level: int) -> tuple[str, str, str]:
     """3 игры уровня `level` (2–10): сдвиг по кругу — за 10 уровней встречаются все 8."""
-    games = TECH_GAMES.get(code, _SKILL)
+    if not TECH_GAMES:
+        TECH_GAMES.update(_assign())
+    games = TECH_GAMES.get(code, _FALLBACK)
     i = (level - 2) * STAGES_PER_LEVEL
     return tuple(games[(i + k) % len(games)] for k in range(STAGES_PER_LEVEL))  # type: ignore[return-value]
 
@@ -47,7 +100,36 @@ def difficulty_for_stage(stage: int) -> float:
 
 
 def params(game: str, d: float) -> dict:
-    """Параметры игры при сложности `d` (0 — легко, 1 — сложно, но проходимо). `seconds` — длительность,
+    """Параметры игры (код может быть «механика~вариант»); вариант меняет базовые параметры."""
+    base, _, variant = game.partition("~")
+    p = _base_params(base, d)
+    if "pairs" in p and variant:  # пар на поле фиксировано — вариант меняет только время
+        p["seconds"] = p["seconds"] * {V_LONG: 1.4, V_SPRINT: 0.75, V_FAST: 0.8, V_TOUGH: 0.85}.get(variant, 1.0)
+        return p
+    if variant == V_FAST:
+        p = {k: (int(v * 0.75) if k.endswith("_ms") else round(v * 1.3, 2) if k == "speed" else v) for k, v in p.items()}
+    elif variant in (V_DENSE, V_LONG):
+        mult = 1.35 if variant == V_DENSE else 1.5
+        counted = [k for k in ("count", "rounds", "strikes") if k in p]
+        for k in counted:
+            p[k] = math.ceil(p[k] * mult)
+        p["need"], p["max_score"], p["seconds"] = math.ceil(p["need"] * mult), math.ceil(p["max_score"] * mult), p["seconds"] * mult
+    elif variant == V_PRECISE:
+        p = {k: (round(v * 0.7, 3) if k in ("zone", "band", "size") else v) for k, v in p.items()}
+    elif variant == V_TOUGH:
+        p["need"] = math.ceil(p["need"] * 1.15)
+    elif variant == V_SPRINT:  # короче, но почти та же планка
+        counted = [k for k in ("count", "rounds", "strikes") if k in p]
+        for k in counted:
+            p[k] = max(3, math.ceil(p[k] * 0.7))
+        p["max_score"] = max(3, math.ceil(p["max_score"] * 0.7))
+        p["need"], p["seconds"] = math.ceil(p["need"] * 0.75), p["seconds"] * 0.7
+    p["need"] = min(p["need"], p["max_score"])
+    return p
+
+
+def _base_params(game: str, d: float) -> dict:
+    """Параметры механики при сложности `d` (0 — легко, 1 — сложно, но проходимо). `seconds` — длительность,
     `need` — сколько нужно набрать, `max_score` — потолок счёта (для проверки)."""
     if game == G_DOTS:  # точки появляются и гаснут — успеть нажать
         n = 14 + round(8 * d)
@@ -79,6 +161,51 @@ def params(game: str, d: float) -> dict:
         s = 12
         return {"seconds": s, "speed": round(0.25 + 0.45 * d, 2), "size": round(0.20 - 0.08 * d, 3), "need": 8 + round(6 * d),
                 "max_score": s * 6}
+    if game == G_ORDER:  # нажать кружки по порядку 1..N, несколько раундов
+        r = 4
+        return {"rounds": r, "length": 4 + round(2 * d), "round_ms": int(5000 - 1500 * d), "need": 3, "max_score": r, "seconds": r * 3.5}
+    if game == G_ARROWS:  # стрелка — нажать такую же из четырёх
+        n = 12
+        return {"rounds": n, "window_ms": int(1300 - 600 * d), "need": 8 + round(2 * d), "max_score": n, "seconds": n * 1.0}
+    if game == G_WHACK:  # сетка 3×3: красных бить, синих не трогать
+        n = 16
+        return {"count": n, "life_ms": int(1000 - 400 * d), "decoy": round(0.25 + 0.15 * d, 2), "need": 8 + round(3 * d),
+                "max_score": n, "seconds": n * 0.9}
+    if game == G_COUNT:  # сосчитать вспышки
+        n = 5
+        return {"rounds": n, "flashes": 4 + round(4 * d), "flash_ms": int(450 - 200 * d), "need": 3 + round(d), "max_score": n,
+                "seconds": n * 4}
+    if game == G_PAIRS:  # найти пары карточек
+        n = 4 + round(2 * d)
+        return {"pairs": n, "seconds": 30 - 6 * d, "need": n, "max_score": n}
+    if game == G_STANCE:  # показали стойку — выбрать такую же из трёх
+        n = 10
+        return {"rounds": n, "window_ms": int(1600 - 700 * d), "need": 7 + round(d), "max_score": n, "seconds": n * 1.2}
+    if game == G_BREATH:  # круг дышит — нажать на вдохе (в самом большом)
+        n = 6
+        return {"rounds": n, "zone": round(0.22 - 0.1 * d, 3), "speed": round(0.7 + 0.6 * d, 2), "need": 4 + round(d),
+                "max_score": n, "seconds": n * 2}
+    if game == G_AIM:  # прицел ходит — остановить в мишени (мишень каждый раз на новом месте)
+        n = 6
+        return {"rounds": n, "size": round(0.2 - 0.08 * d, 3), "speed": round(0.8 + 0.7 * d, 2), "need": 4 + round(d),
+                "max_score": n, "seconds": n * 1.6}
+    if game == G_PARRY:  # удар с одной из четырёх сторон — парировать туда же
+        n = 14
+        return {"strikes": n, "warn_ms": int(1000 - 450 * d), "need": 10 + round(2 * d), "max_score": n, "seconds": n * 1.2}
+    if game == G_CHAIN:  # цели по одной, следующая сразу после попадания
+        s = 10
+        return {"seconds": s, "size": round(0.16 - 0.05 * d, 3), "need": 12 + round(8 * d), "max_score": s * 6}
+    if game == G_HOLD:  # держи — шкала растёт, отпусти — падает; держать в зоне (счёт — десятые доли секунды)
+        s = 12
+        return {"seconds": s, "zone": round(0.25 - 0.1 * d, 3), "speed": round(0.6 + 0.6 * d, 2), "need": 60 + round(20 * d),
+                "max_score": s * 10}
+    if game == G_GONOGO:  # зелёный — бей, красный — нет
+        n = 16
+        return {"rounds": n, "window_ms": int(900 - 350 * d), "decoy": round(0.35 + 0.1 * d, 2), "need": 11 + round(2 * d),
+                "max_score": n, "seconds": n * 1.1}
+    if game == G_SPLIT:  # две точки разом — успеть обе
+        n = 10
+        return {"count": n, "life_ms": int(1500 - 600 * d), "need": 6 + round(2 * d), "max_score": n, "seconds": n * 1.4}
     raise KeyError(game)
 
 

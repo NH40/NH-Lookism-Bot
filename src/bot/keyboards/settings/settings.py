@@ -35,6 +35,7 @@ def settings_menu() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text=BTN_DONATE, callback_data=CB_DONATE_OPEN)],
             [InlineKeyboardButton(text=BTN_NOTIFICATIONS, callback_data=CB_NOTIFY_OPEN)],
             [InlineKeyboardButton(text=BTN_HELP, callback_data=CB_HELP_OPEN)],
+            [InlineKeyboardButton(text="🆘 Поддержка", callback_data="sup:open")],
             [InlineKeyboardButton(text=BTN_RENAME, callback_data=CB_GANG_RENAME)],
             [InlineKeyboardButton(text=BTN_DELETE_GANG, callback_data=CB_GANG_DELETE_ASK)],
             [InlineKeyboardButton(text=BTN_BACK_TO_PROFILE, callback_data=CB_PROFILE_OPEN)],

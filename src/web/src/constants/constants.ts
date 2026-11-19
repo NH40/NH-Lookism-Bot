@@ -12,6 +12,7 @@ export const ROUTE_STATS = "/stats";
 export const ROUTE_INTEL = "/more/intel";
 export const ROUTE_GUIDE = "/more/guide";
 export const ROUTE_TUTORIAL = "/more/tutorial"; // лига-обучение
+export const ROUTE_SUPPORT = "/more/support"; // тикеты в поддержку
 export const ROUTE_BATTLE = "/battle/:id"; // онлайн-бой
 export const battlePath = (id: string) => `/battle/${id}`;
 export const ROUTE_DEVELOPMENT = "/development";

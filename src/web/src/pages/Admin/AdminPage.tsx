@@ -1,6 +1,6 @@
 // Админ-панель: главная (разделы по роли) и экран раздела. Права проверяет сервер на каждом
 // запросе — здесь только не показываем то, что роли всё равно недоступно.
-import {
+import { LifeBuoy,
   BarChart3,
   Beaker,
   Bomb,
@@ -25,6 +25,7 @@ import type { AdminMeta } from "../../types";
 import { useApi } from "../../hooks/useApi";
 import { TextInput, useAdminMeta } from "./AdminKit";
 import { ConfigSection, LogsSection, PatchSection, RolesSection, StatsSection, SystemSection } from "./SectionsCore";
+import { SupportSection } from "./SupportSection";
 import { ClansSection, EventsSection, MassSection, PromoSection, ReferralSection, SeasonSection, WorldSection } from "./SectionsOps";
 import { SaleAdminSection } from "../Sale";
 import "./Admin.css";
@@ -33,6 +34,7 @@ const ICONS: Record<string, ReactNode> = {
   players: <User size={18} />,
   mass: <Megaphone size={18} />,
   promo: <Ticket size={18} />,
+  support: <LifeBuoy size={18} />,
   stats: <BarChart3 size={18} />,
   logs: <ScrollText size={18} />,
   world: <MapIcon size={18} />,
@@ -51,6 +53,7 @@ const HINTS: Record<string, string> = {
   players: "поиск, выдача, развитие, наказания",
   mass: "рассылка и массовая выдача",
   promo: "создать, выключить, удалить",
+  support: "обращения игроков: ответить, закрыть",
   stats: "игроки, донат, экономика, сервер",
   logs: "аудит, платежи, покупки",
   world: "города, районы, императоры",
@@ -111,6 +114,8 @@ function SectionBody({ section, meta }: { section: string; meta: AdminMeta }) {
       return <MassSection meta={meta} />;
     case "promo":
       return <PromoSection />;
+    case "support":
+      return <SupportSection />;
     case "stats":
       return <StatsSection />;
     case "logs":

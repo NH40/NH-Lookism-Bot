@@ -13,7 +13,7 @@ import {
   ROUTE_TRAVEL,
   ROUTE_STATS,
   ROUTE_INTEL,
-  ROUTE_GUIDE, ROUTE_TUTORIAL, ROUTE_BATTLE,
+  ROUTE_GUIDE, ROUTE_TUTORIAL, ROUTE_BATTLE, ROUTE_SUPPORT,
   ROUTE_CASINO,
   ROUTE_CLAN,
   ROUTE_DEVELOPMENT,
@@ -61,6 +61,7 @@ import { IntelPage } from "./pages/Intel";
 import { GuidePage } from "./pages/Guide";
 import { TutorialPage } from "./pages/Tutorial";
 import { BattlePage } from "./pages/Battle";
+import { SupportPage } from "./pages/Support/SupportPage";
 import { TopPage } from "./pages/Top";
 import { BankPage, PenguanPage } from "./pages/Bank";
 import { getWebApp } from "./telegram";
@@ -120,6 +121,7 @@ export function App() {
           <Route path={ROUTE_GUIDE} element={<GuidePage />} />
           <Route path={ROUTE_TUTORIAL} element={<TutorialPage />} />
           <Route path={ROUTE_BATTLE} element={<BattlePage />} />
+          <Route path={ROUTE_SUPPORT} element={<SupportPage />} />
           <Route path={ROUTE_DEVELOPMENT} element={<DevelopmentPage />} />
           <Route path={ROUTE_TRAINING} element={<TrainingPage />} />
           <Route path={ROUTE_MASTERY} element={<MasteryPage />} />

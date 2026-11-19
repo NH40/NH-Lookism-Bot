@@ -42,6 +42,7 @@ from bot.constant.admin.admin import (  # noqa: F401
     SECTION_SEASON,
     SECTION_STATS,
     SECTION_SALE,
+    SECTION_SUPPORT,
     SECTION_SYSTEM,
     SECTION_WORLD,
 )

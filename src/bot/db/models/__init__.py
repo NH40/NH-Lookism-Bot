@@ -51,3 +51,4 @@ from bot.db.models.scout_report import ScoutReport  # noqa: F401
 from bot.db.models.penguan import PenguanBuff, PenguanFallen  # noqa: F401
 from bot.db.models.tutorial import TutorialRun  # noqa: F401
 from bot.db.models.raid import Raid  # noqa: F401
+from bot.db.models.support import SupportMessage, SupportTicket  # noqa: F401

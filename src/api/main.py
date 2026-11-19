@@ -30,6 +30,7 @@ from api.routers import bank, penguan
 from api.routers import tutorial as tutorial_router
 from api.routers import raid as raid_router
 from api.routers import arena as arena_router
+from api.routers import support as support_router
 from api.routers import admin_ops
 from api.routers import admin_players
 from api.routers import awakening
@@ -207,6 +208,7 @@ app.include_router(penguan.router)
 app.include_router(tutorial_router.router)
 app.include_router(raid_router.router)
 app.include_router(arena_router.router)
+app.include_router(support_router.router)
 
 
 @app.get("/api/health")

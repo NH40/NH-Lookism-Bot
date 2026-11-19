@@ -53,6 +53,7 @@ from bot.handlers.genius import router as genius_router
 from bot.handlers.tutorial import router as tutorial_router
 from bot.handlers.raid import router as raid_router
 from bot.handlers.arena import router as arena_router
+from bot.handlers.support.support import router as support_router
 from bot.handlers.awakening import router as awakening_router
 from bot.handlers.clan import router as clan_router
 from bot.handlers.quest import router as quest_router
@@ -75,6 +76,7 @@ def get_routers() -> list[Router]:
         start_router,
         common_router,
         profile_router,
+        support_router,
         admin_router,
         settings_router,
         referral_router,

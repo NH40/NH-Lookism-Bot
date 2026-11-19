@@ -12,6 +12,7 @@ import "../../styles/game-screens.css";
 import { RaidBanner } from "./RaidBanner";
 import { OnlineBattleButton } from "../../components/OnlineBattleButton";
 import { ArenaBanner } from "./ArenaBanner";
+import { LiveMap } from "./LiveMap";
 
 type Outcome =
   | { kind: "battle"; data: BattleResult }
@@ -278,6 +279,10 @@ export function MapPage() {
             <Link className="qa" to={`${ROUTE_GANG}#recruit`}><UserPlus size={20} color="var(--cyan-2)" />Вербовка</Link>
             <Link className="qa" to={ROUTE_BUSINESS}><Building2 size={20} color="var(--gold-2)" />Бизнес</Link>
           </div>
+
+          <Panel title="ЖИВАЯ КАРТА">
+            <LiveMap onOpen={(d) => setSelected({ id: d.id, number: d.number, kind: d.kind, owner: d.owner, bot_rank: null, bot_quantity: null, bot_power: d.bot_power })} />
+          </Panel>
 
           <Panel title="РАЙОНЫ">
             {data.sole_owner && (

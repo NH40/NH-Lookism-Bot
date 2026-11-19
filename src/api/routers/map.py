@@ -322,3 +322,16 @@ async def get_events_catalog(
             for c in SCHOOLS
         ],
     )
+
+
+@router.get("/live")
+async def get_live_map(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    """Живая карта (2026-11-20): все районы города одним списком — для поля с плитками (опрос раз в 15 с)."""
+    user = await require_user(session, user_id)
+    city = await get_city(session, user.city_id)
+    city_map = await get_city_map(session, user)
+    return {
+        "city": city.name, "art": COUNTRY_ART.get(base_code(city.country_code)), "count": city.district_count,
+        "districts": [{"id": d.id, "number": d.number, "kind": "mine" if d.is_mine else "bot" if d.owner_id is None else "player",
+                       "owner": d.owner_label, "owner_id": d.owner_id, "bot_power": d.bot_power} for d in city_map.districts],
+    }

@@ -6,6 +6,8 @@
 чтобы UI показывал игроку только допустимые действия. Пуши второй стороне шлёт `api.push` теми же текстами/категориями, что хендлеры бота."""
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from redis.asyncio import Redis
@@ -14,11 +16,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import get_current_user_id
 from api.db import get_session
 from api.deps import get_redis
-from api.push import push, push_many
+from api.db import session_factory
+from api.push import get_bot, push, push_many
+from api.routers.admin import background
 from api.routers._common import bad, clean_label, require_user
 from bot.config.card import CARD_BY_CODE
 from bot.config.clan import (
     CLAN_BUILDINGS,
+    CLAN_ANNOUNCE_MAX,
     CLAN_CREATE_COST,
     CLAN_DEMOLISH_REFUND,
     CLAN_DONATE_LEVELS,
@@ -114,6 +119,7 @@ class InviteOut(BaseModel):
 
 class NoClanOut(BaseModel):
     coins: int
+    rejoin_days: int = 0  # вышел сам — столько дней нельзя вступить или создать клан
     create_cost: int
     name_min: int
     name_max: int
@@ -166,6 +172,10 @@ class ClanOut(BaseModel):
     requests: list[PersonOut]
     access_requests: list[PersonOut]
     set_ranks: list[dict]
+    announcement: str | None = None
+    announcement_at: datetime | None = None
+    announce_max: int = 0
+    announce_cooldown: int = 0  # секунд до следующего объявления (только для владельца и зама)
 
 
 class ClanResponse(BaseModel):
@@ -205,7 +215,7 @@ async def _browse(session: AsyncSession, page: int, query: str, applied_id: int 
 
 @router.get("", response_model=ClanResponse)
 async def get_my_clan(
-    user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)
+    user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session), redis: Redis = Depends(get_redis)
 ) -> ClanResponse:
     await require_user(session, user_id)
     coins = await balance(session, user_id, RES_COINS)
@@ -218,6 +228,7 @@ async def get_my_clan(
             clan=None, coins=coins,
             no_clan=NoClanOut(
                 coins=coins, create_cost=CLAN_CREATE_COST, name_min=CLAN_NAME_MIN, name_max=CLAN_NAME_MAX,
+                rejoin_days=await clan_service.rejoin_left(session, user_id),
                 application=InviteOut(clan_id=app.clan_id, name=names.get(app.clan_id, "—")) if app else None,
                 invites=[InviteOut(clan_id=r.clan_id, name=names.get(r.clan_id, "—")) for r in invites],
                 browse=await _browse(session, 0, "", app.clan_id if app else None),
@@ -256,6 +267,8 @@ async def get_my_clan(
             requests=[PersonOut(user_id=r.user_id, name=_label(labels, r.user_id)[0], username=_label(labels, r.user_id)[1]) for r in requests],
             access_requests=[PersonOut(user_id=u, name=n, username=None) for u, n in access],
             set_ranks=[{"rank": r, "label": RANK_NAME[r]} for r in _SET_RANKS],
+            announcement=clan.announcement, announcement_at=clan.announcement_at, announce_max=CLAN_ANNOUNCE_MAX,
+            announce_cooldown=await clan_service.announce_cooldown_left(redis, clan.id) if manage else 0,
         ),
         my_rank=me.rank, my_rank_label=RANK_NAME.get(me.rank, me.rank),
         can=CanOut(
@@ -419,6 +432,24 @@ async def transfer(body: UserIdIn, user_id: int = Depends(get_current_user_id), 
     except ClanError as exc:
         raise _err(exc) from None
     return _ok("Клан передан.")
+
+
+class AnnounceIn(BaseModel):
+    text: str
+
+
+@router.post("/announce")
+async def announce(
+    body: AnnounceIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    await require_user(session, user_id)
+    try:
+        ann = await clan_service.publish_announcement(session, redis, user_id, body.text)
+    except ClanError as exc:
+        raise _err(exc) from None
+    background(clan_service.deliver_announcement(get_bot(), session_factory, ann))
+    return _ok(f"Объявление опубликовано, рассылаю участникам: {len(ann.recipient_ids)}.")
 
 
 @router.post("/leave")

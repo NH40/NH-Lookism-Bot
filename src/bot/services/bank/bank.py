@@ -44,6 +44,7 @@ from bot.config.bank import (
     BANK_MEMBERS_MAX,
     BANK_MIN_CAPITAL,
     BANK_MIN_LOAN,
+    BANK_OPEN_DONATE,
     BANK_OFFER_HOURS,
     BANK_PAGE,
     BANK_PENALTY_CAP,
@@ -75,6 +76,7 @@ from bot.constant.bank import (
 )
 from bot.constant.ledger import REASON_BANK
 from bot.constant.resource import RES_COINS as RES_NH
+from bot.constant.resource import RES_DONATE, RESOURCES
 from bot.db.models.bank import Bank, BankLoan, BankMember
 from bot.db.models.user import User
 from bot.services.resource import grant, spend
@@ -288,6 +290,9 @@ async def create_bank(session: AsyncSession, redis: Redis, user_id: int, capital
     if await team_of(session, user_id) is not None:
         raise BankError("has_bank")
     with coin_reason(REASON_BANK):
+        if not await spend(session, user_id, RES_DONATE, BANK_OPEN_DONATE):
+            await session.rollback()
+            raise BankError("no_donate", BANK_OPEN_DONATE)
         if not await spend(session, user_id, RES_NH, capital):
             await session.rollback()
             raise BankError("no_money", capital)
@@ -850,3 +855,143 @@ async def sweep(session_factory: async_sessionmaker[AsyncSession], redis: Redis)
         if n.code in ("unfrozen", "slave") and n.user_id not in frozen:
             await redis.delete(key_frozen(n.user_id))
     return notices
+
+
+# --- 2026-11-19: прайс банка, погашение ресурсами, прощение долга, карточка должника ---------------
+
+BANK_PRICE_RESOURCES: tuple[str, ...] = tuple(r for r in RESOURCES if r not in (RES_NH, RES_DONATE))
+BANK_PRICE_MAX = 1_000_000_000  # NHCoin за единицу ресурса
+
+
+@_locked
+async def set_prices(session: AsyncSession, redis: Redis, user_id: int, prices: dict[str, int]) -> dict[str, int]:
+    """Прайс владельца: {ресурс: NHCoin за единицу}; 0 или отсутствие — ресурс не принимается."""
+    clean: dict[str, int] = {}
+    for code, price in prices.items():
+        if code not in BANK_PRICE_RESOURCES or not isinstance(price, int) or price < 0 or price > BANK_PRICE_MAX:
+            raise BankError("bad_price")
+        if price:
+            clean[code] = price
+    bank = await _own(session, user_id)
+    bank.prices = clean or None
+    await session.commit()
+    return clean
+
+
+@_locked
+async def repay_with_resource(session: AsyncSession, redis: Redis, user_id: int, loan_id: int, code: str, units: int) -> tuple[BankLoan, int, int, bool]:
+    """Погасить долг ресурсом по прайсу банка: ресурс уходит владельцу банка, долг уменьшается на его цену.
+    Лишнего не берём: единиц — не больше, чем нужно на остаток долга. → (кредит, единиц, погашено, разморожен)."""
+    if units <= 0:
+        raise BankError("bad_amount")
+    loan, bank = await _borrower_loan(session, user_id, loan_id, LOAN_OPEN)
+    price = int((bank.prices or {}).get(code, 0)) if bank is not None else 0
+    if price <= 0:
+        await session.rollback()
+        raise BankError("no_price")
+    now = _now()
+    accrue(loan, now)
+    units = min(units, -(-loan.debt // price))
+    pay = min(units * price, loan.debt)
+    if units <= 0 or pay <= 0:
+        await session.rollback()
+        raise BankError("bad_amount")
+    if not await spend(session, user_id, code, units):
+        await session.rollback()
+        raise BankError("no_resource", units)
+    await grant(session, bank.owner_id, code, units)
+    income, _ = _apply_payment(loan, pay)
+    bank.earned_total += income
+    was_frozen = loan.status == LOAN_FROZEN
+    closed = _close_if_paid(loan, now)
+    await session.commit()
+    if closed and was_frozen:
+        await _refresh_frozen(session, redis, user_id)
+    return loan, units, pay, closed and was_frozen
+
+
+@_locked
+async def forgive(session: AsyncSession, redis: Redis, user_id: int, loan_id: int, amount: int | None) -> tuple[BankLoan, int, list[Notice]]:
+    """Владелец прощает долг целиком (`None`) или часть: сначала пеню, потом проценты, потом тело.
+    Прощённое не считается погашенным (`paid` не растёт) и в капитал не возвращается. → (кредит, прощено, пуши)."""
+    loan = await session.scalar(select(BankLoan).where(BankLoan.id == loan_id))
+    if loan is None or loan.bank_id is None or loan.status not in LOAN_OPEN:
+        raise BankError("no_loan")
+    bank = await session.scalar(select(Bank).where(Bank.id == loan.bank_id).with_for_update())
+    if bank is None or bank.owner_id != user_id:
+        await session.rollback()
+        raise BankError("owner_only")
+    loan = await session.scalar(select(BankLoan).where(BankLoan.id == loan_id).with_for_update().execution_options(populate_existing=True))
+    if loan.status not in LOAN_OPEN:
+        await session.rollback()
+        raise BankError("no_loan")
+    now = _now()
+    accrue(loan, now)
+    cut = loan.debt if amount is None else min(amount, loan.debt)
+    if cut <= 0:
+        await session.rollback()
+        raise BankError("bad_amount")
+    rest = cut
+    for field_ in ("penalty", "interest", "principal"):
+        take = min(rest, getattr(loan, field_))
+        setattr(loan, field_, getattr(loan, field_) - take)
+        rest -= take
+    was_frozen = loan.status == LOAN_FROZEN
+    closed = _close_if_paid(loan, now)
+    borrower = loan.borrower_id
+    notices = [Notice(borrower, "forgiven_all" if closed else "forgiven", {"amount": cut, "debt": loan.debt}, loan.id)]
+    await session.commit()
+    if closed and was_frozen:
+        await _refresh_frozen(session, redis, borrower)
+    return loan, cut, notices
+
+
+@dataclass(frozen=True, slots=True)
+class DebtorCard:
+    user_id: int
+    name: str
+    username: str | None
+    phase: str
+    league: str | None
+    power: int
+    nh_coins: int
+    districts: int
+    buildings: int
+    clan: str | None
+    loans_open: int
+    debt_total: int
+    frozen: bool
+
+
+def _league_name(index: int | None) -> str | None:
+    from bot.config.league import LEAGUES
+
+    return LEAGUES[index].name if index is not None and 0 <= index < len(LEAGUES) else None
+
+
+async def debtor_card(session: AsyncSession, redis: Redis, user_id: int, loan_id: int) -> DebtorCard:
+    """Профиль должника — только команде банка, выдавшего этот кредит (или куда пришла заявка)."""
+    from bot.db.repositories import business as business_repo
+    from bot.db.repositories import clan as clan_repo
+    from bot.services.profile import get_profile
+
+    loan = await session.scalar(select(BankLoan).where(BankLoan.id == loan_id))
+    if loan is None or loan.bank_id is None:
+        raise BankError("no_loan")
+    bank = await session.scalar(select(Bank).where(Bank.id == loan.bank_id))
+    if bank is None or user_id not in await _team_by_bank(session, bank):
+        raise BankError("no_loan")
+    uid = loan.borrower_id
+    profile = await get_profile(session, uid)
+    others = list(await session.scalars(select(BankLoan).where(BankLoan.borrower_id == uid, BankLoan.status.in_(LOAN_OPEN))))
+    member = await clan_repo.get_member(session, uid)
+    clan = await clan_repo.get(session, member.clan_id) if member else None
+    buildings = sum((await business_repo.count_by_type(session, uid)).values())
+    name = (profile.display_name or profile.gang_name or (f"@{profile.username}" if profile.username else "—")) if profile else "—"
+    return DebtorCard(
+        user_id=uid, name=name, username=profile.username if profile else None, phase=profile.phase if profile else "",
+        league=_league_name(profile.stats.league) if profile else None, power=int(profile.army_power or 0) if profile else 0,
+        nh_coins=int(profile.nh_coins or 0) if profile else 0, districts=int(profile.districts or 0) if profile else 0,
+        buildings=buildings, clan=clan.name if clan else None, loans_open=len(others), debt_total=sum(x.debt for x in others),
+        frozen=await is_frozen(redis, uid),
+    )

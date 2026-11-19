@@ -7,6 +7,7 @@ import { ContractsTab } from "./ContractsTab";
 import { DepositsTab } from "./DepositsTab";
 import { PotionsTab } from "./PotionsTab";
 import { StorageTab } from "./StorageTab";
+import { TicketsCard } from "./TicketsCard";
 import "../../styles/game-screens.css";
 import "./Shop.css";
 
@@ -35,6 +36,7 @@ export function ShopPage() {
 						to={ROUTE_MORE}
 						subtitle={`NHCoin: ${fmt(data.nh_coins)} · к сбору ${fmt(data.pending)}`}
 					/>
+					<TicketsCard data={data.tickets} {...common} />
 					<div className="grid-4">
 						{TABS.map((t) => (
 							<button

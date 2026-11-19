@@ -7,6 +7,7 @@ import { BackHeader, Bar, Panel, Screen, countdown, fmt, useCountdown } from "..
 import { ROUTE_MAP } from "../../constants/constants";
 import { useAction, useApi } from "../../hooks/useApi";
 import { Sheet } from "../../components/Sheet";
+import { AbsoluteDrop, type AbsoluteCard } from "../../components/AbsoluteDrop";
 import "../../styles/game-screens.css";
 import "./Gang.css";
 
@@ -181,13 +182,19 @@ function RecruitTab({ data, reload }: { data: GangData; reload: () => void }) {
   const [count, setCount] = useState(Math.max(1, Math.min(10, data.tickets.count)));
   const [reveal, setReveal] = useState<RollResult | null>(null);
   const [many, setMany] = useState<RollManyResult | null>(null);
+  const [abs, setAbs] = useState<AbsoluteCard[]>([]); // выпал абсолют — сначала анимация, под ней обычный экран
   const roll = async () => {
-    const r = await run("/gacha/roll");
-    if (r) setReveal(r as never);
+    const r = (await run("/gacha/roll")) as unknown as RollResult | null | undefined;
+    if (!r) return;
+    if (r.card?.rarity === "absolute") setAbs([r.card]);
+    setReveal(r);
   };
   const rollMany = async () => {
-    const r = await run("/gacha/roll-many", { count });
-    if (r) setMany(r as never);
+    const r = (await run("/gacha/roll-many", { count })) as unknown as RollManyResult | null | undefined;
+    if (!r) return;
+    const found = r.cards.filter((c) => c.rarity === "absolute");
+    if (found.length) setAbs(found);
+    setMany(r);
   };
   const t = data.tickets;
   return (
@@ -257,6 +264,7 @@ function RecruitTab({ data, reload }: { data: GangData; reload: () => void }) {
           </div>
         </Sheet>
       )}
+      {abs.length > 0 && <AbsoluteDrop cards={abs} onDone={() => setAbs([])} />}
       {reveal && (
         <Sheet title="Новый уник" onClose={() => setReveal(null)}>
           <div className="reveal-art">{reveal.card.image && <img src={imgUrl(reveal.card.image, 480)} alt={reveal.card.name} />}</div>

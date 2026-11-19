@@ -1,4 +1,4 @@
-import { Banknote, Check, ChevronLeft, ChevronRight, FileSignature, Landmark, Lock, PiggyBank, Plus, Settings2, Snowflake, Trash2, UserMinus, UserPlus, Users, Wallet, X } from "lucide-react";
+import { Banknote, Check, ChevronLeft, ChevronRight, FileSignature, Landmark, Lock, PiggyBank, Plus, Settings2, Snowflake, Tag, Trash2, UserMinus, UserPlus, Users, Wallet, X } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { BankHome, BankRow, BankTeam, LoanRow } from "../../types";
@@ -6,6 +6,7 @@ import { BackHeader, Bar, Chip, Panel, Screen, StatRow, countdown, fmt, useCount
 import { Sheet } from "../../components/Sheet";
 import { ROUTE_MORE } from "../../constants";
 import { useAction, useApi } from "../../hooks/useApi";
+import { DebtorSheet, PricesSheet, ResourceRepay } from "./BankExtras";
 import "./Bank.css";
 
 // Кредиты — банки v2 (2026-11-14): заявка → банк одобряет → договор → подпись; фикс и почасовой; участники банка.
@@ -185,7 +186,7 @@ function ContractCard({ loan, reload }: { loan: LoanRow; reload: () => void }) {
   );
 }
 
-function LoanCard({ loan, reload }: { loan: LoanRow; reload: () => void }) {
+function LoanCard({ loan, labels, reload }: { loan: LoanRow; labels: Record<string, string>; reload: () => void }) {
   const { run, busy } = useAction(reload);
   const [part, setPart] = useState("");
   const due = useCountdown(loan.due_in);
@@ -218,6 +219,7 @@ function LoanCard({ loan, reload }: { loan: LoanRow; reload: () => void }) {
         onClick={() => run("/bank/repay", { loan_id: loan.id })}>
         Погасить всё · {fmt(loan.debt)}
       </button>
+      <ResourceRepay loan={loan} labels={labels} reload={reload} />
     </Panel>
   );
 }
@@ -241,7 +243,7 @@ function LoansTab({ data, reload }: { data: BankHome; reload: () => void }) {
           ))}
         </Panel>
       )}
-      {open.map((l) => <LoanCard key={l.id} loan={l} reload={reload} />)}
+      {open.map((l) => <LoanCard key={l.id} loan={l} labels={data.limits.resource_labels ?? {}} reload={reload} />)}
     </>
   );
 }
@@ -301,7 +303,8 @@ function MineTab({ data, reload }: { data: BankHome; reload: () => void }) {
   const [terms, setTerms] = useState<TermsState>(termsFrom(team));
   const [move, setMove] = useState("");
   const [member, setMember] = useState("");
-  const [sheet, setSheet] = useState<"terms" | "close" | null>(null);
+  const [sheet, setSheet] = useState<"terms" | "close" | "prices" | null>(null);
+  const [debtor, setDebtor] = useState<LoanRow | null>(null);
   const [approve, setApprove] = useState<LoanRow | null>(null);
   const [approveText, setApproveText] = useState("");
 
@@ -318,7 +321,7 @@ function MineTab({ data, reload }: { data: BankHome; reload: () => void }) {
         <TermsFields t={terms} set={setTerms} limits={L} />
         <button type="button" className="btn gold block" style={{ marginTop: 10 }} disabled={busy || num(capital) < L.min_capital || terms.min > terms.max}
           onClick={() => run("/bank/create", { capital: num(capital), ...termsBody(terms) })}>
-          <Plus size={16} /> Создать банк
+          <Plus size={16} /> Создать банк · {L.open_donate ?? 100} 💎
         </button>
       </Panel>
     );
@@ -345,8 +348,9 @@ function MineTab({ data, reload }: { data: BankHome; reload: () => void }) {
           )}
         </div>
         {team.is_owner ? (
-          <div className="grid-2" style={{ marginTop: 10 }}>
+          <div className="grid-3" style={{ marginTop: 10 }}>
             <button type="button" className="btn ghost small" onClick={() => { setTerms(termsFrom(team)); setSheet("terms"); }}><Settings2 size={14} /> Условия</button>
+            <button type="button" className="btn ghost small" onClick={() => setSheet("prices")}><Tag size={14} /> Прайс</button>
             <button type="button" className="btn red small" onClick={() => setSheet("close")}><Trash2 size={14} /> Закрыть</button>
           </div>
         ) : (
@@ -373,7 +377,7 @@ function MineTab({ data, reload }: { data: BankHome; reload: () => void }) {
       <Panel title={`Должники · ${team.loans.length}`}>
         {team.loans.length === 0 && <div className="bk-empty">Выданных кредитов нет.</div>}
         {team.loans.map((l) => (
-          <div key={l.id} className={`bk-debtor ${l.status === "frozen" || l.status === "slave" ? "frozen" : ""}`}>
+          <div key={l.id} className={`bk-debtor ${l.status === "frozen" || l.status === "slave" ? "frozen" : ""}`} role="button" style={{ cursor: "pointer" }} onClick={() => setDebtor(l)}>
             <span>
               <b>{l.name}</b>
               <small>{l.status === "frozen" ? "🧊 заморожен" : l.status === "slave" ? "⛓ в рабстве — 90% дохода в банк" : `срок через ${countdown(l.due_in)}`}</small>
@@ -426,6 +430,10 @@ function MineTab({ data, reload }: { data: BankHome; reload: () => void }) {
             onClick={async () => { if (await run("/bank/terms", termsBody(terms))) setSheet(null); }}>Сохранить</button>
         </Sheet>
       )}
+      {sheet === "prices" && (
+        <PricesSheet prices={team.prices ?? {}} resources={L.price_resources ?? []} labels={L.resource_labels ?? {}} onClose={() => setSheet(null)} reload={reload} />
+      )}
+      {debtor && <DebtorSheet loan={debtor} isOwner={team.is_owner} onClose={() => setDebtor(null)} reload={reload} />}
       {sheet === "close" && (
         <Sheet title="Закрыть банк?" onClose={() => setSheet(null)}>
           <div className="bk-note">Свободный капитал {fmt(team.capital)} вернётся на счёт. Закрыть можно, когда нет кредитов и заявок.</div>

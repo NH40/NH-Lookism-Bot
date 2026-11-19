@@ -13,6 +13,7 @@ from bot.constant.admin import CB_ADMIN_SECTION_PREFIX, SECTION_PROMO
 from bot.constant.admin.promo_admin import (
     CB_PROMO_DELETE_ASK_PREFIX,
     CB_PROMO_DELETE_PREFIX,
+    CB_PROMO_GROUP_PREFIX,
     CB_PROMO_NEW,
     CB_PROMO_TOGGLE_PREFIX,
     CB_PROMO_VIEW_PREFIX,
@@ -33,6 +34,7 @@ from bot.texts.admin.promo_admin import (
     DELETED_ALERT,
     DETAIL,
     FORMAT_ERROR,
+    GROUP_LINE,
     LIST_EMPTY,
     LIST_HINT,
     LIST_TITLE,
@@ -41,7 +43,6 @@ from bot.texts.admin.promo_admin import (
     STATUS_DEAD,
     STATUS_OFF,
 )
-from bot.texts.resource import amount_label
 from bot.utils.formatting import esc, format_number
 from bot.utils.safe_edit import safe_edit_text
 
@@ -49,7 +50,7 @@ router = Router(name="admin_promo")
 
 
 def _reward_text(reward: dict) -> str:
-    return " ".join(f"{'+' if v > 0 else '−'}{amount_label(k, abs(int(v)))}" for k, v in reward.items())
+    return " ".join(promo_service.reward_label(k, v) for k, v in reward.items())
 
 
 def _status(promo: PromoCode) -> str:
@@ -58,15 +59,16 @@ def _status(promo: PromoCode) -> str:
     return STATUS_ALIVE if promo_service.is_alive(promo) else STATUS_DEAD
 
 
-async def _show_list(message, session: AsyncSession) -> None:
-    promos = await promo_service.list_recent(session)
+async def _show_list(message, session: AsyncSession, group: str | None = None) -> None:
+    promos = await promo_service.list_recent(session, group)
     text = LIST_TITLE + (LIST_EMPTY if not promos else "") + LIST_HINT.format(limit=PROMO_LIST_LIMIT)
     items = []
     for p in promos:
         icon = "✅" if promo_service.is_alive(p) else "❌"
         limit = f"/{p.max_uses}" if p.max_uses is not None else ""
-        items.append((p.id, f"{icon} {p.code} · {p.used_count}{limit}"))
-    await safe_edit_text(message, text, reply_markup=list_menu(items))
+        tag = f" #{p.group_name}" if p.group_name and group is None else ""
+        items.append((p.id, f"{icon} {p.code}{tag} · {p.used_count}{limit}"))
+    await safe_edit_text(message, text, reply_markup=list_menu(items, await promo_service.groups(session), group))
 
 
 async def _show_detail(message, session: AsyncSession, promo_id: int) -> bool:
@@ -79,7 +81,7 @@ async def _show_detail(message, session: AsyncSession, promo_id: int) -> bool:
         code=esc(promo.code), status=_status(promo), reward=_reward_text(promo.reward),
         used=format_number(promo.used_count),
         limit=f" / {format_number(promo.max_uses)}" if promo.max_uses is not None else "",
-        expires=expires, users=users,
+        expires=expires, users=users, group=GROUP_LINE.format(group=esc(promo.group_name)) if promo.group_name else "",
     )
     await safe_edit_text(message, text, reply_markup=detail_menu(promo.id, promo.is_active))
     return True
@@ -92,6 +94,15 @@ async def cb_section(callback: CallbackQuery, session: AsyncSession, state: FSMC
     await state.clear()
     await callback.answer()
     await _show_list(callback.message, session)
+
+
+@router.callback_query(F.data.startswith(CB_PROMO_GROUP_PREFIX))
+async def cb_group(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    if not await guard(callback, session, SECTION_PROMO):
+        return
+    await state.clear()
+    await callback.answer()
+    await _show_list(callback.message, session, callback.data.removeprefix(CB_PROMO_GROUP_PREFIX) or None)
 
 
 @router.callback_query(F.data == CB_PROMO_NEW)

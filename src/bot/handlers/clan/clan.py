@@ -4,6 +4,8 @@
 удаляем и шлём новое — правило 12 UAP)."""
 from __future__ import annotations
 
+from datetime import timezone
+
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
@@ -38,6 +40,7 @@ from bot.services.settings import notify_player
 from bot.states.clan import ClanStates
 from bot.texts.clan import (
     CARD_ME,
+    CARD_ANNOUNCE,
     CARD_SHARE,
     CLAN_CARD,
     CLAN_LINE,
@@ -96,6 +99,9 @@ async def _card_text(session: AsyncSession, clan_id: int, viewer_rank: str | Non
             share = await clan_repo.pending_share(session, viewer_id)
             if share:
                 me += CARD_SHARE.format(share=format_number(share))
+        if clan.announcement:  # объявление — только своим
+            when = clan.announcement_at.astimezone(timezone.utc).strftime("%d.%m %H:%M UTC") if clan.announcement_at else ""
+            me += CARD_ANNOUNCE.format(when=when, text=esc(clan.announcement))
     text = CLAN_CARD.format(
         name=esc(clan.name), crown=" 👑" if v.top10 else "",
         description=(esc(clan.description) + "\n") if clan.description else NO_DESCRIPTION,

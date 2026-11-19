@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,19 +27,30 @@ async def add(
     expires_at: datetime | None,
     allowed_usernames: list[str] | None,
     created_by: int,
+    group_name: str | None = None,
 ) -> PromoCode:
     promo = PromoCode(
         code=code, reward=reward, max_uses=max_uses, expires_at=expires_at,
-        allowed_usernames=allowed_usernames, created_by=created_by,
+        allowed_usernames=allowed_usernames, created_by=created_by, group_name=group_name,
     )
     session.add(promo)
     await session.flush()
     return promo
 
 
-async def list_recent(session: AsyncSession, limit: int) -> list[PromoCode]:
-    rows = await session.scalars(select(PromoCode).order_by(PromoCode.id.desc()).limit(limit))
-    return list(rows)
+async def list_recent(session: AsyncSession, limit: int, group: str | None = None) -> list[PromoCode]:
+    stmt = select(PromoCode).order_by(PromoCode.id.desc()).limit(limit)
+    if group:
+        stmt = stmt.where(PromoCode.group_name == group)
+    return list(await session.scalars(stmt))
+
+
+async def groups(session: AsyncSession) -> list[tuple[str, int]]:
+    """Группы промокодов с числом кодов — по алфавиту."""
+    rows = await session.execute(
+        select(PromoCode.group_name, func.count()).where(PromoCode.group_name.is_not(None)).group_by(PromoCode.group_name).order_by(PromoCode.group_name)
+    )
+    return [(g, int(n)) for g, n in rows.all()]
 
 
 async def set_active(session: AsyncSession, promo_id: int, active: bool) -> bool:

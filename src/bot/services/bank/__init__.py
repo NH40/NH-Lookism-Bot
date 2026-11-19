@@ -1,6 +1,12 @@
 """Публичное API домена bank (сервис)."""
 from bot.services.bank.bank import (  # noqa: F401
+    BANK_PRICE_RESOURCES,
     BankError,
+    DebtorCard,
+    debtor_card,
+    forgive,
+    repay_with_resource,
+    set_prices,
     BankRow,
     Notice,
     Team,

@@ -26,6 +26,7 @@ export interface ClanInviteRef {
 export interface ClanNone {
   coins: number;
   create_cost: number;
+  rejoin_days?: number;
   name_min: number;
   name_max: number;
   application: ClanInviteRef | null;
@@ -77,6 +78,10 @@ export interface ClanInfo {
   requests: ClanPerson[];
   access_requests: ClanPerson[];
   set_ranks: { rank: string; label: string }[];
+  announcement?: string | null;
+  announcement_at?: string | null;
+  announce_max?: number;
+  announce_cooldown?: number;
 }
 
 export interface ClanData {

@@ -3,6 +3,7 @@ from bot.db.repositories.promo.promo import (  # noqa: F401
     add,
     delete_promo,
     get,
+    groups,
     get_by_code,
     increment_used,
     insert_redemption,

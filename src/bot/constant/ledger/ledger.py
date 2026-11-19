@@ -12,6 +12,7 @@ REASON_ELITE_LOOT = "elite_loot"  # родословная Элиты: побе�
 REASON_SABOTAGE = "sabotage"  # кража из казны императора
 REASON_WAR_TREASURY = "war_treasury"  # казна проигравшего в войне императоров или бою за трон
 REASON_BANK = "bank"  # банки игроков: капитал, кредиты, погашение, конфискация за долг
+REASON_SHOP = "shop"  # покупки в общем магазине (тикеты за NHCoin)
 
 # Коды `player_ledger.asset` — их пишут триггеры (миграция a1d5e8c2f7b3).
 ASSET_NH = "nh"

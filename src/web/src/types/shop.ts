@@ -104,9 +104,16 @@ export interface ShopDeposits {
   deposits: ShopDeposit[];
 }
 
+export interface ShopTickets {
+  price: number;
+  limit: number;
+  left: number;
+}
+
 export interface ShopData {
   nh_coins: number;
   pending: number;
+  tickets: ShopTickets;
   contracts: ShopContracts;
   potions: ShopPotions;
   storage: ShopStorage;

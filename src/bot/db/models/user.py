@@ -141,6 +141,8 @@ class User(Base):
     # `tickets_updated_at` — якорь регена; на капе "замораживается" на сейчас. Стартовый
     # запас выставляет `upsert_from_telegram` из конфига (server_default — нейтральный 0).
     tickets_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # Вышел из клана сам — 30 дней нельзя вступить или создать свой (против твинков; кик не считается).
+    clan_left_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     tickets_updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

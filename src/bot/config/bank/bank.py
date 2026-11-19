@@ -17,6 +17,7 @@ BANK_PENALTY_CAP = 1.0  # пени всего — не больше суммы �
 BANK_DAYS_MIN = 1
 BANK_DAYS_MAX = 30
 BANK_MIN_CAPITAL = 10_000
+BANK_OPEN_DONATE = 100  # открытие банка — 100 💎 (2026-11-19; уже открытые банки не трогаем)
 BANK_MIN_LOAN = 1_000
 BANK_MEMBERS_MAX = 5
 BANK_APPLY_HOURS = 24  # заявка без ответа — сгорает

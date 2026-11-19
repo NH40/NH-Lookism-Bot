@@ -163,6 +163,7 @@ export interface AdminConfigSection {
 export interface AdminPromo {
   id: number;
   code: string;
+  group?: string | null;
   reward: { code: string; amount: number; label: string }[];
   max_uses: number | null;
   used: number;

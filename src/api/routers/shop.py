@@ -27,6 +27,7 @@ from bot.constant.resource import ITEM_RESOURCE, ITEM_STATIST, NO_MINT_RESOURCES
 from bot.services import contract as contract_svc
 from bot.services import deposit as deposit_svc
 from bot.services import potion as potion_svc
+from bot.services import shop as shop_svc
 from bot.services import storage as storage_svc
 from bot.services.business import get_wallet
 from bot.services.extra import list_squads
@@ -46,6 +47,7 @@ from bot.texts.potion import (
     ROMAN,
 )
 from bot.texts.resource import RESOURCE_NAMES, item_label
+from bot.texts.shop import TICKETS_BOUGHT, TICKETS_LIMIT
 from bot.texts.storage import OPENED_ALERT, STORED, TAKEN, TAKEN_PAID
 from bot.utils.formatting import format_number
 
@@ -172,9 +174,20 @@ class DepositsOut(BaseModel):
     deposits: list[DepositOut]
 
 
+class TicketsOut(BaseModel):
+    price: int
+    limit: int
+    left: int
+
+
+class TicketsIn(BaseModel):
+    amount: int = Field(ge=1, le=1000)
+
+
 class ShopOut(BaseModel):
     nh_coins: int
     pending: int
+    tickets: TicketsOut
     contracts: ContractsOut
     potions: PotionsOut
     storage: StorageOut
@@ -306,18 +319,43 @@ async def _deposits(session: AsyncSession, user_id: int, bal: dict[str, int]) ->
 async def get_shop(
     user_id: int = Depends(get_current_user_id),
     session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
 ) -> ShopOut:
     await require_user(session, user_id)
     wallet = await get_wallet(session, user_id)
     bal = await balances(session, user_id)
+    offer = await shop_svc.tickets_offer(redis, user_id)
     return ShopOut(
         nh_coins=wallet.nh_coins if wallet else 0,
         pending=wallet.pending if wallet else 0,
+        tickets=TicketsOut(price=offer.price, limit=offer.limit, left=offer.left),
         contracts=await _contracts(session, user_id),
         potions=await _potions(session, user_id),
         storage=await _storage(session, user_id, bal),
         deposits=await _deposits(session, user_id, bal),
     )
+
+
+# --- тикеты за NHCoin ---
+
+
+@router.post("/tickets/buy", response_model=MsgOut)
+async def buy_tickets(
+    body: TicketsIn,
+    user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> MsgOut:
+    await require_user(session, user_id)
+    try:
+        cost = await shop_svc.buy_tickets(session, redis, user_id, body.amount)
+    except shop_svc.ShopBusyError:
+        raise bad(_BUSY)
+    except shop_svc.TicketsDailyLimitError as e:
+        raise bad(TICKETS_LIMIT.format(left=e.left))
+    except shop_svc.TicketsNotEnoughCoinsError as e:
+        raise bad(_coins(e.cost))
+    return MsgOut(message=TICKETS_BOUGHT.format(n=body.amount, cost=format_number(cost)))
 
 
 # --- контракты ---

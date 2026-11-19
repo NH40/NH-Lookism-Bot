@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -28,6 +29,7 @@ class Bank(Base):
     max_days: Mapped[int] = mapped_column(Integer, nullable=False)
     lent_total: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)  # выдано за всё время
     earned_total: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)  # получено процентов и пени
+    prices: Mapped[dict | None] = mapped_column(JSONB, nullable=True)  # прайс: {ресурс: NHCoin за единицу} — погашение ресурсами
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 

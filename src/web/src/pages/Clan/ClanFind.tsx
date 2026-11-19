@@ -34,7 +34,8 @@ export function ClanFind({ data, reload }: { data: ClanNone; reload: () => Promi
 		await reload();
 	};
 	const { run, busy } = useAction(refresh);
-	const canCreate = data.coins >= data.create_cost;
+	const wait = data.rejoin_days ?? 0;  // вышел сам — 30 дней без клана
+	const canCreate = data.coins >= data.create_cost && !wait;
 	const nameOk = name.trim().length >= data.name_min && name.trim().length <= data.name_max;
 
 	return (
@@ -79,6 +80,7 @@ export function ClanFind({ data, reload }: { data: ClanNone; reload: () => Promi
 				<div className="note muted" style={{ textAlign: "center", marginTop: 10 }}>
 					Всего кланов: {list.total} · заявку можно подать только в один клан
 				</div>
+				{wait > 0 && <div className="muted" style={{ fontSize: 11, fontWeight: 700, marginTop: 8 }}>Ты недавно вышел из клана: вступить или создать клан можно через {wait} дн.</div>}
 			</Panel>
 
 			<Panel title="Свой клан" tone="gold">

@@ -164,19 +164,21 @@ class PromoToggleIn(BaseModel):
 
 def _promo(p) -> dict:
     return {
-        "id": p.id, "code": p.code, "reward": [{"code": k, "amount": v, "label": amount_label(k, abs(v))} for k, v in p.reward.items()],
+        "id": p.id, "code": p.code, "group": p.group_name,
+        "reward": [{"code": k, "amount": promo_service.reward_sign(v), "label": promo_service.reward_label(k, v).lstrip("+−")} for k, v in p.reward.items()],
         "max_uses": p.max_uses, "used": p.used_count, "expires_at": p.expires_at, "users": p.allowed_usernames,
         "active": p.is_active, "alive": promo_service.is_alive(p), "created_at": p.created_at,
     }
 
 
 @router.get("/promo")
-async def get_promos(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+async def get_promos(group: str | None = None, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
     await access(session, user_id, SECTION_PROMO)
     from bot.texts.resource import resource_label
 
     return {
-        "items": [_promo(p) for p in await promo_service.list_recent(session)], "resources": list(RESOURCES),
+        "items": [_promo(p) for p in await promo_service.list_recent(session, group or None)], "resources": list(RESOURCES),
+        "groups": [{"name": g, "count": n} for g, n in await promo_service.groups(session)],
         "resource_labels": {r: resource_label(r) for r in RESOURCES},
     }
 

@@ -23,10 +23,14 @@ CLAN_MAX_MEMBERS = 15
 CLAN_NAME_MIN = 3
 CLAN_NAME_MAX = 24
 CLAN_DESCRIPTION_MAX = 300
+CLAN_ANNOUNCE_MAX = 1000  # объявление клана, символов (2026-11-19)
+CLAN_ANNOUNCE_COOLDOWN_SECONDS = 3600  # одно объявление клана в час — без спама участникам
+CLAN_ANNOUNCE_SEND_GAP_SECONDS = 0.05  # пауза между пушами рассылки (лимит Telegram общий с ботом)
 CLAN_PAGE = 10
 CLAN_TOP_IMAGE = 10  # аватарку ставят кланы из топ-N (как в UAP)
 # Создание клана — NHCoin (пользователь: «чтобы создать клан, необходимо энное количество денег»).
 CLAN_CREATE_COST = 50_000
+CLAN_REJOIN_DAYS = 30  # вышел сам — столько дней без вступления и создания клана (кик не считается), 2026-11-19
 
 # --- Земли ---
 CLAN_START_LANDS = 8

@@ -24,6 +24,7 @@ from bot.constant.ledger import (
     REASON_SABOTAGE,
     REASON_WAR_TREASURY,
     REASON_BANK,
+    REASON_SHOP,
 )
 from bot.utils.formatting import esc, format_number as n
 
@@ -116,6 +117,7 @@ _REASONS = {
     REASON_SABOTAGE: "Саботаж: кража из казны",
     REASON_WAR_TREASURY: "Казна в войне или бою за трон",
     REASON_BANK: "Банк: капитал, кредит, погашение, конфискация",
+    REASON_SHOP: "Магазин: покупка тикетов",
 }
 _SOURCES = {
     "adm": "Админка", "admin": "Админка", "biz": "Бизнес", "business": "Бизнес", "clan": "Клан", "ex": "Биржа", "exchange": "Биржа",

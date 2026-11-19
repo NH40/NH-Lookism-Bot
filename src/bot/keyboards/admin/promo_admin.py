@@ -7,12 +7,14 @@ from bot.constant.admin import CB_ADMIN_OPEN, CB_ADMIN_SECTION_PREFIX, SECTION_P
 from bot.constant.admin.promo_admin import (
     CB_PROMO_DELETE_ASK_PREFIX,
     CB_PROMO_DELETE_PREFIX,
+    CB_PROMO_GROUP_PREFIX,
     CB_PROMO_NEW,
     CB_PROMO_TOGGLE_PREFIX,
     CB_PROMO_VIEW_PREFIX,
 )
 from bot.texts.admin.promo_admin import (
     BTN_ACTIVATE,
+    BTN_ALL_GROUPS,
     BTN_BACK,
     BTN_BACK_LIST,
     BTN_CONFIRM_DELETE,
@@ -28,9 +30,14 @@ def _btn(text: str, cb: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, callback_data=cb)
 
 
-def list_menu(items: list[tuple[int, str]]) -> InlineKeyboardMarkup:
-    """items: (id, подпись кнопки)."""
-    rows = [[_btn(label, f"{CB_PROMO_VIEW_PREFIX}{pid}")] for pid, label in items]
+def list_menu(items: list[tuple[int, str]], groups: list[tuple[str, int]] | None = None, current: str | None = None) -> InlineKeyboardMarkup:
+    """items: (id, подпись кнопки); groups: (группа, кодов) — фильтр по группам."""
+    rows = []
+    if groups:
+        chips = [_btn(("• " if current is None else "") + BTN_ALL_GROUPS, CB_PROMO_GROUP_PREFIX)]
+        chips += [_btn(("• " if g == current else "") + f"#{g} ({n})", f"{CB_PROMO_GROUP_PREFIX}{g}") for g, n in groups]
+        rows += [chips[i:i + 3] for i in range(0, len(chips), 3)]
+    rows += [[_btn(label, f"{CB_PROMO_VIEW_PREFIX}{pid}")] for pid, label in items]
     rows.append([_btn(BTN_NEW, CB_PROMO_NEW)])
     rows.append([_btn(BTN_BACK, CB_ADMIN_OPEN)])
     return InlineKeyboardMarkup(inline_keyboard=rows)

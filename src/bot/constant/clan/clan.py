@@ -79,6 +79,7 @@ CB_CLAN_SHOP_POTION_PREFIX = "clan:shpt:"  # f"{...}{kind}:{tier}"
 CB_CLAN_SHOP_MERCS = "clan:shmc"  # наёмники в роту: выбрать ранг
 CB_CLAN_SHOP_MERCS_PREFIX = "clan:shmr:"  # f"{...}{rank}" — ввод количества
 CB_CLAN_LOG = "clan:log"
+CB_CLAN_ANNOUNCE = "clan:ann"  # написать объявление (владелец/зам)
 CB_CLAN_LEVEL_BUY = "clan:lvlbuy"
 CB_CLAN_LEVELS = "clan:levels"
 

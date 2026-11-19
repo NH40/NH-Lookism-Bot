@@ -5,9 +5,13 @@
 набирает обычным способом»). Тратить в минусе нельзя: все списания — `WHERE баланс >= цена`.
 Активация атомарна: запись активации + инкремент с проверкой лимита в
 самом UPDATE, при провале инкремента — rollback (правила 1, 10).
+
+2026-11-19: награда может быть диапазоном `ресурс:25-50` (в JSON — `[25, 50]`), число выпадает при
+активации у каждого своё. Группа (`#канал`, `#рофл`) — только для порядка в админке, механика одна.
 """
 from __future__ import annotations
 
+import random
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -32,7 +36,8 @@ from bot.services import ticket as ticket_service
 from bot.services.admin import audit
 from bot.services.resource.resource import _COLUMNS
 
-_REWARD_RE = re.compile(r"^([a-z_]+):(-?\d+)$")
+_REWARD_RE = re.compile(r"^([a-z_]+):(-?\d+)(?:(?:-|\.\.)(-?\d+))?$")
+_GROUP_MAX_LEN = 20  # кириллица — 2 байта: группа влезает в callback_data (64 байта)
 _CODE_RE = re.compile(r"^[A-Za-zА-Яа-яЁё0-9_\-]+$")
 
 
@@ -75,14 +80,39 @@ class PromoNotAllowedError(PromoError):
 @dataclass(frozen=True, slots=True)
 class PromoDraft:
     code: str
-    reward: dict[str, int]
+    reward: dict[str, int | list[int]]
     max_uses: int | None
     expires_at: datetime | None
     allowed_usernames: list[str] | None
+    group: str | None = None
+
+
+def roll(value: int | list[int]) -> int:
+    """Количество из награды: число как есть, диапазон `[от, до]` — случайное внутри."""
+    if isinstance(value, list):
+        return random.randint(int(value[0]), int(value[1]))
+    return int(value)
+
+
+def reward_sign(value: int | list[int]) -> int:
+    lo, hi = (value[0], value[1]) if isinstance(value, list) else (value, value)
+    return 1 if lo + hi > 0 else -1
+
+
+def reward_label(code: str, value: int | list[int]) -> str:
+    """«+25–50 🎟», «−100 🪙» — для админки и списков."""
+    from bot.texts.resource import amount_label
+    from bot.utils.formatting import format_number
+
+    sign = "+" if reward_sign(value) > 0 else "−"
+    if isinstance(value, list):
+        lo, hi = sorted((abs(int(value[0])), abs(int(value[1]))))
+        return f"{sign}{format_number(lo)}–{amount_label(code, hi)}"
+    return f"{sign}{amount_label(code, abs(int(value)))}"
 
 
 def parse_create(line: str) -> PromoDraft:
-    """`КОД [uses|time|users] ПАРАМ РЕСУРС:КОЛ ...` → черновик. PromoFormatError при ошибке."""
+    """`КОД [#группа] [uses|time|users] ПАРАМ РЕСУРС:КОЛ|РЕСУРС:ОТ-ДО ...` → черновик. PromoFormatError при ошибке."""
     tokens = line.split()
     if len(tokens) < 2:
         raise PromoFormatError
@@ -90,6 +120,12 @@ def parse_create(line: str) -> PromoDraft:
     if len(code) > PROMO_CODE_MAX_LEN or not _CODE_RE.match(code):
         raise PromoFormatError
     rest = tokens[1:]
+    group = None
+    if rest[0].startswith("#"):
+        group = rest[0][1:].lower()
+        if not group or len(group) > _GROUP_MAX_LEN or not _CODE_RE.match(group) or len(rest) < 2:
+            raise PromoFormatError
+        rest = rest[1:]
     max_uses = expires_at = allowed = None
     if rest[0].lower() in PROMO_MODES:
         if len(rest) < 3:
@@ -108,15 +144,24 @@ def parse_create(line: str) -> PromoDraft:
             if not allowed:
                 raise PromoFormatError
             max_uses = len(allowed)
-    reward: dict[str, int] = {}
+    reward: dict[str, int | list[int]] = {}
     for token in rest:
         match = _REWARD_RE.match(token.lower())
-        if not match or match.group(1) not in RESOURCES or int(match.group(2)) == 0:
+        if not match or match.group(1) not in RESOURCES:
             raise PromoFormatError
-        reward[match.group(1)] = reward.get(match.group(1), 0) + int(match.group(2))
+        res, first = match.group(1), int(match.group(2))
+        if match.group(3) is not None:  # диапазон: одним токеном на ресурс, не складывается с другими
+            lo, hi = sorted((first, int(match.group(3))))
+            if res in reward or (lo == 0 and hi == 0) or (lo < 0 < hi):
+                raise PromoFormatError
+            reward[res] = [lo, hi] if lo != hi else lo
+            continue
+        if first == 0 or isinstance(reward.get(res), list):
+            raise PromoFormatError
+        reward[res] = reward.get(res, 0) + first
     if not reward:
         raise PromoFormatError
-    return PromoDraft(code, reward, max_uses, expires_at, allowed)
+    return PromoDraft(code, reward, max_uses, expires_at, allowed, group)
 
 
 async def create(session: AsyncSession, admin_id: int, draft: PromoDraft) -> PromoCode:
@@ -124,9 +169,9 @@ async def create(session: AsyncSession, admin_id: int, draft: PromoDraft) -> Pro
         raise PromoCodeTakenError
     promo = await promo_repo.add(
         session, code=draft.code, reward=draft.reward, max_uses=draft.max_uses,
-        expires_at=draft.expires_at, allowed_usernames=draft.allowed_usernames, created_by=admin_id,
+        expires_at=draft.expires_at, allowed_usernames=draft.allowed_usernames, created_by=admin_id, group_name=draft.group,
     )
-    await audit.log(session, admin_id, "promo_create", None, {"code": promo.code, "reward": promo.reward})
+    await audit.log(session, admin_id, "promo_create", None, {"code": promo.code, "reward": promo.reward, "group": promo.group_name})
     await session.commit()
     return promo
 
@@ -140,8 +185,12 @@ def is_alive(promo: PromoCode, now: datetime | None = None) -> bool:
     return promo.max_uses is None or promo.used_count < promo.max_uses
 
 
-async def list_recent(session: AsyncSession) -> list[PromoCode]:
-    return await promo_repo.list_recent(session, PROMO_LIST_LIMIT)
+async def list_recent(session: AsyncSession, group: str | None = None) -> list[PromoCode]:
+    return await promo_repo.list_recent(session, PROMO_LIST_LIMIT, group)
+
+
+async def groups(session: AsyncSession) -> list[tuple[str, int]]:
+    return await promo_repo.groups(session)
 
 
 async def get(session: AsyncSession, promo_id: int) -> PromoCode | None:
@@ -189,7 +238,8 @@ async def redeem(session: AsyncSession, user: User, raw_code: str) -> dict[str, 
         raise PromoExpiredError
     if promo.allowed_usernames is not None and (user.username or "").lower() not in promo.allowed_usernames:
         raise PromoNotAllowedError
-    promo_id, reward = promo.id, dict(promo.reward)
+    promo_id = promo.id
+    reward = {code: roll(value) for code, value in promo.reward.items()}  # диапазон — своё число каждому
     if not await promo_repo.insert_redemption(session, promo_id, user.id):
         await session.rollback()
         raise PromoAlreadyUsedError

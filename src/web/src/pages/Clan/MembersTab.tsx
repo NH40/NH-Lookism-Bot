@@ -5,6 +5,7 @@ import type { ClanCan, ClanInfo, ClanMember } from "../../types";
 import { Panel, Spinner, fmt } from "../../components/ui";
 import { Sheet } from "../../components/Sheet";
 import { useAction } from "../../hooks/useApi";
+import { AnnouncePanel } from "./AnnouncePanel";
 import { ConfirmSheet } from "./shared";
 
 type Confirm = { kind: "kick" | "transfer" | "leave"; member?: ClanMember };
@@ -52,11 +53,12 @@ export function MembersTab({ clan, can, onChanged }: { clan: ClanInfo; can: Clan
 	const confirmText = (c: Confirm): string => {
 		if (c.kind === "kick") return `Исключить ${c.member?.name} из клана?`;
 		if (c.kind === "transfer") return `Передать клан игроку ${c.member?.name}? Ты станешь рядовым участником.`;
-		return "Выйти из клана? Купленные тобой уровни клана пропадут, уплаченное вернётся.";
+		return "Выйти из клана? Купленные тобой уровни клана пропадут, уплаченное вернётся. После выхода 30 дней нельзя вступить в другой клан или создать свой.";
 	};
 
 	return (
 		<>
+			<AnnouncePanel clan={clan} can={can} onChanged={onChanged} />
 			<Panel title={`Состав ${clan.members.length}/${clan.max_members}`}>
 				{clan.description && <div className="note" style={{ marginBottom: 10 }}>{clan.description}</div>}
 				<div className="clan-members">

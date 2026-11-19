@@ -9,14 +9,17 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.config.clan import CLAN_CREATE_COST, CLAN_MAX_MEMBERS, CLAN_START_LANDS, CLAN_TOP_IMAGE
+from bot.config.clan import CLAN_CREATE_COST, CLAN_MAX_MEMBERS, CLAN_REJOIN_DAYS, CLAN_START_LANDS, CLAN_TOP_IMAGE
 from bot.constant.clan import STATS_PERIOD_ALL, STATS_PERIOD_PATCH
 from bot.constant.clan import KICK_RANKS, MANAGER_RANKS, RANK_LEVEL, RANK_MEMBER, RANK_OWNER, RANKS
 from bot.db.models.clan import Clan, ClanMember
+from bot.db.models.user import User
 from bot.db.repositories import business as business_repo
 from bot.db.repositories import clan as clan_repo
 from bot.db.repositories.user import find_by_username
@@ -49,6 +52,21 @@ async def require_member(session: AsyncSession, user_id: int, ranks: tuple[str, 
     return member
 
 
+async def rejoin_left(session: AsyncSession, user_id: int) -> int:
+    """Сколько дней ещё нельзя вступить в клан или создать свой после выхода (0 — можно)."""
+    left_at = await session.scalar(select(User.clan_left_at).where(User.id == user_id))
+    if left_at is None:
+        return 0
+    rest = left_at + timedelta(days=CLAN_REJOIN_DAYS) - datetime.now(timezone.utc)
+    return max(0, -(-int(rest.total_seconds()) // 86400))
+
+
+async def _check_rejoin(session: AsyncSession, user_id: int, code: str = "rejoin_wait") -> None:
+    days = await rejoin_left(session, user_id)
+    if days:
+        raise ClanError(code, days)
+
+
 async def view(session: AsyncSession, clan_id: int) -> ClanView | None:
     clan = await clan_repo.get(session, clan_id)
     if clan is None:
@@ -64,6 +82,7 @@ async def create(session: AsyncSession, user_id: int, name: str) -> Clan:
     """Клан + владелец в участниках + списание NHCoin — одной транзакцией."""
     if await clan_repo.get_member(session, user_id):
         raise ClanError("already_in_clan")
+    await _check_rejoin(session, user_id)
     if not await business_repo.spend_coins(session, user_id, CLAN_CREATE_COST):
         raise ClanError("no_coins", CLAN_CREATE_COST)
     clan = await clan_repo.create(session, name=name, owner_id=user_id, lands=CLAN_START_LANDS)
@@ -91,6 +110,7 @@ async def apply(session: AsyncSession, user_id: int, clan_id: int) -> None:
         raise ClanError("already_in_clan")
     if await clan_repo.get(session, clan_id) is None:
         raise ClanError("clan_gone")
+    await _check_rejoin(session, user_id)
     existing = await clan_repo.application_of(session, user_id)
     if existing is not None and existing.clan_id != clan_id:
         raise ClanError("applied_elsewhere")
@@ -105,7 +125,8 @@ async def cancel_application(session: AsyncSession, user_id: int, clan_id: int) 
         await session.commit()
 
 
-async def _join(session: AsyncSession, clan_id: int, user_id: int) -> None:
+async def _join(session: AsyncSession, clan_id: int, user_id: int, *, actor_id: int | None = None) -> None:
+    await _check_rejoin(session, user_id, "rejoin_wait" if actor_id in (None, user_id) else "target_rejoin_wait")
     if await clan_repo.count_members(session, clan_id) >= CLAN_MAX_MEMBERS:
         raise ClanError("clan_full", CLAN_MAX_MEMBERS)
     if not await clan_repo.add_member(session, clan_id, user_id, RANK_MEMBER):
@@ -122,7 +143,7 @@ async def accept(session: AsyncSession, actor_id: int, user_id: int) -> int:
     request = await clan_repo.get_request(session, actor.clan_id, user_id)
     if request is None or request.is_invite:
         raise ClanError("request_gone")
-    await _join(session, actor.clan_id, user_id)
+    await _join(session, actor.clan_id, user_id, actor_id=actor_id)
     return actor.clan_id
 
 
@@ -140,6 +161,7 @@ async def invite(session: AsyncSession, actor_id: int, username: str) -> tuple[i
         raise ClanError("no_player")
     if await clan_repo.get_member(session, target.id):
         raise ClanError("target_in_clan")
+    await _check_rejoin(session, target.id, "target_rejoin_wait")
     await clan_repo.create_request(session, actor.clan_id, target.id, is_invite=True)
     await session.commit()
     return target.id, actor.clan_id
@@ -235,6 +257,7 @@ async def leave(session: AsyncSession, user_id: int) -> None:
 
     await refund_on_exit(session, member.clan_id, user_id)
     await clan_repo.remove_member(session, user_id)
+    await session.execute(update(User).where(User.id == user_id).values(clan_left_at=datetime.now(timezone.utc)))
     await clan_repo.log(session, member.clan_id, f"🚪 {labels[user_id][0]} покинул(а) клан")
     await session.commit()
 

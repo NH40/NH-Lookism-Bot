@@ -63,6 +63,7 @@ from bot.constant.clan.clan import (  # noqa: F401
     CB_CLAN_LEAVE_CONFIRM,
     CB_CLAN_LEVELS,
     CB_CLAN_LEVEL_BUY,
+    CB_CLAN_ANNOUNCE,
     CB_CLAN_LOG,
     CB_CLAN_MEMBERS,
     CB_CLAN_MY_INVITES,

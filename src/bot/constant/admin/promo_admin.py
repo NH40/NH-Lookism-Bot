@@ -4,3 +4,4 @@ CB_PROMO_VIEW_PREFIX = "adm:pr:v:"
 CB_PROMO_TOGGLE_PREFIX = "adm:pr:t:"
 CB_PROMO_DELETE_ASK_PREFIX = "adm:pr:da:"
 CB_PROMO_DELETE_PREFIX = "adm:pr:dd:"
+CB_PROMO_GROUP_PREFIX = "adm:pr:g:"  # f"{...}{группа}" — список одной группы; пусто — все

@@ -23,6 +23,7 @@ from bot.config.bank import (
     BANK_HOURLY_MIN,
     BANK_MEMBERS_MAX,
     BANK_MIN_CAPITAL,
+    BANK_OPEN_DONATE,
     BANK_MIN_LOAN,
     BANK_PENALTY_MAX,
     BANK_SLAVE_SHARE,
@@ -500,7 +501,7 @@ def terms_prompt() -> str:
 @router.callback_query(F.data == C.CB_BANK_CREATE)
 async def cb_create(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
     coins = await _coins(session, callback.from_user.id)
-    await _ask(callback, state, BankStates.create_capital, t.ASK_CAPITAL.format(min=format_number(BANK_MIN_CAPITAL), coins=format_number(coins)))
+    await _ask(callback, state, BankStates.create_capital, t.ASK_CAPITAL.format(min=format_number(BANK_MIN_CAPITAL), coins=format_number(coins), donate=BANK_OPEN_DONATE))
 
 
 @router.message(BankStates.create_capital)

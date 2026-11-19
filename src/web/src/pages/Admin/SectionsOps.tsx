@@ -105,7 +105,10 @@ export function MassSection({ meta }: { meta: AdminMeta }) {
 // ---------------------------------------------------------------- промокоды
 
 export function PromoSection() {
-  const data = useApi<{ items: AdminPromo[]; resources: string[]; resource_labels?: Record<string, string> }>("/admin/promo");
+  const [group, setGroup] = useState("");  // фильтр списка
+  const data = useApi<{ items: AdminPromo[]; resources: string[]; resource_labels?: Record<string, string>; groups?: { name: string; count: number }[] }>(
+    group ? `/admin/promo?group=${encodeURIComponent(group)}` : "/admin/promo",
+  );
   const { run, busy } = useAction(data.reload);
   const [open, setOpen] = useState<number | null>(null);
   // Форма как в UAP (пользователь 2026-10-21): поля вместо одной строки. Отправляем ту же строку
@@ -114,8 +117,11 @@ export function PromoSection() {
   const [mode, setMode] = useState<"uses" | "time" | "users" | "none">("uses");
   const [param, setParam] = useState("100");
   const [reward, setReward] = useState<Record<string, string>>({});
-  const parts = Object.entries(reward).filter(([, v]) => Number(v)).map(([k, v]) => `${k}:${Math.trunc(Number(v))}`);
-  const line = [code.trim().toUpperCase(), mode === "none" ? "" : `${mode} ${param.trim()}`, ...parts].filter(Boolean).join(" ");
+  const [newGroup, setNewGroup] = useState("");
+  // Число или диапазон «25-50» (случайное каждому) — проверяет сервер.
+  const parts = Object.entries(reward).map(([k, v]) => [k, v.split(" ").join("")] as const).filter(([, v]) => v && v !== "0").map(([k, v]) => `${k}:${v}`);
+  const tag = newGroup.trim().split(" ").join("").replace("#", "").toLowerCase();
+  const line = [code.trim().toUpperCase(), tag ? `#${tag}` : "", mode === "none" ? "" : `${mode} ${param.trim()}`, ...parts].filter(Boolean).join(" ");
   const ready = !!code.trim() && parts.length > 0 && (mode === "none" || !!param.trim());
   const create = async () => {
     if (await run("/admin/promo", { line })) {
@@ -130,6 +136,7 @@ export function PromoSection() {
           <Panel title="Новый промокод">
             <div className="adm-inline">
               <TextInput value={code} onChange={setCode} placeholder="КОД" />
+              <TextInput value={newGroup} onChange={setNewGroup} placeholder="группа (канал, рофл)" />
             </div>
             <div className="adm-inline" style={{ marginTop: 8 }}>
               <Select value={mode} onChange={setMode} options={[
@@ -144,22 +151,31 @@ export function PromoSection() {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6, marginTop: 8 }}>
               {data.data.resources.map((r) => (
-                <TextInput key={r} type="number" value={reward[r] ?? ""} onChange={(v) => setReward({ ...reward, [r]: v })}
+                <TextInput key={r} value={reward[r] ?? ""} onChange={(v) => setReward({ ...reward, [r]: v })}
                   placeholder={data.data?.resource_labels?.[r] ?? r} />
               ))}
             </div>
             <div className="adm-hint" style={{ marginTop: 6 }}>
-              Отрицательная награда — штраф (баланс не уйдёт ниже 0). Итог: <code>{line || "—"}</code>
+              Число или диапазон <code>25-50</code> — случайное каждому. Минус — штраф. Итог: <code>{line || "—"}</code>
             </div>
             <button type="button" className="btn gold block" style={{ marginTop: 8 }} disabled={busy || !ready} onClick={create}>Создать</button>
           </Panel>
           <Panel title="Последние коды">
+            {!!data.data.groups?.length && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                {[{ name: "", count: 0 }, ...data.data.groups].map((g) => (
+                  <button key={g.name || "all"} type="button" className={`pill ${group === g.name ? "on" : ""}`} onClick={() => setGroup(g.name)}>
+                    {g.name ? `#${g.name} · ${g.count}` : "Все"}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="adm-list">
               {data.data.items.map((p) => (
                 <div key={p.id}>
                   <button type="button" className={`adm-item ${p.alive ? "" : "off"} ${open === p.id ? "on" : ""}`} onClick={() => setOpen(open === p.id ? null : p.id)}>
                     <div>
-                      <b>{p.code}{p.alive ? <span className="adm-tag green">активен</span> : <span className="adm-tag red">{p.active ? "истёк" : "выключен"}</span>}</b>
+                      <b>{p.code}{p.group && <span className="adm-tag">#{p.group}</span>}{p.alive ? <span className="adm-tag green">активен</span> : <span className="adm-tag red">{p.active ? "истёк" : "выключен"}</span>}</b>
                       <small>{p.reward.map((r) => `${r.amount > 0 ? "+" : "−"}${r.label}`).join(", ")}</small>
                     </div>
                     <div className="adm-right">{p.used}{p.max_uses != null ? `/${p.max_uses}` : ""}</div>

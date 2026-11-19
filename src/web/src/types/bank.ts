@@ -30,6 +30,7 @@ export interface LoanRow {
   due_in: number;
   frozen_in: number;
   offer_in: number;
+  prices?: Record<string, number> | null;
 }
 
 export interface BankTeam {
@@ -48,6 +49,7 @@ export interface BankTeam {
   members: { id: number; name: string }[];
   apps: LoanRow[];
   loans: LoanRow[];
+  prices?: Record<string, number>;
 }
 
 export interface BankHome {
@@ -60,7 +62,8 @@ export interface BankHome {
   frozen: boolean;
   limits: {
     fixed_min: number; fixed_max: number; hourly_min: number; hourly_max: number; penalty_max: number; days_min: number; days_max: number;
-    min_capital: number; min_loan: number; freeze_days: number; slave_share: number; members_max: number;
+    min_capital: number; open_donate?: number; min_loan: number; freeze_days: number; slave_share: number; members_max: number;
+    price_resources?: string[]; resource_labels?: Record<string, string>;
   };
 }
 

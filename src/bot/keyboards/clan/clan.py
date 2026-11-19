@@ -21,6 +21,7 @@ from bot.constant.clan import (
     CB_CLAN_DELETE,
     CB_CLAN_DELETE_CONFIRM,
     CB_CLAN_DONATE_COINS,
+    CB_CLAN_ANNOUNCE,
     CB_CLAN_EDIT,
     CB_CLAN_EDIT_DESCRIPTION,
     CB_CLAN_EDIT_IMAGE,
@@ -103,6 +104,7 @@ from bot.texts.clan import (
     BTN_DELETE,
     BTN_DEMOLISH,
     BTN_DONATE,
+    BTN_ANNOUNCE,
     BTN_EDIT,
     BTN_EDIT_DESCRIPTION,
     BTN_EDIT_IMAGE,
@@ -198,7 +200,7 @@ def clan_menu(rank: str, requests: int, access_requests: int = 0) -> InlineKeybo
         label = BTN_GAR_ACCESS.format(count=access_requests) if access_requests else BTN_GAR_ACCESS_PLAIN
         rows.append([_btn(label, CB_CLAN_GAR_ACCESS)])
     if rank in MANAGER_RANKS:
-        rows.append([_btn(BTN_EDIT, CB_CLAN_EDIT)])
+        rows.append([_btn(BTN_ANNOUNCE, CB_CLAN_ANNOUNCE), _btn(BTN_EDIT, CB_CLAN_EDIT)])
     manage = []
     if rank == RANK_OWNER:
         manage.append(_btn(BTN_RANKS, CB_CLAN_RANKS))

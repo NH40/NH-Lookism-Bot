@@ -13,9 +13,13 @@ from bot.services.promo.promo import (  # noqa: F401
     create,
     delete,
     get,
+    groups,
     is_alive,
     list_recent,
     parse_create,
     redeem,
+    reward_label,
+    reward_sign,
+    roll,
     set_active,
 )

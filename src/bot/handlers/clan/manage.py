@@ -2,14 +2,18 @@
 редактирование и аватарка. Права перепроверяет сервис на каждом шаге (как в UAP)."""
 from __future__ import annotations
 
+import asyncio
+
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
-from sqlalchemy.ext.asyncio import AsyncSession
+from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from bot.config.clan import CLAN_DESCRIPTION_MAX, CLAN_NAME_MAX, CLAN_NAME_MIN
+from bot.config.clan import CLAN_ANNOUNCE_MAX, CLAN_DESCRIPTION_MAX, CLAN_NAME_MAX, CLAN_NAME_MIN
 from bot.constant.clan import (
     CB_CLAN_ACCEPT_PREFIX,
+    CB_CLAN_ANNOUNCE,
     CB_CLAN_DELETE,
     CB_CLAN_DELETE_CONFIRM,
     CB_CLAN_EDIT,
@@ -19,6 +23,7 @@ from bot.constant.clan import (
     CB_CLAN_INVITE,
     CB_CLAN_KICK,
     CB_CLAN_KICK_PREFIX,
+    CB_CLAN_OPEN,
     CB_CLAN_RANK_PREFIX,
     CB_CLAN_RANKS,
     CB_CLAN_REJECT_PREFIX,
@@ -46,6 +51,8 @@ from bot.services import clan as clan_service
 from bot.services.settings import notify_player
 from bot.states.clan import ClanStates
 from bot.texts.clan import (
+    ANNOUNCE_PROMPT,
+    ANNOUNCE_SENT,
     CREATE_PROMPT,
     DELETE_CONFIRM,
     DONE_ALERT,
@@ -390,3 +397,40 @@ async def on_edit_image(message: Message, state: FSMContext, session: AsyncSessi
 @router.message(ClanStates.waiting_image)
 async def on_edit_image_invalid(message: Message) -> None:
     await message.answer(EDIT_IMAGE_PROMPT, reply_markup=back_menu(CB_CLAN_EDIT))
+
+
+# --- объявление клана (2026-11-19) ---
+
+_announce_tasks: set[asyncio.Task] = set()  # ссылки на фоновые рассылки, чтобы их не собрал GC
+
+
+@router.callback_query(F.data == CB_CLAN_ANNOUNCE)
+async def cb_announce(callback: CallbackQuery, state: FSMContext, session: AsyncSession, redis: Redis) -> None:
+    member = await _manager(callback, session)
+    if member is None:
+        return
+    left = await clan_service.announce_cooldown_left(redis, member.clan_id)
+    if left:
+        await callback.answer(ERRORS["announce_cooldown"].format(value=max(1, left // 60)), show_alert=True)
+        return
+    await state.set_state(ClanStates.waiting_announce)
+    await callback.answer()
+    await send_screen(callback.bot, callback.message.chat.id, callback.message, ANNOUNCE_PROMPT.format(max=CLAN_ANNOUNCE_MAX), back_menu(CB_CLAN_OPEN))
+
+
+@router.message(ClanStates.waiting_announce)
+async def on_announce(
+    message: Message, state: FSMContext, session: AsyncSession, redis: Redis, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    try:
+        ann = await clan_service.publish_announcement(session, redis, message.from_user.id, message.text)
+    except clan_service.ClanError as exc:
+        await message.answer(error_text(exc), reply_markup=back_menu(CB_CLAN_OPEN))
+        if exc.code != "announce_text":
+            await state.clear()
+        return
+    await state.clear()
+    await message.answer(ANNOUNCE_SENT.format(count=len(ann.recipient_ids)), reply_markup=back_menu(CB_CLAN_OPEN))
+    task = asyncio.create_task(clan_service.deliver_announcement(message.bot, session_factory, ann))
+    _announce_tasks.add(task)
+    task.add_done_callback(_announce_tasks.discard)

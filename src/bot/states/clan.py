@@ -7,6 +7,7 @@ class ClanStates(StatesGroup):
     waiting_name = State()  # название нового клана
     waiting_edit_name = State()
     waiting_edit_description = State()
+    waiting_announce = State()  # текст объявления клана
     waiting_image = State()  # аватарка (фото)
     waiting_invite = State()  # @юзернейм приглашённого
     waiting_donate = State()  # взнос в казну

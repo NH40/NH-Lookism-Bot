@@ -24,13 +24,16 @@ from bot.config.bank import (
     BANK_HOURLY_MIN,
     BANK_MEMBERS_MAX,
     BANK_MIN_CAPITAL,
+    BANK_OPEN_DONATE,
     BANK_MIN_LOAN,
     BANK_PENALTY_MAX,
     BANK_SLAVE_SHARE,
 )
 from bot.constant import bank as C
+from bot.db.models.bank import Bank
 from bot.db.models.gang import Gang
 from bot.db.models.user import User
+from bot.texts.resource import RESOURCE_NAMES
 from bot.handlers.bank.bank import error_text, send_pushes
 from bot.services import bank as svc
 from bot.texts.bank import bank as t
@@ -68,6 +71,7 @@ class LoanOut(BaseModel):
     due_in: int
     frozen_in: int
     offer_in: int
+    prices: dict[str, int] | None = None  # прайс банка: чем ещё можно гасить (заёмщику)
 
 
 class MemberOut(BaseModel):
@@ -91,6 +95,7 @@ class TeamOut(BaseModel):
     members: list[MemberOut]
     apps: list[LoanOut]
     loans: list[LoanOut]
+    prices: dict[str, int] = {}
 
 
 class BankHomeOut(BaseModel):
@@ -118,8 +123,9 @@ async def _names(session: AsyncSession, ids: set[int]) -> dict[int, str]:
     return dict((await session.execute(select(Gang.user_id, Gang.name).where(Gang.user_id.in_(ids)))).all())
 
 
-def _loan(x, name: str) -> LoanOut:
+def _loan(x, name: str, prices: dict | None = None) -> LoanOut:
     return LoanOut(
+        prices=prices or None,
         id=x.id, name=name, status=x.status, kind=x.kind, rate=x.rate, penalty_rate=x.penalty_rate or 0.0, amount=x.amount, debt=x.debt,
         principal=x.principal, interest=x.interest, penalty=x.penalty, paid=x.paid, days=x.days, terms=x.terms,
         due_in=_secs(x.due_at) if x.status in C.LOAN_OPEN else 0, frozen_in=_secs(x.frozen_until) if x.status == C.LOAN_FROZEN else 0,
@@ -146,16 +152,20 @@ async def home(page: int = 0, user_id: int = Depends(get_current_user_id), sessi
             earned=b.earned_total, members=[MemberOut(id=m, name=names.get(m, "—")) for m in team.members],
             apps=[_loan(x, names.get(x.borrower_id, "—")) for x in team_loans if x.status == C.LOAN_PENDING],
             loans=[_loan(x, names.get(x.borrower_id, "—")) for x in team_loans if x.status in C.LOAN_OPEN],
+            prices=b.prices or {},
         )
     coins = int(await session.scalar(select(User.nh_coins).where(User.id == user_id)) or 0)
+    bank_ids = {x.bank_id for x in loans if x.bank_id is not None}
+    prices = dict((await session.execute(select(Bank.id, Bank.prices).where(Bank.id.in_(bank_ids)))).all()) if bank_ids else {}
     return BankHomeOut(
         banks=[BankOut(id=r.id, owner=r.owner_name, capital=r.capital, fixed_rate=r.fixed_rate, hourly_rate=r.hourly_rate, penalty_rate=r.penalty_rate,
                        min_days=r.min_days, max_days=r.max_days, open_loans=r.open_loans) for r in rows],
-        more=more, page=page, loans=[_loan(x, names.get(x.lender_id, "—")) for x in loans], team=team_out, coins=coins,
+        more=more, page=page, loans=[_loan(x, names.get(x.lender_id, "—"), prices.get(x.bank_id)) for x in loans], team=team_out, coins=coins,
         frozen=await svc.is_frozen(redis, user_id),
         limits={"fixed_min": BANK_FIXED_MIN, "fixed_max": BANK_FIXED_MAX, "hourly_min": BANK_HOURLY_MIN, "hourly_max": BANK_HOURLY_MAX,
-                "penalty_max": BANK_PENALTY_MAX, "days_min": BANK_DAYS_MIN, "days_max": BANK_DAYS_MAX, "min_capital": BANK_MIN_CAPITAL,
-                "min_loan": BANK_MIN_LOAN, "freeze_days": BANK_FREEZE_DAYS, "slave_share": round(BANK_SLAVE_SHARE * 100), "members_max": BANK_MEMBERS_MAX},
+                "penalty_max": BANK_PENALTY_MAX, "days_min": BANK_DAYS_MIN, "days_max": BANK_DAYS_MAX, "min_capital": BANK_MIN_CAPITAL, "open_donate": BANK_OPEN_DONATE,
+                "min_loan": BANK_MIN_LOAN, "price_resources": list(svc.BANK_PRICE_RESOURCES),
+                "resource_labels": {r: RESOURCE_NAMES.get(r, r) for r in svc.BANK_PRICE_RESOURCES}, "freeze_days": BANK_FREEZE_DAYS, "slave_share": round(BANK_SLAVE_SHARE * 100), "members_max": BANK_MEMBERS_MAX},
     )
 
 
@@ -223,6 +233,35 @@ class MemberIdIn(BaseModel):
     user_id: int
 
 
+class PricesIn(BaseModel):
+    prices: dict[str, int]
+
+
+class ResourceRepayIn(LoanIn):
+    resource: str
+    units: int
+
+
+class ForgiveIn(LoanIn):
+    amount: int | None = None
+
+
+class DebtorOut(BaseModel):
+    user_id: int
+    name: str
+    username: str | None
+    phase: str
+    league: str | None
+    power: int
+    nh_coins: int
+    districts: int
+    buildings: int
+    clan: str | None
+    loans_open: int
+    debt_total: int
+    frozen: bool
+
+
 
 @router.post("/apply", response_model=MessageOut)
 async def apply(body: ApplyIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
@@ -254,6 +293,41 @@ async def decline(body: LoanIn, user_id: int = Depends(get_current_user_id), ses
     notices = await _do(svc.decline(session, redis, user_id, body.loan_id))
     await _push(session, notices)
     return MessageOut(message=clean_label(t.DECLINED))
+
+
+@router.post("/prices", response_model=MessageOut)
+async def set_prices(body: PricesIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
+                     redis: Redis = Depends(get_redis)) -> MessageOut:
+    prices = await _do(svc.set_prices(session, redis, user_id, body.prices))
+    return MessageOut(message="Прайс сохранён." if prices else "Прайс очищен: долги — только NHCoin.")
+
+
+@router.post("/repay-resource", response_model=MessageOut)
+async def repay_resource(body: ResourceRepayIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
+                         redis: Redis = Depends(get_redis)) -> MessageOut:
+    loan, units, paid, unfrozen = await _do(svc.repay_with_resource(session, redis, user_id, body.loan_id, body.resource, body.units))
+    if unfrozen:
+        return MessageOut(message=clean_label(t.REPAID_UNFROZEN))
+    if loan.debt == 0:
+        return MessageOut(message=clean_label(t.REPAID_FULL.format(id=loan.id)))
+    return MessageOut(message=f"Отдано {_n(units)} ед. — долг меньше на {_n(paid)} 🪙. Осталось: {_n(loan.debt)} 🪙.")
+
+
+@router.post("/forgive", response_model=MessageOut)
+async def forgive(body: ForgiveIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
+                  redis: Redis = Depends(get_redis)) -> MessageOut:
+    loan, cut, notices = await _do(svc.forgive(session, redis, user_id, body.loan_id, body.amount))
+    await _push(session, notices)
+    if loan.debt == 0:
+        return MessageOut(message=f"Долг прощён целиком ({_n(cut)} 🪙), кредит #{loan.id} закрыт.")
+    return MessageOut(message=f"Прощено {_n(cut)} 🪙. Осталось: {_n(loan.debt)} 🪙.")
+
+
+@router.get("/debtor/{loan_id}", response_model=DebtorOut)
+async def debtor(loan_id: int, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
+                 redis: Redis = Depends(get_redis)) -> DebtorOut:
+    card = await _do(svc.debtor_card(session, redis, user_id, loan_id))
+    return DebtorOut(**{f: getattr(card, f) for f in DebtorOut.model_fields})
 
 
 @router.post("/repay", response_model=MessageOut)

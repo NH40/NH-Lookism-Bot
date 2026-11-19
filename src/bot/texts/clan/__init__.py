@@ -1,6 +1,11 @@
 """Публичное API домена clan (тексты)."""
 from bot.texts.clan.clan import (  # noqa: F401
     ACCEPTED_ALERT,
+    ANNOUNCE_PROMPT,
+    ANNOUNCE_PUSH,
+    ANNOUNCE_SENT,
+    BTN_ANNOUNCE,
+    CARD_ANNOUNCE,
     AMOUNT_INVALID,
     BTN_ACCEPT,
     BTN_ACCEPT_INVITE,

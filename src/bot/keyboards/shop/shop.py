@@ -22,13 +22,19 @@ from bot.texts.casino import BTN_CASINO
 from bot.texts.exchange import BTN_EXCHANGE
 from bot.texts.common import BTN_BACK_TO_PROFILE
 from bot.texts.genius import BTN_ROLL as BTN_ROLL_GENIUS
-from bot.texts.shop import BTN_TO_MASTERY
+from bot.constant.shop import CB_SHOP_TICKETS_PREFIX, SHOP_TICKET_PACKS
+from bot.texts.shop import BTN_TICKETS, BTN_TICKETS_ALL, BTN_TO_MASTERY
 
 
 def shop_menu(
-    *, has_free_points: bool, extra_rows: list | None = None
+    *, has_free_points: bool, extra_rows: list | None = None, tickets_left: int = 0
 ) -> InlineKeyboardMarkup:
     rows = []
+    if tickets_left > 0:  # тикеты за NHCoin: пачки, которые ещё влезают в дневной лимит, и «весь остаток»
+        packs = [n for n in SHOP_TICKET_PACKS if n < tickets_left]
+        buttons = [InlineKeyboardButton(text=BTN_TICKETS.format(n=n), callback_data=f"{CB_SHOP_TICKETS_PREFIX}{n}") for n in packs]
+        buttons.append(InlineKeyboardButton(text=BTN_TICKETS_ALL.format(n=tickets_left), callback_data=f"{CB_SHOP_TICKETS_PREFIX}{tickets_left}"))
+        rows.append(buttons)
     if has_free_points:
         rows.append([InlineKeyboardButton(text=BTN_TO_MASTERY, callback_data=CB_MASTERY_OPEN)])
     rows.append([

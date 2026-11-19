@@ -16,6 +16,7 @@ from bot.services.clan.clan import (  # noqa: F401
     kick,
     kickable,
     leave,
+    rejoin_left,
     member_of,
     member_stats,
     reject,
@@ -65,3 +66,5 @@ from bot.services.clan.garrison import (  # noqa: F401
 )
 from bot.services.clan.garrison import view as garrison_view  # noqa: F401
 from bot.services.clan.war import WarOutcome, WarTarget, attack, cooldown_left, history, my_clan, shield_left, targets  # noqa: F401
+from bot.services.clan.announce import ClanAnnouncement, cooldown_left as announce_cooldown_left  # noqa: F401,E402
+from bot.services.clan.announce import deliver as deliver_announcement, publish as publish_announcement  # noqa: F401,E402

@@ -1,4 +1,5 @@
 import { Bookmark, BookmarkCheck, Eye, RefreshCw, Search } from "lucide-react";
+import { WorldScout } from "./WorldScout";
 import { useState } from "react";
 import { apiGet, apiPost, ApiError } from "../../api";
 import type { IntelData, IntelLog, ScoutReport, ScoutRow } from "../../types";
@@ -72,6 +73,7 @@ export function IntelPage() {
       {data && (
         <div className="page">
           <BackHeader title="Разведка" subtitle={data.fields ? `видит полей: ${data.fields}` : undefined} backLabel="Ещё" to={ROUTE_MORE} />
+          <WorldScout />
           {!access ? (
             <Panel title="НЕТ РАЗВЕДЧИКА" tone="violet" badgeMark="?">
               <p className="muted intel-note" style={{ margin: 0 }}>

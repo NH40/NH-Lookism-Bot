@@ -278,3 +278,29 @@ async def post_mark(body: MarkIn, user_id: int = Depends(get_current_user_id), s
     except MarksFullError as exc:
         raise bad(MARKS_FULL_ALERT.format(limit=exc.limit))
     return MarkOut(message=MARKED_ALERT if marked else UNMARKED_ALERT, marked=marked)
+
+
+# --- расширенная разведка: клан, город, страна (2026-11-20) ---
+
+class WorldScoutIn(BaseModel):
+    kind: str  # clan | city | country
+    name: str | None = None  # клан — название, страна — код
+    city_id: int | None = None
+
+
+@router.post("/world")
+async def scout_world(body: WorldScoutIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
+                      redis: Redis = Depends(get_redis)) -> dict:
+    from bot.services.intel import world
+
+    await require_user(session, user_id)
+    try:
+        if body.kind == "clan":
+            rep = await world.scout_clan(session, redis, user_id, body.name or "")
+        elif body.kind == "city":
+            rep = await world.scout_city(session, redis, user_id, body.city_id or 0)
+        else:
+            rep = await world.scout_country(session, redis, user_id, (body.name or "").upper())
+    except world.WorldScoutError as exc:
+        raise HTTPException(400, world.ERRORS.get(exc.code, "Не вышло.").format(value=exc.value))
+    return {"title": rep.title, "level": rep.level, "lines": rep.lines, "top": rep.top}

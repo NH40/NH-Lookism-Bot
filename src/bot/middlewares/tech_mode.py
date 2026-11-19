@@ -4,6 +4,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware
+
+from bot.utils.group_noise import is_group_noise
 from aiogram.types import CallbackQuery, Message, TelegramObject
 from redis.asyncio import Redis
 
@@ -47,7 +49,7 @@ class TechModeMiddleware(BaseMiddleware):
                 if db_user is not None and (db_user.is_admin or db_user.admin_role):
                     return await handler(event, data)
 
-        if isinstance(event, Message):
+        if isinstance(event, Message) and not is_group_noise(event):
             await event.answer(TECH_MODE_TEXT)
         elif isinstance(event, CallbackQuery):
             await event.answer(TECH_MODE_TEXT, show_alert=True)

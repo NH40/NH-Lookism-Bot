@@ -10,6 +10,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware
+
+from bot.utils.group_noise import is_group_noise
 from aiogram.types import CallbackQuery, Message, TelegramObject
 from redis.asyncio import Redis
 
@@ -43,7 +45,7 @@ class BankFreezeMiddleware(BaseMiddleware):
             return await handler(event, data)
         if isinstance(event, CallbackQuery):
             await event.answer(FROZEN_ALERT, show_alert=True)
-        elif isinstance(event, Message) and event.chat.type == "private":
+        elif isinstance(event, Message) and not is_group_noise(event):
             await event.answer(FROZEN_MESSAGE, reply_markup=frozen_menu())
         # В группах — молча (2026-11-20, пользователь: на каждое сообщение замороженного бот спамил в чат).
         return None

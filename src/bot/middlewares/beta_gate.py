@@ -20,6 +20,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware
+
+from bot.utils.group_noise import is_group_noise
 from aiogram.types import CallbackQuery, Message, TelegramObject
 from redis.asyncio import Redis
 
@@ -66,6 +68,8 @@ class BetaGateMiddleware(BaseMiddleware):
             await event.answer(BETA_GATE_ALERT, show_alert=True)
             return None
 
+        if isinstance(event, Message) and is_group_noise(event):
+            return None  # в группе обычный текст — не попытка кода
         if isinstance(event, Message):
             text = event.text or ""
             # Команды (/start и т.п.) — не попытка ввести код, их не считаем в лимит попыток.

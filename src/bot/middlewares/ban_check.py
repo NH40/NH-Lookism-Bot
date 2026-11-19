@@ -4,6 +4,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware
+
+from bot.utils.group_noise import is_group_noise
 from aiogram.types import CallbackQuery, Message, TelegramObject
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -59,7 +61,7 @@ class BanCheckMiddleware(BaseMiddleware):
         await session.commit()
 
         if row is not None and row.is_banned:
-            if isinstance(event, Message):
+            if isinstance(event, Message) and not is_group_noise(event):
                 await event.answer(BANNED_TEXT)
             elif isinstance(event, CallbackQuery):
                 await event.answer(BANNED_TEXT, show_alert=True)

@@ -1,15 +1,16 @@
 import { Building2, ChevronLeft, ChevronRight, Crown, Flag, Luggage, Skull, Swords, Trophy, UserPlus, Users, Layers } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { imgUrl } from "../../api";
 import type { BattleResult, BossResult, ChallengeResult, DistrictCard, MapData, MapDistrict, MapEvent } from "../../types";
 import { Panel, Screen, StatRow, countdown, fmt, useCountdown } from "../../components/ui";
-import { PHASE_CIRCLE, PHASE_FIST, ROUTE_BUSINESS, ROUTE_CARDS, ROUTE_COUNTRY, ROUTE_EMPIRE, ROUTE_DEVELOPMENT, ROUTE_GANG, ROUTE_MAP_EVENTS, ROUTE_TRAINING, ROUTE_TRAVEL } from "../../constants/constants";
+import { PHASE_CIRCLE, PHASE_FIST, ROUTE_BUSINESS, ROUTE_CARDS, ROUTE_COUNTRY, ROUTE_EMPIRE, ROUTE_DEVELOPMENT, ROUTE_GANG, ROUTE_MAP_EVENTS, ROUTE_TRAINING, ROUTE_TRAVEL, battlePath } from "../../constants/constants";
 import { useAction, useApi } from "../../hooks/useApi";
 import { Sheet } from "../../components/Sheet";
 import { Journal } from "../../components/Journal";
 import "../../styles/game-screens.css";
 import { RaidBanner } from "./RaidBanner";
+import { ArenaBanner } from "./ArenaBanner";
 
 type Outcome =
   | { kind: "battle"; data: BattleResult }
@@ -81,6 +82,11 @@ function DistrictSheet({ district, onClose, onChanged }: { district: MapDistrict
   const { run, busy } = useAction(onChanged);
   const cd = useCountdown(card.data?.cooldown_seconds ?? 0);
 
+  const nav = useNavigate();
+  const online = async () => {
+    const r = (await run("/arena/start/district", { district_id: district.id })) as { id?: string } | null;
+    if (r?.id) nav(battlePath(r.id));
+  };
   const fight = async (action: "attack" | "challenge") => {
     const result = await run(`/district/${district.id}/${action}`);
     if (result) setOutcome({ kind: action === "attack" ? "battle" : "challenge", data: result as never });
@@ -118,6 +124,11 @@ function DistrictSheet({ district, onClose, onChanged }: { district: MapDistrict
             {d.kind === "bot" && (
               <button className={`btn red block ${!d.can_act || cd > 0 ? "off" : ""}`} type="button" disabled={busy || !d.can_act || cd > 0} onClick={() => fight("attack")}>
                 <Swords size={16} />Атаковать ботов
+              </button>
+            )}
+            {d.kind === "bot" && (
+              <button className={`btn gold block ${!d.can_act || cd > 0 ? "off" : ""}`} type="button" disabled={busy || !d.can_act || cd > 0} onClick={online}>
+                <Swords size={16} />Бой онлайн: перки и ходы
               </button>
             )}
             {d.kind === "player" && (
@@ -239,6 +250,7 @@ export function MapPage() {
       {data && (
         <div className="page">
           <RaidBanner />
+          <ArenaBanner />
           <div className="map-hero">
             {data.city.art && <img src={imgUrl(data.city.art, 720)} alt={data.city.name} />}
             <div className="map-hero-over">

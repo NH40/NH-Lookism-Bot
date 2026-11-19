@@ -559,3 +559,22 @@ async def cb_city_challenge(callback: CallbackQuery, session: AsyncSession, redi
 
     await callback.answer()
     await _announce_challenge(callback, session, issued)
+
+
+def attack_error_text(exc: Exception) -> str | None:
+    """Текст алерта для ошибки атаки на район (онлайн-бой в `handlers/arena`). None — не ошибка атаки."""
+    if isinstance(exc, PlayerDistrictError):
+        return "Этот район держит игрок — брось ему вызов."
+    if isinstance(exc, (DistrictNotFoundError, NotYourCityError)):
+        return NOT_FOUND
+    if isinstance(exc, OwnDistrictError):
+        return OWN_DISTRICT
+    if isinstance(exc, EmperorNoConquestError):
+        return EMPEROR_NO_CONQUEST
+    if isinstance(exc, CityConquerorError):
+        return CITY_CONQUEROR
+    if isinstance(exc, NoAttackersError):
+        return NO_ATTACKERS
+    if isinstance(exc, BattleOnCooldownError):
+        return BATTLE_COOLDOWN.format(countdown=format_countdown(exc.retry_after_seconds))
+    return None

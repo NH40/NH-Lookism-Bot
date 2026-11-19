@@ -52,6 +52,7 @@ from bot.handlers.development import router as development_router
 from bot.handlers.genius import router as genius_router
 from bot.handlers.tutorial import router as tutorial_router
 from bot.handlers.raid import router as raid_router
+from bot.handlers.arena import router as arena_router
 from bot.handlers.awakening import router as awakening_router
 from bot.handlers.clan import router as clan_router
 from bot.handlers.quest import router as quest_router
@@ -112,6 +113,7 @@ def get_routers() -> list[Router]:
         genius_router,
         tutorial_router,
         raid_router,
+        arena_router,
         awakening_router,
         clan_router,
         quest_router,

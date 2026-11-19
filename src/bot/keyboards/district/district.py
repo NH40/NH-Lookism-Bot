@@ -10,7 +10,7 @@ from bot.constant.business import CB_BUSINESS_DISTRICT_PREFIX
 from bot.constant.district import CB_CHALLENGE_ACCEPT_PREFIX, CB_CITY_ATTACK_BOTS_PREFIX, CB_DISTRICT_ATTACK_PREFIX
 from bot.constant.map import CB_MAP_CITY_PREFIX, CB_MAP_PAGE_PREFIX
 from bot.texts.business import BTN_DISTRICT_BUSINESSES
-from bot.texts.district import BTN_ACCEPT, BTN_ATTACK_AGAIN, BTN_ATTACK_CITY_AGAIN, BTN_BACK_TO_CITY, BTN_BACK_TO_MAP
+from bot.texts.district import BTN_ACCEPT, BTN_ATTACK, BTN_ATTACK_AGAIN, BTN_ATTACK_CITY_AGAIN, BTN_BACK_TO_CITY, BTN_BACK_TO_MAP
 
 
 def _back_to_map(number: int) -> InlineKeyboardButton:
@@ -34,6 +34,8 @@ def district_menu(
         )
     if action_label is not None:
         rows.append([InlineKeyboardButton(text=action_label, callback_data=f"{CB_DISTRICT_ATTACK_PREFIX}{district_id}")])
+        if action_label == BTN_ATTACK:  # онлайн-бой с ботами — перки и ходы (2026-11-20)
+            rows.append([InlineKeyboardButton(text="⚔️ Бой онлайн (перки)", callback_data=f"ar:sd:{district_id}")])
     if scout_target is not None:  # район держит игрок — разведать его (отдельный этап, без КД)
         rows.append([InlineKeyboardButton(text=BTN_SCOUT, callback_data=f"{CB_SCOUT_PREFIX}{scout_target}")])
     rows.append([_back_to_map(number)])
@@ -52,7 +54,10 @@ def report_menu(district_id: int, number: int, *, can_attack_again: bool) -> Inl
 
 def accept_menu(challenge_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text=BTN_ACCEPT, callback_data=f"{CB_CHALLENGE_ACCEPT_PREFIX}{challenge_id}")]]
+        inline_keyboard=[
+            [InlineKeyboardButton(text=BTN_ACCEPT, callback_data=f"{CB_CHALLENGE_ACCEPT_PREFIX}{challenge_id}")],
+            [InlineKeyboardButton(text="⚔️ Принять онлайн (перки и ходы)", callback_data=f"ar:sc:{challenge_id}")],
+        ]
     )
 
 

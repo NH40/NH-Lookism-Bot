@@ -45,7 +45,8 @@ def view(st: dict, user_id: int) -> dict:
         "me": {"name": s["name"], "power": s["power"], "energy": s["energy"], "emax": s.get("emax", 10), "auto": s["auto"],
                "waiting": s["action"] is not None, "game": s["pending_game"]},
         "foe": {"name": o["name"], "power": o["power"], "energy": o["energy"], "auto": o["auto"]},
-        "perks": [{"code": p.code, "name": p.name, "about": p.about, "cost": p.cost, "ready_in": p.ready_in, "affordable": p.affordable}
+        "perks": [{"code": p.code, "name": p.name, "about": p.about, "cost": p.cost, "ready_in": p.ready_in, "affordable": p.affordable,
+                   "minigame": svc.PERK_REGISTRY[p.code].minigame, "game": svc.PERK_REGISTRY[p.code].game}
                   for p in svc.perks_view(st, me)],
         "log": [{"me": e[me]["code"], "foe": e[foe]["code"], "kills": e["kills"][0 if me == "a" else 1],
                  "lost": e["kills"][1 if me == "a" else 0]} for e in st["log"][-10:]],

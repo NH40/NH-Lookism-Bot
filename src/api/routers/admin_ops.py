@@ -8,10 +8,12 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user_id
 from api.db import get_session, session_factory
+from api.deps import get_redis
 from api.push import get_bot
 from api.routers._common import bad, clean_label
 from api.routers.admin import access, background, done
@@ -324,6 +326,33 @@ async def get_countries(user_id: int = Depends(get_current_user_id), session: As
     from bot.config.league import LEAGUES
 
     return {"items": await world_svc.countries_overview(session), "leagues": [x.name for x in LEAGUES]}
+
+
+@router.get("/world/leagues/preview")
+async def get_leagues_preview(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    """Что будет при пересчёте лиг сейчас (мощь — из последнего снимка)."""
+    role = await access(session, user_id, SECTION_WORLD)
+    from bot.config.league import LEAGUE_THRESHOLDS, LEAGUES
+    from bot.services.league import preview
+
+    plan = await preview(session)
+    return {
+        "thresholds": list(LEAGUE_THRESHOLDS), "up": plan.up, "down": plan.down, "can_run": role == ROLE_SUPER,
+        "counts": [{"name": LEAGUES[lg].name, "count": n} for lg, n in plan.counts.items()],
+        "moves": [{"from": LEAGUES[a].name, "to": LEAGUES[b].name, "count": n} for (a, b), n in plan.moves.items()],
+    }
+
+
+@router.post("/world/leagues/redistribute")
+async def post_leagues_redistribute(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session), redis: Redis = Depends(get_redis)) -> dict:
+    """Пересчитать очки всем и раскидать по лигам (только суперадмин). Итог придёт в личку бота."""
+    if await access(session, user_id, SECTION_WORLD) != ROLE_SUPER:
+        raise bad("Запустить может только суперадмин.")
+    from bot.handlers.league.league import REDISTRIBUTE_REQUEST_KEY
+
+    if await redis.exists("league:redistribute") or not await redis.set(REDISTRIBUTE_REQUEST_KEY, str(user_id), nx=True, ex=600):
+        raise bad("Пересчёт уже идёт.")
+    return done("Пересчёт запущен: несколько минут, итог придёт в личку бота.")
 
 
 @router.get("/world/countries/{code}")

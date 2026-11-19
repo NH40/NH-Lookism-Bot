@@ -24,6 +24,7 @@ from bot.db.repositories import league as repo
 from bot.db.repositories import travel as travel_repo
 from bot.services.business import accrue_many
 from bot.utils.log_context import reset_source, set_source
+from bot.services.league.redistribute import compute_scores
 
 _PARAMS = {"cancelled": CHALLENGE_CANCELLED, "admin": RESOLUTION_ADMIN, "pending": CHALLENGE_PENDING, "war_cancelled": WAR_CANCELLED, "war_pending": WAR_PENDING}
 
@@ -63,7 +64,7 @@ async def launch(session_factory: async_sessionmaker[AsyncSession]) -> dict[int,
     token = set_source("league:launch")
     try:
         async with session_factory() as session:
-            scores = await repo.all_scores(session)
+            scores = await compute_scores(session)
             await repo.set_scores(session, [(u, s) for u, _, s in scores])
             await repo.set_leagues(session, [(u, league_for_score(s)) for u, _, s in scores if league_for_score(s) > 0])
             await repo.move_to_league_maps(session, _PARAMS)
@@ -102,7 +103,7 @@ async def daily_sweep(session_factory: async_sessionmaker[AsyncSession]) -> list
             return []
     await refresh_powers(session_factory, everyone=True)
     async with session_factory() as session:
-        scores = await repo.all_scores(session)
+        scores = await compute_scores(session)
         await repo.set_scores(session, [(u, s) for u, _, s in scores])
         await session.commit()
     promoted = []

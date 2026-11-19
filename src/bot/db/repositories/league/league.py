@@ -105,3 +105,27 @@ async def strip_territory(session: AsyncSession, user_id: int, params: dict) -> 
         ("DELETE FROM emperor_tax_overrides WHERE emperor_id = :uid OR user_id = :uid", ("uid",)),
     ):
         await session.execute(text(sql), {k: params[k] for k in keys})
+
+
+async def income_counts(session: AsyncSession) -> tuple[dict[int, dict[str, int]], dict[int, int]]:
+    """Здания всех игроков по типам — по тому же правилу, что доход (`business._owned_types`): на своих районах и во
+    владениях, пока игрок император города, откуда здание. Плюс уровень бизнеса. Два запроса на всех (правило 3)."""
+    rows = await session.execute(text("""
+        SELECT d.owner_id, b.type, count(*) FROM businesses b JOIN districts d ON d.id = b.district_id
+        WHERE d.owner_id IS NOT NULL GROUP BY 1, 2
+        UNION ALL
+        SELECT b.holder_id, b.type, count(*) FROM businesses b
+          LEFT JOIN districts d ON d.id = b.district_id LEFT JOIN cities o ON o.id = b.origin_city_id
+        WHERE b.holder_id IS NOT NULL AND (d.owner_id IS NULL OR d.owner_id <> b.holder_id)
+          AND (o.emperor_id = b.holder_id OR (b.origin_city_id IS NULL AND EXISTS (SELECT 1 FROM cities c WHERE c.emperor_id = b.holder_id)))
+        GROUP BY 1, 2"""))
+    counts: dict[int, dict[str, int]] = {}
+    for uid, type_, n in rows.all():
+        bucket = counts.setdefault(int(uid), {})
+        bucket[type_] = bucket.get(type_, 0) + int(n)
+    levels = {int(u): int(lv or 0) for u, lv in (await session.execute(text("SELECT id, business_level FROM users WHERE id = ANY(:ids)"), {"ids": list(counts)})).all()} if counts else {}
+    return counts, levels
+
+
+async def clan_of_all(session: AsyncSession) -> dict[int, int]:
+    return {int(u): int(c) for u, c in (await session.execute(text("SELECT user_id, clan_id FROM clan_members"))).all()}

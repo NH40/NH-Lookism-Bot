@@ -9,3 +9,11 @@ from bot.services.league.league import (  # noqa: F401
     status,
     sweep_due,
 )
+from bot.services.league.redistribute import (  # noqa: F401,E402
+    Plan,
+    RedistributeBusyError,
+    Result,
+    compute_scores,
+    preview,
+    redistribute,
+)

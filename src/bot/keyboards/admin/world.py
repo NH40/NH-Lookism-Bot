@@ -7,14 +7,14 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.constant.admin import CB_ADMIN_OPEN
 from bot.constant.admin.world import (
-    CB_W_BATTLES_PREFIX, CB_W_COUNTRIES, CB_W_COUNTRY_PREFIX, CB_W_LEAGUE_PREFIX, CB_W_ENTRY_PREFIX, CB_W_KICK_ASK_PREFIX, CB_W_KICK_OK_PREFIX,
+    CB_W_BATTLES_PREFIX, CB_W_COUNTRIES, CB_W_COUNTRY_PREFIX, CB_W_LEAGUE_PREFIX, CB_W_LEAGUE_RECALC, CB_W_LEAGUE_RECALC_GO, CB_W_ENTRY_PREFIX, CB_W_KICK_ASK_PREFIX, CB_W_KICK_OK_PREFIX,
     CB_W_CH_ASK_PREFIX, CB_W_CITY_PREFIX, CB_W_DEL_EMP_ASK_PREFIX, CB_W_DISTRICT_PREFIX, CB_W_FIND,
     CB_W_RESET_ASK_PREFIX, CB_W_SET_EMP_PREFIX, CB_W_SET_OWNER_PREFIX, CB_W_WAR_ASK_PREFIX,
 )
 from bot.texts.admin.world import (
     BTN_BATTLES_CLOSE, BTN_BATTLES_OPEN, BTN_COUNTRIES, BTN_COUNTRY, BTN_ENTRY_CLOSE, BTN_ENTRY_OPEN, BTN_KICK,
     BTN_BACK, BTN_CANCEL_CH, BTN_CANCEL_WAR, BTN_DEL_EMP, BTN_FIND_CITY, BTN_NO, BTN_RESET, BTN_SET_EMP,
-    BTN_SET_OWNER, BTN_TO_CITY, BTN_YES,
+    BTN_SET_OWNER, BTN_TO_CITY, BTN_YES, BTN_LEAGUE_RECALC, BTN_LEAGUE_RECALC_GO,
 )
 
 
@@ -39,8 +39,15 @@ def leagues(rows: list[dict]) -> InlineKeyboardMarkup:
         [_b(f"{x.name} · {sum(r['players'] for r in rows if r['league'] == x.index)}", f"{CB_W_LEAGUE_PREFIX}{x.index}")]
         for x in LEAGUES
     ]
+    grid.append([_b(BTN_LEAGUE_RECALC, CB_W_LEAGUE_RECALC)])
     grid.append([_b(BTN_BACK, f"{CB_ADMIN_SECTION_PREFIX}{SECTION_WORLD}")])
     return _m(grid)
+
+
+def league_recalc(can_run: bool) -> InlineKeyboardMarkup:
+    rows = [[_b(BTN_LEAGUE_RECALC_GO, CB_W_LEAGUE_RECALC_GO)]] if can_run else []
+    rows.append([_b(BTN_BACK, CB_W_COUNTRIES)])
+    return _m(rows)
 
 
 def countries(rows: list[dict]) -> InlineKeyboardMarkup:

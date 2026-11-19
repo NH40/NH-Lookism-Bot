@@ -433,3 +433,68 @@ async def cb_war_ok(callback: CallbackQuery, session: AsyncSession) -> None:
     count = await svc.cancel_emperor_wars(session, callback.from_user.id, view.emperor.id)
     await callback.answer(T.DONE_CANCEL_WAR.format(count=count), show_alert=True)
     await _show_city(callback, session, city_id)
+
+
+# --- пересчёт и перераспределение лиг (2026-11-19) ---
+
+@router.callback_query(F.data == C.CB_W_LEAGUE_RECALC)
+async def cb_league_recalc(callback: CallbackQuery, session: AsyncSession) -> None:
+    if not await guard(callback, session, SECTION_WORLD):
+        return
+    from bot.config.league import LEAGUE_THRESHOLDS
+    from bot.handlers.league.league import plan_lines
+    from bot.services.league import preview
+
+    await callback.answer()
+    plan = await preview(session)
+    counts, moves = plan_lines(plan)
+    is_super = await roles.role_of(session, callback.from_user.id) == ROLE_SUPER
+    text = T.LEAGUE_RECALC_PREVIEW.format(
+        thresholds=" / ".join(str(x) for x in LEAGUE_THRESHOLDS), counts=counts, up=plan.up, down=plan.down, moves=moves,
+        note="" if is_super else T.LEAGUE_RECALC_SUPER_ONLY,
+    )
+    await safe_edit_text(callback.message, text, reply_markup=K.league_recalc(is_super))
+
+
+async def run_league_recalc(bot, session_factory, redis, admin_id: int, chat_id: int) -> None:
+    """Фоном: пересчитать и раскидать, записать в аудит, отчитаться админу и разослать пуши переехавшим."""
+    from bot.handlers.league.league import plan_lines, send_moved
+    from bot.services.admin import audit
+    from bot.services.league import redistribute
+
+    try:
+        result = await redistribute(session_factory, redis)
+        async with session_factory() as session:
+            await audit.log(session, admin_id, "league_redistribute", None, {"moved": len(result.moved), "up": result.plan.up, "down": result.plan.down})
+            await session.commit()
+        counts, _ = plan_lines(result.plan)
+        await bot.send_message(chat_id, T.LEAGUE_RECALC_DONE.format(
+            counts=counts, moved=len(result.moved), up=result.plan.up, down=result.plan.down, districts=result.districts_moved,
+            lost=result.districts_lost, refunded=format_number(result.refunded), thrones=result.thrones_moved, thrones_lost=result.thrones_lost,
+        ))
+        await send_moved(bot, result.moved)
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("League redistribute failed")
+        try:
+            await bot.send_message(chat_id, T.LEAGUE_RECALC_FAILED)
+        except Exception:  # noqa: BLE001
+            pass
+
+
+@router.callback_query(F.data == C.CB_W_LEAGUE_RECALC_GO)
+async def cb_league_recalc_go(callback: CallbackQuery, session: AsyncSession, redis, session_factory) -> None:
+    if not await guard(callback, session, SECTION_WORLD):
+        return
+    if await roles.role_of(session, callback.from_user.id) != ROLE_SUPER:
+        await callback.answer(T.KICK_NO_RIGHTS_ALERT, show_alert=True)
+        return
+    if await redis.exists("league:redistribute"):
+        await callback.answer(T.LEAGUE_RECALC_BUSY, show_alert=True)
+        return
+    await callback.answer()
+    await safe_edit_text(callback.message, T.LEAGUE_RECALC_STARTED, reply_markup=K.league_recalc(False))
+    task = asyncio.create_task(run_league_recalc(callback.bot, session_factory, redis, callback.from_user.id, callback.message.chat.id))
+    _notice_tasks.add(task)
+    task.add_done_callback(_notice_tasks.discard)

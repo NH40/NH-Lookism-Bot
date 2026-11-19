@@ -29,6 +29,10 @@ async def send_promotions(bot: Bot, session_factory: async_sessionmaker[AsyncSes
             await asyncio.sleep(1)
 
 
+REDISTRIBUTE_REQUEST_KEY = "league:redistribute:request"  # Mini App просит бота пересчитать лиги (значение — id админа)
+_REQUEST_POLL_SECONDS = 10
+
+
 async def league_loop(bot: Bot, session_factory: async_sessionmaker[AsyncSession], redis: Redis) -> None:
     while True:
         try:
@@ -38,4 +42,33 @@ async def league_loop(bot: Bot, session_factory: async_sessionmaker[AsyncSession
                 await send_promotions(bot, session_factory, promoted)
         except Exception:
             log.exception("League sweep failed")
-        await asyncio.sleep(LEAGUE_SWEEP_TICK_SECONDS)
+        # Пересчёт из Mini App идёт здесь, в процессе бота: пересчёт мощи всем тяжёлый, у API лимит памяти меньше.
+        for _ in range(max(1, LEAGUE_SWEEP_TICK_SECONDS // _REQUEST_POLL_SECONDS)):
+            try:
+                admin = await redis.getdel(REDISTRIBUTE_REQUEST_KEY)
+                if admin:
+                    from bot.handlers.admin.world import run_league_recalc
+
+                    admin_id = int(admin)
+                    await run_league_recalc(bot, session_factory, redis, admin_id, admin_id)
+            except Exception:
+                log.exception("League redistribute request failed")
+            await asyncio.sleep(_REQUEST_POLL_SECONDS)
+
+
+async def send_moved(bot: Bot, moved: list[tuple[int, int, int]]) -> None:
+    """Пуш переехавшим при пересчёте лиг из админки: территория уехала с ними, страну выбирать не нужно."""
+    from bot.texts.league import MOVED
+
+    for i, (user_id, _, league) in enumerate(moved, 1):
+        text = MOVED.format(name=LEAGUES[league].name, income=round(LEAGUE_INCOME_STEP * league * 100), power=round(LEAGUE_POWER_STEP * league * 100))
+        await notify(bot, user_id, text)
+        if i % _PUSHES_PER_SECOND == 0:
+            await asyncio.sleep(1)
+
+
+def plan_lines(plan) -> tuple[str, str]:
+    """Тексты «игроков по лигам» и «переезды» для админки (бот и Mini App)."""
+    counts = "\n".join(f"• {LEAGUES[lg].name}: <b>{n}</b>" for lg, n in plan.counts.items())
+    moves = "\n".join(f"• {LEAGUES[a].name} → {LEAGUES[b].name}: {n}" for (a, b), n in plan.moves.items()) or "• никто"
+    return counts, moves

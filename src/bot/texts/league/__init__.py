@@ -8,5 +8,6 @@ from bot.texts.league.league import (  # noqa: F401
     LEAGUE_NO_BUFF,
     LEAGUE_READY,
     LEAGUE_TOP,
+    MOVED,
     PROMOTED,
 )

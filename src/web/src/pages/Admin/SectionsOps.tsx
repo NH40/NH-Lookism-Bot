@@ -375,6 +375,44 @@ export function WorldSection() {
   );
 }
 
+type LeaguePlan = { thresholds: number[]; up: number; down: number; can_run: boolean; counts: { name: string; count: number }[]; moves: { from: string; to: string; count: number }[] };
+
+/** Пересчёт лиг (2026-11-19): очки всем заново и раскидать по текущим порогам в обе стороны, территория едет с игроком. */
+function LeagueRecalc() {
+  const [plan, setPlan] = useState<LeaguePlan | null>(null);
+  const [loading, setLoading] = useState(false);
+  const { run, busy } = useAction(async () => setPlan(null));
+  const toast = useToast();
+  const load = async () => {
+    setLoading(true);
+    try {
+      setPlan(await apiGet<LeaguePlan>("/admin/world/leagues/preview"));
+    } catch (e) {
+      toast(String((e as Error).message || e));
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <Panel title="Пересчёт лиг">
+      {!plan ? (
+        <button type="button" className="btn ghost block" disabled={loading} onClick={load}>{loading ? "Считаю…" : "Посчитать, что будет"}</button>
+      ) : (
+        <div style={{ display: "grid", gap: 8 }}>
+          <Kv rows={[["Пороги", plan.thresholds.join(" / ")], ...plan.counts.map((c) => [c.name, fmt(c.count)] as [string, string]), ["Переезды", `вверх ${plan.up} · вниз ${plan.down}`]]} />
+          {plan.moves.length > 0 && <div className="adm-hint">{plan.moves.map((m) => `${m.from} → ${m.to}: ${m.count}`).join(" · ")}</div>}
+          <div className="adm-hint">Территория едет с игроком: занятый район — на свободный в том же городе (нет мест — здания возвращаются NHCoin), занятый трон теряется. Мощь пересчитается при запуске.</div>
+          {plan.can_run ? (
+            <ConfirmButton tone="gold" disabled={busy} onConfirm={() => run("/admin/world/leagues/redistribute")}>Пересчитать и раскидать</ConfirmButton>
+          ) : (
+            <div className="adm-hint">Запустить может только суперадмин.</div>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 function Countries({ onPick }: { onPick: (code: string) => void }) {
   const data = useApi<{ items: CountryRow[]; leagues: string[] }>("/admin/world/countries");
   const [league, setLeague] = useState("0");
@@ -382,6 +420,7 @@ function Countries({ onPick }: { onPick: (code: string) => void }) {
     <Screen status={data.status} error={data.error}>
       {data.data && (
         <>
+        <LeagueRecalc />
         <Seg value={league} onChange={setLeague} cols={3} options={data.data.leagues.map((name, i) => ({ value: String(i), label: name }))} />
         <div className="grid-2" style={{ gap: 8, marginTop: 10 }}>
           {data.data.items.filter((c) => c.league === Number(league)).map((c) => (

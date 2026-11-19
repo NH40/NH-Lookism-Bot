@@ -7,6 +7,7 @@ from bot.services.combat.combat import (  # noqa: F401
     TriggerSpec,
     SideOutcome,
     base_chances,
+    BattleRun,
     simulate_battle,
 )
 from bot.services.combat.mods import (  # noqa: F401

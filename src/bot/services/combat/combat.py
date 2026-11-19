@@ -812,44 +812,64 @@ def _loss_save_after(side: _Side, opponent: _Side, won: bool) -> float:
     return min(BATTLE_LOSS_SAVE_MAX, _loss_save(side, opponent) + extra)
 
 
-def simulate_battle(
-    attacker: Sequence[CombatStack],
-    defender: Sequence[CombatStack],
-    *,
-    attacker_chances: CombatChances,
-    defender_chances: CombatChances,
-    rng: Random | None = None,
-) -> BattleResult:
-    rng = rng or Random()
-    a, d = _Side(attacker, attacker_chances), _Side(defender, defender_chances)
-    a.mods = attacker_chances.build.total + _copied(attacker_chances.build, defender_chances.build) + defender_chances.enemy_mods
-    d.mods = defender_chances.build.total + _copied(defender_chances.build, attacker_chances.build) + attacker_chances.enemy_mods
-    a.base_mods, d.base_mods = a.mods, d.mods
+class BattleRun:
+    """Бой по раундам (2026-11-19, онлайн-бои): `play_round` — один раунд с действиями сторон (доп. модификаторы
+    на раунд и множитель урона), `result` — итог. `simulate_battle` — тот же бой целиком без действий: порядок
+    бросков случайности прежний, автобой даёт ровно те же результаты."""
 
-    a_first = d_first = 0
-    if a.mods.first_strike:
-        a_first = _first_strike(d, a.mods.first_strike * (1 - min(1.0, d.mods.slow)), rng)
-        a.kills += a_first
-    if d.mods.first_strike:
-        d_first = _first_strike(a, d.mods.first_strike * (1 - min(1.0, a.mods.slow)), rng)
-        d.kills += d_first
-    a_pre = d_pre = 0
-    if a.mods.pre_strike_share and a.mods.pre_strike_power:
-        a_pre = _pre_strike(a, d, a.mods, rng)
-    if d.mods.pre_strike_share and d.mods.pre_strike_power:
-        d_pre = _pre_strike(d, a, d.mods, rng)
+    def __init__(
+        self,
+        attacker: Sequence[CombatStack],
+        defender: Sequence[CombatStack],
+        *,
+        attacker_chances: CombatChances,
+        defender_chances: CombatChances,
+        rng: Random | None = None,
+    ) -> None:
+        rng = self.rng = rng or Random()
+        a, d = self.a, self.d = _Side(attacker, attacker_chances), _Side(defender, defender_chances)
+        a.mods = attacker_chances.build.total + _copied(attacker_chances.build, defender_chances.build) + defender_chances.enemy_mods
+        d.mods = defender_chances.build.total + _copied(defender_chances.build, attacker_chances.build) + attacker_chances.enemy_mods
+        a.base_mods, d.base_mods = a.mods, d.mods
+        self.a_first = self.d_first = 0
+        if a.mods.first_strike:
+            self.a_first = _first_strike(d, a.mods.first_strike * (1 - min(1.0, d.mods.slow)), rng)
+            a.kills += self.a_first
+        if d.mods.first_strike:
+            self.d_first = _first_strike(a, d.mods.first_strike * (1 - min(1.0, a.mods.slow)), rng)
+            d.kills += self.d_first
+        self.a_pre = self.d_pre = 0
+        if a.mods.pre_strike_share and a.mods.pre_strike_power:
+            self.a_pre = _pre_strike(a, d, a.mods, rng)
+        if d.mods.pre_strike_share and d.mods.pre_strike_power:
+            self.d_pre = _pre_strike(d, a, d.mods, rng)
+        self.log: list[RoundLog] = []
+        self.rounds = 0
+        self.ended = False
 
-    log: list[RoundLog] = []
-    rounds = 0
-    for round_number in range(1, BATTLE_MAX_ROUNDS + 1):
+    @property
+    def over(self) -> bool:
+        return self.ended or self.rounds >= BATTLE_MAX_ROUNDS or self.a.total_power() == 0 or self.d.total_power() == 0
+
+    def play_round(
+        self, a_extra: CombatMods | None = None, d_extra: CombatMods | None = None, a_damage: float = 1.0, d_damage: float = 1.0,
+    ) -> RoundLog | None:
+        """Раунд. `*_extra` — модификаторы действия стороны на этот раунд, `*_damage` — множитель её урона."""
+        a, d, rng = self.a, self.d, self.rng
+        if self.over:
+            self.ended = True
+            return None
+        round_number = self.rounds + 1
         a_power, d_power = a.total_power(), d.total_power()
-        if a_power == 0 or d_power == 0:
-            break
-        rounds = round_number
+        self.rounds = round_number
         a_own, a_enemy, a_fired = _apply_triggers(a, d, round_number, rng)
         d_own, d_enemy, d_fired = _apply_triggers(d, a, round_number, rng)
         a.mods = a.base_mods + a_own + d_enemy
         d.mods = d.base_mods + d_own + a_enemy
+        if a_extra is not None:
+            a.mods = a.mods + a_extra
+        if d_extra is not None:
+            d.mods = d.mods + d_extra
         a_dead_before, d_dead_before = sum(a.dead.values()), sum(d.dead.values())
         am, dm = _round_mods(a, round_number), _round_mods(d, round_number)
         a.round_dead, d.round_dead = {}, {}
@@ -866,6 +886,8 @@ def simulate_battle(
 
         damage_to_d = a_power * BATTLE_DAMAGE_FRACTION * rng.uniform(1 - BATTLE_DAMAGE_VARIANCE, 1 + BATTLE_DAMAGE_VARIANCE)
         damage_to_a = d_power * BATTLE_DAMAGE_FRACTION * rng.uniform(1 - BATTLE_DAMAGE_VARIANCE, 1 + BATTLE_DAMAGE_VARIANCE)
+        damage_to_d *= a_damage
+        damage_to_a *= d_damage
         if am != _ZERO or dm != _ZERO:
             damage_to_d *= _attack_multiplier(a, d, am, round_number, rng)
             damage_to_a *= _attack_multiplier(d, a, dm, round_number, rng)
@@ -905,31 +927,49 @@ def simulate_battle(
         a_lost, d_lost = sum(a.dead.values()) - a_dead_before, sum(d.dead.values()) - d_dead_before
         a.prev_round_lost = a_lost / a.initial_quantity if a.initial_quantity else 0.0
         d.prev_round_lost = d_lost / d.initial_quantity if d.initial_quantity else 0.0
-        log.append(RoundLog(
+        entry = RoundLog(
             number=round_number, attacker_damage=round(damage_to_d), defender_damage=round(damage_to_a),
             attacker_kills=max(0, d_lost), defender_kills=max(0, a_lost), attacker_chaos=a_chaos, defender_chaos=d_chaos,
             attacker_fired=tuple(a_fired + a.events), defender_fired=tuple(d_fired + d.events),
-        ))
+        )
+        self.log.append(entry)
+        return entry
 
-    a.mods, d.mods = a.base_mods, d.base_mods
-    a_remaining, d_remaining = a.total_power(), d.total_power()
-    attacker_won = a_remaining > 0 and (d_remaining == 0 or a_remaining > d_remaining)
-    a_after, d_after = _after_battle(a, d, attacker_won, rng), _after_battle(d, a, not attacker_won, rng)
-    a_after += _despair(a, d, attacker_won, rng)
-    d_after += _despair(d, a, not attacker_won, rng)
-    return BattleResult(
-        attacker_won=attacker_won,
-        rounds=rounds,
-        attacker=_outcome(a, _loss_save_after(a, d, attacker_won), a.total_power(), rng),
-        defender=_outcome(d, _loss_save_after(d, a, not attacker_won), d.total_power(), rng),
-        log=tuple(log),
-        attacker_first_strike=a_first,
-        defender_first_strike=d_first,
-        attacker_pre_strike=a_pre,
-        defender_pre_strike=d_pre,
-        attacker_after=a_after,
-        defender_after=d_after,
-    )
+    def result(self) -> BattleResult:
+        a, d, rng = self.a, self.d, self.rng
+        a.mods, d.mods = a.base_mods, d.base_mods
+        a_remaining, d_remaining = a.total_power(), d.total_power()
+        attacker_won = a_remaining > 0 and (d_remaining == 0 or a_remaining > d_remaining)
+        a_after, d_after = _after_battle(a, d, attacker_won, rng), _after_battle(d, a, not attacker_won, rng)
+        a_after += _despair(a, d, attacker_won, rng)
+        d_after += _despair(d, a, not attacker_won, rng)
+        return BattleResult(
+            attacker_won=attacker_won,
+            rounds=self.rounds,
+            attacker=_outcome(a, _loss_save_after(a, d, attacker_won), a.total_power(), rng),
+            defender=_outcome(d, _loss_save_after(d, a, not attacker_won), d.total_power(), rng),
+            log=tuple(self.log),
+            attacker_first_strike=self.a_first,
+            defender_first_strike=self.d_first,
+            attacker_pre_strike=self.a_pre,
+            defender_pre_strike=self.d_pre,
+            attacker_after=a_after,
+            defender_after=d_after,
+        )
+
+
+def simulate_battle(
+    attacker: Sequence[CombatStack],
+    defender: Sequence[CombatStack],
+    *,
+    attacker_chances: CombatChances,
+    defender_chances: CombatChances,
+    rng: Random | None = None,
+) -> BattleResult:
+    run = BattleRun(attacker, defender, attacker_chances=attacker_chances, defender_chances=defender_chances, rng=rng)
+    while run.play_round() is not None:
+        pass
+    return run.result()
 
 
 _ZERO = CombatMods()

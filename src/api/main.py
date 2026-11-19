@@ -27,6 +27,7 @@ from api.routers import admin
 from api.routers import payments
 from api.routers import minigame, sale
 from api.routers import bank, penguan
+from api.routers import tutorial as tutorial_router
 from api.routers import admin_ops
 from api.routers import admin_players
 from api.routers import awakening
@@ -104,7 +105,7 @@ app = FastAPI(title="LookismBattlePlanet API", lifespan=lifespan)
 @app.exception_handler(BattlesClosedError)
 async def _battles_closed(_request, exc: BattlesClosedError) -> JSONResponse:
     """Запрет боёв в стране: один ответ на все места боя (сервис бросает его до КД и списаний)."""
-    return JSONResponse(status_code=400, content={"detail": BATTLES_CLOSED_ALERT.format(name=exc.country_name)})
+    return JSONResponse(status_code=400, content={"detail": exc.alert if exc.alert else BATTLES_CLOSED_ALERT.format(name=exc.country_name)})
 
 # В проде Caddy/аналог проксирует и фронтенд, и /api под одним доменом — CORS не
 # нужен вовсе. allow_methods шире, чем у read-only Mini App UAP — тут почти всё пишет.
@@ -191,6 +192,7 @@ app.include_router(admin.router)
 app.include_router(payments.router)
 app.include_router(bank.router)
 app.include_router(penguan.router)
+app.include_router(tutorial_router.router)
 
 
 @app.get("/api/health")

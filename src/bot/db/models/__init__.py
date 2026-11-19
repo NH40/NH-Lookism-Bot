@@ -49,3 +49,4 @@ from bot.db.models.referral import ReferralLink, ReferralVisit  # noqa: F401
 from bot.db.models.top import SeasonTopPayout  # noqa: F401
 from bot.db.models.scout_report import ScoutReport  # noqa: F401
 from bot.db.models.penguan import PenguanBuff, PenguanFallen  # noqa: F401
+from bot.db.models.tutorial import TutorialRun  # noqa: F401

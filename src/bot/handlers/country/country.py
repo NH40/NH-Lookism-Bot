@@ -10,7 +10,7 @@ from bot.texts.country import BATTLES_CLOSED_ALERT
 async def on_battles_closed(event: ErrorEvent) -> bool:
     """Сервис боя бросает `BattlesClosedError` до КД и списаний. Отвечаем там, откуда пришёл апдейт."""
     exc = event.exception
-    text = BATTLES_CLOSED_ALERT.format(name=exc.country_name if isinstance(exc, BattlesClosedError) else "")
+    text = (getattr(exc, "alert", None) or BATTLES_CLOSED_ALERT.format(name=exc.country_name)) if isinstance(exc, BattlesClosedError) else BATTLES_CLOSED_ALERT.format(name="")
     update = event.update
     if update.callback_query is not None:
         await update.callback_query.answer(text, show_alert=True)

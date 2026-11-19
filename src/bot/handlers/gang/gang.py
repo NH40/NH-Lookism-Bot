@@ -110,6 +110,13 @@ async def on_gang_name(message: Message, state: FSMContext, session: AsyncSessio
 
     await state.clear()
     await message.answer(NAME_CONFIRMED.format(name=esc(gang.name)))
+    # Лига-обучение (2026-11-19): новичку — обязательный гайд по учебной стране.
+    from bot.services.tutorial import start_if_new
+    from bot.texts.tutorial import INTRO_NEW, SEP
+    from bot.keyboards.tutorial import open_menu
+
+    if await start_if_new(session, message.from_user.id):
+        await message.answer(INTRO_NEW.format(sep=SEP), reply_markup=open_menu())
     # Следующий шаг онбординга — родословная (выбор навсегда), профиль — после неё. После
     # удаления банды родословная остаётся (`services/gang/reset`) — повторно её не спрашиваем,
     # иначе игрок застревал: любой выбор отклонялся как «уже выбрана» (баг 2026-10-21).

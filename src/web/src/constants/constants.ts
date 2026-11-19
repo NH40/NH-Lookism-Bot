@@ -11,6 +11,7 @@ export const ROUTE_TRAVEL = "/map/travel";
 export const ROUTE_STATS = "/stats";
 export const ROUTE_INTEL = "/more/intel";
 export const ROUTE_GUIDE = "/more/guide";
+export const ROUTE_TUTORIAL = "/more/tutorial"; // лига-обучение
 export const ROUTE_DEVELOPMENT = "/development";
 export const ROUTE_TRAINING = "/development/training";
 export const ROUTE_MASTERY = "/development/mastery";

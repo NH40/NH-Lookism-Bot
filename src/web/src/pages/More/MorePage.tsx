@@ -1,4 +1,4 @@
-import { BookOpen, Briefcase, Dices, Landmark, Eye, Gem, Gift, Repeat, Settings, ShieldCheck, ShoppingBag, Trophy, Users, VenetianMask } from "lucide-react";
+import { BookOpen, GraduationCap, Briefcase, Dices, Landmark, Eye, Gem, Gift, Repeat, Settings, ShieldCheck, ShoppingBag, Trophy, Users, VenetianMask } from "lucide-react";
 import { useState } from "react";
 import { Sheet } from "../../components/Sheet";
 import { useAction } from "../../hooks/useApi";
@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { MoreData } from "../../types";
 import { Panel, Screen, fmt } from "../../components/ui";
-import { ROUTE_ADMIN, ROUTE_BANK, ROUTE_BUSINESS, ROUTE_CASINO, ROUTE_CLAN, ROUTE_DONATE, ROUTE_EXCHANGE, ROUTE_GANG, ROUTE_GUIDE, ROUTE_INTEL, ROUTE_MARKET, ROUTE_SETTINGS, ROUTE_SHOP, ROUTE_TOP } from "../../constants";
+import { ROUTE_ADMIN, ROUTE_BANK, ROUTE_BUSINESS, ROUTE_CASINO, ROUTE_CLAN, ROUTE_DONATE, ROUTE_EXCHANGE, ROUTE_GANG, ROUTE_GUIDE, ROUTE_INTEL, ROUTE_MARKET, ROUTE_SETTINGS, ROUTE_SHOP, ROUTE_TOP, ROUTE_TUTORIAL } from "../../constants";
 import { useApi } from "../../hooks/useApi";
 import "./More.css";
 
@@ -78,6 +78,7 @@ function MoreView({ d }: { d: MoreData }) {
         )}
         {tile(<Eye size={18} />, "Разведка", "отчёты и метки", ROUTE_INTEL, "violet")}
         {tile(<BookOpen size={18} />, "Гайд", "всё об игре по разделам", ROUTE_GUIDE)}
+        {tile(<GraduationCap size={18} />, "Обучение", "учебная страна и награды за шаги", ROUTE_TUTORIAL, "gold")}
         <button type="button" className="tile gold" style={{ font: "inherit", textAlign: "left" }} onClick={() => setPromoOpen(true)}>
           <div className="ico-box"><Gift size={18} /></div>
           <b>Промокод</b>

@@ -1,0 +1,20 @@
+"""Публичное API домена tutorial (сервис): лига-обучение."""
+from bot.services.tutorial.tutorial import (  # noqa: F401
+    STATUS_ACTIVE,
+    STATUS_DONE,
+    STATUS_LEGACY,
+    Advance,
+    FightReport,
+    TrainingError as TutorialError,
+    TrainingLockError as TutorialLockError,
+    TrainingView as TutorialView,
+    acknowledge,
+    attack,
+    build,
+    collect,
+    ensure_not_locked,
+    is_locked,
+    start_if_new,
+    start_voluntary,
+    view,
+)

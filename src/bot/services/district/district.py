@@ -216,11 +216,18 @@ async def get_district_view(session: AsyncSession, user: User, district_id: int)
     return view
 
 
+async def _ensure_trained(session: AsyncSession, user_id: int) -> None:
+    from bot.services.tutorial import ensure_not_locked
+
+    await ensure_not_locked(session, user_id)
+
+
 async def attack_district(session: AsyncSession, redis: Redis, user: User, district_id: int) -> AttackReport:
     """Составная операция (правило 10): проверки → КД → бой → списание погибших → захват
     → один commit. Все проверки, которые не должны тратить КД (чужой город, свой
     район, пустой лагерь атаки), — ДО выставления КД в Redis."""
     await ensure_battles_open(session, user.country_code)
+    await _ensure_trained(session, user.id)
     row = await get_row(session, district_id)
     if row is None:
         raise DistrictNotFoundError

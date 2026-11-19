@@ -46,9 +46,14 @@ def _btn(text: str, callback_data: str) -> InlineKeyboardButton:
 
 
 def profile_menu(
-    *, mini_app_url: str | None = None, emperor: bool = False, under_emperor: bool = False
+    *, mini_app_url: str | None = None, emperor: bool = False, under_emperor: bool = False, tutorial: bool = False
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
+    if tutorial:  # лига-обучение: идёт или ещё не пройдена старым игроком
+        from bot.constant.tutorial import CB_TUT_OPEN
+        from bot.texts.tutorial import BTN_OPEN
+
+        rows.append([_btn(BTN_OPEN, CB_TUT_OPEN)])
     if mini_app_url:
         rows.append(
             [InlineKeyboardButton(text=BTN_PROFILE_APP, web_app=WebAppInfo(url=build_mini_app_url(mini_app_url)))]

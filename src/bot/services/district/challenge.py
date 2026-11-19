@@ -213,12 +213,19 @@ async def _after_issue(session: AsyncSession, redis: Redis, attacker_id: int, cd
     return False
 
 
+async def _ensure_trained(session: AsyncSession, user_id: int) -> None:
+    from bot.services.tutorial import ensure_not_locked
+
+    await ensure_not_locked(session, user_id)
+
+
 async def issue_challenge(session: AsyncSession, redis: Redis, attacker: User, district_id: int) -> ChallengeIssued:
     """Проверки → вставка вызова (частичные уникальные индексы ловят гонку) → один commit.
     КД на сражения ПРОВЕРЯЕТСЯ, но не ставится — он ставится после боя (raw-notes: «после
     сражения у игрока начинается кд»); повторно бросить вызов, пока висит текущий, не
     даёт уникальный индекс, а не КД."""
     await ensure_battles_open(session, attacker.country_code)
+    await _ensure_trained(session, attacker.id)
     row = await get_row(session, district_id)
     if row is None:
         raise DistrictNotFoundError
@@ -299,6 +306,7 @@ async def issue_city_challenge(
     городе В МОМЕНТ боя. Тот же порядок проверок: всё, что не должно ничего стоить, — до
     вставки; гарантия единственности — в частичных индексах."""
     await ensure_battles_open(session, attacker.country_code)
+    await _ensure_trained(session, attacker.id)
     if is_emperor(attacker.phase):
         raise EmperorNoConquestError
     if not can_conquer_cities(attacker.phase):

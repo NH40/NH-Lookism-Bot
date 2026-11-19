@@ -21,6 +21,8 @@ class BattlesClosedError(Exception):
     """В стране запрещены бои (админка). Ловится один раз на всё приложение: бот — `handlers/country`,
     API — `api/main.py`. Поэтому каждому месту боя не нужна своя ветка обработки."""
 
+    alert: str | None = None  # свой текст отказа (лига-обучение: «сначала пройди обучение»)
+
     def __init__(self, country_name: str) -> None:
         super().__init__(country_name)
         self.country_name = country_name

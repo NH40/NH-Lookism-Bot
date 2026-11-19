@@ -109,6 +109,15 @@ def render_mastery_block(mastery: dict[str, int], *, unlocked: bool) -> str:
     return "\n".join(lines)
 
 
+
+async def _tutorial_button(session: AsyncSession, user_id: int) -> bool:
+    """Кнопка «Обучение»: идёт сейчас или старый игрок ещё не проходил."""
+    from bot.services.tutorial import STATUS_DONE
+    from bot.services.tutorial.tutorial import get_run
+
+    run = await get_run(session, user_id)
+    return run is None or run.status != STATUS_DONE
+
 async def _potions_block(session: AsyncSession, user_id: int) -> str:
     """Действующие зелья с остатком срока и эффектом — пусто, если ни одно не действует."""
     active = [st for st in (await potion_catalog(session, user_id)).states.values() if st.tier]
@@ -166,6 +175,7 @@ async def show_profile(message: Message, session: AsyncSession, user_id: int) ->
             mini_app_url=mini_app_url,
             emperor=is_emperor(profile.phase),
             under_emperor=await get_emperor(session, user_id) is not None,
+            tutorial=await _tutorial_button(session, user_id),
         ),
     )
 

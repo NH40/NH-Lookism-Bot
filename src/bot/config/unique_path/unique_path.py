@@ -81,11 +81,11 @@ LEVELS: dict[str, tuple[dict, ...]] = {
         _c(influence_power=0.03, durability=0.05, pierce=0.05),
         _c(overcome=0.20, loss_save=0.04),
         _c(influence_gap=0.05, overcome_gap=0.05, overcome_gap_cap=0.75),
-        _e(recruit_cap=50, influence_rank_cut=0.10),
+        _e(recruit_cap=20, influence_rank_cut=0.10),  # вербовка ослаблена 2026-11-20 (было 50)
         _c(overcome=0.25, reduction=0.04, pierce=0.05),
         _c(influence_power=0.03, influence_gap=0.05),
         _c(overcome_gap=0.10, overcome_gap_cap=1.5, durability=0.05, pierce=0.05),
-        _s({"overcome": 0.35, "attack": 0.05, "influence_power": 0.04, "pierce": 0.10}, {"recruit_cap": 100, "recruit_influence_cut": 0.15, "influence_bonus": 0.10}),
+        _s({"overcome": 0.35, "attack": 0.05, "influence_power": 0.04, "pierce": 0.10}, {"recruit_cap": 40, "recruit_influence_cut": 0.15, "influence_bonus": 0.10}),  # было 100
     ),
     # Отчаяние: противоположность Преодоления. Побеждать слабых и сохранять себя: бафы против более
     # слабой армии, при победе выживает больше своих, ресурсы защищены. Шкала — за победы и убитых.

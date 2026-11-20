@@ -82,15 +82,15 @@ _NOTIFY: dict[str, object] = {}
 
 
 def set_notifier(fn) -> None:
-    """`fn(user_id, text)` — пуш итога боя (бот или API подставляют свой способ отправки)."""
+    """`fn(user_id, text, battle_id)` — пуш (бот или API подставляют свой способ отправки); с `battle_id` — кнопка «Войти в бой»."""
     _NOTIFY["fn"] = fn
 
 
-async def _notify(user_id: int | None, text: str) -> None:
+async def _notify(user_id: int | None, text: str, battle_id: str | None = None) -> None:
     fn = _NOTIFY.get("fn")
     if fn is not None and user_id:
         try:
-            await fn(user_id, text)
+            await fn(user_id, text, battle_id)
         except Exception:  # noqa: BLE001 — пуш не должен ломать итог боя
             pass
 
@@ -126,7 +126,9 @@ async def start_challenge(session: AsyncSession, redis: Redis, defender, challen
         meta={"challenge_id": challenge_id}, a_energy=await energy_for(session, a_id), d_energy=await energy_for(session, d_id),
     )
     await session.commit()  # вызов взят; блокировки стопок отпущены — бой идёт без транзакции
-    await _notify(a_id, f"⚔️ {ctx.base['defender_label']} принял твой вызов — бой идёт! Открой Mini App, иначе за тебя ходит автоатака.")
+    await _notify(a_id, f"⚔️ <b>{ctx.base['defender_label']} принял твой вызов — бой начался!</b>\n\n"
+                        "Жми «Войти в бой»: раунд 12 секунд, атака, защита, перки и мини-игры 🎮. "
+                        "Не зайдёшь — за тебя ходит автоатака.", st["id"])
     return st
 
 

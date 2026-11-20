@@ -116,12 +116,15 @@ export function BattlePage() {
             <button type="button" className="btn red" disabled={busy || b.me.waiting || b.me.auto} onClick={() => act("attack")}><Swords size={16} /> Атака</button>
             <button type="button" className="btn ghost" disabled={busy || b.me.waiting || b.me.auto} onClick={() => act("defend")}><Shield size={16} /> Защита</button>
           </div>
+          {b.perks.some((p) => p.minigame) && (
+            <small className="muted" style={{ fontSize: 11, fontWeight: 700 }}>🎮 — мини-игра для тебя (сыграешь лучше — сильнее удар) · 🎯 — навязать испытание сопернику</small>
+          )}
           <div className="bt-perks">
             {b.perks.map((p) => {
               const ok = p.ready_in === 0 && p.affordable && !b.me.waiting && !b.me.auto;
               return (
                 <button key={p.code} type="button" className={`bt-perk ${ok ? "" : "off"}`} disabled={busy || !ok} title={p.about} onClick={() => usePerk(p)}>
-                  <b>{p.name}</b>
+                  <b>{p.minigame === "self" ? "🎮 " : p.minigame === "enemy" ? "🎯 " : ""}{p.name}</b>
                   <small><Zap size={11} />{p.cost}{p.ready_in ? ` · через ${p.ready_in}` : ""}</small>
                 </button>
               );

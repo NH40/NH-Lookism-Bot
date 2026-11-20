@@ -99,8 +99,10 @@ async def lifespan(app: FastAPI):
     from bot.services.arena import set_notifier
     from bot.utils.notify import notify as _notify
 
-    async def _arena_push(uid: int, text: str) -> None:
-        await _notify(get_bot(), uid, text)
+    async def _arena_push(uid: int, text: str, battle_id: str | None = None) -> None:
+        from bot.keyboards.arena_push import battle_markup
+
+        await _notify(get_bot(), uid, text, battle_markup(battle_id) if battle_id else None)
 
     set_notifier(_arena_push)
     refresher = asyncio.create_task(refresh_loop(session_factory))

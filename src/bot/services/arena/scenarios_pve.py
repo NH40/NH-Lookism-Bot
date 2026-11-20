@@ -142,7 +142,7 @@ async def start_war(session: AsyncSession, redis: Redis, defender_id: int, war_i
         a_energy=await energy_for(session, a_id), d_energy=await energy_for(session, d_id),
     )
     await session.commit()
-    await _notify(a_id, "⚔️ Император принял войну — бой вождей идёт! Открой Mini App, иначе за тебя ходит автоатака.")
+    await _notify(a_id, "⚔️ <b>Император принял войну — бой вождей начался!</b>\n\nЖми «Войти в бой». Не зайдёшь — за тебя ходит автоатака.", st["id"])
     return st
 
 

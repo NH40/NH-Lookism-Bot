@@ -1,4 +1,4 @@
-import { Swords } from "lucide-react";
+import { Swords, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiGet } from "../../api";
@@ -12,6 +12,14 @@ interface Item {
   resolution: string | null; won: boolean | null; expires_in: number; ago: number | null;
 }
 
+const HIDDEN_KEY = "lbp:challenges:hidden";
+function loadHidden(): number[] {
+  try { return JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? "[]") as number[]; } catch { return []; }
+}
+function saveHidden(ids: number[]) {
+  try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(ids.slice(-100))); } catch { /* приватный режим */ }
+}
+
 function resultText(it: Item): string {
   const res = it.won === null ? "" : it.won ? " — 🏆 победа" : " — 💀 поражение";
   if (it.resolution === "accepted") return it.out ? `${it.other} принял вызов${res}` : `Ты принял вызов ${it.other}${res}`;
@@ -22,6 +30,8 @@ function resultText(it: Item): string {
 export function ChallengesPanel() {
   const [items, setItems] = useState<Item[]>([]);
   const [tick, setTick] = useState(0);
+  const [hidden, setHidden] = useState<number[]>(loadHidden);
+  const hide = (ids: number[]) => { const next = [...hidden, ...ids]; setHidden(next); saveHidden(next); };
   const nav = useNavigate();
   const { run, busy } = useAction();
   useEffect(() => {
@@ -32,11 +42,13 @@ export function ChallengesPanel() {
     const sec = setInterval(() => setTick((t) => t + 1), 1000);
     return () => { alive = false; clearInterval(poll); clearInterval(sec); };
   }, []);
-  if (!items.length) return null;
+  const shown = items.filter((it) => it.pending || !hidden.includes(it.id));
+  if (!shown.length) return null;
+  const done = shown.filter((it) => !it.pending).map((it) => it.id);
   return (
     <Panel title="ВЫЗОВЫ" tone="red">
       <div className="ef">
-        {items.map((it) => (
+        {shown.map((it) => (
           <div key={it.id} className={`ef-row ${it.pending ? "live" : ""}`} style={{ cursor: "default" }}>
             <span className="ef-ico"><Swords size={14} /></span>
             <span className="ef-txt">
@@ -61,8 +73,14 @@ export function ChallengesPanel() {
                 if (r?.id) nav(battlePath(r.id));
               }}>Принять</button>
             )}
+            {!it.pending && (
+              <button type="button" className="btn ghost small" aria-label="Скрыть" onClick={() => hide([it.id])}><X size={14} /></button>
+            )}
           </div>
         ))}
+        {done.length > 1 && (
+          <button type="button" className="btn ghost small block" onClick={() => hide(done)}>Очистить завершённые</button>
+        )}
       </div>
     </Panel>
   );

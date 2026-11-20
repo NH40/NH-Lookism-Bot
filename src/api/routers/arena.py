@@ -190,7 +190,7 @@ async def my_challenges(user_id: int = Depends(get_current_user_id), session: As
            FROM district_challenges c LEFT JOIN districts d ON d.id = c.district_id LEFT JOIN cities ci ON ci.id = c.city_id
            LEFT JOIN gangs ga ON ga.user_id = c.attacker_id LEFT JOIN gangs gd ON gd.user_id = c.defender_id
            WHERE (c.attacker_id = :u OR c.defender_id = :u)
-             AND (c.status = 'pending' OR c.resolved_at > now() - interval '2 hours')
+             AND (c.status = 'pending' OR (c.resolved_at > now() - interval '2 hours' AND c.resolution IN ('accepted', 'timeout')))
            ORDER BY c.status = 'pending' DESC, coalesce(c.resolved_at, c.created_at) DESC LIMIT 8"""), {"u": user_id})).all()
     return {"items": [{
         "id": cid, "out": out, "other": other or "—", "target": f"район №{num}" if num else f"город {city}" if city else "земли",

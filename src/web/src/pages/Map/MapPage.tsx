@@ -12,7 +12,6 @@ import "../../styles/game-screens.css";
 import "../../styles/world-map.css";
 import { RaidBanner } from "./RaidBanner";
 import { OnlineBattleButton } from "../../components/OnlineBattleButton";
-import { ArenaBanner } from "./ArenaBanner";
 import { ChallengesPanel } from "./ChallengesPanel";
 import { CityView } from "./CityView";
 import { EventFeed } from "./EventFeed";
@@ -284,7 +283,6 @@ export function MapPage() {
       {data && (
         <div className="page">
           <RaidBanner />
-          <ArenaBanner />
           <ChallengesPanel />
 
           {world.data && world.geo ? (

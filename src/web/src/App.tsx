@@ -65,6 +65,7 @@ import { SupportPage } from "./pages/Support/SupportPage";
 import { TopPage } from "./pages/Top";
 import { BankPage, PenguanPage } from "./pages/Bank";
 import { getWebApp } from "./telegram";
+import { LiveBattleDock } from "./components/LiveBattleDock";
 
 const TOP_LEVEL = new Set([ROUTE_PROFILE, ROUTE_MAP, ROUTE_DEVELOPMENT, ROUTE_QUESTS, ROUTE_MORE]);
 
@@ -79,6 +80,13 @@ export function App() {
     webApp?.expand();
     webApp?.setHeaderColor?.("#0a1130");
     webApp?.setBackgroundColor?.("#060a1c");
+  }, []);
+
+  // Пуш «соперник принял вызов» открывает Mini App с ?battle=<id> — сразу на экран боя.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("battle");
+    if (id) navigate(`/battle/${id}`, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Нативная кнопка «Назад» Telegram — на вложенных экранах.
@@ -141,6 +149,7 @@ export function App() {
           <Route path={ROUTE_SETTINGS} element={<SettingsPage />} />
           <Route path="*" element={<ProfilePage />} />
         </Routes>
+        <LiveBattleDock />
         <NavTabs />
       </div>
     </ToastProvider>

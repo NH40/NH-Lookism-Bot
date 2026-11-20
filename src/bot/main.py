@@ -210,8 +210,10 @@ async def _arena_loop(bot: Bot, session_factory: async_sessionmaker[AsyncSession
 
     set_session_factory(session_factory)
 
-    async def _push(uid: int, text: str) -> None:
-        await notify(bot, uid, text)
+    async def _push(uid: int, text: str, battle_id: str | None = None) -> None:
+        from bot.keyboards.arena_push import battle_markup
+
+        await notify(bot, uid, text, battle_markup(battle_id) if battle_id else None)
 
     set_notifier(_push)
     while True:

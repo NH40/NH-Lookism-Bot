@@ -8,18 +8,18 @@
 .wm.full .wm-box { position: fixed; inset: 0; z-index: 60; height: auto; border-radius: 0; border: 0; }
 .wm.full .wm-card { position: fixed; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 61; }
 .wm-box svg { display: block; cursor: grab; }
-.wm-land { fill: #12284a; stroke: rgba(110, 200, 255, 0.55); stroke-linejoin: round; filter: drop-shadow(0 0 6px rgba(79, 216, 255, 0.25)); }
+.wm-land { fill: #12284a; stroke: rgba(110, 200, 255, 0.55); stroke-linejoin: round; }
+.wm-land-glow { fill: none; stroke: rgba(79, 216, 255, 0.1); stroke-linejoin: round; }
 .wm-city { cursor: pointer; }
 .wm-dot { stroke: rgba(4, 10, 28, 0.9); transition: r 0.2s; }
 .wm-dot.mine { stroke: #2ee88a; }
 .wm-dot.sel { stroke: #ffe08a; }
 .wm-label { fill: #eaf6ff; font-weight: 800; paint-order: stroke; stroke: rgba(3, 8, 20, 0.85); pointer-events: none; }
-.wm-pulse { fill: none; transform-box: fill-box; transform-origin: center; animation: wm-pulse 1.4s ease-out infinite; }
+.wm-pulse { fill: none; transform-box: fill-box; transform-origin: center; animation: wm-pulse 1.4s ease-out infinite; will-change: transform, opacity; }
 .wm-pulse.red { stroke: #ff3d62; }
 .wm-pulse.gold { stroke: #ffe08a; animation-duration: 2.2s; }
 @keyframes wm-pulse { 0% { transform: scale(0.7); opacity: 1; } 100% { transform: scale(2.4); opacity: 0; } }
 .wm-token { transition: transform 0.9s cubic-bezier(0.5, 0, 0.3, 1.2); pointer-events: none; }
-.wm-token text { animation: wm-bob 1.6s ease-in-out infinite; }
 @keyframes wm-bob { 50% { transform: translateY(-3px); } }
 .wm-ctrl { position: absolute; right: 8px; top: 8px; display: flex; flex-direction: column; gap: 6px; }
 .wm-ctrl button {
@@ -71,14 +71,14 @@
 }
 .cv-block.bot { background: repeating-linear-gradient(135deg, #0d1830 0 6px, #0a1326 6px 12px); border-color: rgba(120, 140, 180, 0.3); }
 .cv-block.mine { border-width: 2px; box-shadow: 0 0 16px rgba(46, 232, 138, 0.55), inset 0 0 14px rgba(46, 232, 138, 0.35); }
-.cv-block.fresh { animation: cv-fresh 1.8s ease-in-out infinite; }
-@keyframes cv-fresh { 50% { box-shadow: 0 0 18px #ffe08a, inset 0 0 14px rgba(255, 224, 138, 0.45); } }
-.cv-block.fight { animation: cv-fight 0.9s ease-in-out infinite; }
-@keyframes cv-fight { 50% { box-shadow: 0 0 18px #ff3d62, inset 0 0 14px rgba(255, 61, 98, 0.5); } }
+.cv-block.fresh::after, .cv-block.fight::after { content: ""; position: absolute; inset: -2px; border-radius: 11px; pointer-events: none; animation: cv-blink 1.6s ease-in-out infinite; will-change: opacity; }
+.cv-block.fresh::after { border: 2px solid #ffe08a; }
+.cv-block.fight::after { border: 2px solid #ff3d62; animation-duration: 0.9s; }
+@keyframes cv-blink { 50% { opacity: 0.15; } }
 .cv-num { position: absolute; left: 5px; top: 3px; font-size: 10px; font-weight: 800; color: var(--muted); }
 .cv-token {
   width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 900;
-  color: #04101f; box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); animation: wm-bob 2s ease-in-out infinite;
+  color: #04101f; box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 .cv-token.me { background: none; font-size: 22px; box-shadow: none; }
 .cv-bots { font-size: 10px; font-weight: 800; color: var(--muted); }
@@ -99,7 +99,7 @@
 .ef-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .ef-txt b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ef-txt small { font-size: 11px; color: var(--muted); font-weight: 700; }
-.ef-live { font-size: 9px; font-weight: 900; color: #fff; background: var(--red); padding: 2px 6px; border-radius: 6px; animation: cv-fight 1s infinite; }
+.ef-live { font-size: 9px; font-weight: 900; color: #fff; background: var(--red); padding: 2px 6px; border-radius: 6px; animation: cv-blink 1s infinite; }
 .wm-home {
   position: absolute; left: 10px; bottom: 10px; display: flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 12px;
   font-size: 13px; font-weight: 900; color: #1a0d00; background: linear-gradient(160deg, #ffe08a, #f5b942); border: 0;

@@ -39,6 +39,32 @@ export function WorldMap({ data, geo, onOpenCity, extra }: {
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef({ moved: 0, dist: 0 });
   const touched = useRef(false); // пока игрок не трогал карту — подгоняем вид под реальный размер окна
+  const pending = useRef<{ dx: number; dy: number; f: number; px: number; py: number } | null>(null);
+  const frame = useRef(0);
+  // Жесты копятся и применяются раз в кадр — иначе на телефоне каждое движение пальца перерисовывает всю карту.
+  const flush = () => {
+    frame.current = 0;
+    const p = pending.current;
+    pending.current = null;
+    if (!p) return;
+    setView((cur) => {
+      const c = cur ?? v;
+      const u0 = c.w / size.w;
+      let next = { ...c, x: c.x - p.dx * u0, y: c.y - p.dy * u0 };
+      if (p.f !== 1) {
+        const w = Math.min(maxW, Math.max(minW, next.w / p.f));
+        const u1 = w / size.w;
+        next = { x: next.x + p.px * (u0 - u1), y: next.y + p.py * (u0 - u1), w };
+      }
+      return next;
+    });
+  };
+  const queue = (dx: number, dy: number, f = 1, px = 0, py = 0) => {
+    const p = pending.current ?? { dx: 0, dy: 0, f: 1, px, py };
+    p.dx += dx; p.dy += dy; p.f *= f; p.px = px; p.py = py;
+    pending.current = p;
+    if (!frame.current) frame.current = requestAnimationFrame(flush);
+  };
 
   useEffect(() => {
     const el = box.current;
@@ -60,8 +86,8 @@ export function WorldMap({ data, geo, onOpenCity, extra }: {
   }, [placed.length, aspect]);
 
   const v = view ?? { x: 0, y: 0, w: geo.w };
-  const unit = v.w / size.w; // единиц карты на пиксель
   const minW = 60, maxW = Math.max(geo.w, geo.h / aspect) * 1.3;
+  const unit = v.w / size.w; // единиц карты на пиксель
 
   const zoomAt = (factor: number, px: number, py: number) => setView((cur) => {
     touched.current = true;
@@ -93,11 +119,11 @@ export function WorldMap({ data, geo, onOpenCity, extra }: {
     if (pointers.current.size === 1) {
       const dx = p.x - prev.x, dy = p.y - prev.y;
       gesture.current.moved += Math.abs(dx) + Math.abs(dy);
-      setView((cur) => { const c = cur ?? v; const u = c.w / size.w; return { ...c, x: c.x - dx * u, y: c.y - dy * u }; });
+      queue(dx, dy);
     } else if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
       const d = Math.hypot(a.x - b.x, a.y - b.y);
-      if (gesture.current.dist > 0) zoomAt(d / gesture.current.dist, (a.x + b.x) / 2, (a.y + b.y) / 2);
+      if (gesture.current.dist > 0) queue(0, 0, d / gesture.current.dist, (a.x + b.x) / 2, (a.y + b.y) / 2);
       gesture.current.dist = d;
       gesture.current.moved += 100;
     }
@@ -112,7 +138,8 @@ export function WorldMap({ data, geo, onOpenCity, extra }: {
   };
   const onWheel = (e: React.WheelEvent) => {
     const p = local(e);
-    zoomAt(e.deltaY < 0 ? 1.18 : 1 / 1.18, p.x, p.y);
+    touched.current = true;
+    queue(0, 0, e.deltaY < 0 ? 1.18 : 1 / 1.18, p.x, p.y);
   };
 
   const battles = useMemo(() => {
@@ -154,6 +181,7 @@ export function WorldMap({ data, geo, onOpenCity, extra }: {
             </pattern>
           </defs>
           <rect x={-geo.w} y={-geo.h} width={geo.w * 3} height={geo.h * 3} fill="url(#wm-grid)" />
+          <path d={geo.path} className="wm-land-glow" style={{ strokeWidth: 7 * unit }} />
           <path d={geo.path} className="wm-land" style={{ strokeWidth: 1.4 * unit }} />
           {data.cities.filter((c) => at(c) && c.clan).map((c) => (
             <circle key={`g${c.id}`} cx={at(c)[0]} cy={at(c)[1]} r={(RADIUS[c.districts] ?? 7) * unit * 3.2}

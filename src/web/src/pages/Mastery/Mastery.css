@@ -39,10 +39,9 @@
   position: relative; min-height: 46px; padding: 5px 6px; border-radius: 10px; font-size: 10.5px; font-weight: 700; line-height: 1.2;
   color: var(--muted); background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); text-align: center;
 }
-.mt-node.can { color: var(--text); border-color: color-mix(in srgb, var(--c) 70%, transparent); background: color-mix(in srgb, var(--c) 10%, transparent); animation: mt-glow 2s ease-in-out infinite; }
+.mt-node.can { color: var(--text); border-color: color-mix(in srgb, var(--c) 70%, transparent); background: color-mix(in srgb, var(--c) 10%, transparent); box-shadow: 0 0 10px color-mix(in srgb, var(--c) 35%, transparent); }
 .mt-node.on { color: #07101f; font-weight: 800; background: linear-gradient(160deg, color-mix(in srgb, var(--c) 85%, #fff), var(--c)); border-color: transparent; box-shadow: 0 0 12px color-mix(in srgb, var(--c) 55%, transparent); }
 .mt-check { position: absolute; right: 4px; top: 4px; }
-@keyframes mt-glow { 50% { box-shadow: 0 0 12px color-mix(in srgb, var(--c) 45%, transparent); } }
 .mt-cost { display: block; margin-top: 6px; font-size: 10.5px; font-weight: 700; color: var(--muted); text-align: right; }
 .mt-sheet { --c: #4fd8ff; display: flex; flex-direction: column; gap: 6px; }
 .mt-sheet-tag { align-self: flex-start; font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); }

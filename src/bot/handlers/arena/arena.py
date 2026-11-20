@@ -227,6 +227,7 @@ async def cb_refresh(callback: CallbackQuery, redis: Redis) -> None:
     if st is None or callback.from_user.id not in (st["a"]["uid"], st["d"]["uid"]):
         await callback.answer(_ERR["no_battle"] if st is None else _ERR["not_yours"], show_alert=True)
         return
+    await svc.mark_seen(redis, st, callback.from_user.id)
     await callback.answer()
     await _show(callback, st)
 

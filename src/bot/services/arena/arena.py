@@ -216,15 +216,30 @@ def _resolve_action(side: dict, action: dict | None, round_no: int, own_power: f
     return ATTACK, 1.0, None
 
 
+async def mark_seen(redis: Redis, st: dict, user_id: int) -> None:
+    """Игрок открыл бой (Mini App или текст в боте) — с этого момента считаем пропуски ходов."""
+    for side in SIDES:
+        if st[side]["uid"] == user_id and not st[side].get("seen"):
+            st[side]["seen"] = True
+            if st["status"] == STATUS_LIVE:
+                await _save(redis, st)
+
+
 async def act(redis: Redis, battle_id: str, user_id: int, action: dict) -> dict:
     """Ход игрока. Если обе стороны готовы — раунд разыгрывается сразу. → состояние."""
     st = await load(redis, battle_id)
     if st is None or st["status"] != STATUS_LIVE:
         raise ArenaError("no_battle")
     side = _side_of(st, user_id)
-    st[side]["action"] = action
+    st[side]["seen"] = True
     if "game_score" in action and st[side]["pending_game"]:
         st[side]["pending_game"]["score"] = max(0.0, min(1.0, float(action["game_score"])))
+        st[side]["pending_game"]["played"] = True
+    if action.get("kind") == "game":
+        # Только результат навязанного испытания (2026-11-20): ход игрок выбирает сам, раунд не разыгрывается.
+        await _save(redis, st)
+        return st
+    st[side]["action"] = action
     other = "d" if side == "a" else "a"
     if st[other]["auto"] or st[other]["action"] is not None:
         return await _play(redis, st)
@@ -265,6 +280,8 @@ async def tick(redis: Redis, battle_id: str) -> dict | None:
 
 
 ARENA_AFK_ROUNDS = 2  # столько ходов подряд пропустил — за игрока до конца боя ходит автоатака (может выключить)
+# Пропуски считаются только после того, как игрок открыл бой (`seen`): пока он идёт из пуша в Mini App, ходит
+# автоатака по таймеру, но насовсем её не включаем (жалоба 2026-11-20: «скипает мои атаки, не даёт выбрать»).
 
 
 def _mark_afk(st: dict) -> None:
@@ -273,7 +290,7 @@ def _mark_afk(st: dict) -> None:
     timed_out = time.time() >= st["deadline"]
     for side in SIDES:
         s = st[side]
-        if s["uid"] is None or s["auto"]:
+        if s["uid"] is None or s["auto"] or not s.get("seen"):
             continue
         if s["action"] is not None:
             s["missed"] = 0

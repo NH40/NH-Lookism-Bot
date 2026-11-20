@@ -117,7 +117,7 @@ def view(st: dict, user_id: int) -> dict:
         "id": st["id"], "kind": st["kind"], "status": st["status"], "round": st["round"],
         "left": max(0, int(st["deadline"] - time.time())),
         "me": {"name": s["name"], "power": s["power"], "energy": s["energy"], "emax": s.get("emax", 10), "auto": s["auto"],
-               "waiting": s["action"] is not None, "game": s["pending_game"], "power0": s.get("power0", s["power"]), "afk": s.get("afk", False),
+               "waiting": s["action"] is not None, "game": s["pending_game"] if s["pending_game"] and not s["pending_game"].get("played") else None, "power0": s.get("power0", s["power"]), "afk": s.get("afk", False),
                "ava": s.get("ava"), "bot": s["uid"] is None,
                "chosen": _act_name((s["action"] or {}).get("perk") or (s["action"] or {}).get("kind")) if s["action"] else None,
                "units": s.get("units"), "units0": s.get("units0")},
@@ -242,6 +242,7 @@ async def get_battle(battle_id: str, user_id: int = Depends(get_current_user_id)
     if user_id not in (st["a"]["uid"], st["d"]["uid"]):
         raise bad(_ERRORS["not_yours"])
     await _ensure_avatars(session, redis, st)
+    await svc.mark_seen(redis, st, user_id)
     return view(st, user_id)
 
 

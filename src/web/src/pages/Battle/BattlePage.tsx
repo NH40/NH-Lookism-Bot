@@ -173,7 +173,7 @@ export function BattlePage() {
     if (!game) return;
     const p = battleParams(game.game);
     const ratio = Math.max(0, Math.min(1, score / (p.max_score || 1)));
-    if (game.enemy) send("act", { kind: "attack", game_score: ratio });
+    if (game.enemy) send("act", { kind: "game", game_score: ratio }); // только результат испытания — ход выбираешь сам
     else act("perk", { perk: game.perk, score: ratio });
     setGame(null);
   };
@@ -216,6 +216,11 @@ export function BattlePage() {
 
       {live ? (
         <>
+          {b.me.afk && b.me.auto && (
+            <button type="button" className="bt-afk" disabled={busy} onClick={() => send("auto", { on: false })}>
+              🤖 Ты пропустил ходы — включилась автоатака. <b>Играть самому</b>
+            </button>
+          )}
           <div className={`bt-turn ${canAct ? "go" : ""}`}>
             {b.me.auto ? "Ходит автоатака — выключи «Авто-бой», чтобы играть самому"
               : b.me.waiting ? `Ход сделан: ${b.me.chosen ?? "—"} · ждём соперника`

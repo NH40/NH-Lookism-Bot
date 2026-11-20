@@ -126,3 +126,5 @@
 .bt-game-box { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 14px; border: 1px solid var(--gold); background: #0a1024; }
 .bt-game-box.enemy { border-color: var(--red); }
 .bt-game-box .mg-area { min-height: 260px; }
+.bt-afk { display: block; width: 100%; padding: 10px 12px; border-radius: 12px; border: 0; text-align: center; font-size: 13px; font-weight: 700; color: #1a0d00; background: linear-gradient(160deg, #ffe08a, #f5b942); }
+.bt-afk b { text-decoration: underline; }

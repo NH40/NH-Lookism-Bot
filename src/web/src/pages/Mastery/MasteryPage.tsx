@@ -27,7 +27,6 @@ export function MasteryPage() {
         <div className="page">
           <BackHeader title="Мастерство" backLabel="Развитие" to={ROUTE_DEVELOPMENT} />
 
-          <MasteryTechniques />
           <Panel title="Ступени">
             {data.tiers.map((t) => (
               <div key={t.code} className="ms-tier">
@@ -121,6 +120,8 @@ export function MasteryPage() {
               <div className="ms-locked">Все три этапа пройдены — четыре мастерства на высшей ступени.</div>
             </Panel>
           )}
+
+          <MasteryTechniques />
         </div>
       )}
     </Screen>

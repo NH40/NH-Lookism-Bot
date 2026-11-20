@@ -325,13 +325,34 @@ async def get_events_catalog(
 
 
 @router.get("/live")
-async def get_live_map(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
-    """Живая карта (2026-11-20): все районы города одним списком — для поля с плитками (опрос раз в 15 с)."""
+async def get_live_map(city_id: int | None = Query(None), user_id: int = Depends(get_current_user_id),
+                       session: AsyncSession = Depends(get_session)) -> dict:
+    """Районы города для живой карты: свой город (по умолчанию) или любой город своей страны (просмотр)."""
+    from bot.services.worldmap import city_districts
+
     user = await require_user(session, user_id)
-    city = await get_city(session, user.city_id)
-    city_map = await get_city_map(session, user)
-    return {
-        "city": city.name, "art": COUNTRY_ART.get(base_code(city.country_code)), "count": city.district_count,
-        "districts": [{"id": d.id, "number": d.number, "kind": "mine" if d.is_mine else "bot" if d.owner_id is None else "player",
-                       "owner": d.owner_label, "owner_id": d.owner_id, "bot_power": d.bot_power} for d in city_map.districts],
-    }
+    cid = city_id or user.city_id
+    data = await city_districts(session, cid, user_id)
+    if not data or data["country"] != user.country_code:
+        raise bad("Город не найден.")
+    city = await get_city(session, cid)
+    data["art"] = COUNTRY_ART.get(base_code(city.country_code))
+    data["own"] = cid == user.city_id
+    if data["own"]:
+        powers = {d.id: d.bot_power for d in (await get_city_map(session, user)).districts}
+        for d in data["districts"]:
+            d["bot_power"] = powers.get(d["id"])
+    return data
+
+
+@router.get("/world")
+async def get_world_map(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
+                        redis: Redis = Depends(get_redis)) -> dict:
+    """Карта страны: города с императорами/кланами/населением, идущие онлайн-бои, лента захватов (опрос раз в 10 с)."""
+    from bot.services.worldmap import country_overview
+
+    user = await require_user(session, user_id)
+    data = await country_overview(session, redis, user.country_code, user_id)
+    data["geo"] = base_code(user.country_code)
+    data["country_name"] = clean_label(COUNTRY_BY_CODE[user.country_code].name) if user.country_code in COUNTRY_BY_CODE else user.country_code
+    return data

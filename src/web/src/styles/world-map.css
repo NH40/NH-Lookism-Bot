@@ -1,0 +1,102 @@
+/* Живая карта страны и города (2026-11-20). Телефон в приоритете: жесты, крупные цели, без hover. */
+.wm { position: relative; display: flex; flex-direction: column; gap: 8px; }
+.wm-box {
+  position: relative; height: min(62vh, 520px); min-height: 340px; border-radius: 16px; overflow: hidden;
+  border: 1px solid var(--line-soft); touch-action: none; user-select: none; -webkit-user-select: none;
+  background: radial-gradient(120% 90% at 50% 40%, #0b1d3d 0%, #050b1c 70%, #03060f 100%);
+}
+.wm.full .wm-box { position: fixed; inset: 0; z-index: 60; height: auto; border-radius: 0; border: 0; }
+.wm.full .wm-card { position: fixed; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 61; }
+.wm-box svg { display: block; cursor: grab; }
+.wm-land { fill: #12284a; stroke: rgba(110, 200, 255, 0.55); stroke-linejoin: round; filter: drop-shadow(0 0 6px rgba(79, 216, 255, 0.25)); }
+.wm-city { cursor: pointer; }
+.wm-dot { stroke: rgba(4, 10, 28, 0.9); transition: r 0.2s; }
+.wm-dot.mine { stroke: #4fd8ff; }
+.wm-dot.sel { stroke: #ffe08a; }
+.wm-label { fill: #eaf6ff; font-weight: 800; paint-order: stroke; stroke: rgba(3, 8, 20, 0.85); pointer-events: none; }
+.wm-pulse { fill: none; transform-box: fill-box; transform-origin: center; animation: wm-pulse 1.4s ease-out infinite; }
+.wm-pulse.red { stroke: #ff3d62; }
+.wm-pulse.gold { stroke: #ffe08a; animation-duration: 2.2s; }
+@keyframes wm-pulse { 0% { transform: scale(0.7); opacity: 1; } 100% { transform: scale(2.4); opacity: 0; } }
+.wm-token { transition: transform 0.9s cubic-bezier(0.5, 0, 0.3, 1.2); pointer-events: none; }
+.wm-token text { animation: wm-bob 1.6s ease-in-out infinite; }
+@keyframes wm-bob { 50% { transform: translateY(-3px); } }
+.wm-ctrl { position: absolute; right: 8px; top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.wm-ctrl button {
+  width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; color: var(--text);
+  background: rgba(8, 18, 40, 0.82); border: 1px solid var(--line-soft);
+}
+.wm-title {
+  position: absolute; left: 10px; top: 8px; padding: 6px 10px; border-radius: 10px; pointer-events: none;
+  background: rgba(8, 18, 40, 0.72); border: 1px solid var(--line-soft); display: flex; flex-direction: column;
+}
+.wm-title b { font-size: 14px; }
+.wm-title small { font-size: 10px; font-weight: 700; color: var(--muted); }
+.wm-card {
+  padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line-soft);
+  background: linear-gradient(180deg, rgba(14, 30, 62, 0.97), rgba(7, 15, 34, 0.97)); animation: wm-up 0.2s ease-out;
+}
+@keyframes wm-up { from { transform: translateY(8px); opacity: 0; } }
+.wm-card-head { display: flex; align-items: center; gap: 8px; }
+.wm-card-head b { flex: 1; font-size: 16px; }
+.wm-chip { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+.wm-emp { display: flex; align-items: center; gap: 4px; color: var(--gold-2); font-size: 12px; font-weight: 800; margin-top: 2px; }
+.wm-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 8px 0 6px; }
+.wm-stats span {
+  display: flex; flex-direction: column; align-items: center; padding: 6px 2px; border-radius: 10px;
+  background: rgba(79, 216, 255, 0.06); font-size: 10px; font-weight: 700; color: var(--muted);
+}
+.wm-stats b { font-size: 15px; color: var(--text); display: flex; align-items: center; gap: 2px; }
+.wm-fight { display: flex; align-items: center; gap: 4px; color: var(--red); font-weight: 800; margin-top: 4px; }
+
+/* Город изнутри: кварталы на ночной сетке улиц */
+.cv { display: flex; flex-direction: column; gap: 8px; }
+.cv-head { display: flex; align-items: center; gap: 10px; }
+.cv-head b { font-size: 17px; display: block; }
+.cv-field {
+  display: grid; gap: 6px; padding: 10px; border-radius: 16px; border: 1px solid var(--line-soft);
+  background:
+    repeating-linear-gradient(0deg, transparent 0 22px, rgba(79, 216, 255, 0.05) 22px 23px),
+    repeating-linear-gradient(90deg, transparent 0 22px, rgba(79, 216, 255, 0.05) 22px 23px),
+    radial-gradient(120% 90% at 50% 30%, #0b1d3d, #040914);
+  animation: cv-in 0.35s ease-out;
+}
+@keyframes cv-in { from { transform: scale(0.92); opacity: 0; } }
+.cv-block {
+  --c: #5a6b8c; position: relative; aspect-ratio: 1; min-height: 52px; border-radius: 10px; padding: 4px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--text);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--c) 38%, #0a1530), #081022);
+  border: 1px solid color-mix(in srgb, var(--c) 70%, transparent);
+  box-shadow: inset 0 0 12px color-mix(in srgb, var(--c) 25%, transparent);
+}
+.cv-block.bot { background: repeating-linear-gradient(135deg, #0d1830 0 6px, #0a1326 6px 12px); border-color: rgba(120, 140, 180, 0.3); }
+.cv-block.mine { box-shadow: 0 0 14px rgba(79, 216, 255, 0.45), inset 0 0 12px rgba(79, 216, 255, 0.3); }
+.cv-block.fresh { animation: cv-fresh 1.8s ease-in-out infinite; }
+@keyframes cv-fresh { 50% { box-shadow: 0 0 18px #ffe08a, inset 0 0 14px rgba(255, 224, 138, 0.45); } }
+.cv-block.fight { animation: cv-fight 0.9s ease-in-out infinite; }
+@keyframes cv-fight { 50% { box-shadow: 0 0 18px #ff3d62, inset 0 0 14px rgba(255, 61, 98, 0.5); } }
+.cv-num { position: absolute; left: 5px; top: 3px; font-size: 10px; font-weight: 800; color: var(--muted); }
+.cv-token {
+  width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 900;
+  color: #04101f; box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); animation: wm-bob 2s ease-in-out infinite;
+}
+.cv-token.me { background: none; font-size: 22px; box-shadow: none; }
+.cv-bots { font-size: 10px; font-weight: 800; color: var(--muted); }
+.cv-swords { position: absolute; right: 4px; top: 2px; font-size: 12px; }
+.cv-block small { font-size: 9px; font-weight: 700; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-legend { display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: 11px; font-weight: 700; color: var(--muted); }
+.cv-legend span { display: flex; align-items: center; gap: 4px; }
+.cv-legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+/* Лента страны */
+.ef { display: flex; flex-direction: column; gap: 6px; }
+.ef-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; text-align: left; color: var(--text);
+  background: rgba(79, 216, 255, 0.05); border: 1px solid rgba(79, 216, 255, 0.1); min-height: 44px;
+}
+.ef-row.live { border-color: rgba(255, 61, 98, 0.45); background: rgba(255, 61, 98, 0.08); }
+.ef-ico { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.05); color: var(--red); flex: none; }
+.ef-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ef-txt b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ef-txt small { font-size: 11px; color: var(--muted); font-weight: 700; }
+.ef-live { font-size: 9px; font-weight: 900; color: #fff; background: var(--red); padding: 2px 6px; border-radius: 6px; animation: cv-fight 1s infinite; }

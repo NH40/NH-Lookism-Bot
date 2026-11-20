@@ -105,15 +105,3 @@
 .teacher-btn { display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; width: auto; min-width: 150px; padding: 0 16px; }
 
 /* Живая карта (2026-11-20) */
-.lm { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
-.lm-field { position: relative; width: 100%; border-radius: 12px; overflow: hidden; border: 1px solid var(--line-soft); background: #071027 center / cover no-repeat; }
-.lm-field::before { content: ""; position: absolute; inset: 0; background: rgba(4, 10, 28, 0.55); }
-.lm-tile { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 2px; color: var(--text);
-  border: 1px solid rgba(120, 160, 255, 0.25); background: rgba(18, 28, 66, 0.35); font-size: 12px; font-weight: 800; cursor: pointer; transition: background 0.2s; }
-.lm-tile small { font-size: 9px; font-weight: 700; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lm-tile.mine { background: rgba(40, 110, 255, 0.4); border-color: var(--cyan); }
-.lm-tile.player { background: rgba(150, 30, 60, 0.38); border-color: rgba(255, 95, 120, 0.6); }
-.lm-tile.sel { outline: 2px solid var(--gold-2); z-index: 1; }
-.lm-token { position: absolute; z-index: 2; transform: translate(-50%, -50%); font-size: 22px; filter: drop-shadow(0 0 6px #000); transition: left 0.6s ease, top 0.6s ease; pointer-events: none; }
-.lm-card { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-soft); background: var(--card); }
-.lm-card-head { display: flex; align-items: center; justify-content: space-between; }

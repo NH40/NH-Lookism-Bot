@@ -1,7 +1,7 @@
-import { Building2, ChevronLeft, ChevronRight, Crown, Flag, Luggage, Skull, Swords, Trophy, UserPlus, Users, Layers } from "lucide-react";
-import { useState } from "react";
+import { Building2, ChevronRight, Crown, Flag, Luggage, Skull, Swords, Trophy, UserPlus, Users, Layers } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { imgUrl } from "../../api";
+import { apiGet, imgUrl } from "../../api";
 import type { BattleResult, BossResult, ChallengeResult, DistrictCard, MapData, MapDistrict, MapEvent } from "../../types";
 import { Panel, Screen, StatRow, countdown, fmt, useCountdown } from "../../components/ui";
 import { PHASE_CIRCLE, PHASE_FIST, ROUTE_BUSINESS, ROUTE_CARDS, ROUTE_COUNTRY, ROUTE_EMPIRE, ROUTE_DEVELOPMENT, ROUTE_GANG, ROUTE_MAP_EVENTS, ROUTE_TRAINING, ROUTE_TRAVEL, battlePath } from "../../constants/constants";
@@ -9,10 +9,14 @@ import { useAction, useApi } from "../../hooks/useApi";
 import { Sheet } from "../../components/Sheet";
 import { Journal } from "../../components/Journal";
 import "../../styles/game-screens.css";
+import "../../styles/world-map.css";
 import { RaidBanner } from "./RaidBanner";
 import { OnlineBattleButton } from "../../components/OnlineBattleButton";
 import { ArenaBanner } from "./ArenaBanner";
-import { LiveMap } from "./LiveMap";
+import { CityView } from "./CityView";
+import { EventFeed } from "./EventFeed";
+import { WorldMap } from "./WorldMap";
+import type { Geo, LiveDistrict, WorldData } from "./worldTypes";
 
 type Outcome =
   | { kind: "battle"; data: BattleResult }
@@ -230,9 +234,27 @@ function EventCard({ event, onFight, onMeet, busy, bossCd }: {
   );
 }
 
+function useWorld() {
+  const [data, setData] = useState<WorldData | null>(null);
+  const [geo, setGeo] = useState<Geo | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const load = () => apiGet<WorldData>("/map/world").then((d) => alive && setData(d)).catch(() => undefined);
+    load();
+    const t = setInterval(load, 10000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+  useEffect(() => {
+    if (!data?.geo || geo) return;
+    fetch(`/geo/${data.geo}.json`).then((r) => r.json()).then(setGeo).catch(() => undefined);
+  }, [data?.geo, geo]);
+  return { data, geo };
+}
+
 export function MapPage() {
-  const [page, setPage] = useState(0);
-  const { data, status, error, reload } = useApi<MapData>(`/map?page=${page}`);
+  const { data, status, error, reload } = useApi<MapData>("/map?page=0");
+  const world = useWorld();
+  const [cityId, setCityId] = useState<number | null>(null);
   const [selected, setSelected] = useState<MapDistrict | null>(null);
   const [bossOutcome, setBossOutcome] = useState<BossResult | null>(null);
   const { run, busy } = useAction(reload);
@@ -247,6 +269,8 @@ export function MapPage() {
     const result = await run(`/boss/${e.id}/fight`);
     if (result) setBossOutcome(result as never);
   };
+  const openDistrict = (d: LiveDistrict) =>
+    setSelected({ id: d.id, number: d.number, kind: d.kind, owner: d.owner, bot_rank: null, bot_quantity: null, bot_power: d.bot_power ?? null });
 
   return (
     <Screen status={status} error={error}>
@@ -254,24 +278,37 @@ export function MapPage() {
         <div className="page">
           <RaidBanner />
           <ArenaBanner />
-          <div className="map-hero">
-            {data.city.art && <img src={imgUrl(data.city.art, 720)} alt={data.city.name} />}
-            <div className="map-hero-over">
-              <div className="disp" style={{ fontSize: 20, fontWeight: 800 }}>{data.city.name}</div>
-              <div className="map-hero-meta">
-                <span className="muted">{data.city.country_name ?? ""} · {data.city.district_count} районов</span>
-                {data.emperor && (
-                  <span className="map-emperor"><Crown size={14} />Император: {data.emperor.name} · налог {data.emperor.tax_percent}%</span>
-                )}
-              </div>
-            </div>
-          </div>
+
+          {world.data && world.geo ? (
+            cityId !== null ? (
+              <CityView cityId={cityId} myClan={world.data.my_clan} battles={world.data.battles}
+                onBack={() => setCityId(null)} onDistrict={(d) => openDistrict(d)} />
+            ) : (
+              <WorldMap data={world.data} geo={world.geo} onOpenCity={(c) => setCityId(c.id)}
+                extra={(c) => c.id === world.data?.my_city
+                  ? <Link className="btn small" to={ROUTE_BUSINESS}><Building2 size={14} />Бизнесы</Link>
+                  : <Link className="btn ghost small" to={ROUTE_TRAVEL}><Luggage size={14} />Переезд</Link>} />
+            )
+          ) : (
+            <div className="skeleton" style={{ height: 380, borderRadius: 14 }} />
+          )}
 
           <div style={{ display: "flex", gap: 8 }}>
-            <div className="stat-tile"><span className="muted">Твои районы</span><div className="disp" style={{ color: "var(--cyan)" }}>{data.my_districts}</div></div>
+            <button type="button" className="stat-tile" style={{ textAlign: "left" }} onClick={() => world.data?.my_city && setCityId(world.data.my_city)}>
+              <span className="muted">{data.city.name}</span><div className="disp" style={{ color: "var(--cyan)" }}>{data.my_districts} р-н.</div>
+            </button>
             <div className="stat-tile"><span className="muted">Доход/мин</span><div className="disp" style={{ color: "var(--gold-2)" }}>+{fmt(Math.round(data.income_per_minute))}</div></div>
             <div className="stat-tile"><span className="muted">Атака через</span><div className="disp">{cd > 0 ? countdown(cd) : "готов"}</div></div>
           </div>
+          {data.emperor && (
+            <div className="map-emperor" style={{ alignSelf: "flex-start" }}><Crown size={14} />Император города: {data.emperor.name} · налог {data.emperor.tax_percent}%</div>
+          )}
+
+          {world.data && (
+            <Panel title="ЛЕНТА СТРАНЫ">
+              <EventFeed data={world.data} onCity={(id) => { setCityId(id); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
+            </Panel>
+          )}
 
           <div className="grid-4">
             <Link className="qa" to={ROUTE_GANG}><Users size={20} color="var(--cyan-2)" />Банда</Link>
@@ -279,36 +316,11 @@ export function MapPage() {
             <Link className="qa" to={`${ROUTE_GANG}#recruit`}><UserPlus size={20} color="var(--cyan-2)" />Вербовка</Link>
             <Link className="qa" to={ROUTE_BUSINESS}><Building2 size={20} color="var(--gold-2)" />Бизнес</Link>
           </div>
-
-          <Panel title="ЖИВАЯ КАРТА">
-            <LiveMap onOpen={(d) => setSelected({ id: d.id, number: d.number, kind: d.kind, owner: d.owner, bot_rank: null, bot_quantity: null, bot_power: d.bot_power })} />
-          </Panel>
-
-          <Panel title="РАЙОНЫ">
-            {data.sole_owner && (
-              <p className="muted" style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 700 }}>Весь город принадлежит: {data.sole_owner}</p>
-            )}
-            <div className="grid-4">
-              {data.districts.map((d) => (
-                <button key={d.id} type="button" className={`dist ${d.kind}`} onClick={() => setSelected(d)}>
-                  {d.number}
-                  <small>{d.kind === "mine" ? "твой" : d.kind === "bot" ? "боты" : d.owner}</small>
-                </button>
-              ))}
-            </div>
-            <div className="pager">
-              <span>Показаны {data.page * 12 + 1}–{data.page * 12 + data.districts.length} из {data.total}</span>
-              <span>
-                <button type="button" disabled={data.page <= 0} onClick={() => setPage(data.page - 1)}><ChevronLeft size={14} />Назад</button>
-                <button type="button" disabled={data.page >= data.pages - 1} onClick={() => setPage(data.page + 1)}>Далее<ChevronRight size={14} /></button>
-              </span>
-            </div>
-            {!data.can_attack && !data.empire && (
-              <p className="muted" style={{ margin: "8px 0 0", fontSize: 11, fontWeight: 700 }}>
-                Твоя фаза воюет за город целиком — бои за города страны доступны в боте (Карта).
-              </p>
-            )}
-          </Panel>
+          {!data.can_attack && !data.empire && (
+            <p className="muted" style={{ margin: 0, fontSize: 11, fontWeight: 700 }}>
+              Твоя фаза воюет за город целиком — бои за города страны в разделе «Война за города».
+            </p>
+          )}
 
           <Link to={ROUTE_TRAVEL} className="emp-entry country">
             <span className="ico"><Luggage size={20} color="var(--cyan-2)" /></span>
@@ -322,7 +334,7 @@ export function MapPage() {
             <Link to={ROUTE_COUNTRY} className="emp-entry country">
               <span className="ico"><Flag size={20} color="var(--cyan-2)" /></span>
               <span style={{ flex: 1, minWidth: 0 }}>
-                <b>Карта страны</b>
+                <b>Война за города</b>
                 <small>{data.phase === PHASE_FIST ? "города страны · только просмотр" : "штурм ботов города и вызовы за город"}</small>
               </span>
               <ChevronRight size={18} />

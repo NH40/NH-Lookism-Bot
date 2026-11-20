@@ -55,8 +55,7 @@ def report_menu(district_id: int, number: int, *, can_attack_again: bool) -> Inl
 def accept_menu(challenge_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=BTN_ACCEPT, callback_data=f"{CB_CHALLENGE_ACCEPT_PREFIX}{challenge_id}")],
-            [InlineKeyboardButton(text="⚔️ Принять онлайн (перки и ходы)", callback_data=f"ar:sc:{challenge_id}")],
+            [InlineKeyboardButton(text="⚔️ Принять бой", callback_data=f"ar:sc:{challenge_id}")],
         ]
     )
 

@@ -199,12 +199,25 @@ async def cb_war_accept(callback: CallbackQuery, session: AsyncSession, redis: R
     if war_id is None:
         await callback.answer()
         return
+    # Принятие войны — онлайн-бой вождей (пользователь 2026-11-20); просрочено — прежний автобой внутри start_war.
+    from bot.keyboards.arena_push import battle_markup
+    from bot.services.arena import ArenaError
+    from bot.services.arena.scenarios_pve import start_war
+
     try:
-        outcome = await accept_war(session, redis, callback.from_user.id, war_id)
+        outcome = await start_war(session, redis, callback.from_user.id, war_id)
     except WarNotFoundError:
         await callback.answer(WAR_NOT_FOUND_ALERT, show_alert=True)
         return
+    except ArenaError:
+        await callback.answer("Ты или соперник уже в другом бою — закончи его.", show_alert=True)
+        return
     await callback.answer()
+    if isinstance(outcome, dict):
+        await callback.message.answer(
+            "⚔️ <b>Бой вождей начался!</b>\n\nРаунд — 12 секунд: атака, защита, перки и мини-игры. "
+            "Не зайдёшь — за тебя ходит автоатака.", reply_markup=battle_markup(outcome["id"]))
+        return
     await send_war_reports(callback.bot, session, outcome)
 
 

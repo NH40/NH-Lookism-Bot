@@ -1,10 +1,10 @@
 import { Crown, Eye, Megaphone, Shield, Swords } from "lucide-react";
-import { OnlineBattleButton } from "../../components/OnlineBattleButton";
 import { useCallback, useState } from "react";
 import { apiGet, ApiError } from "../../api";
 import type { EmpireAnnounce, EmpireAnnouncementLog, EmpireData, EmpireIncomingWar, EmpireRuler, EmpireSubject, EmpireSubjectRate, EmpireWarTarget, EmpireWarTargets, SabotageAction } from "../../types";
 import { BackHeader, Panel, Screen, StatRow, countdown, fmt, useCountdown, useToast } from "../../components/ui";
-import { ROUTE_MAP } from "../../constants/constants";
+import { ROUTE_MAP, battlePath } from "../../constants/constants";
+import { useNavigate } from "react-router-dom";
 import { Sheet } from "../../components/Sheet";
 import { useAction, useApi } from "../../hooks/useApi";
 import { AbdicatePanel, EmperorEvents, SubjectEvents } from "./EmpireEvents";
@@ -167,15 +167,18 @@ function AnnouncementLog() {
 function IncomingWar({ war, onChanged }: { war: EmpireIncomingWar; onChanged: () => void }) {
   const left = useCountdown(war.expires_in_seconds);
   const { run, busy } = useAction(onChanged);
+  const nav = useNavigate();
   return (
     <Panel title="ПРОТИВ ТЕБЯ ВОЙНА" tone="red" badgeMark="!">
       <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 700 }}>
         Император <b>{war.attacker}</b> бросил вызов. Не примешь за {countdown(left)} — бой пройдёт против твоего лагеря защиты.
       </p>
-      <button className="btn red block" type="button" disabled={busy || left <= 0} onClick={() => run("/empire/war/accept", { war_id: war.war_id })}>
-        <Swords size={16} />Принять бой
+      <button className="btn red block" type="button" disabled={busy || left <= 0} onClick={async () => {
+        const r = (await run("/empire/war/accept", { war_id: war.war_id })) as { battle_id?: string | null } | null;
+        if (r?.battle_id) nav(battlePath(r.battle_id));
+      }}>
+        <Swords size={16} />Принять бой — онлайн
       </button>
-      {left > 0 && <OnlineBattleButton path="/arena/start/war" body={{ war_id: war.war_id }} label="Принять онлайн: бой вождей" />}
     </Panel>
   );
 }

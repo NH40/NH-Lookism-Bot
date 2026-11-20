@@ -118,8 +118,14 @@ async def cb_start_challenge(callback: CallbackQuery, session: AsyncSession, red
     if not isinstance(st, dict):
         await callback.message.answer("⏳ Вызов уже истёк — бой провела рота защиты.")
         return
-    text, markup = render(st, callback.from_user.id)
-    await callback.message.answer(text, reply_markup=markup)
+    from bot.keyboards.arena_push import battle_markup
+
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:  # noqa: BLE001 — старое сообщение могло быть удалено
+        pass
+    await callback.message.answer("⚔️ <b>Бой начался!</b> Жми «Войти в бой» — там перки и мини-игры. Не зайдёшь — ходит автоатака.",
+                                  reply_markup=battle_markup(st["id"]))
 
 
 @router.callback_query(F.data.startswith(CB_ACT))

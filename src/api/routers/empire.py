@@ -481,6 +481,7 @@ class AcceptIn(BaseModel):
 class WarResultOut(BaseModel):
     message: str
     won: bool | None
+    battle_id: str | None = None
 
 
 @router.post("/war/accept", response_model=WarResultOut)
@@ -492,10 +493,17 @@ async def post_war_accept(
 ) -> WarResultOut:
     from bot.handlers.empire import send_war_reports
 
+    from bot.services.arena import ArenaError
+    from bot.services.arena.scenarios_pve import start_war
+
     try:
-        outcome = await accept_war(session, redis, user_id, body.war_id)
+        outcome = await start_war(session, redis, user_id, body.war_id)
     except WarNotFoundError:
         raise bad(WAR_NOT_FOUND_ALERT)
+    except ArenaError:
+        raise bad("Ты или соперник уже в другом бою — закончи его.")
+    if isinstance(outcome, dict):  # онлайн-бой вождей начался
+        return WarResultOut(message="Бой вождей начался!", won=None, battle_id=outcome["id"])
     await with_bot_session(lambda bot, s: send_war_reports(bot, s, outcome))
     if outcome.resolution not in (WAR_ACCEPTED, WAR_FORFEIT):
         return WarResultOut(message="Война аннулирована — у сторон уже нет городов или трона.", won=None)

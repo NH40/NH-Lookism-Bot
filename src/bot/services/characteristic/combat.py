@@ -141,6 +141,8 @@ class CombatProfile:
             loss_save=endurance_mastery_loss_save_percent(self.mastery[MASTERY_ENDURANCE]) / 100
             + endurance * ENDURANCE_VITALITY_PERCENT_PER_RANK / 100,
             absorb=endurance * ENDURANCE_ABSORB_PERCENT_PER_RANK / 100,
+            # Влияние в бой (баг до 2026-11-20: всегда 0 — «+атака и прочность за влияние» Преодоления не работали нигде).
+            influence=int(getattr(self.build, "influence", 0) or 0),
             **parts,
         )
 

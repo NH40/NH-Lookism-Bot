@@ -60,6 +60,7 @@ from bot.config.game import (
     BATTLE_FIRST_STRIKE_MAX,
     BATTLE_GROW_ON_KILL_CAP,
     BATTLE_INFLUENCE_GAP_CAP,
+    BATTLE_INFLUENCE_STEP,
     BATTLE_PHANTOM_ROUND_CHANCE,
     BATTLE_PRE_STRIKE_MAX,
     BATTLE_REVIVE_STRIKE_MAX,
@@ -301,12 +302,12 @@ def _dominance(side: _Side, opponent: _Side, m: CombatMods) -> float:
 
 
 def _influence_edge(side: _Side, opponent: _Side, m: CombatMods) -> float:
-    """Влияние в бою: своё и перевес над противником, за каждые 100 единиц, под потолком."""
+    """Влияние в бою: своё и перевес над противником, за каждые `BATTLE_INFLUENCE_STEP` единиц, под потолком."""
     if not m.influence_gap and not m.influence_power:
         return 0.0
     own = side.chances.influence
     diff = max(0, own - opponent.chances.influence)
-    return min(BATTLE_INFLUENCE_GAP_CAP, (m.influence_power * own + m.influence_gap * diff) / 100)
+    return min(BATTLE_INFLUENCE_GAP_CAP, (m.influence_power * own + m.influence_gap * diff) / BATTLE_INFLUENCE_STEP)
 
 
 def _refresh_dynamics(side: _Side, opponent: _Side, m: CombatMods, round_number: int) -> None:

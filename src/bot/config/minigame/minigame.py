@@ -125,6 +125,39 @@ def params(game: str, d: float) -> dict:
         p["max_score"] = max(3, math.ceil(p["max_score"] * 0.7))
         p["need"], p["seconds"] = math.ceil(p["need"] * 0.75), p["seconds"] * 0.7
     p["need"] = min(p["need"], p["max_score"])
+    return _playable(base, p)
+
+
+# Играбельность (аудит 2026-11-20): после сложности и варианта — человеческие пороги на телефоне.
+_MS_FLOOR = {"window_ms": 350, "warn_ms": 450, "flash_ms": 250, "show_ms": 350, "life_ms": 500, "gap_ms": 350,
+             "round_ms": 3000, "fill_ms": 700}
+_SIZE_FLOOR = {"zone": 0.12, "band": 0.10, "size": 0.10}
+_TIMING_WINDOW_S = 0.12  # цель/полоса проходит зону не быстрее, чем за 120 мс
+_NO_SLACK = frozenset({G_MASH, G_HOLD, G_CHAIN, G_TRACK, G_PAIRS})  # счёт по времени/всё поле — свой предел
+
+
+def _playable(game: str, p: dict) -> dict:
+    p = dict(p)
+    for k, lo in _MS_FLOOR.items():
+        if k in p:
+            p[k] = max(lo, p[k])
+    for k, lo in _SIZE_FLOOR.items():
+        if k in p:
+            p[k] = max(lo, p[k])
+    if game == G_RHYTHM:  # бегунок: speed — долей полосы в секунду
+        p["speed"] = min(p["speed"], round(p["zone"] / _TIMING_WINDOW_S, 2))
+    if game == G_AIM:  # прицел ходит туда-обратно: 2·speed долей в секунду
+        p["speed"] = min(p["speed"], round(p["size"] / (2 * _TIMING_WINDOW_S), 2))
+    if game == G_TRACK:
+        p["speed"] = min(p["speed"], 0.8)
+    if game == G_CHARGE:  # окно отпускания = band × fill_ms
+        p["fill_ms"] = max(p["fill_ms"], int(_TIMING_WINDOW_S * 1000 / p["band"]))
+    if game == G_MASH:  # не больше ~7 нажатий в секунду
+        p["need"] = min(p["need"], int(7 * p["seconds"]))
+    if game == G_HOLD:  # не больше 70% времени в зоне
+        p["need"] = min(p["need"], int(p["seconds"] * 10 * 0.7))
+    if game not in _NO_SLACK:  # идеал не обязателен: хотя бы 1 ошибка (≈12%) допустима
+        p["need"] = max(1, min(p["need"], p["max_score"] - max(1, math.ceil(p["max_score"] * 0.12))))
     return p
 
 

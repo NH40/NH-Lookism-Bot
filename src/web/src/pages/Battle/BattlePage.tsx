@@ -35,7 +35,7 @@ function battleParams(game: string): P {
     rhythm: { rounds: 4, zone: 0.2, speed: 1.2, need: 3, max_score: 4, seconds: 4 },
     charge: { rounds: 3, band: 0.16, fill_ms: 1100, need: 2, max_score: 3, seconds: 3 },
     combo: { rounds: 1, length: 4, show_ms: 500, need: 1, max_score: 1, seconds: 3 },
-    aim: { rounds: 3, size: 0.16, speed: 1.1, need: 2, max_score: 3, seconds: 4 },
+    aim: { rounds: 3, size: 0.16, speed: 0.6, need: 2, max_score: 3, seconds: 4 }, // мишень проходится за ~130 мс, а не 70
     reaction: { rounds: 3, window_ms: 480, need: 2, max_score: 3, seconds: 4 },
     dodge: { strikes: 6, warn_ms: 650, max_miss: 2, need: 4, max_score: 6, seconds: 5 },
     gonogo: { rounds: 6, window_ms: 700, decoy: 0.4, need: 4, max_score: 6, seconds: 5 },

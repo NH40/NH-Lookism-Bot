@@ -14,3 +14,42 @@
 .ms-count { font-size: 12px; font-weight: 800; flex: none; }
 .ms-tom { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line-dash); }
 .ms-tom .btn { margin-top: 8px; }
+
+/* Техники мастерства — цветные карточки (2026-11-20) */
+.mt-wrap { display: flex; flex-direction: column; gap: 10px; }
+.mt-top { display: flex; align-items: center; justify-content: space-between; }
+.mt-top b { font-size: 16px; letter-spacing: 0.02em; }
+.mt-frag { font-size: 13px; font-weight: 800; padding: 4px 10px; border-radius: 999px; background: rgba(255, 224, 138, 0.12); color: var(--gold-2); border: 1px solid rgba(255, 224, 138, 0.35); }
+.mt-hint { font-size: 11px; font-weight: 600; margin-top: -6px; }
+.mt-card {
+  --c: #4fd8ff; position: relative; padding: 10px 10px 8px; border-radius: 14px; overflow: hidden;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--c) 16%, #0a1430) 0%, #070e22 70%);
+  border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--c) 14%, transparent);
+}
+.mt-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c); box-shadow: 0 0 10px var(--c); }
+.mt-card.locked { filter: saturate(0.45); opacity: 0.8; }
+.mt-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.mt-head b { flex: 1; font-size: 14px; color: color-mix(in srgb, var(--c) 35%, #fff); }
+.mt-ico { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; background: color-mix(in srgb, var(--c) 18%, transparent); }
+.mt-state { display: flex; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 800; color: var(--muted); }
+.mt-tier { position: relative; display: grid; grid-template-columns: 20px repeat(3, 1fr); gap: 6px; align-items: stretch; margin-top: 6px; }
+.mt-num { display: grid; place-items: center; font-size: 10px; font-weight: 900; color: color-mix(in srgb, var(--c) 70%, #fff); }
+.mt-node {
+  position: relative; min-height: 46px; padding: 5px 6px; border-radius: 10px; font-size: 10.5px; font-weight: 700; line-height: 1.2;
+  color: var(--muted); background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); text-align: center;
+}
+.mt-node.can { color: var(--text); border-color: color-mix(in srgb, var(--c) 70%, transparent); background: color-mix(in srgb, var(--c) 10%, transparent); animation: mt-glow 2s ease-in-out infinite; }
+.mt-node.on { color: #07101f; font-weight: 800; background: linear-gradient(160deg, color-mix(in srgb, var(--c) 85%, #fff), var(--c)); border-color: transparent; box-shadow: 0 0 12px color-mix(in srgb, var(--c) 55%, transparent); }
+.mt-check { position: absolute; right: 4px; top: 4px; }
+@keyframes mt-glow { 50% { box-shadow: 0 0 12px color-mix(in srgb, var(--c) 45%, transparent); } }
+.mt-cost { display: block; margin-top: 6px; font-size: 10.5px; font-weight: 700; color: var(--muted); text-align: right; }
+.mt-sheet { --c: #4fd8ff; display: flex; flex-direction: column; gap: 6px; }
+.mt-sheet-tag { align-self: flex-start; font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); }
+.mt-about { margin: 2px 0 4px; font-size: 13px; font-weight: 600; color: var(--text); }
+.mt-sheet-sub { font-size: 11px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: var(--c); }
+.mt-eff { font-size: 13px; font-weight: 700; }
+.mt-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.mt-chips span { font-size: 12px; font-weight: 800; padding: 5px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); }
+.mt-learn { margin-top: 8px; color: #07101f; background: linear-gradient(160deg, color-mix(in srgb, var(--c) 80%, #fff), var(--c)); border: 0; }
+.mt-done { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; font-weight: 800; color: var(--c); }

@@ -1,5 +1,5 @@
 import { Check, Lock, Plus, Shield, Swords, Zap, Gauge } from "lucide-react";
-import { MasteryTechniques } from "./MasteryTechniques";
+import { MASTERY_COLORS, MasteryTechniques } from "./MasteryTechniques";
 import type { ReactNode } from "react";
 import type { MasteryData } from "../../types";
 import { BackHeader, Bar, Panel, Screen, StatRow, fmt } from "../../components/ui";
@@ -9,10 +9,10 @@ import { useAction, useApi } from "../../hooks/useApi";
 import "./Mastery.css";
 
 const ICONS: Record<string, ReactNode> = {
-  strength: <Swords size={16} color="#ff7a8a" />,
-  speed: <Zap size={16} color="#7fd4ff" />,
-  endurance: <Shield size={16} color="#3ddc84" />,
-  technique: <Gauge size={16} color="#a78bfa" />,
+  strength: <Swords size={16} color={MASTERY_COLORS.strength} />,
+  speed: <Zap size={16} color={MASTERY_COLORS.speed} />,
+  endurance: <Shield size={16} color={MASTERY_COLORS.endurance} />,
+  technique: <Gauge size={16} color={MASTERY_COLORS.technique} />,
 };
 
 /** Мастерство: ступени четырёх мастерств, цепочка «Преодоление стены», бой с Томом Ли, тренер. */

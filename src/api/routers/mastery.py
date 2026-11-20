@@ -192,6 +192,23 @@ class LearnIn(BaseModel):
     code: str
 
 
+def _tech_perk(code: str) -> dict:
+    """Цифры техники мастерства в онлайн-бою: перк `mt:<code>` — эффекты, энергия, перезарядка."""
+    from dataclasses import asdict
+
+    from bot.services.arena.arena import PERK_REGISTRY
+    from bot.texts.development.effects import describe_spec
+
+    perk = PERK_REGISTRY.get(f"mt:{code}")
+    if perk is None:
+        return {"effects": [], "energy": 0, "cooldown": 0}
+    combat = {k: v for k, v in asdict(perk.self_mods).items() if isinstance(v, float) and v}
+    effects = describe_spec({"combat": combat})
+    if perk.damage != 1.0:
+        effects.insert(0, f"урон в раунде ×{perk.damage:g}")
+    return {"effects": effects, "energy": perk.cost, "cooldown": perk.cooldown}
+
+
 @router.get("/techniques")
 async def get_techniques(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
     from bot.config.mastery.techniques import MASTERY_NAMES, MASTERY_TREES
@@ -200,7 +217,7 @@ async def get_techniques(user_id: int = Depends(get_current_user_id), session: A
     trees, fragments = await view(session, user_id)
     return {"fragments": fragments, "trees": [{
         "mastery": t.mastery, "name": MASTERY_NAMES[t.mastery], "unlocked": t.unlocked, "next_tier": t.next_tier, "cost": t.cost,
-        "tiers": [[{"code": x.code, "name": x.name, "about": x.about, "learned": t.learned.get(i) == x.code} for x in techs]
+        "tiers": [[{"code": x.code, "name": x.name, "about": x.about, "learned": t.learned.get(i) == x.code, **_tech_perk(x.code)} for x in techs]
                   for i, techs in enumerate(MASTERY_TREES[t.mastery], 1)],
     } for t in trees]}
 

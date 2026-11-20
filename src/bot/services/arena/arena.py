@@ -127,7 +127,9 @@ async def create(
         start, regen, cap = energy or (ARENA_ENERGY_START, ARENA_ENERGY_REGEN, ARENA_ENERGY_MAX)
         return {"uid": uid, "name": name, "auto": bool(auto or uid is None), "energy": start, "regen": regen, "emax": cap, "cd": {},
                 "perks": [p for p in perks if p in PERK_REGISTRY], "action": None, "pending_game": None,
-                "power": int(sum(s.unit_power * s.quantity for s in stacks))}
+                "power": int(sum(s.unit_power * s.quantity for s in stacks)),
+                "power0": int(sum(s.unit_power * s.quantity for s in stacks)), "units": int(sum(s.quantity for s in stacks)),
+                "units0": int(sum(s.quantity for s in stacks))}
 
     st = {
         "id": battle_id, "kind": kind, "status": STATUS_LIVE, "round": 0, "seed": secrets.randbits(48),
@@ -292,9 +294,13 @@ async def _play(redis: Redis, st: dict) -> dict:
         s["energy"] = min(s.get("emax", ARENA_ENERGY_MAX), s["energy"] + s.get("regen", ARENA_ENERGY_REGEN))
         s["action"] = None
     st["log"].append({"a": {"code": a_code, "dmg": a_dmg}, "d": {"code": d_code, "dmg": d_dmg},
-                      "kills": [entry_log.attacker_kills, entry_log.defender_kills] if entry_log else [0, 0]})
+                      "kills": [entry_log.attacker_kills, entry_log.defender_kills] if entry_log else [0, 0],
+                      # для живого журнала в Mini App: урон сторон и сработавшие навыки/события раунда
+                      "hit": [entry_log.attacker_damage, entry_log.defender_damage] if entry_log else [0, 0],
+                      "fired": [list(entry_log.attacker_fired)[:4], list(entry_log.defender_fired)[:4]] if entry_log else [[], []]})
     st["round"] = round_no
     st["a"]["power"], st["d"]["power"] = int(run.a.total_power()), int(run.d.total_power())
+    st["a"]["units"], st["d"]["units"] = int(run.a.alive_quantity()), int(run.d.alive_quantity())
     st["deadline"] = time.time() + ARENA_ROUND_SECONDS
     if run.over:
         result = run.result()

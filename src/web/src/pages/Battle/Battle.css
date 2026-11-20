@@ -1,33 +1,101 @@
-/* Онлайн-бой: карточный стиль на фоне карты. */
+/* Онлайн-бой (2026-11-20): карточки армий, перки-карты, живой журнал. Анимации — только transform/opacity. */
 .bt { gap: 10px; }
-.bt-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 800; }
-.bt-top b { font-family: var(--font-mono); font-size: 18px; }
-.bt-red { color: var(--red-2); }
-.bt-board { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 14px 12px; border-radius: 12px;
-  border: 1px solid var(--line-soft); overflow: hidden;
-  background: linear-gradient(180deg, rgba(6, 14, 34, 0.85), rgba(6, 14, 34, 0.6)),
-    repeating-linear-gradient(45deg, rgba(79, 216, 255, 0.05) 0 2px, transparent 2px 22px), #071027; }
-.bt-card { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 10px; border: 1px solid; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); }
-.bt-card b { font-family: var(--font-display); font-size: 15px; font-weight: 900; }
-.bt-card span { font-family: var(--font-mono); font-size: 18px; font-weight: 800; }
-.bt-card small { font-size: 11px; font-weight: 700; color: var(--muted); }
-.bt-card.foe { border-color: rgba(255, 77, 106, 0.55); background: linear-gradient(135deg, rgba(255, 77, 106, 0.16), rgba(10, 10, 20, 0.6)); }
-.bt-card.me { border-color: rgba(79, 216, 255, 0.55); background: linear-gradient(135deg, rgba(79, 216, 255, 0.16), rgba(10, 10, 20, 0.6)); }
-.bt-clash { display: flex; align-items: center; gap: 10px; color: var(--gold-2); }
-.bt-bar { flex: 1; height: 8px; border-radius: 4px; background: rgba(255, 77, 106, 0.45); overflow: hidden; }
-.bt-bar i { display: block; height: 100%; background: linear-gradient(90deg, #4fd8ff, #8ff0b8); transition: width 0.4s ease; }
-.bt-perks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; max-height: 38vh; overflow-y: auto; }
-.bt-perk { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; border-radius: 8px; text-align: left; color: inherit;
-  border: 1px solid rgba(255, 191, 60, 0.45); background: linear-gradient(135deg, rgba(255, 191, 60, 0.14), rgba(10, 10, 20, 0.5)); cursor: pointer; }
-.bt-perk b { font-size: 12px; font-weight: 800; line-height: 1.25; }
-.bt-perk small { display: flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 700; color: var(--gold-2); }
-.bt-perk.off { opacity: 0.4; cursor: default; }
-.bt-log { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; font-weight: 600; }
-.bt-log div { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; padding: 5px 8px; border-radius: 6px; background: var(--card); }
-.bt-result { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px; border-radius: 12px; border: 1px solid; }
+.bt-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bt-top > div:first-child { display: flex; flex-direction: column; }
+.bt-top > div:first-child b { font-family: var(--font-display); font-size: 17px; font-weight: 900; }
+.bt-top > div:first-child small { font-size: 11px; font-weight: 800; color: var(--muted); }
+.bt-timer {
+  --p: 100%; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center;
+  background: conic-gradient(var(--gold-2) var(--p), rgba(255, 255, 255, 0.08) 0);
+}
+.bt-timer span { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: #0a1130; font-family: var(--font-mono); font-size: 17px; font-weight: 900; }
+.bt-timer.hot { background: conic-gradient(var(--red) var(--p), rgba(255, 255, 255, 0.08) 0); }
+.bt-timer.hot span { color: var(--red); }
+
+.bt-army { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 14px; border: 1px solid; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); }
+.bt-army.foe { border-color: rgba(255, 77, 106, 0.55); background: linear-gradient(135deg, rgba(255, 77, 106, 0.18), rgba(10, 10, 20, 0.7)); }
+.bt-army.me { border-color: rgba(79, 216, 255, 0.55); background: linear-gradient(135deg, rgba(79, 216, 255, 0.18), rgba(10, 10, 20, 0.7)); }
+.bt-army-head { display: flex; align-items: center; gap: 10px; }
+.bt-ava { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; font-size: 22px; background: rgba(255, 255, 255, 0.06); }
+.bt-army-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.bt-army-name b { font-family: var(--font-display); font-size: 15px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-army-name small { font-size: 11px; font-weight: 700; color: var(--muted); }
+.bt-pow { font-family: var(--font-mono); font-size: 17px; font-weight: 900; }
+.bt-hp { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.bt-hp i { display: block; height: 100%; transition: width 0.5s ease; }
+.bt-army.foe .bt-hp i { background: linear-gradient(90deg, #ff3d62, #ff8a6a); }
+.bt-army.me .bt-hp i { background: linear-gradient(90deg, #4fd8ff, #8ff0b8); }
+.bt-army-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 800; color: var(--muted); }
+.bt-army-row > span:first-child { display: flex; align-items: center; gap: 4px; }
+.bt-pips { display: flex; align-items: center; gap: 3px; }
+.bt-pips i { width: 7px; height: 12px; border-radius: 2px; background: rgba(255, 255, 255, 0.1); }
+.bt-pips i.on { background: var(--gold-2); box-shadow: 0 0 6px rgba(255, 224, 138, 0.6); }
+.bt-pips small { display: flex; align-items: center; margin-left: 4px; color: var(--gold-2); font-weight: 900; }
+
+.bt-clash { display: flex; justify-content: center; padding: 6px; font-size: 13px; font-weight: 900; color: var(--gold-2); }
+.bt-clash span { display: flex; align-items: center; gap: 6px; }
+.bt-clash.go span { animation: bt-pop 0.5s ease-out; }
+@keyframes bt-pop { 0% { transform: scale(0.6); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } }
+
+.bt-big { min-height: 52px; font-size: 15px; }
+.bt-big small { opacity: 0.8; margin-left: 2px; }
+.bt-note { font-size: 11px; font-weight: 700; text-align: center; }
+.bt-sub { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: var(--cyan-2); margin-top: 4px; }
+.bt-sub small { font-size: 10px; letter-spacing: 0; text-transform: none; color: var(--muted); font-weight: 700; }
+
+.bt-cards { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
+.bt-cardp {
+  position: relative; flex: 0 0 132px; height: 168px; scroll-snap-align: start; display: flex; flex-direction: column; gap: 4px;
+  padding: 26px 10px 10px; border-radius: 14px; text-align: left; color: var(--text);
+  border: 1px solid rgba(255, 191, 60, 0.5);
+  background: linear-gradient(165deg, rgba(255, 191, 60, 0.2), rgba(12, 16, 36, 0.95) 55%), #0b1230;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+.bt-cardp.mg-self { border-color: rgba(167, 123, 255, 0.65); background: linear-gradient(165deg, rgba(167, 123, 255, 0.24), rgba(12, 16, 36, 0.95) 55%), #0b1230; }
+.bt-cardp.mg-enemy { border-color: rgba(255, 77, 106, 0.6); background: linear-gradient(165deg, rgba(255, 77, 106, 0.22), rgba(12, 16, 36, 0.95) 55%), #0b1230; }
+.bt-cardp b { font-size: 12.5px; font-weight: 900; line-height: 1.2; }
+.bt-cardp small { font-size: 10.5px; font-weight: 600; color: var(--muted); line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; }
+.bt-cardp.off { opacity: 0.45; }
+.bt-cost { position: absolute; left: 8px; top: 6px; display: flex; align-items: center; gap: 2px; font-size: 11px; font-weight: 900; color: var(--gold-2); }
+.bt-mg { position: absolute; right: 8px; top: 4px; font-size: 14px; }
+.bt-cd { position: absolute; inset: auto 8px 8px 8px; text-align: center; font-size: 11px; font-weight: 900; padding: 3px; border-radius: 8px; background: rgba(0, 0, 0, 0.55); }
+
+.bt-log { display: flex; flex-direction: column; gap: 6px; }
+.bt-round { display: flex; gap: 8px; padding: 8px; border-radius: 12px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); }
+.bt-round-n { flex: none; width: 30px; font-family: var(--font-mono); font-size: 12px; font-weight: 900; color: var(--muted); }
+.bt-round-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.bt-line { display: flex; flex-direction: column; gap: 2px; padding-left: 8px; border-left: 3px solid; }
+.bt-line.me { border-color: #4fd8ff; }
+.bt-line.foe { border-color: #ff3d62; }
+.bt-line b { font-size: 12.5px; font-weight: 900; }
+.bt-line span { font-size: 11.5px; font-weight: 700; color: var(--muted); }
+.bt-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.bt-tags i { font-style: normal; font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 6px; background: rgba(255, 224, 138, 0.12); color: var(--gold-2); }
+
+.bt-result { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px; border-radius: 14px; border: 1px solid; }
 .bt-result b { font-family: var(--font-display); font-size: 24px; font-weight: 900; }
 .bt-result.win { border-color: rgba(61, 220, 132, 0.6); background: rgba(61, 220, 132, 0.1); }
 .bt-result.lose { border-color: rgba(255, 77, 106, 0.6); background: rgba(255, 77, 106, 0.1); }
-.bt-game { position: fixed; inset: 0; z-index: 900; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(2, 4, 14, 0.85); }
-.bt-game-box { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 12px; border: 1px solid var(--gold); background: #0a1024; }
+.bt-game { position: fixed; inset: 0; z-index: 900; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(2, 4, 14, 0.88); }
+.bt-game-box { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 14px; border: 1px solid var(--gold); background: #0a1024; }
+.bt-game-box.enemy { border-color: var(--red); }
 .bt-game-box .mg-area { min-height: 260px; }
+.bt-cards { scrollbar-width: none; }
+.bt-cards::-webkit-scrollbar { display: none; }
+/* Перки списком: тап — окно с описанием и «Использовать» (пользователь 2026-11-20) */
+.bt-plist { display: flex; flex-direction: column; gap: 6px; }
+.bt-prow {
+  display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 12px; border-radius: 12px; text-align: left; color: var(--text);
+  border: 1px solid rgba(255, 191, 60, 0.45); background: linear-gradient(90deg, rgba(255, 191, 60, 0.14), rgba(12, 16, 36, 0.9));
+}
+.bt-prow.mg-self { border-color: rgba(167, 123, 255, 0.6); background: linear-gradient(90deg, rgba(167, 123, 255, 0.18), rgba(12, 16, 36, 0.9)); }
+.bt-prow.mg-enemy { border-color: rgba(255, 77, 106, 0.55); background: linear-gradient(90deg, rgba(255, 77, 106, 0.16), rgba(12, 16, 36, 0.9)); }
+.bt-prow.off { opacity: 0.5; }
+.bt-prow b { flex: 1; min-width: 0; font-size: 13px; font-weight: 800; }
+.bt-prow-ico { width: 22px; text-align: center; font-size: 15px; }
+.bt-prow-meta { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 800; color: var(--muted); }
+.bt-prow-meta i { font-style: normal; display: flex; align-items: center; gap: 2px; color: var(--gold-2); font-weight: 900; }
+.bt-pinfo { display: flex; flex-direction: column; gap: 10px; }
+.bt-pinfo p { margin: 0; font-size: 14px; font-weight: 600; }
+.bt-pinfo-chips { display: flex; flex-direction: column; gap: 6px; }
+.bt-pinfo-chips span { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; padding: 6px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); }

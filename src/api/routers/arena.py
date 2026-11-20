@@ -100,6 +100,15 @@ class AutoIn(BaseModel):
     on: bool
 
 
+def _act_name(code: str | None) -> str:
+    if code in (None, "", "attack"):
+        return "Атака"
+    if code == "defend":
+        return "Защита"
+    perk = svc.PERK_REGISTRY.get(code)
+    return perk.name if perk else "Перк"
+
+
 def view(st: dict, user_id: int) -> dict:
     me = "a" if st["a"]["uid"] == user_id else "d"
     foe = "d" if me == "a" else "a"
@@ -108,13 +117,18 @@ def view(st: dict, user_id: int) -> dict:
         "id": st["id"], "kind": st["kind"], "status": st["status"], "round": st["round"],
         "left": max(0, int(st["deadline"] - time.time())),
         "me": {"name": s["name"], "power": s["power"], "energy": s["energy"], "emax": s.get("emax", 10), "auto": s["auto"],
-               "waiting": s["action"] is not None, "game": s["pending_game"]},
-        "foe": {"name": o["name"], "power": o["power"], "energy": o["energy"], "auto": o["auto"]},
+               "waiting": s["action"] is not None, "game": s["pending_game"], "power0": s.get("power0", s["power"]),
+               "units": s.get("units"), "units0": s.get("units0")},
+        "foe": {"name": o["name"], "power": o["power"], "energy": o["energy"], "emax": o.get("emax", 10), "auto": o["auto"],
+                "waiting": o["action"] is not None, "power0": o.get("power0", o["power"]), "units": o.get("units"), "units0": o.get("units0")},
         "perks": [{"code": p.code, "name": p.name, "about": p.about, "cost": p.cost, "ready_in": p.ready_in, "affordable": p.affordable,
                    "minigame": svc.PERK_REGISTRY[p.code].minigame, "game": svc.PERK_REGISTRY[p.code].game}
                   for p in svc.perks_view(st, me)],
-        "log": [{"me": e[me]["code"], "foe": e[foe]["code"], "kills": e["kills"][0 if me == "a" else 1],
-                 "lost": e["kills"][1 if me == "a" else 0]} for e in st["log"][-10:]],
+        "log": [{"round": n, "me": e[me]["code"], "foe": e[foe]["code"], "me_name": _act_name(e[me]["code"]), "foe_name": _act_name(e[foe]["code"]),
+                 "kills": e["kills"][0 if me == "a" else 1], "lost": e["kills"][1 if me == "a" else 0],
+                 "hit": e.get("hit", [0, 0])[0 if me == "a" else 1], "taken": e.get("hit", [0, 0])[1 if me == "a" else 0],
+                 "fired": e.get("fired", [[], []])[0 if me == "a" else 1], "foe_fired": e.get("fired", [[], []])[1 if me == "a" else 0]}
+                for n, e in list(enumerate(st["log"], 1))[-12:]],
         "result": st["result"], "report": st.get("report"), "won": (st["result"]["attacker_won"] == (me == "a")) if st["result"] else None,
     }
 

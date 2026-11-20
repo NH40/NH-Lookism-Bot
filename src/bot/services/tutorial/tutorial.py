@@ -338,7 +338,15 @@ async def _step_done(session: AsyncSession, run: TrainingRun, user_id: int, code
     if code == cfg.STEP_POWER:
         return sum(c[0]["o"]) >= cfg.TRAINING_POWER_DISTRICTS
     if code == cfg.STEP_DEVELOP:
-        return (await _baseline(session, user_id))["stats"] > base.get("stats", 0)
+        if (await _baseline(session, user_id))["stats"] > base.get("stats", 0):
+            return True
+        # Все характеристики уже на потолке (Infinity) — вкладывать некуда, шаг засчитан (жалоба игрока 2026-11-20).
+        from bot.constant.characteristic import RANK_LADDER
+
+        top = len(RANK_LADDER) - 1
+        row = (await session.execute(select(User.stat_strength, User.stat_speed, User.stat_endurance, User.stat_agility)
+                                     .where(User.id == user_id))).one_or_none()
+        return bool(row) and all(v >= top for v in row)
     if code == cfg.STEP_BLOODLINE:
         return await session.scalar(select(User.bloodline).where(User.id == user_id)) is not None
     if code in cfg.TRAINING_LESSONS:

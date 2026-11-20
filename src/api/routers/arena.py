@@ -178,6 +178,27 @@ async def start_challenge(body: StartChallengeIn, user_id: int = Depends(get_cur
     return view(st, user_id)
 
 
+@router.get("/challenges")
+async def my_challenges(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    """Вызовы игрока (2026-11-20): ждущие ответа (свои и входящие) и итоги за 2 часа — чтобы было видно, принял ли соперник."""
+    from sqlalchemy import text
+
+    rows = (await session.execute(text(
+        """SELECT c.id, c.attacker_id = :u, CASE WHEN c.attacker_id = :u THEN gd.name ELSE ga.name END, d.number, ci.name,
+                  c.status, c.resolution, c.attacker_won,
+                  greatest(0, extract(epoch FROM c.expires_at - now()))::int, extract(epoch FROM now() - c.resolved_at)::int
+           FROM district_challenges c LEFT JOIN districts d ON d.id = c.district_id LEFT JOIN cities ci ON ci.id = c.city_id
+           LEFT JOIN gangs ga ON ga.user_id = c.attacker_id LEFT JOIN gangs gd ON gd.user_id = c.defender_id
+           WHERE (c.attacker_id = :u OR c.defender_id = :u)
+             AND (c.status = 'pending' OR c.resolved_at > now() - interval '2 hours')
+           ORDER BY c.status = 'pending' DESC, coalesce(c.resolved_at, c.created_at) DESC LIMIT 8"""), {"u": user_id})).all()
+    return {"items": [{
+        "id": cid, "out": out, "other": other or "—", "target": f"район №{num}" if num else f"город {city}" if city else "земли",
+        "pending": status == "pending", "resolution": res, "won": (won if out else (not won if won is not None else None)),
+        "expires_in": exp, "ago": ago,
+    } for cid, out, other, num, city, status, res, won, exp, ago in rows]}
+
+
 @router.get("/current")
 async def current(user_id: int = Depends(get_current_user_id), redis: Redis = Depends(get_redis)) -> dict:
     battle_id = await svc.current_of(redis, user_id)

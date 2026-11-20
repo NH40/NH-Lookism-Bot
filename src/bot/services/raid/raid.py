@@ -107,6 +107,12 @@ async def _resolve(session: AsyncSession, raid: Raid, camp: str, result_override
     lost = 0
     if won:
         rewards = dict(cfg.RAID_REWARDS[raid.difficulty])
+        from bot.constant.resource import RES_COINS
+        from bot.services.business import get_wallet
+
+        wallet = await get_wallet(session, uid)
+        hourly = float(wallet.per_minute) * 60 if wallet else 0.0
+        rewards[RES_COINS] = max(rewards.get(RES_COINS, 0), int(hourly * cfg.RAID_COIN_HOURS[raid.difficulty]))
         for res, n in rewards.items():
             await grant(session, uid, res, n)
     else:

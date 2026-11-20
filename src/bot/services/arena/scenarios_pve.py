@@ -146,11 +146,46 @@ async def start_war(session: AsyncSession, redis: Redis, defender_id: int, war_i
     return st
 
 
+async def start_war_expired(session: AsyncSession, redis: Redis, war_id: int) -> bool:
+    """Защитник не принял войну — бой всё равно онлайн: нападающий ходит сам, за защитника автоатака лагерем защиты
+    (он может зайти и выключить её). False — нельзя (кто-то уже в бою, пустой лагерь) → прежний автобой."""
+    from bot.constant.empire import WAR_FORFEIT
+    from bot.db.repositories import empire as empire_repo
+    from bot.services.arena.sources import energy_for, perks_for
+    from bot.services.empire.war import _label, war_fight
+
+    war = await empire_repo.get_pending_for_update(session, war_id)
+    if war is None:
+        return False
+    for uid in (war.attacker_id, war.defender_id):
+        if await core.current_of(redis, uid):
+            return False
+    stacks_a, stacks_d, m = await war_fight(session, war, accepted=False)
+    if not stacks_a or not stacks_d:
+        return False
+    a_id, d_id = war.attacker_id, war.defender_id
+    war.expires_at = datetime.now(timezone.utc) + timedelta(seconds=ARENA_TTL_SECONDS)  # не заберёт как неявку повторно
+    a_name, d_name = await _label(session, a_id), await _label(session, d_id)
+    st = await core.create(
+        redis, kind=KIND_WAR, a_uid=a_id, d_uid=d_id, a_stacks=stacks_a, d_stacks=stacks_d, a_chances=m.attacker, d_chances=m.defender,
+        a_perks=await perks_for(session, a_id), d_perks=await perks_for(session, d_id), a_auto=False, d_auto=True,
+        a_name=a_name, d_name=f"{d_name} (оборона)", meta={"war_id": war_id, "resolution": WAR_FORFEIT},
+        a_energy=await energy_for(session, a_id), d_energy=await energy_for(session, d_id),
+    )
+    await session.commit()
+    await _notify(a_id, f"⚔️ <b>{d_name} не принял войну — бой с его обороной идёт онлайн!</b>\n\n"
+                        "Жми «Войти в бой». Не зайдёшь — за тебя ходит автоатака.", st["id"])
+    await _notify(d_id, f"🚨 <b>{a_name} напал на твою империю!</b> Ты не принял войну — бьётся лагерь защиты на автоатаке.\n\n"
+                        "Зайди в бой и веди его сам: перки, мини-игры.", st["id"])
+    return True
+
+
 async def _finish_war(redis: Redis, st: dict, result) -> None:
+    from bot.constant.empire import WAR_ACCEPTED
     from bot.services.empire.war import settle_war_online
 
     async with _SF["sf"]() as session:
-        o = await settle_war_online(session, redis, st["meta"]["war_id"], result)
+        o = await settle_war_online(session, redis, st["meta"]["war_id"], result, st["meta"].get("resolution") or WAR_ACCEPTED)
     won = bool(o and o.attacker_won)
     st["report"] = {"won": won}
     await core.save(redis, st)

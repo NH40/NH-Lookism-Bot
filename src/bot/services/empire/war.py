@@ -252,10 +252,15 @@ async def resolve_expired(session_factory: async_sessionmaker[AsyncSession], red
     транзакция, падение одной не мешает остальным."""
     async with session_factory() as session:
         ids = await empire_repo.list_expired_war_ids(session, EMPIRE_WAR_SWEEP_BATCH)
+    from bot.services.arena.scenarios_pve import start_war_expired
+
     outcomes = []
     for war_id in ids:
         async with session_factory() as session:
             try:
+                # Неявка — бой всё равно онлайн (2026-11-20): нападающий ведёт сам, за защитника автоатака лагерем защиты.
+                if await start_war_expired(session, redis, war_id):
+                    continue
                 war = await empire_repo.get_pending_for_update(session, war_id)
                 if war is not None:
                     outcomes.append(await _resolve(session, redis, war, WAR_FORFEIT))
@@ -403,20 +408,22 @@ async def _resolve(session: AsyncSession, redis: Redis, war, resolution: str, *,
 
 
 async def war_fight(session: AsyncSession, war, accepted: bool = True):
-    """Армии и matchup войны для онлайн-боя (`services/arena`): лагеря атаки обоих вождей. → (стопки А, стопки Д, matchup)."""
+    """Армии и matchup войны для онлайн-боя (`services/arena`): принял — лагеря атаки обоих вождей,
+    не принял (2026-11-20, бой всё равно онлайн) — у защитника лагерь защиты. → (стопки А, стопки Д, matchup)."""
     attacker_id, defender_id = war.attacker_id, war.defender_id
-    camps = {uid: await load_camp(session, uid, CAMP_ATTACK, for_update=True) for uid in sorted((attacker_id, defender_id))}
+    sides = {attacker_id: CAMP_ATTACK, defender_id: CAMP_ATTACK if accepted else CAMP_DEFENSE}
+    camps = {uid: await load_camp(session, uid, sides[uid], for_update=True) for uid in sorted((attacker_id, defender_id))}
     m = matchup(
         await get_combat_profile(session, attacker_id), await get_combat_profile(session, defender_id),
-        vs=(VS_WAR,), defender_role=ROLE_ATTACK, scouted=await has_scout_report(session, attacker_id, defender_id),
+        vs=(VS_WAR,), defender_role=ROLE_ATTACK if accepted else ROLE_DEFENSE, scouted=await has_scout_report(session, attacker_id, defender_id),
         attacker_stacks=camps[attacker_id], defender_stacks=camps[defender_id],
     )
     return camps[attacker_id], camps[defender_id], m
 
 
-async def settle_war_online(session: AsyncSession, redis: Redis, war_id: int, result) -> WarOutcome | None:
+async def settle_war_online(session: AsyncSession, redis: Redis, war_id: int, result, resolution: str = WAR_ACCEPTED) -> WarOutcome | None:
     """Итог онлайн-войны: вызывается финишером арены, война ещё pending (срок продлён на время боя)."""
     war = await empire_repo.get_pending_for_update(session, war_id)
     if war is None:
         return None
-    return await _resolve(session, redis, war, WAR_ACCEPTED, result_override=result)
+    return await _resolve(session, redis, war, resolution, result_override=result)

@@ -132,6 +132,42 @@ async def start_challenge(session: AsyncSession, redis: Redis, defender, challen
     return st
 
 
+async def start_challenge_expired(session: AsyncSession, redis: Redis, challenge_id: int):
+    """Защитник не ответил — бой всё равно онлайн (2026-11-20): нападающий ходит сам, за защитника автоатака лагерем
+    защиты (может зайти и выключить её). None — нельзя (кто-то уже в бою) → прежний автобой; иначе состояние/итог."""
+    from bot.constant.district import RESOLUTION_TIMEOUT
+    from bot.db.repositories.district import challenge as challenge_repo
+    from bot.services.arena.sources import energy_for, perks_for
+    from bot.services.district.challenge import ChallengeFight, challenge_context
+
+    challenge = await challenge_repo.get(session, challenge_id)
+    if challenge is None:
+        return None
+    for uid in (challenge.attacker_id, challenge.defender_id):
+        if await core.current_of(redis, uid):
+            return None
+    claimed = await challenge_repo.claim(session, challenge_id, RESOLUTION_TIMEOUT)
+    if claimed is None:
+        return None
+    ctx = await challenge_context(session, claimed, RESOLUTION_TIMEOUT)
+    if not isinstance(ctx, ChallengeFight):
+        return ctx  # аннулирован или без боя — итог как раньше
+    a_id, d_id = claimed.attacker_id, claimed.defender_id
+    st = await core.create(
+        redis, kind=KIND_CHALLENGE, a_uid=a_id, d_uid=d_id, a_stacks=ctx.stacks_a, d_stacks=ctx.stacks_d,
+        a_chances=ctx.m.attacker, d_chances=ctx.m.defender, a_perks=await perks_for(session, a_id), d_perks=await perks_for(session, d_id),
+        a_auto=False, d_auto=True, a_name=ctx.base["attacker_label"], d_name=f"{ctx.base['defender_label']} (оборона)",
+        meta={"challenge_id": challenge_id, "resolution": RESOLUTION_TIMEOUT},
+        a_energy=await energy_for(session, a_id), d_energy=await energy_for(session, d_id),
+    )
+    await session.commit()
+    await _notify(a_id, f"⚔️ <b>{ctx.base['defender_label']} не ответил — бой с его обороной идёт онлайн!</b>\n\n"
+                        "Жми «Войти в бой». Не зайдёшь — за тебя ходит автоатака.", st["id"])
+    await _notify(d_id, f"🚨 <b>{ctx.base['attacker_label']} атакует твои земли!</b> Ты не принял вызов — бьётся лагерь защиты на автоатаке.\n\n"
+                        "Зайди в бой и веди его сам: перки, мини-игры.", st["id"])
+    return st
+
+
 async def _finish_challenge(redis: Redis, st: dict, result) -> None:
     from bot.constant.district import RESOLUTION_ACCEPTED
     from bot.db.repositories.district import challenge as challenge_repo
@@ -139,7 +175,7 @@ async def _finish_challenge(redis: Redis, st: dict, result) -> None:
 
     async with _SF["sf"]() as session:
         challenge = await challenge_repo.get(session, st["meta"]["challenge_id"])
-        ctx = await challenge_context(session, challenge, RESOLUTION_ACCEPTED)
+        ctx = await challenge_context(session, challenge, st["meta"].get("resolution") or RESOLUTION_ACCEPTED)
         outcome = ctx if not isinstance(ctx, ChallengeFight) else await settle_challenge(session, redis, ctx, result)
     won = bool(outcome.attacker_won)
     st["report"] = {"won": won, "captured": outcome.captured, "districts": getattr(outcome, "captured_districts", 0)}

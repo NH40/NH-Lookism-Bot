@@ -391,11 +391,17 @@ async def resolve_expired(session_factory: async_sessionmaker[AsyncSession], red
     `pending` и будет подхвачен следующим проходом."""
     async with session_factory() as session:
         ids = await challenge_repo.list_expired_ids(session, CHALLENGE_SWEEP_BATCH)
+    from bot.services.arena.scenarios import start_challenge_expired
+
     outcomes: list[ChallengeOutcome] = []
     for challenge_id in ids:
         async with session_factory() as session:
             try:
-                outcome = await _resolve(session, redis, challenge_id, RESOLUTION_TIMEOUT)
+                # Неявка — бой всё равно онлайн (2026-11-20); None — кто-то уже в бою → прежний автобой.
+                started = await start_challenge_expired(session, redis, challenge_id)
+                if isinstance(started, dict):
+                    continue
+                outcome = started if started is not None else await _resolve(session, redis, challenge_id, RESOLUTION_TIMEOUT)
             except Exception:
                 log.exception("Failed to resolve expired challenge %s", challenge_id)
                 await session.rollback()

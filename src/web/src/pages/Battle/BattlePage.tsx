@@ -13,7 +13,7 @@ import "./Battle.css";
 interface Perk { code: string; name: string; about: string; cost: number; ready_in: number; affordable: boolean; minigame?: string | null; game?: string | null }
 interface Side {
   name: string; power: number; power0?: number; units?: number | null; units0?: number | null; energy: number; emax?: number;
-  auto: boolean; waiting?: boolean; game?: { game: string; power: number } | null;
+  auto: boolean; afk?: boolean; waiting?: boolean; game?: { game: string; power: number } | null;
 }
 interface LogEntry {
   round: number; me: string; foe: string; me_name: string; foe_name: string; kills: number; lost: number;
@@ -57,7 +57,7 @@ function ArmyCard({ side, mine }: { side: Side; mine: boolean }) {
         <span className="bt-ava">{mine ? "🥷" : "👊"}</span>
         <div className="bt-army-name">
           <b>{side.name}</b>
-          <small>{side.auto ? "🤖 автоатака" : side.waiting ? "✅ ход сделан" : mine ? "👤 твой ход" : "🤔 думает…"}</small>
+          <small>{side.afk ? (mine ? "🤖 ты пропустил ходы — включена автоатака" : "🤖 соперник не ходит — за него автоатака") : side.auto ? "🤖 автоатака" : side.waiting ? "✅ ход сделан" : mine ? "👤 твой ход" : "🤔 думает…"}</small>
         </div>
         <span className="bt-pow">{fmt(side.power)}</span>
       </div>

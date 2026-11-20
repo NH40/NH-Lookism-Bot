@@ -238,6 +238,8 @@ async def set_auto(redis: Redis, battle_id: str, user_id: int, on: bool) -> dict
         raise ArenaError("no_battle")
     side = _side_of(st, user_id)
     st[side]["auto"] = bool(on)
+    if not on:
+        st[side]["afk"], st[side]["missed"] = False, 0
     other = "d" if side == "a" else "a"
     if on and (st[other]["auto"] or st[other]["action"] is not None):
         return await _play(redis, st)
@@ -262,7 +264,27 @@ async def tick(redis: Redis, battle_id: str) -> dict | None:
     return st
 
 
+ARENA_AFK_ROUNDS = 2  # столько ходов подряд пропустил — за игрока до конца боя ходит автоатака (может выключить)
+
+
+def _mark_afk(st: dict) -> None:
+    """Игрок нарочно не ходит (2026-11-20): не форфит, а автоатака после 2 пропусков подряд —
+    раунды перестают ждать его 12 секунд, соперник видит «соперник не ходит»."""
+    timed_out = time.time() >= st["deadline"]
+    for side in SIDES:
+        s = st[side]
+        if s["uid"] is None or s["auto"]:
+            continue
+        if s["action"] is not None:
+            s["missed"] = 0
+        elif timed_out:
+            s["missed"] = s.get("missed", 0) + 1
+            if s["missed"] >= ARENA_AFK_ROUNDS:
+                s["auto"], s["afk"] = True, True
+
+
 async def _play(redis: Redis, st: dict) -> dict:
+    _mark_afk(st)
     run = _rebuild(st)
     round_no = st["round"] + 1
     a_pow, d_pow = run.a.total_power(), run.d.total_power()

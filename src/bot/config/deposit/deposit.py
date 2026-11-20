@@ -19,11 +19,13 @@ from bot.constant.resource import (
 
 DEPOSIT_MAX_ACTIVE = 3
 # Срок (часы) → доходность NHCoin.
-DEPOSIT_RATES: dict[int, float] = {1: 0.02, 3: 0.05, 6: 0.09, 12: 0.15, 24: 0.25}
+# 2026-11-20 (инфляция: вклады напечатали ~0,5 трлн за 13 дней) — ставки в 10 раз ниже (было 2/5/9/15/25%).
+DEPOSIT_RATES: dict[int, float] = {1: 0.002, 3: 0.005, 6: 0.009, 12: 0.015, 24: 0.025}
 # Остальные ресурсы — такая доля от ставки NHCoin.
 DEPOSIT_OTHER_RATE_SHARE = 0.5
-# Потолок вклада NHCoin — суточный доход бизнеса (не меньше этого).
+# Потолок вклада NHCoin — доход бизнеса за `DEPOSIT_COINS_CAP_HOURS` часов (не меньше `DEPOSIT_COINS_MIN_CAP`).
 DEPOSIT_COINS_MIN_CAP = 20_000
+DEPOSIT_COINS_CAP_HOURS = 6  # было 24 (суточный доход), 2026-11-20
 # Потолки вклада остальных ресурсов.
 DEPOSIT_CAPS: dict[str, int] = {
     RES_TICKETS: 50,

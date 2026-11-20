@@ -14,6 +14,7 @@ from bot.config.battle_pass.battle_pass import (  # noqa: F401
     BP_QUEST_ORDER_MULTIPLIERS,
     BP_SEASON_DAYS,
     BP_COIN_HOUR_MIN,
+    BP_COIN_HOUR_MAX,
     BP_PREMIUM_BLOOD_EVERY,
     ITEM_COIN_HOURS,
     ITEM_SCROLL,

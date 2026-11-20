@@ -183,7 +183,7 @@ async def _lock(redis: Redis, user_id: int) -> str:
 async def _grant(session: AsyncSession, user_id: int, reward: dict[str, int]) -> dict[str, int]:
     """Начислить награду. Часы дохода превращаются в монеты по доходу игрока сейчас.
     → фактически начисленное (для сообщения игроку)."""
-    from bot.config.battle_pass import BP_COIN_HOUR_MIN, ITEM_COIN_HOURS
+    from bot.config.battle_pass import BP_COIN_HOUR_MAX, BP_COIN_HOUR_MIN, ITEM_COIN_HOURS
     from bot.constant.resource import RES_COINS
 
     reward = dict(reward)
@@ -193,7 +193,7 @@ async def _grant(session: AsyncSession, user_id: int, reward: dict[str, int]) ->
 
         wallet = await get_wallet(session, user_id)
         per_hour = int(wallet.per_minute * 60) if wallet else 0
-        reward[RES_COINS] = reward.get(RES_COINS, 0) + hours * max(BP_COIN_HOUR_MIN, per_hour)
+        reward[RES_COINS] = reward.get(RES_COINS, 0) + hours * min(BP_COIN_HOUR_MAX, max(BP_COIN_HOUR_MIN, per_hour))
     for code, amount in reward.items():
         if code == ITEM_SCROLL:
             await bp_repo.add_skip_scrolls(session, user_id, amount)

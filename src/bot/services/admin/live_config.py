@@ -205,7 +205,7 @@ LIVE_KEYS: dict[str, LiveKey] = {
     k.key: _grouped(k)
     for k in (
         LiveKey(KEY_BP_XP_MULT, "Множитель опыта пасса", float, 0.1, 10.0, lambda: 1.0, True),
-        LiveKey(KEY_INCOME_MULT, "Множитель дохода бизнеса", float, 0.1, 10.0, lambda: 1.0, True),
+        LiveKey(KEY_INCOME_MULT, "Множитель дохода бизнеса", float, 0.01, 10.0, lambda: 1.0, True),
         LiveKey(KEY_START_COINS, "Стартовые NHCoin новичка", int, 0, 10_000_000, _d_coins),
         LiveKey(KEY_START_TICKETS, "Стартовые тикеты новичка", int, 0, 10_000, _d_tickets),
         LiveKey(KEY_BP_PRICE, "Цена премиум-пасса (донат-коины)", int, 0, 1_000_000, _d_bp_price),

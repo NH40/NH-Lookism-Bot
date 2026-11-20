@@ -24,6 +24,7 @@ from bot.cache.keys import action_lock
 from bot.config.deposit import (
     DEPOSIT_CAPS,
     DEPOSIT_EXCLUDED,
+    DEPOSIT_COINS_CAP_HOURS,
     DEPOSIT_COINS_MIN_CAP,
     DEPOSIT_MAX_ACTIVE,
     DEPOSIT_OTHER_RATE_SHARE,
@@ -93,7 +94,7 @@ async def cap_for(session: AsyncSession, user_id: int, resource: str) -> int:
     фиксированные потолки."""
     if resource == RES_COINS:
         wallet = await get_wallet(session, user_id)
-        daily = int(wallet.per_minute * 60 * 24) if wallet else 0
+        daily = int(wallet.per_minute * 60 * DEPOSIT_COINS_CAP_HOURS) if wallet else 0
         return max(DEPOSIT_COINS_MIN_CAP, daily)
     return DEPOSIT_CAPS.get(resource, 0)
 

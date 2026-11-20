@@ -3,6 +3,7 @@ from bot.config.deposit.deposit import (  # noqa: F401
     DEPOSIT_CAPS,
     DEPOSIT_EXCLUDED,
     DEPOSIT_COINS_MIN_CAP,
+    DEPOSIT_COINS_CAP_HOURS,
     DEPOSIT_MAX_ACTIVE,
     DEPOSIT_OTHER_RATE_SHARE,
     DEPOSIT_RATES,

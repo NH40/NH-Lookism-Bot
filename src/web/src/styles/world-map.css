@@ -11,7 +11,7 @@
 .wm-land { fill: #12284a; stroke: rgba(110, 200, 255, 0.55); stroke-linejoin: round; filter: drop-shadow(0 0 6px rgba(79, 216, 255, 0.25)); }
 .wm-city { cursor: pointer; }
 .wm-dot { stroke: rgba(4, 10, 28, 0.9); transition: r 0.2s; }
-.wm-dot.mine { stroke: #4fd8ff; }
+.wm-dot.mine { stroke: #2ee88a; }
 .wm-dot.sel { stroke: #ffe08a; }
 .wm-label { fill: #eaf6ff; font-weight: 800; paint-order: stroke; stroke: rgba(3, 8, 20, 0.85); pointer-events: none; }
 .wm-pulse { fill: none; transform-box: fill-box; transform-origin: center; animation: wm-pulse 1.4s ease-out infinite; }
@@ -70,7 +70,7 @@
   box-shadow: inset 0 0 12px color-mix(in srgb, var(--c) 25%, transparent);
 }
 .cv-block.bot { background: repeating-linear-gradient(135deg, #0d1830 0 6px, #0a1326 6px 12px); border-color: rgba(120, 140, 180, 0.3); }
-.cv-block.mine { box-shadow: 0 0 14px rgba(79, 216, 255, 0.45), inset 0 0 12px rgba(79, 216, 255, 0.3); }
+.cv-block.mine { border-width: 2px; box-shadow: 0 0 16px rgba(46, 232, 138, 0.55), inset 0 0 14px rgba(46, 232, 138, 0.35); }
 .cv-block.fresh { animation: cv-fresh 1.8s ease-in-out infinite; }
 @keyframes cv-fresh { 50% { box-shadow: 0 0 18px #ffe08a, inset 0 0 14px rgba(255, 224, 138, 0.45); } }
 .cv-block.fight { animation: cv-fight 0.9s ease-in-out infinite; }
@@ -105,3 +105,9 @@
   font-size: 13px; font-weight: 900; color: #1a0d00; background: linear-gradient(160deg, #ffe08a, #f5b942); border: 0;
   box-shadow: 0 0 16px rgba(245, 185, 66, 0.45);
 }
+.cv-mine-tag { position: absolute; right: 4px; top: 3px; font-size: 8.5px; font-weight: 900; letter-spacing: 0.05em; padding: 1px 5px; border-radius: 6px; color: #04140b; background: #2ee88a; }
+.cv-mine { padding: 8px 10px; border-radius: 12px; border: 1px solid rgba(46, 232, 138, 0.35); background: rgba(46, 232, 138, 0.06); }
+.cv-mine-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cv-mine-head b { font-size: 13px; color: #2ee88a; }
+.cv-mine-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.cv-mine-list button { min-width: 44px; min-height: 32px; padding: 0 10px; border-radius: 9px; font-size: 12px; font-weight: 900; color: #04140b; background: #2ee88a; border: 0; }

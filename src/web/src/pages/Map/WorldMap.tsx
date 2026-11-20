@@ -196,6 +196,11 @@ export function WorldMap({ data, geo, onOpenCity, extra }: {
           <button type="button" onClick={() => zoomAt(1 / 1.4, size.w / 2, size.h / 2)}><Minus size={16} /></button>
           <button type="button" onClick={() => { setFull(!full); touched.current = false; setView(null); }}>{full ? <Minimize2 size={15} /> : <Maximize2 size={15} />}</button>
         </div>
+        {home && (
+          <button type="button" className="wm-home" onPointerDown={(e) => e.stopPropagation()} onClick={() => onOpenCity(home)}>
+            <Swords size={15} />Мой город · бои
+          </button>
+        )}
         <div className="wm-title">
           <b>{data.country_name}</b>
           <small>{data.cities.length} городов · {data.battles.length > 0 ? `⚔️ боёв сейчас: ${data.battles.length}` : "тихо"}</small>
@@ -227,7 +232,9 @@ export function WorldMap({ data, geo, onOpenCity, extra }: {
             <small className="wm-fight"><Swords size={12} /> Идёт боёв: {battles.get(selected.id)}</small>
           )}
           <div className="grid-2" style={{ gap: 6, marginTop: 8 }}>
-            <button type="button" className="btn gold small" onClick={() => onOpenCity(selected)}>Открыть город</button>
+            <button type="button" className="btn gold small" onClick={() => onOpenCity(selected)}>
+              {selected.id === data.my_city ? <><Swords size={14} />В бой</> : "Посмотреть"}
+            </button>
             {extra?.(selected)}
           </div>
         </div>

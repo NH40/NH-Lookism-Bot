@@ -57,7 +57,9 @@ export function CityView({ cityId, myClan, battles, onBack, onDistrict }: {
               ))}
             </div>
           )}
-          {!data.own && <small className="muted" style={{ display: "block", marginTop: 6 }}>Чужой город — только просмотр. Воевать можно в своём городе.</small>}
+          <small className="muted" style={{ display: "block", marginTop: 2, fontWeight: 700 }}>
+            {data.own ? "⚔️ Нажми на район ботов, чтобы атаковать, или на район игрока — бросить вызов." : "Чужой город — только просмотр. Воевать можно в своём городе."}
+          </small>
         </>
       )}
     </div>

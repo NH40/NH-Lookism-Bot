@@ -104,6 +104,11 @@ function DistrictSheet({ district, onClose, onChanged }: { district: MapDistrict
     <Sheet title={`Район №${district.number}`} onClose={onClose}>
       {outcome ? (
         <ResultView outcome={outcome} onClose={onClose} />
+      ) : card.status === "error" ? (
+        <>
+          <p className="muted" style={{ fontSize: 13, fontWeight: 700 }}>{card.error ?? "Район недоступен."}</p>
+          <button className="btn block" type="button" onClick={onClose}>Закрыть</button>
+        </>
       ) : !d ? (
         <div className="skeleton" style={{ height: 160 }} />
       ) : (
@@ -256,6 +261,7 @@ export function MapPage() {
   const world = useWorld();
   const [cityId, setCityId] = useState<number | null>(null);
   const [selected, setSelected] = useState<MapDistrict | null>(null);
+  const [foreign, setForeign] = useState<LiveDistrict | null>(null);
   const [bossOutcome, setBossOutcome] = useState<BossResult | null>(null);
   const { run, busy } = useAction(reload);
   const cd = useCountdown(data?.attack_cooldown_seconds ?? 0);
@@ -282,7 +288,7 @@ export function MapPage() {
           {world.data && world.geo ? (
             cityId !== null ? (
               <CityView cityId={cityId} myClan={world.data.my_clan} battles={world.data.battles}
-                onBack={() => setCityId(null)} onDistrict={(d) => openDistrict(d)} />
+                onBack={() => setCityId(null)} onDistrict={(d, own) => (own ? openDistrict(d) : setForeign(d))} />
             ) : (
               <WorldMap data={world.data} geo={world.geo} onOpenCity={(c) => setCityId(c.id)}
                 extra={(c) => c.id === world.data?.my_city
@@ -364,6 +370,20 @@ export function MapPage() {
         </div>
       )}
 
+      {foreign && (
+        <Sheet title={`Район №${foreign.number}`} onClose={() => setForeign(null)}>
+          <StatRow label="Владелец" value={foreign.kind === "bot" ? "боты" : foreign.owner ?? "—"} />
+          <p className="muted" style={{ fontSize: 13, fontWeight: 700, margin: "10px 0" }}>
+            Это чужой город — здесь можно только смотреть. Бои идут за районы твоего города: открой его и нажми на район ботов или игрока.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <button className="btn gold block" type="button" onClick={() => { setForeign(null); if (world.data?.my_city) setCityId(world.data.my_city); }}>
+              <Swords size={16} />В мой город — к боям
+            </button>
+            <Link className="btn ghost block" to={ROUTE_TRAVEL}><Luggage size={16} />Переехать в этот город</Link>
+          </div>
+        </Sheet>
+      )}
       {selected && <DistrictSheet district={selected} onClose={() => setSelected(null)} onChanged={reload} />}
       {bossOutcome && (
         <Sheet title={bossOutcome.boss_name} onClose={() => setBossOutcome(null)}>

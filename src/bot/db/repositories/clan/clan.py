@@ -540,7 +540,7 @@ async def member_stats(session: AsyncSession, clan_id: int) -> list:
 STAT_COUNTERS = ("treasury", "garrison_units", "garrison_power", "garrison_taken", "shop_spent", "build_spent", "wars", "wars_won", "lands_won", "exchanges")
 
 
-async def reset_for_patch(session: AsyncSession, start_lands: int) -> None:
+async def reset_for_patch(session: AsyncSession, start_lands: int, *, keep_wars: bool = False) -> None:
     """Патч (пользователь 2026-11-04): земли и постройки, рота, казна и магазин, войны — с нуля. Сами
     кланы, участники, ранги, право на роту и донат-уровень остаются. Вклад участников не стирается:
     снимок счётчиков в `patch_base` делит его на «этот патч» и «за всё время». Одним набором запросов
@@ -551,7 +551,7 @@ async def reset_for_patch(session: AsyncSession, start_lands: int) -> None:
         "DELETE FROM clan_garrison_extras",
         "DELETE FROM clan_garrison_cards",
         "DELETE FROM clan_contracts",
-        "DELETE FROM clan_wars",
+        *(() if keep_wars else ("DELETE FROM clan_wars",)),  # мягкий вайп 2026-11-20: войны кланов продолжаются
         f"UPDATE clan_member_stats SET patch_base = jsonb_build_object({pairs})",
     ):
         await session.execute(text(sql))

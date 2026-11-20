@@ -328,6 +328,26 @@ async def launch_leagues():
     await engine.dispose()
 
 
+async def soft_wipe():
+    """Мягкий вайп 2026-11-20 (`bot/services/admin/soft_wipe.py`): сначала бэкап, потом сброс."""
+    from bot.cache.redis_client import make_redis, make_redis_pool
+    from bot.config.settings import get_settings
+    from bot.db.session import make_engine, make_session_factory
+    from bot.services.admin.live_config import load as load_live_config
+    from bot.services.admin.soft_wipe import run_soft_wipe
+
+    await backup()
+    settings = get_settings()
+    engine = make_engine(settings)
+    sf = make_session_factory(engine)
+    redis = make_redis(make_redis_pool(settings.redis_url))
+    await load_live_config(sf)
+    report = await run_soft_wipe(sf, redis)
+    print("Мягкий вайп готов:", report)
+    await redis.aclose()
+    await engine.dispose()
+
+
 async def seed():
     """Засеивает статичный контент карты 2.0.0 (страны/города — см. src/bot/config/country,
     config/city; районы — по district_count каждого города) — идемпотентно (ON CONFLICT
@@ -399,6 +419,11 @@ if __name__ == "__main__":
         asyncio.run(migrate())
     elif args[0] == "seed":
         asyncio.run(seed())
+    elif args[0] == "soft_wipe":
+        if "--yes" not in args:
+            print("Мягкий вайп: районы, статисты, уники (кроме абсолютов), NHCoin, кланы, кредиты. Запуск: soft_wipe --yes")
+        else:
+            asyncio.run(soft_wipe())
     elif args[0] == "launch_leagues":
         asyncio.run(launch_leagues())
     elif args[0] == "stats":

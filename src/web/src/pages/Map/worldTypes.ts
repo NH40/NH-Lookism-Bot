@@ -6,7 +6,7 @@ export interface WorldCity {
 export interface WorldBattle { id: string; city_id: number; district_id: number | null; kind: string; a: string; d: string; round: number }
 export interface WorldFeed { ago: number; number: number; city_id: number; city: string; who: string; clan: number | null }
 export interface WorldData {
-  country: string; country_name: string; geo: string; my_city: number | null; my_clan: number | null;
+  country: string; country_name: string; geo: string; my_city: number | null; my_clan: number | null; phase?: string;
   clans: Record<string, string>; cities: WorldCity[]; battles: WorldBattle[]; feed: WorldFeed[];
 }
 export interface Geo { w: number; h: number; path: string; cities: Record<string, [number, number]> }

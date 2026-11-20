@@ -354,5 +354,6 @@ async def get_world_map(user_id: int = Depends(get_current_user_id), session: As
     user = await require_user(session, user_id)
     data = await country_overview(session, redis, user.country_code, user_id)
     data["geo"] = base_code(user.country_code)
+    data["phase"] = user.phase  # круг штурмует города целиком прямо с карты (2026-11-20)
     data["country_name"] = clean_label(COUNTRY_BY_CODE[user.country_code].name) if user.country_code in COUNTRY_BY_CODE else user.country_code
     return data

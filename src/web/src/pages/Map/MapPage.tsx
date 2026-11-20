@@ -239,6 +239,18 @@ function EventCard({ event, onFight, onMeet, busy, bossCd }: {
   );
 }
 
+/** Круг: штурм ботов чужого города прямо из карточки на карте (онлайн-бой). */
+function CityAssault({ cityId }: { cityId: number }) {
+  const nav = useNavigate();
+  const { run, busy } = useAction();
+  return (
+    <button type="button" className="btn red small" disabled={busy} onClick={async () => {
+      const r = (await run("/arena/start/city", { city_id: cityId })) as { id?: string | null } | null;
+      if (r?.id) nav(battlePath(r.id));
+    }}><Swords size={14} />Штурм</button>
+  );
+}
+
 function useWorld() {
   const [data, setData] = useState<WorldData | null>(null);
   const [geo, setGeo] = useState<Geo | null>(null);
@@ -293,7 +305,9 @@ export function MapPage() {
               <WorldMap data={world.data} geo={world.geo} onOpenCity={(c) => setCityId(c.id)}
                 extra={(c) => c.id === world.data?.my_city
                   ? <Link className="btn small" to={ROUTE_BUSINESS}><Building2 size={14} />Бизнесы</Link>
-                  : <Link className="btn ghost small" to={ROUTE_TRAVEL}><Luggage size={14} />Переезд</Link>} />
+                  : world.data?.phase === PHASE_CIRCLE && c.bots > 0
+                    ? <CityAssault cityId={c.id} />
+                    : <Link className="btn ghost small" to={ROUTE_TRAVEL}><Luggage size={14} />Переезд</Link>} />
             )
           ) : (
             <div className="skeleton" style={{ height: 380, borderRadius: 14 }} />
@@ -374,8 +388,16 @@ export function MapPage() {
         <Sheet title={`Район №${foreign.number}`} onClose={() => setForeign(null)}>
           <StatRow label="Владелец" value={foreign.kind === "bot" ? "боты" : foreign.owner ?? "—"} />
           <p className="muted" style={{ fontSize: 13, fontWeight: 700, margin: "10px 0" }}>
-            Это чужой город — здесь можно только смотреть. Бои идут за районы твоего города: открой его и нажми на район ботов или игрока.
+            {world.data?.phase === PHASE_CIRCLE
+              ? "Круг берёт города целиком: штурмуй ботов этого города или брось вызов владельцам в «Войне за города»."
+              : "Это чужой город — здесь можно только смотреть. Бои идут за районы твоего города: открой его и нажми на район ботов или игрока."}
           </p>
+          {world.data?.phase === PHASE_CIRCLE && cityId !== null && (
+            <OnlineBattleButton path="/arena/start/city" body={{ city_id: cityId }} label="Штурм ботов города онлайн" />
+          )}
+          {world.data?.phase === PHASE_CIRCLE && (
+            <Link className="btn ghost block" style={{ marginTop: 8 }} to={ROUTE_COUNTRY}><Flag size={16} />Война за города</Link>
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <button className="btn gold block" type="button" onClick={() => { setForeign(null); if (world.data?.my_city) setCityId(world.data.my_city); }}>
               <Swords size={16} />В мой город — к боям

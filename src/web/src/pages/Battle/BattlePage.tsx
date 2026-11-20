@@ -1,19 +1,20 @@
-import { Bot, Shield, Swords, Users, Zap } from "lucide-react";
+import { Bot, ChevronRight, Shield, Swords, Users, Zap } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { apiGet, apiPost } from "../../api";
-import { fmt, useToast } from "../../components/ui";
+import { apiGet, apiPost, imgUrl } from "../../api";
 import { Sheet } from "../../components/Sheet";
+import { fmt, useToast } from "../../components/ui";
 import { ROUTE_MAP } from "../../constants";
 import { gameOf, type P } from "../Minigame/games";
 import "./Battle.css";
 
-// Онлайн-бой (2026-11-19, экран переделан 2026-11-20): две карточки армий с силой, статистами и энергией,
-// перки картами, живой журнал раундов (кто чем ходил, урон, павшие, сработавшие навыки), мини-игры поверх.
+// Онлайн-бой (2026-11-19; дизайн 2026-11-20): «ты против соперника» с портретами (уник-лидер банды),
+// мощью, статистами и энергией; аккуратный список перков с окном описания; живая лента раундов.
 interface Perk { code: string; name: string; about: string; cost: number; ready_in: number; affordable: boolean; minigame?: string | null; game?: string | null }
 interface Side {
   name: string; power: number; power0?: number; units?: number | null; units0?: number | null; energy: number; emax?: number;
-  auto: boolean; afk?: boolean; waiting?: boolean; game?: { game: string; power: number } | null;
+  auto: boolean; afk?: boolean; waiting?: boolean; chosen?: string | null; ava?: string | null; bot?: boolean;
+  game?: { game: string; power: number } | null;
 }
 interface LogEntry {
   round: number; me: string; foe: string; me_name: string; foe_name: string; kills: number; lost: number;
@@ -46,46 +47,60 @@ function battleParams(game: string): P {
 const KIND_TITLE: Record<string, string> = {
   district: "Бой за район", challenge: "Вызов", boss: "Босс", city: "Штурм города", raid: "Рейд", war: "Война вождей",
 };
+const BOT_FACE: Record<string, string> = { boss: "👹", raid: "🏴‍☠️", district: "🤖", city: "🏯" };
 
-function ArmyCard({ side, mine }: { side: Side; mine: boolean }) {
+function status(side: Side, mine: boolean): string {
+  if (side.afk) return mine ? "пропустил ходы · автоатака" : "не ходит · автоатака";
+  if (side.auto) return "🤖 автоатака";
+  if (side.waiting) return mine ? `✅ ${side.chosen ?? "ход сделан"}` : "✅ сходил";
+  return mine ? "твой ход" : "думает…";
+}
+
+function Fighter({ side, mine, kind }: { side: Side; mine: boolean; kind: string }) {
   const p0 = Math.max(1, side.power0 ?? side.power);
   const hp = Math.max(0, Math.min(1, side.power / p0));
   const emax = side.emax ?? 10;
+  const initial = side.name.replace(/[^\p{L}\p{N}]/gu, "").slice(0, 1).toUpperCase() || "?";
   return (
-    <div className={`bt-army ${mine ? "me" : "foe"}`}>
-      <div className="bt-army-head">
-        <span className="bt-ava">{mine ? "🥷" : "👊"}</span>
-        <div className="bt-army-name">
-          <b>{side.name}</b>
-          <small>{side.afk ? (mine ? "🤖 ты пропустил ходы — включена автоатака" : "🤖 соперник не ходит — за него автоатака") : side.auto ? "🤖 автоатака" : side.waiting ? "✅ ход сделан" : mine ? "👤 твой ход" : "🤔 думает…"}</small>
-        </div>
-        <span className="bt-pow">{fmt(side.power)}</span>
+    <div className={`bt-f ${mine ? "me" : "foe"}`}>
+      <div className="bt-f-ava">
+        {side.ava ? <img src={imgUrl(side.ava, 160)} alt={side.name} /> : <span>{side.bot ? BOT_FACE[kind] ?? "🤖" : initial}</span>}
+        <i className={`bt-f-dot ${side.waiting || side.auto ? "ok" : ""}`} />
       </div>
+      <b className="bt-f-name">{side.name}</b>
+      <small className="bt-f-status">{status(side, mine)}</small>
+      <div className="bt-f-pow">{fmt(side.power)}</div>
       <div className="bt-hp"><i style={{ width: `${hp * 100}%` }} /></div>
-      <div className="bt-army-row">
-        <span><Users size={12} /> {side.units != null ? `${fmt(side.units)}${side.units0 ? ` / ${fmt(side.units0)}` : ""}` : "—"}</span>
-        <span className="bt-pips" title="энергия">
-          {Array.from({ length: emax }, (_, i) => <i key={i} className={i < side.energy ? "on" : ""} />)}
-          <small><Zap size={11} />{side.energy}</small>
-        </span>
+      <div className="bt-f-row">
+        <span><Users size={11} /> {side.units != null ? fmt(side.units) : "—"}</span>
+        <span className="bt-en"><Zap size={11} /> {side.energy}/{emax}</span>
       </div>
+      <div className="bt-pips">{Array.from({ length: emax }, (_, i) => <i key={i} className={i < side.energy ? "on" : ""} />)}</div>
     </div>
   );
 }
 
-function RoundLine({ e }: { e: LogEntry }) {
+function RoundCard({ e, fresh }: { e: LogEntry; fresh: boolean }) {
+  const won = e.kills >= e.lost;
   return (
-    <div className="bt-round">
-      <div className="bt-round-n">Р{e.round}</div>
-      <div className="bt-round-body">
-        <div className="bt-line me">
-          <b>Ты: {e.me_name}</b>
-          <span>💥 {fmt(e.hit)} урона · ☠️ пало врагов {fmt(e.kills)}</span>
+    <div className={`bt-rc ${fresh ? "fresh" : ""}`}>
+      <div className="bt-rc-head">
+        <b>Раунд {e.round}</b>
+        <span className={won ? "up" : "down"}>{won ? "▲ за тобой" : "▼ за соперником"}</span>
+      </div>
+      <div className="bt-rc-side me">
+        <span className="bt-rc-who">Ты</span>
+        <div>
+          <b>{e.me_name}</b>
+          <small>💥 {fmt(e.hit)} · ☠️ −{fmt(e.kills)} у врага</small>
           {e.fired.length > 0 && <div className="bt-tags">{e.fired.map((f) => <i key={f}>{f}</i>)}</div>}
         </div>
-        <div className="bt-line foe">
-          <b>Враг: {e.foe_name}</b>
-          <span>💥 {fmt(e.taken)} урона · ☠️ пало твоих {fmt(e.lost)}</span>
+      </div>
+      <div className="bt-rc-side foe">
+        <span className="bt-rc-who">Враг</span>
+        <div>
+          <b>{e.foe_name}</b>
+          <small>💥 {fmt(e.taken)} · ☠️ −{fmt(e.lost)} у тебя</small>
           {e.foe_fired.length > 0 && <div className="bt-tags">{e.foe_fired.map((f) => <i key={f}>{f}</i>)}</div>}
         </div>
       </div>
@@ -167,54 +182,62 @@ export function BattlePage() {
   const G = game ? gameOf(game.game) : null;
   const live = b.status === "live";
   const canAct = live && !busy && !b.me.waiting && !b.me.auto;
+  const lastLog = b.log[b.log.length - 1];
   return (
     <div className="page bt">
       <div className="bt-top">
-        <div>
+        <div className="bt-title">
           <b>{KIND_TITLE[b.kind] ?? "Бой"}</b>
-          <small>Раунд {b.round + (live ? 1 : 0)}</small>
+          <small>{live ? `Раунд ${b.round + 1}` : `Сыграно раундов: ${b.round}`}</small>
         </div>
-        {live && (
-          <div className={`bt-timer ${left <= 3 ? "hot" : ""}`} style={{ ["--p" as string]: `${(left / ROUND_SECONDS) * 100}%` }}>
-            <span>{left}</span>
-          </div>
-        )}
-        <button type="button" className={`btn small ${b.me.auto ? "gold" : "ghost"}`} disabled={!live || busy}
-          onClick={() => send("auto", { on: !b.me.auto })}><Bot size={14} /> {b.me.auto ? "Авто: вкл" : "Авто-бой"}</button>
+        <button type="button" className={`bt-auto ${b.me.auto ? "on" : ""}`} disabled={!live || busy}
+          onClick={() => send("auto", { on: !b.me.auto })}>
+          <Bot size={15} /> {b.me.auto ? "Авто: вкл" : "Авто-бой"}
+        </button>
       </div>
 
-      <ArmyCard side={b.foe} mine={false} />
-      <div className={`bt-clash ${flash ? "go" : ""}`}>
-        {flash ? (
-          <span>💥 {fmt(flash.hit)} → · ← {fmt(flash.taken)} 💥</span>
-        ) : (
-          <span><Swords size={18} /> {live ? (b.me.waiting ? "Ждём ход соперника…" : b.me.auto ? "Ходит автоатака" : "Выбери ход") : "Бой окончен"}</span>
-        )}
+      <div className="bt-vs">
+        <Fighter side={b.me} mine kind={b.kind} />
+        <div className="bt-vs-mid">
+          {live ? (
+            <div className={`bt-timer ${left <= 3 ? "hot" : ""}`} style={{ ["--p" as string]: `${(left / ROUND_SECONDS) * 100}%` }}>
+              <span>{left}</span>
+            </div>
+          ) : <div className="bt-vs-badge">VS</div>}
+          {flash ? (
+            <div className="bt-hits">
+              <span className="me">−{fmt(flash.kills)}</span>
+              <span className="foe">−{fmt(flash.lost)}</span>
+            </div>
+          ) : <div className="bt-vs-badge small">VS</div>}
+        </div>
+        <Fighter side={b.foe} mine={false} kind={b.kind} />
       </div>
-      <ArmyCard side={b.me} mine />
 
       {live ? (
         <>
-          <div className="grid-2" style={{ gap: 8 }}>
-            <button type="button" className="btn red bt-big" disabled={!canAct} onClick={() => act("attack")}><Swords size={18} /> Атака</button>
-            <button type="button" className="btn ghost bt-big" disabled={!canAct} onClick={() => act("defend")}><Shield size={18} /> Защита <small>+⚡</small></button>
+          <div className={`bt-turn ${canAct ? "go" : ""}`}>
+            {b.me.auto ? "Ходит автоатака — выключи «Авто-бой», чтобы играть самому"
+              : b.me.waiting ? `Ход сделан: ${b.me.chosen ?? "—"} · ждём соперника`
+                : "Твой ход — атака, защита или способность"}
           </div>
-          {b.me.auto && <small className="muted bt-note">Автоатака ходит за тебя. Выключи «Авто-бой», чтобы играть перками сам.</small>}
+          <div className="bt-actions">
+            <button type="button" className="bt-act atk" disabled={!canAct} onClick={() => act("attack")}><Swords size={20} /><b>Атака</b><small>обычный удар</small></button>
+            <button type="button" className="bt-act def" disabled={!canAct} onClick={() => act("defend")}><Shield size={20} /><b>Защита</b><small>меньше урона · +⚡</small></button>
+          </div>
           {b.perks.length > 0 && (
             <>
-              <div className="bt-sub">Способности <small>🎮 мини-игра для тебя · 🎯 испытание сопернику</small></div>
+              <div className="bt-sub">Способности <small>{b.perks.filter((p) => p.ready_in === 0 && p.affordable).length} из {b.perks.length} готовы</small></div>
               <div className="bt-plist">
                 {b.perks.map((p) => {
                   const ok = canAct && p.ready_in === 0 && p.affordable;
+                  const tag = p.ready_in > 0 ? `⏳ ${p.ready_in} р.` : !p.affordable ? "мало ⚡" : null;
                   return (
-                    <button key={p.code} type="button" className={`bt-prow ${ok ? "" : "off"} ${p.minigame ? `mg-${p.minigame}` : ""}`}
-                      onClick={() => setInfo(p)}>
+                    <button key={p.code} type="button" className={`bt-prow ${ok ? "ready" : "off"} ${p.minigame ? `mg-${p.minigame}` : ""}`} onClick={() => setInfo(p)}>
                       <span className="bt-prow-ico">{p.minigame === "self" ? "🎮" : p.minigame === "enemy" ? "🎯" : "✦"}</span>
-                      <b>{p.name}</b>
-                      <span className="bt-prow-meta">
-                        {p.ready_in > 0 ? `⏳ ${p.ready_in}` : !p.affordable ? "мало ⚡" : ""}
-                        <i><Zap size={11} />{p.cost}</i>
-                      </span>
+                      <span className="bt-prow-txt"><b>{p.name}</b><small>{p.about}</small></span>
+                      {tag ? <span className="bt-prow-tag">{tag}</span> : <span className="bt-prow-cost"><Zap size={11} />{p.cost}</span>}
+                      <ChevronRight size={14} className="bt-prow-go" />
                     </button>
                   );
                 })}
@@ -230,12 +253,18 @@ export function BattlePage() {
         </div>
       )}
 
-      {b.log.length > 0 && (
-        <>
-          <div className="bt-sub">Ход боя</div>
-          <div className="bt-log">{[...b.log].reverse().map((e) => <RoundLine key={e.round} e={e} />)}</div>
-        </>
-      )}
+      <div className="bt-sub">Лента боя <small>{live ? "обновляется вживую" : "итог"}</small></div>
+      <div className="bt-feed">
+        {live && (
+          <div className="bt-now">
+            <span className="bt-live">LIVE</span>
+            <span>Раунд {b.round + 1}: ты — <b>{b.me.waiting || b.me.auto ? (b.me.chosen ?? (b.me.auto ? "автоатака" : "выбрал")) : "выбираешь…"}</b>
+              {" · "}соперник — <b>{b.foe.waiting ? "сходил" : b.foe.auto ? "автоатака" : "думает…"}</b></span>
+          </div>
+        )}
+        {[...b.log].reverse().map((e) => <RoundCard key={e.round} e={e} fresh={e.round === lastLog?.round && !!flash} />)}
+        {!b.log.length && !live && <small className="muted">Раундов не было.</small>}
+      </div>
 
       {info && (() => {
         const p = b.perks.find((x) => x.code === info.code) ?? info;

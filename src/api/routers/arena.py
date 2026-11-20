@@ -118,8 +118,11 @@ def view(st: dict, user_id: int) -> dict:
         "left": max(0, int(st["deadline"] - time.time())),
         "me": {"name": s["name"], "power": s["power"], "energy": s["energy"], "emax": s.get("emax", 10), "auto": s["auto"],
                "waiting": s["action"] is not None, "game": s["pending_game"], "power0": s.get("power0", s["power"]), "afk": s.get("afk", False),
+               "ava": s.get("ava"), "bot": s["uid"] is None,
+               "chosen": _act_name((s["action"] or {}).get("perk") or (s["action"] or {}).get("kind")) if s["action"] else None,
                "units": s.get("units"), "units0": s.get("units0")},
         "foe": {"name": o["name"], "power": o["power"], "energy": o["energy"], "emax": o.get("emax", 10), "auto": o["auto"], "afk": o.get("afk", False),
+                "ava": o.get("ava"), "bot": o["uid"] is None,
                 "waiting": o["action"] is not None, "power0": o.get("power0", o["power"]), "units": o.get("units"), "units0": o.get("units0")},
         "perks": [{"code": p.code, "name": p.name, "about": p.about, "cost": p.cost, "ready_in": p.ready_in, "affordable": p.affordable,
                    "minigame": svc.PERK_REGISTRY[p.code].minigame, "game": svc.PERK_REGISTRY[p.code].game}
@@ -219,11 +222,26 @@ async def current(user_id: int = Depends(get_current_user_id), redis: Redis = De
     return {"id": battle_id}
 
 
+async def _ensure_avatars(session: AsyncSession, redis: Redis, st: dict) -> None:
+    """Аватарки сторон (2026-11-20): уник на позиции лидера банды. Считаются один раз и хранятся в состоянии боя."""
+    if all("ava" in st[x] for x in ("a", "d")):
+        return
+    from bot.services.profile.summary import _avatar
+
+    for x in ("a", "d"):
+        if "ava" not in st[x]:
+            st[x]["ava"] = await _avatar(session, st[x]["uid"]) if st[x]["uid"] else None
+    if st["status"] == svc.STATUS_LIVE:
+        await svc.save(redis, st)
+
+
 @router.get("/{battle_id}")
-async def get_battle(battle_id: str, user_id: int = Depends(get_current_user_id), redis: Redis = Depends(get_redis)) -> dict:
+async def get_battle(battle_id: str, user_id: int = Depends(get_current_user_id), redis: Redis = Depends(get_redis),
+                     session: AsyncSession = Depends(get_session)) -> dict:
     st = await _get(redis, battle_id)
     if user_id not in (st["a"]["uid"], st["d"]["uid"]):
         raise bad(_ERRORS["not_yours"])
+    await _ensure_avatars(session, redis, st)
     return view(st, user_id)
 
 

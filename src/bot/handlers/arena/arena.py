@@ -1,6 +1,7 @@
 """Онлайн-бой в боте (текст и кнопки) — тот же бой, что в Mini App (`services/arena`).
 
-Мини-игры в текстовом режиме засчитываются средним результатом. Кнопки отвечают только участнику боя — в группе
+Мини-игр в боте нет (2026-11-20): свой перк с мини-игрой бьёт без бонуса, навязанное соперником испытание
+засчитывается проваленным (полный дебафф) — сыграть можно в Mini App. Кнопки отвечают только участнику боя — в группе
 чужие нажатия молча отклоняются алертом.
 """
 from __future__ import annotations
@@ -21,6 +22,7 @@ CB_START_CHALLENGE = "ar:sc:"  # + id вызова
 CB_ACT = "ar:x:"  # + id боя + ":" + код действия
 CB_AUTO = "ar:au:"  # + id боя + ":" + 0/1
 CB_REFRESH = "ar:r:"  # + id боя
+CB_HELP = "ar:h:"  # + id боя + ":" + 1 (перки) / 0 (лента)
 BTN_ONLINE = "⚔️ Бой онлайн (перки)"
 BTN_ACCEPT_ONLINE = "⚔️ Принять онлайн"
 _NAMES = {"attack": "атака", "defend": "защита"}
@@ -32,46 +34,110 @@ def _b(text: str, data: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, callback_data=data)
 
 
-def render(st: dict, user_id: int) -> tuple[str, InlineKeyboardMarkup]:
+KIND_TITLE = {"district": "Бой за район", "challenge": "Вызов", "boss": "Босс", "city": "Штурм города", "raid": "Рейд", "war": "Война вождей"}
+SEP = "━━━━━━━━━━━━━━━━━━"
+
+
+def _bar(cur: int, full: int, n: int = 10) -> str:
+    k = max(0, min(n, round(n * cur / max(1, full))))
+    return "▰" * k + "▱" * (n - k)
+
+
+def _act_name(code: str | None) -> str:
+    if code in (None, "", "attack"):
+        return "Атака"
+    if code == "defend":
+        return "Защита"
+    perk = svc.PERK_REGISTRY.get(code)
+    return perk.name if perk else "Перк"
+
+
+def _side_lines(mark: str, side: dict, mine: bool) -> list[str]:
+    p0 = side.get("power0") or side["power"] or 1
+    units = side.get("units")
+    if side.get("afk"):
+        state = "🤖 не ходит — автоатака"
+    elif side["auto"]:
+        state = "🤖 автоатака"
+    elif side["action"] is not None:
+        state = f"✅ {_act_name(side['action'].get('perk') or side['action'].get('kind'))}" if mine else "✅ сходил"
+    else:
+        state = "⌛ твой ход" if mine else "🤔 думает"
+    unit_txt = f"👥 {format_number(units)}/{format_number(side.get('units0') or units)} · " if units is not None else ""
+    return [
+        f"{mark} <b>{esc(side['name'])}</b> — {format_number(side['power'])}",
+        f"   {_bar(side['power'], p0)} {round(100 * side['power'] / max(1, p0))}%",
+        f"   {unit_txt}⚡ {side['energy']}/{side.get('emax', 10)} · {state}",
+    ]
+
+
+def render(st: dict, user_id: int, *, perks_help: bool = False) -> tuple[str, InlineKeyboardMarkup]:
+    """Текстовый экран боя (дизайн 2026-11-20): обе стороны полосками, лента раундов, кнопки ходов и перков.
+    Мини-игр в боте нет: свой перк — без бонуса мини-игры, навязанное испытание — провалено (полный дебафф)."""
     me = "a" if st["a"]["uid"] == user_id else "d"
     foe = "d" if me == "a" else "a"
     s, o = st[me], st[foe]
+    i_me = 0 if me == "a" else 1
     left = max(0, int(st["deadline"] - time.time()))
-    lines = [f"⚔️ <b>{esc(s['name'])}</b> vs <b>{esc(o['name'])}</b>", "━━━━━━━━━━━━━━━━━━"]
-    if st["status"] == "live":
-        lines.append(f"Раунд {st['round'] + 1} · ⏳ {left} с{' · 🤖 автоатака' if s['auto'] else ''}")
-    lines.append(f"🛡 Твоя мощь: <b>{format_number(s['power'])}</b> · ⚡ {s['energy']}/{s.get('emax', 10)}")
-    lines.append(f"💢 Противник: <b>{format_number(o['power'])}</b> · ⚡ {o['energy']}")
-    for e in st["log"][-3:]:
-        mine = e[me]["code"]
-        lines.append(f"· {_NAMES.get(mine, svc.PERK_REGISTRY.get(mine).name if mine in svc.PERK_REGISTRY else mine)} — "
-                     f"выбито {format_number(e['kills'][0 if me == 'a' else 1])}, потеряно {format_number(e['kills'][1 if me == 'a' else 0])}")
-    if s.get("pending_game"):
-        lines.append("🎯 Противник навязал испытание — в боте засчитается средне.")
+    live = st["status"] == "live"
+    head = f"⚔️ <b>{KIND_TITLE.get(st['kind'], 'Бой')}</b>"
+    head += f" · раунд {st['round'] + 1} · ⏳ {left} с" if live else f" · раундов: {st['round']}"
+    lines = [head, SEP, *_side_lines("🟦", s, True), "", *_side_lines("🟥", o, False), SEP]
+    perks = svc.perks_view(st, me)
+    if perks_help:
+        lines.append("📖 <b>Твои способности</b>")
+        for p in perks:
+            perk = svc.PERK_REGISTRY[p.code]
+            mg = " 🎮" if perk.minigame == "self" else " 🎯" if perk.minigame == "enemy" else ""
+            ready = "готов" if p.ready_in == 0 and p.affordable else f"через {p.ready_in} р." if p.ready_in else "мало ⚡"
+            lines.append(f"✦ <b>{esc(p.name)}</b>{mg} · ⚡{p.cost} · {ready}\n   <i>{esc(p.about)}</i>")
+        lines.append("🎮 — в Mini App мини-игра усиливает удар, в боте перк бьёт без бонуса. 🎯 — сопернику испытание.")
+    else:
+        log = st["log"][-4:]
+        if log:
+            lines.append("📜 <b>Лента боя</b>")
+        start = len(st["log"]) - len(log) + 1
+        for n, e in enumerate(log, start):
+            hit = e.get("hit", [0, 0])
+            fired = e.get("fired", [[], []])
+            k_me, k_foe = e["kills"][i_me], e["kills"][1 - i_me]
+            lines.append(f"<b>Р{n}</b> {'▲' if k_me >= k_foe else '▼'}")
+            lines.append(f"   🟦 {esc(_act_name(e[me]['code']))}: 💥 {format_number(hit[i_me])} · ☠️ {format_number(k_me)}"
+                         + (f" · ✨ {esc(', '.join(fired[i_me][:3]))}" if fired[i_me] else ""))
+            lines.append(f"   🟥 {esc(_act_name(e[foe]['code']))}: 💥 {format_number(hit[1 - i_me])} · ☠️ {format_number(k_foe)}"
+                         + (f" · ✨ {esc(', '.join(fired[1 - i_me][:3]))}" if fired[1 - i_me] else ""))
+    if live and s.get("pending_game") and not s["auto"]:
+        lines.append("🎯 <b>Соперник навязал испытание!</b> В боте оно засчитывается проваленным — получишь больше урона. "
+                     "Сыграть можно в Mini App.")
     rows: list[list[InlineKeyboardButton]] = []
     bid = st["id"]
-    if st["status"] == "live":
+    if live:
         if s["action"] is not None:
-            lines.append("✅ Ход сделан — ждём соперника.")
-        elif not s["auto"]:
-            rows.append([_b("🗡 Атака", f"{CB_ACT}{bid}:attack"), _b("🛡 Защита", f"{CB_ACT}{bid}:defend")])
-            ready = [p for p in svc.perks_view(st, me) if p.ready_in == 0 and p.affordable][:_MAX_PERK_BUTTONS]
+            lines.append("✅ Ход сделан — ждём соперника. Жми «Обновить».")
+        elif s["auto"]:
+            lines.append("🤖 Ходит автоатака. Выключи её, чтобы ходить самому.")
+        else:
+            lines.append("👇 <b>Твой ход</b>")
+            rows.append([_b("🗡 Атака", f"{CB_ACT}{bid}:attack"), _b("🛡 Защита +⚡", f"{CB_ACT}{bid}:defend")])
+            ready = [p for p in perks if p.ready_in == 0 and p.affordable][:_MAX_PERK_BUTTONS]
             for i in range(0, len(ready), 2):
-                rows.append([_b(f"✨ {p.name} ⚡{p.cost}"[:60], f"{CB_ACT}{bid}:{p.code}") for p in ready[i:i + 2]])
-        rows.append([_b("🤖 Выключить авто" if s["auto"] else "🤖 Автоатака", f"{CB_AUTO}{bid}:{0 if s['auto'] else 1}"),
+                rows.append([_b(f"{'🎯' if svc.PERK_REGISTRY[p.code].minigame == 'enemy' else '✦'} {p.name} ⚡{p.cost}"[:60],
+                                f"{CB_ACT}{bid}:{p.code}") for p in ready[i:i + 2]])
+        rows.append([_b("📜 Лента" if perks_help else "📖 Перки", f"{CB_HELP}{bid}:{0 if perks_help else 1}"),
                      _b("🔄 Обновить", f"{CB_REFRESH}{bid}")])
+        rows.append([_b("🤖 Выключить авто" if s["auto"] else "🤖 Автоатака", f"{CB_AUTO}{bid}:{0 if s['auto'] else 1}")])
     else:
         won = st["result"]["attacker_won"] == (me == "a")
-        lines.append("━━━━━━━━━━━━━━━━━━")
+        lines.append(SEP)
         lines.append("🏆 <b>Победа!</b>" if won else "💀 <b>Поражение</b>")
         rep = st.get("report") or {}
-        if "captured" in rep:
-            lines.append("Район захвачен." if rep["captured"] and won else "")
-    return "\n".join(x for x in lines if x), InlineKeyboardMarkup(inline_keyboard=rows)
+        if rep.get("captured") and won:
+            lines.append("🚩 Район захвачен.")
+    return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-async def _show(callback: CallbackQuery, st: dict) -> None:
-    text, markup = render(st, callback.from_user.id)
+async def _show(callback: CallbackQuery, st: dict, *, perks_help: bool = False) -> None:
+    text, markup = render(st, callback.from_user.id, perks_help=perks_help)
     try:
         await callback.message.edit_text(text, reply_markup=markup)
     except Exception:  # то же сообщение — не страшно
@@ -131,8 +197,9 @@ async def cb_start_challenge(callback: CallbackQuery, session: AsyncSession, red
 @router.callback_query(F.data.startswith(CB_ACT))
 async def cb_act(callback: CallbackQuery, redis: Redis) -> None:
     bid, _, code = callback.data.removeprefix(CB_ACT).partition(":")
-    action = {"kind": code} if code in ("attack", "defend") else {"kind": "perk", "perk": code, "score": 0.5}
-    action["game_score"] = 0.5
+    # Текстовый режим без мини-игр: своя — без бонуса (0), навязанная — провалена (0, полный дебафф).
+    action = {"kind": code} if code in ("attack", "defend") else {"kind": "perk", "perk": code, "score": 0.0}
+    action["game_score"] = 0.0
     try:
         st = await svc.act(redis, bid, callback.from_user.id, action)
     except svc.ArenaError as exc:
@@ -162,3 +229,14 @@ async def cb_refresh(callback: CallbackQuery, redis: Redis) -> None:
         return
     await callback.answer()
     await _show(callback, st)
+
+
+@router.callback_query(F.data.startswith(CB_HELP))
+async def cb_help(callback: CallbackQuery, redis: Redis) -> None:
+    bid, _, on = callback.data.removeprefix(CB_HELP).partition(":")
+    st = await svc.tick(redis, bid)
+    if st is None or callback.from_user.id not in (st["a"]["uid"], st["d"]["uid"]):
+        await callback.answer(_ERR["no_battle"] if st is None else _ERR["not_yours"], show_alert=True)
+        return
+    await callback.answer()
+    await _show(callback, st, perks_help=on == "1")

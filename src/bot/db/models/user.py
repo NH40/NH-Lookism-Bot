@@ -159,6 +159,8 @@ class User(Base):
     ultra_settings: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
     # Самдак: ранги, на которых статистам запрещено переходить на следующий ранг.
     rank_locks: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
+    # Онлайн-бои: коды перков, которые игрок отключил (их нет в бою, автоатака их не жмёт) — 2026-11-20.
+    arena_perks_off: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
     # Сенсорика «Снять безопасность»: до этого времени безопасность игрока не работает.
     security_off_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Мощь армии для топа/«/players» — снимок `services.extra.get_army_stats` (живой расчёт —

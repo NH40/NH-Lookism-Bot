@@ -368,3 +368,17 @@ input, select, textarea { font-family: inherit; }
 .battle-dock span { display: flex; flex-direction: column; }
 .battle-dock b { font-size: 14px; }
 .battle-dock small { font-size: 11px; font-weight: 700; opacity: 0.85; }
+
+/* Способности в бою — переключатели (2026-11-20) */
+.ap-list { display: flex; flex-direction: column; gap: 6px; max-height: 62vh; overflow-y: auto; }
+.ap-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; text-align: left; color: var(--text);
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); }
+.ap-row.off { opacity: 0.55; }
+.ap-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ap-txt b { font-size: 13.5px; font-weight: 800; }
+.ap-txt small { font-size: 11px; font-weight: 700; color: var(--muted); }
+.ap-about { font-weight: 600 !important; }
+.ap-switch { flex: none; width: 42px; height: 24px; border-radius: 12px; background: rgba(255, 255, 255, 0.15); position: relative; transition: background 0.2s; }
+.ap-switch i { position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform 0.2s; }
+.ap-switch.on { background: #2ee88a; }
+.ap-switch.on i { transform: translateX(18px); }

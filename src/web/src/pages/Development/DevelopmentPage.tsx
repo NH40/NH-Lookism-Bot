@@ -1,3 +1,4 @@
+import { ArenaPerksSheet } from "../../components/ArenaPerksSheet";
 import { ChevronRight, Check, Droplet, Dumbbell, Mountain, Lightbulb, Lock, Plus, Sun, Swords, TrendingUp } from "lucide-react";
 import { CopySlots } from "./CopySlots";
 import { useState, type ReactNode } from "react";
@@ -42,10 +43,13 @@ export function DevelopmentPage() {
   const { run, busy } = useAction(reload);
   const post = (path: string, body: unknown = {}) => run(`${API}${path}`, body);
   const ready = data !== null && data.tab === tab;
+  const [perksOpen, setPerksOpen] = useState(false);
 
   return (
     <Screen status={ready || status !== "ready" ? status : "loading"} error={error}>
       <div className="page">
+        <button type="button" className="btn ghost block small" onClick={() => setPerksOpen(true)}>⚙ Способности в онлайн-боях — включить / выключить</button>
+        {perksOpen && <ArenaPerksSheet onClose={() => setPerksOpen(false)} />}
         <div className="seg" role="tablist" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}>
           {TABS.map((t) => (
             <button

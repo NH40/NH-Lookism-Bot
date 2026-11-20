@@ -10,9 +10,10 @@ def _tiers(prefix: str, code: str | None, level: int) -> list[str]:
     return [f"{prefix}:{code}:{t + 1}" for t, need in enumerate(TIER_LEVELS) if code and level >= need]
 
 
-async def perks_for(session: AsyncSession, user_id: int) -> list[str]:
+async def perks_for(session: AsyncSession, user_id: int, *, include_off: bool = False) -> list[str]:
     """Коды перков: базовые всем + техника, пути (оба тела), родословные, активные абсолюты, позиции банды,
-    изученные техники мастерства. Только те, что есть в реестре."""
+    изученные техники мастерства. Только те, что есть в реестре. Отключённые игроком (`users.arena_perks_off`)
+    в бой не попадают — автоатака их не жмёт (2026-11-20); `include_off` — для экрана настройки."""
     from sqlalchemy import select
 
     from bot.config.arena.perks import BASE_PERKS
@@ -33,7 +34,13 @@ async def perks_for(session: AsyncSession, user_id: int) -> list[str]:
     learned = (await session.execute(select(MasteryTechnique.code).where(MasteryTechnique.user_id == user_id))).scalars().all()
     codes += [f"mt:{c}" for c in learned]
     seen: set[str] = set()
-    return [c for c in codes if c in PERK_REGISTRY and not (c in seen or seen.add(c))]
+    out = [c for c in codes if c in PERK_REGISTRY and not (c in seen or seen.add(c))]
+    if include_off:
+        return out
+    from bot.db.models.user import User
+
+    off = set(await session.scalar(select(User.arena_perks_off).where(User.id == user_id)) or [])
+    return [c for c in out if c not in off]
 
 
 async def energy_for(session: AsyncSession, user_id: int) -> tuple[int, int, int]:

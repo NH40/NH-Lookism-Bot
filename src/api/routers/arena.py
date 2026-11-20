@@ -195,6 +195,50 @@ async def start_challenge(body: StartChallengeIn, user_id: int = Depends(get_cur
     return view(st, user_id)
 
 
+class PerkToggleIn(BaseModel):
+    code: str
+    off: bool
+
+
+_SOURCE_NAMES = {"base": "Базовый", "tech": "Техника", "path": "Путь", "blood": "Родословная", "abs": "Абсолют",
+                 "pos": "Позиция банды", "mt": "Техника мастерства"}
+
+
+@router.get("/perks")
+async def my_perks(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    """Способности для онлайн-боёв (2026-11-20): все доступные перки игрока и какие отключены."""
+    from sqlalchemy import select
+
+    from bot.db.models.user import User
+    from bot.services.arena.sources import perks_for
+
+    codes = await perks_for(session, user_id, include_off=True)
+    off = set(await session.scalar(select(User.arena_perks_off).where(User.id == user_id)) or [])
+    out = []
+    for c in codes:
+        p = svc.PERK_REGISTRY[c]
+        src = c.split(":", 1)[0] if ":" in c else "base"
+        out.append({"code": c, "name": p.name, "about": p.about, "cost": p.cost, "cooldown": p.cooldown,
+                    "minigame": p.minigame, "source": _SOURCE_NAMES.get(src, "Другое"), "off": c in off})
+    return {"perks": out}
+
+
+@router.post("/perks")
+async def toggle_perk(body: PerkToggleIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    from sqlalchemy import select, update
+
+    from bot.db.models.user import User
+
+    off = list(await session.scalar(select(User.arena_perks_off).where(User.id == user_id)) or [])
+    if body.off and body.code not in off:
+        off.append(body.code)
+    if not body.off:
+        off = [c for c in off if c != body.code]
+    await session.execute(update(User).where(User.id == user_id).values(arena_perks_off=off))
+    await session.commit()
+    return await my_perks(user_id, session)
+
+
 @router.get("/challenges")
 async def my_challenges(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
     """Вызовы игрока (2026-11-20): ждущие ответа (свои и входящие) и итоги за 2 часа — чтобы было видно, принял ли соперник."""

@@ -253,20 +253,39 @@ async def run_once(session_factory: async_sessionmaker[AsyncSession], redis: Red
         candidates = await _candidates(session)
 
     async def attempt(name: str, action, expected: tuple) -> bool:
-        """Одно действие своей транзакцией. → False — ожидаемый отказ (КД, нет тикетов)."""
-        async with session_factory() as session:
-            try:
-                await action(session)
-            except expected:
-                await session.rollback()
-                return False
-            except Exception as exc:  # одно действие не валит проход
-                await session.rollback()
-                report.errors.append(f"{name}:{exc!r}")
-                log.exception("Ultra instinct action failed")
-                return False
-        setattr(report, name, getattr(report, name) + 1)
-        return True
+        """Одно действие своей транзакцией. → False — ожидаемый отказ (КД, нет тикетов).
+        Deadlock (игрок в ту же секунду сам вербует/тренирует/бьётся теми же стопками) — не ошибка:
+        повтор через полсекунды, потом тихо пропуск до следующего тика (2026-11-20)."""
+        import asyncio
+
+        from sqlalchemy.exc import DBAPIError
+
+        for try_no in range(2):
+            async with session_factory() as session:
+                try:
+                    await action(session)
+                except expected:
+                    await session.rollback()
+                    return False
+                except DBAPIError as exc:
+                    await session.rollback()
+                    if "deadlock" in str(exc).lower():
+                        if try_no == 0:
+                            await asyncio.sleep(0.5)
+                            continue
+                        log.warning("Ultra instinct %s: deadlock twice, skip till next tick", name)
+                        return False
+                    report.errors.append(f"{name}:{exc!r}")
+                    log.exception("Ultra instinct action failed")
+                    return False
+                except Exception as exc:  # одно действие не валит проход
+                    await session.rollback()
+                    report.errors.append(f"{name}:{exc!r}")
+                    log.exception("Ultra instinct action failed")
+                    return False
+            setattr(report, name, getattr(report, name) + 1)
+            return True
+        return False
 
     for user_id, phase, settings in candidates:
         async with session_factory() as session:

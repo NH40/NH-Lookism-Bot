@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { apiGet, apiPost, imgUrl } from "../../api";
 import { Sheet } from "../../components/Sheet";
+import { ArenaPerksSheet } from "../../components/ArenaPerksSheet";
 import { fmt, useToast } from "../../components/ui";
 import { ROUTE_MAP } from "../../constants";
 import { gameOf, type P } from "../Minigame/games";
@@ -118,6 +119,7 @@ export function BattlePage() {
   const [game, setGame] = useState<Pending>(null);
   const [flash, setFlash] = useState<LogEntry | null>(null);
   const [info, setInfo] = useState<Perk | null>(null);
+  const [perksOpen, setPerksOpen] = useState(false);
   const lastRound = useRef(0);
 
   const apply = useCallback((v: BattleView) => {
@@ -190,6 +192,7 @@ export function BattlePage() {
           <b>{KIND_TITLE[b.kind] ?? "Бой"}</b>
           <small>{live ? `Раунд ${b.round + 1}` : `Сыграно раундов: ${b.round}`}</small>
         </div>
+        <button type="button" className="bt-auto" onClick={() => setPerksOpen(true)} aria-label="Способности">⚙</button>
         <button type="button" className={`bt-auto ${b.me.auto ? "on" : ""}`} disabled={!live || busy}
           onClick={() => send("auto", { on: !b.me.auto })}>
           <Bot size={15} /> {b.me.auto ? "Авто: вкл" : "Авто-бой"}
@@ -291,6 +294,8 @@ export function BattlePage() {
           </Sheet>
         );
       })()}
+
+      {perksOpen && <ArenaPerksSheet onClose={() => setPerksOpen(false)} />}
 
       {G && game && (
         <div className="bt-game">

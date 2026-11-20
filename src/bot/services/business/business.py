@@ -129,9 +129,9 @@ def _shop_total_per_minute(shops: float) -> float:
     cap = BUSINESS_SHOP_LINEAR_AFTER
     if shops <= cap:
         return BUSINESS_SHOP_BASE * shops**BUSINESS_SHOP_EXPONENT
-    # После 200-го каждый магазин даёт как кафе (экономика 2026-11-20: было ~103/мин — в 5 раз больше кафе,
-    # «самая жирная точка» сверхлинейной кривой, и топы строили тысячи магазинов).
-    return BUSINESS_SHOP_BASE * cap**BUSINESS_SHOP_EXPONENT + (shops - cap) * BUSINESS_CAFE_INCOME
+    # После `cap` каждый магазин даёт столько же, сколько последний на кривой (плавное продолжение, 2026-11-20).
+    marginal = BUSINESS_SHOP_BASE * BUSINESS_SHOP_EXPONENT * cap ** (BUSINESS_SHOP_EXPONENT - 1)
+    return BUSINESS_SHOP_BASE * cap**BUSINESS_SHOP_EXPONENT + (shops - cap) * marginal
 
 
 def _fixed_per_minute(counts: dict[str, int]) -> float:

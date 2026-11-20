@@ -44,8 +44,8 @@ _PROGRESS_STATEMENTS = (
     "DELETE FROM user_potions WHERE user_id = :uid",
     # Вклады сгорают с прогрессом — иначе через них проносили бы NHCoin мимо сброса.
     "DELETE FROM deposits WHERE user_id = :uid",
-    # Банк игрока сгорает вместе с капиталом (как NHCoin); выданные им кредиты гасятся владельцу напрямую (bank_id → NULL).
-    "DELETE FROM banks WHERE owner_id = :uid",
+    # Банк куплен за донат — остаётся (пользователь 2026-11-20), сгорает только капитал (NHCoin, как у всех).
+    "UPDATE banks SET capital = 0 WHERE owner_id = :uid",
     "DELETE FROM bank_members WHERE user_id = :uid",
     # Стек за покерным столом сгорает (иначе NHCoin проносили бы через сброс за столом);
     # игрок встаёт после текущей раздачи.

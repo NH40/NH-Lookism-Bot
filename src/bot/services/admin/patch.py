@@ -44,6 +44,7 @@ async def run_patch(session_factory: async_sessionmaker[AsyncSession], progress=
 
     done, last = 0, 0
     coins, tickets = live_get("starting_nh_coins"), live_get("starting_tickets")
+    compensation = await _wipe_loans(session_factory)
     while True:
         async with session_factory() as session:
             ids = (
@@ -58,6 +59,11 @@ async def run_patch(session_factory: async_sessionmaker[AsyncSession], progress=
                 await reset_player(session, uid, nh_coins=coins, tickets=tickets)
                 await apply_bloodline_effects(session, uid)
                 await apply_donate(session, uid)
+                if compensation.get(uid):
+                    from bot.constant.resource import RES_COINS
+                    from bot.services.resource import grant
+
+                    await grant(session, uid, RES_COINS, compensation[uid])
             await session.commit()
         last, done = ids[-1], done + len(ids)
         if progress:
@@ -67,6 +73,32 @@ async def run_patch(session_factory: async_sessionmaker[AsyncSession], progress=
         await reset_clans_for_patch(session, CLAN_START_LANDS)  # земли, постройки, рота, казна, войны
         await session.commit()
     return done
+
+
+BANK_WIPE_COMPENSATION = 0.10  # банкиру при вайпе — 10% невозвращённого по сгоревшим кредитам
+
+
+async def _wipe_loans(session_factory: async_sessionmaker[AsyncSession]) -> dict[int, int]:
+    """Вайп (пользователь 2026-11-20): все кредиты сгорают, долги заёмщиков списаны, заморозки за долг сняты;
+    банкиру после сброса — 10% того, что ему не вернули. → {банкир: компенсация NHCoin}."""
+    from bot.cache.redis_client import make_redis, make_redis_pool
+    from bot.config.settings import get_settings
+    from bot.constant.bank import key_frozen
+
+    async with session_factory() as session:
+        rows = (await session.execute(text(
+            "SELECT lender_id, coalesce(sum(principal + interest + penalty), 0) FROM bank_loans "
+            "WHERE status IN ('active', 'frozen', 'slave') GROUP BY lender_id"))).all()
+        borrowers = [b for (b,) in (await session.execute(text("SELECT DISTINCT borrower_id FROM bank_loans"))).all()]
+        await session.execute(text("DELETE FROM bank_loans"))
+        await session.commit()
+    redis = make_redis(make_redis_pool(get_settings().redis_url))
+    try:
+        for uid in borrowers:
+            await redis.delete(key_frozen(uid))
+    finally:
+        await redis.aclose()
+    return {int(lender): int(int(unpaid) * BANK_WIPE_COMPENSATION) for lender, unpaid in rows if unpaid > 0}
 
 
 async def season_patch(bot, session_factory: async_sessionmaker[AsyncSession], progress=None) -> int:

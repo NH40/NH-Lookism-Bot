@@ -51,7 +51,9 @@ from bot.config.game import (
     BUSINESS_GYM_INCOME,
     BUSINESS_GYM_TRAINING_BONUS_PERCENT,
     BUSINESS_LEVEL_INCOME_BONUS_PERCENT,
+    BUSINESS_BUILD_COST_GROWTH,
     BUSINESS_LEVEL_UPGRADE_BASE_COST,
+    BUSINESS_UPGRADE_COST_MULT,
     BUSINESS_MAX_UPGRADE,
     BUSINESS_PARLIAMENT_INCOME,
     BUSINESS_PARLIAMENT_INFLUENCE,
@@ -115,7 +117,8 @@ class NothingToDemolishError(Exception):
 
 
 def _level_multiplier(level: int) -> float:
-    return 1 + BUSINESS_LEVEL_INCOME_BONUS_PERCENT * level / 100
+    # Уровень выше 10 (было до 15 через бонусы систем) доход больше не растит (экономика 2026-11-20).
+    return 1 + BUSINESS_LEVEL_INCOME_BONUS_PERCENT * min(level, BUSINESS_MAX_UPGRADE) / 100
 
 
 def _shop_total_per_minute(shops: float) -> float:
@@ -126,8 +129,9 @@ def _shop_total_per_minute(shops: float) -> float:
     cap = BUSINESS_SHOP_LINEAR_AFTER
     if shops <= cap:
         return BUSINESS_SHOP_BASE * shops**BUSINESS_SHOP_EXPONENT
-    marginal = BUSINESS_SHOP_BASE * BUSINESS_SHOP_EXPONENT * cap ** (BUSINESS_SHOP_EXPONENT - 1)
-    return BUSINESS_SHOP_BASE * cap**BUSINESS_SHOP_EXPONENT + (shops - cap) * marginal
+    # После 200-го каждый магазин даёт как кафе (экономика 2026-11-20: было ~103/мин — в 5 раз больше кафе,
+    # «самая жирная точка» сверхлинейной кривой, и топы строили тысячи магазинов).
+    return BUSINESS_SHOP_BASE * cap**BUSINESS_SHOP_EXPONENT + (shops - cap) * BUSINESS_CAFE_INCOME
 
 
 def _fixed_per_minute(counts: dict[str, int]) -> float:
@@ -224,10 +228,11 @@ async def _wealth_potion_bonus(session: AsyncSession, user_id: int, start: datet
 def upgrade_cost(kind: str, current: int, discount: float = 0.0, extra_cap: int = 0) -> int | None:
     """Цена следующего уровня прокачки; None — уже максимум. `discount` — скидка систем
     развития (Элита, гений бизнеса), режется потолком."""
-    if current >= BUSINESS_MAX_UPGRADE + extra_cap:
+    # Уровень дохода — не выше 10 при любых бонусах систем (экономика 2026-11-20), вместимость — как раньше.
+    if current >= BUSINESS_MAX_UPGRADE + (0 if kind == UPGRADE_LEVEL else extra_cap):
         return None
     base = BUSINESS_LEVEL_UPGRADE_BASE_COST if kind == UPGRADE_LEVEL else BUSINESS_CAPACITY_UPGRADE_BASE_COST
-    return max(1, int(base * 2**current * (1 - capped(discount, 0.6))))
+    return max(1, int(base * BUSINESS_UPGRADE_COST_MULT * 2**current * (1 - capped(discount, 0.6))))
 
 
 def build_cost(type_: str, discount: float = 0.0, *, owned_total: int = 1) -> int:
@@ -236,7 +241,10 @@ def build_cost(type_: str, discount: float = 0.0, *, owned_total: int = 1) -> in
     навсегда (старт с 500 = цена кафе, потеря всех районов в PvP)."""
     if type_ == BIZ_CAFE and owned_total == 0:
         return 0
-    return max(1, int(BUSINESS_BUILD_COST[type_] * (1 - capped(discount, 0.6))))
+    # Цена растёт с числом зданий игрока: +1% за каждое стоящее (экономика 2026-11-20: при плоских 500–1500
+    # здание окупалось за минуты, у топов по 2 000+ зданий). 1000-е — в 11 раз дороже первого.
+    growth = 1 + BUSINESS_BUILD_COST_GROWTH * max(0, owned_total)
+    return max(1, int(BUSINESS_BUILD_COST[type_] * growth * (1 - capped(discount, 0.6))))
 
 
 def _capacity_per_district(capacity_level: int) -> int:

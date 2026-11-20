@@ -127,7 +127,7 @@ async def start_challenge(session: AsyncSession, redis: Redis, defender, challen
     )
     await session.commit()  # вызов взят; блокировки стопок отпущены — бой идёт без транзакции
     await _notify(a_id, f"⚔️ <b>{ctx.base['defender_label']} принял твой вызов — бой начался!</b>\n\n"
-                        "Жми «Войти в бой»: раунд 12 секунд, атака, защита, перки и мини-игры 🎮. "
+                        "Жми «Войти в бой»: раунд 30 секунд, атака, защита, перки и мини-игры 🎮. "
                         "Не зайдёшь — за тебя ходит автоатака.", st["id"])
     return st
 

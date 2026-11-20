@@ -27,7 +27,7 @@ interface BattleView {
 }
 type Pending = { perk?: string; enemy?: boolean; game: string; name?: string } | null;
 
-const ROUND_SECONDS = 12;
+const ROUND_SECONDS = 30;
 
 /** Короткие параметры мини-игр в бою (3–5 с). */
 function battleParams(game: string): P {

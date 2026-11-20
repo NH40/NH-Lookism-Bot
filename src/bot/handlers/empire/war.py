@@ -215,7 +215,7 @@ async def cb_war_accept(callback: CallbackQuery, session: AsyncSession, redis: R
     await callback.answer()
     if isinstance(outcome, dict):
         await callback.message.answer(
-            "⚔️ <b>Бой вождей начался!</b>\n\nРаунд — 12 секунд: атака, защита, перки и мини-игры. "
+            "⚔️ <b>Бой вождей начался!</b>\n\nРаунд — 30 секунд: атака, защита, перки и мини-игры. "
             "Не зайдёшь — за тебя ходит автоатака.", reply_markup=battle_markup(outcome["id"]))
         return
     await send_war_reports(callback.bot, session, outcome)

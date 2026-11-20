@@ -53,3 +53,6 @@
 .mg-signal b { font-size: 28px; }
 .mg-signal.go { background: rgba(61, 220, 132, 0.18); }
 .mg-signal.no { background: rgba(255, 77, 106, 0.18); }
+
+/* Удержание: палец держит шкалу без прокрутки/выделения/контекстного меню (2026-11-20) */
+.mg-hold { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }

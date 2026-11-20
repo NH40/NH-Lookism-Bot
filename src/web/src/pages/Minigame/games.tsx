@@ -253,10 +253,11 @@ export function Charge({ p, onDone }: GameProps) {
           <div className="mg-fill" style={{ height: `${Math.min(1, fill) * 100}%` }} />
         </div>
         <button
-          className="btn red"
-          onPointerDown={() => (holding.current = performance.now())}
+          className="btn red mg-hold"
+          onPointerDown={(e) => { holding.current = performance.now(); e.currentTarget.setPointerCapture?.(e.pointerId); }}
           onPointerUp={release}
-          onPointerLeave={release}
+          onPointerCancel={release}
+          onContextMenu={(e) => e.preventDefault()}
         >
           Держи и отпусти
         </button>

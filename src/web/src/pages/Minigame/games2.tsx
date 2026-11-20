@@ -314,21 +314,36 @@ export function Hold({ p, onDone }: GameProps) {
   const val = useRef(0);
   const score = useRef(0);
   const [inZone, setInZone] = useState(0);
-  const lo = 0.5 - p.zone / 2;
+  // 2026-11-20 (жалоба «Удержание · точно» не проходится): зона не уже 12%, шаг шкалы не больше трети зоны
+  // и чаще (50 мс) — раньше шаг 6–12% перепрыгивал узкую зону «точно».
+  const zone = Math.max(p.zone, 0.12);
+  const lo = 0.5 - zone / 2;
+  const step = Math.min(p.speed * 0.05, zone / 3);
+  const ticks = useRef(0);
   const left = useTimer(p.seconds, () => onDone(score.current));
   useEffect(() => {
     const t = setInterval(() => {
-      val.current = Math.max(0, Math.min(1, val.current + (held.current ? 1 : -1) * p.speed * 0.1));
-      if (val.current >= lo && val.current <= lo + p.zone) setInZone((score.current += 1));
+      val.current = Math.max(0, Math.min(1, val.current + (held.current ? 1 : -1) * step));
+      if (val.current >= lo && val.current <= lo + zone) {
+        ticks.current += 1;
+        score.current = Math.floor(ticks.current / 2); // счёт — десятые доли секунды
+        setInZone(score.current);
+      }
       setV(val.current);
-    }, 100);
+    }, 50);
     return () => clearInterval(t);
   }, []);
+  const press = (e: React.PointerEvent) => {
+    held.current = true;
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId); // палец не «теряется» при сдвиге
+  };
+  const release = () => (held.current = false);
   return (
     <>
       <Hud left={`В зоне ${(inZone / 10).toFixed(1)}/${(p.need / 10).toFixed(1)} с`} right={`${left.toFixed(1)} с`} />
-      <div className="mg-area mg-tap" onPointerDown={() => (held.current = true)} onPointerUp={() => (held.current = false)} onPointerLeave={() => (held.current = false)}>
-        <div className="mg-vbar"><div className="mg-zone" style={{ bottom: `${lo * 100}%`, height: `${p.zone * 100}%` }} /><div className="mg-fill" style={{ height: `${v * 100}%` }} /></div>
+      <div className="mg-area mg-tap mg-hold" onPointerDown={press} onPointerUp={release} onPointerCancel={release}
+        onLostPointerCapture={release} onContextMenu={(e) => e.preventDefault()}>
+        <div className="mg-vbar"><div className="mg-zone" style={{ bottom: `${lo * 100}%`, height: `${zone * 100}%` }} /><div className="mg-fill" style={{ height: `${v * 100}%` }} /></div>
         <small className="muted">Держи палец — шкала растёт</small>
       </div>
     </>

@@ -49,6 +49,7 @@ from bot.db.repositories.clan.clan import (  # noqa: F401
     search_page,
     all_garrisons,
     member_power_sums,
+    set_dev_scores,
     set_powers,
     set_garrison_access,
     set_owner,

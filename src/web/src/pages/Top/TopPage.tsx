@@ -105,7 +105,7 @@ export function TopPage() {
                   <div className="muted top-hint">Мощь обновляется раз в 10 минут. Награды — по итогу сезона (раз в месяц) и при вайпе.</div>
                 </Panel>
               ) : (
-                <Panel title="Топ кланов · мощь" tone="violet">
+                <Panel title="Топ кланов · сила развития" tone="violet">
                   {data.clans.length === 0 ? (
                     <div className="muted top-hint">Кланов пока нет.</div>
                   ) : (
@@ -115,7 +115,7 @@ export function TopPage() {
                         <div className="grow">
                           <div className="top-name">{c.name}</div>
                           <div className="muted top-sub">
-                            <Swords size={11} /> {fmt(c.power)} · <MapIcon size={11} /> {fmt(c.lands)} · <Users size={11} /> {c.members}
+                            📈 СР {fmt(c.dev ?? 0)} · <Swords size={11} /> {fmt(c.power)} · <MapIcon size={11} /> {fmt(c.lands)} · <Users size={11} /> {c.members}
                           </div>
                           {c.reward && <div className="top-reward"><Gift size={12} /> {c.reward} каждому</div>}
                         </div>

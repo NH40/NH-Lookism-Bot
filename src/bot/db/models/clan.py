@@ -26,6 +26,8 @@ class Clan(Base):
     # Снимок мощи для топа (пользователь 2026-11-06): рота + сумма мощи участников. Пересчитывает
     # `services/top.refresh_powers` вместе с `users.army_power_cache`.
     power_cache: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0", index=True)
+    # Сила развития клана (среднее СР топ-10, `services/top/dev_score`) — по ней строится топ кланов (2026-11-20).
+    dev_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0", index=True)
     treasury: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
     # Донат-уровень 0–5 (+4 к потолку земель и бафы; покупка — с доменом доната).
     donate_level: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")

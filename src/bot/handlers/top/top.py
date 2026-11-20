@@ -60,7 +60,7 @@ def _render_top(view: TopView, tab: str, league: int | None = None) -> str:
     if tab == TAB_CLANS:
         rows = [
             CLAN_ROW.format(
-                medal=_medal(i), name=esc(c.name), power=format_number(c.power), lands=format_number(c.lands), members=c.members,
+                medal=_medal(i), name=esc(c.name), dev=format_number(c.dev), power=format_number(c.power), lands=format_number(c.lands), members=c.members,
                 reward=_reward(clan_reward(i)),
             )
             for i, c in enumerate(view.clans, start=1)

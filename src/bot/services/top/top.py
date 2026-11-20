@@ -76,6 +76,9 @@ async def refresh_clan_powers(session_factory: async_sessionmaker[AsyncSession])
         members = await clan_repo.member_power_sums(session)
         totals = {c: garrisons.get(c, 0) + members.get(c, 0) for c in set(garrisons) | set(members)}
         await clan_repo.set_powers(session, totals)
+        from bot.services.top.dev_score import clan_scores
+
+        await clan_repo.set_dev_scores(session, await clan_scores(session))  # топ кланов — по силе развития
         await session.commit()
 
 
@@ -88,6 +91,7 @@ class ClanRow:
     lands: int
     members: int
     power: int
+    dev: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,7 +106,7 @@ class TopView:
 async def get_top(session: AsyncSession, user_id: int, league: int | None = None) -> TopView:
     """`league` — вкладка лиги (только список и место; награды считаются по общему топу)."""
     players = await top_repo.players_page(session, TOP_PAGE_SIZE, 0, league)
-    clans = [ClanRow(c.name, c.lands, n, c.power_cache) for c, n in await clan_repo.top_page(session, TOP_PAGE_SIZE, 0)]
+    clans = [ClanRow(c.name, c.lands, n, c.power_cache, c.dev_score) for c, n in await clan_repo.top_page(session, TOP_PAGE_SIZE, 0)]
     mine = await top_repo.rank_of(session, user_id, league)
     now = datetime.now(timezone.utc)
     season = await bp_repo.current_season(session, now)

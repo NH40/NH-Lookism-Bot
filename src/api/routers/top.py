@@ -36,6 +36,7 @@ class TopClanOut(BaseModel):
     lands: int
     members: int
     reward: str
+    dev: int = 0  # сила развития клана — по ней строится топ
 
 
 class TopOut(BaseModel):
@@ -72,7 +73,7 @@ async def top(
             for i, p in enumerate(view.players, start=1)
         ],
         clans=[
-            TopClanOut(place=i, name=c.name, power=c.power, lands=c.lands, members=c.members, reward=reward_text(*clan_reward(i)))
+            TopClanOut(place=i, name=c.name, power=c.power, lands=c.lands, members=c.members, reward=reward_text(*clan_reward(i)), dev=c.dev)
             for i, c in enumerate(view.clans, start=1)
         ],
         my_place=view.my_place,

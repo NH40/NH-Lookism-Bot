@@ -66,11 +66,11 @@ async def count_clans(session: AsyncSession) -> int:
 
 
 async def top_page(session: AsyncSession, limit: int, offset: int) -> list[tuple[Clan, int]]:
-    """Топ кланов: мощь (рота + участники, снимок), затем земли, затем старшинство."""
+    """Топ кланов: сила развития (среднее СР топ-10, 2026-11-20), затем мощь, затем земли, затем старшинство."""
     members = func.count(ClanMember.user_id)
     rows = await session.execute(
         select(Clan, members).outerjoin(ClanMember, ClanMember.clan_id == Clan.id)
-        .group_by(Clan.id).order_by(Clan.power_cache.desc(), Clan.lands.desc(), Clan.id).limit(limit).offset(offset)
+        .group_by(Clan.id).order_by(Clan.dev_score.desc(), Clan.power_cache.desc(), Clan.lands.desc(), Clan.id).limit(limit).offset(offset)
     )
     return [(c, int(n)) for c, n in rows.all()]
 
@@ -101,6 +101,13 @@ async def member_power_sums(session: AsyncSession) -> dict[int, int]:
         .join(User, User.id == ClanMember.user_id).group_by(ClanMember.clan_id)
     )
     return {clan_id: int(total) for clan_id, total in rows.all()}
+
+
+async def set_dev_scores(session: AsyncSession, values: dict[int, int]) -> None:
+    """Снимок силы развития всем кланам (без участников — 0). Не коммитит."""
+    await session.execute(update(Clan).values(dev_score=0))
+    if values:
+        await session.execute(text("UPDATE clans SET dev_score = :s WHERE id = :c"), [{"c": c, "s": v} for c, v in values.items()])
 
 
 async def set_powers(session: AsyncSession, values: dict[int, int]) -> None:

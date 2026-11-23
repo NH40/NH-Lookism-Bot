@@ -78,9 +78,15 @@ def roll_extra_rank(phase: str, influence: int, rank_bonus: int = 0, cut: float 
     return RANK_LADDER[randint(int(ceiling_index * floor), ceiling_index)]
 
 
-def _crowd_size(eco, influence: int) -> int:
+def _crowd_size(eco, influence: int, phase: str | None = None) -> int:
+    """Бойцов за нажатие. У императора бонусы потолка и количества от систем — на долю
+    `RECRUIT_EMPEROR_BONUS_SHARE` (2026-11-24)."""
+    from bot.config.game import RECRUIT_EMPEROR_BONUS_SHARE
+    from bot.services.phase.phase import is_emperor
+
+    share = RECRUIT_EMPEROR_BONUS_SHARE if phase is not None and is_emperor(phase) else 1.0
     return recruit_quantity(
-        influence, cut=eco.recruit_influence_cut, quantity=eco.recruit_quantity, cap=eco.recruit_cap
+        influence, cut=eco.recruit_influence_cut, quantity=eco.recruit_quantity * share, cap=int(eco.recruit_cap * share)
     )
 
 
@@ -91,7 +97,7 @@ def _rank_cut(eco) -> float:
 async def get_offer(session: AsyncSession, user_id: int, phase: str) -> RecruitOffer:
     profile = await get_combat_profile(session, user_id)
     eco, influence = profile.eco, profile.build.influence
-    crowd = _crowd_size(eco, influence)
+    crowd = _crowd_size(eco, influence, phase)
     ceiling = min(
         PHASE_RANK_CAP_INDEX[phase] + eco.recruit_rank_bonus,
         influence_rank_index(influence, _rank_cut(eco)) + eco.recruit_rank_bonus,
@@ -119,7 +125,7 @@ async def recruit_extra(session: AsyncSession, redis: Redis, user_id: int, phase
 
     eco = profile.eco
     influence = profile.build.influence
-    count = _crowd_size(eco, influence)
+    count = _crowd_size(eco, influence, phase)
     if select:
         count = max(1, count // RECRUIT_SELECT_DIVISOR)
     # Шанс завербовать вдвое больше (гений харизмы).

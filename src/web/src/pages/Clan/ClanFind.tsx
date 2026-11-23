@@ -34,7 +34,7 @@ export function ClanFind({ data, reload }: { data: ClanNone; reload: () => Promi
 		await reload();
 	};
 	const { run, busy } = useAction(refresh);
-	const wait = data.rejoin_days ?? 0;  // вышел сам — 30 дней без клана
+	const wait = data.rejoin_days ?? 0;  // вышел сам — 7 дней без клана
 	const canCreate = data.coins >= data.create_cost && !wait;
 	const nameOk = name.trim().length >= data.name_min && name.trim().length <= data.name_max;
 

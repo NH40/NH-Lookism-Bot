@@ -238,6 +238,7 @@ SCALARS: dict[str, tuple[str, str, str]] = {
     "SR_BUSINESS_LEVEL": ("league", "bot.config.top.top", "СР: за уровень бизнеса, ₽"),
     "SR_NHCOIN_PER_RUB": ("league", "bot.config.top.top", "СР: NHCoin за 1 ₽ (земли и здания клана)"),
     "SR_CLAN_ACTIVE_DAYS": ("league", "bot.config.top.top", "СР клана: активные за дней"),
+    "RECRUIT_EMPEROR_BONUS_SHARE": ("dev", "bot.config.game.game", "Вербовка: доля бонусов систем у императора"),
     "LEAGUE_INACTIVE_DAYS": ("league", "bot.config.league.league", "Лиги: дней без входа, после которых неактивный опускается"),
     "LEAGUE_STATIC_AXES": ("league", "bot.config.league.league", "Лиги по мощи и силе развития: 1 — включено, 0 — прежний счёт"),
     "TOM_POWER_MIN": ("dev", "bot.config.mastery.mastery", "Том Ли: минимум мощи"),

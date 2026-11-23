@@ -53,7 +53,7 @@ export function MembersTab({ clan, can, onChanged }: { clan: ClanInfo; can: Clan
 	const confirmText = (c: Confirm): string => {
 		if (c.kind === "kick") return `Исключить ${c.member?.name} из клана?`;
 		if (c.kind === "transfer") return `Передать клан игроку ${c.member?.name}? Ты станешь рядовым участником.`;
-		return "Выйти из клана? Купленные тобой уровни клана пропадут, уплаченное вернётся. После выхода 30 дней нельзя вступить в другой клан или создать свой.";
+		return "Выйти из клана? Купленные тобой уровни клана пропадут, уплаченное вернётся. После выхода 7 дней нельзя вступить в другой клан или создать свой.";
 	};
 
 	return (

@@ -100,6 +100,7 @@ from bot.config.game.game import (  # noqa: F401
     influence_rank_index,
     recruit_quantity,
     RECRUIT_BASE_CAP,
+    RECRUIT_EMPEROR_BONUS_SHARE,
     RECRUIT_SELECT_DIVISOR,
     RECRUIT_SELECT_FLOOR,
 )

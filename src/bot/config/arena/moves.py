@@ -218,6 +218,43 @@ BLOOD_MOVES: dict[str, tuple[Move, Move, Move, Move]] = {
 # Техники мастерства (36): приём (кнопка в бою, цена/КД по ступени дерева) + пассив на весь бой, пока техника изучена
 # (пассив — источник «mastery» в билде, `services/build`). Упрощения против черновика: «Чем хуже, тем злее» — атака
 # +30% с 20% потерь (адаптация); пассив «Абсолютного копирования» — атака +5% (пассивное копирование — только у пути).
+# Сила приёмов техник мастерства (баланс симуляцией 2026-11-23): цель — 65 / 70 / 75% побед по ступеням дерева
+# против того же бойца без техники. Не правятся: копирование (Взгляд Йохана, Копирование Даниэля — сила зависит от
+# бафов противника) и Несгибаемость Гапрёна (спасение павших — после боя, долей побед не меряется).
+MASTERY_BOOST: dict[str, float] = {
+    "eli_wild": 1.19,
+    "gapryong_fist": 0.7,
+    "god_eye": 1.25,
+    "goo_four_swords": 0.81,
+    "heavy_hand": 1.19,
+    "jaegyeon_speed": 0.35,
+    "jake_step": 0.81,
+    "jinyoung_instant": 1.62,
+    "johan_choreo": 0.4,
+    "johan_shadow": 1.5,
+    "killing_intent": 1.62,
+    "kim_grips": 1.06,
+    "king_fist": 0.56,
+    "kyokushin_body": 1.25,
+    "mandeok_brute": 0.88,
+    "mandeok_quake": 1.56,
+    "mandeok_wall": 1.19,
+    "moonlight_sword": 1.31,
+    "pen_sword": 1.31,
+    "pichon_blood": 1.44,
+    "seokdu_iron": 0.75,
+    "seongji_iron": 1.62,
+    "sinu_storm": 0.75,
+    "ssireum": 0.88,
+    "systema_breath": 1.06,
+    "taekkyeon": 0.81,
+    "vinjin_kick": 1.12,
+    "warren_jkd": 0.94,
+    "warren_rush": 1.06,
+    "yakuza": 0.88,
+    "zack_jab": 1.19,
+    "zack_wind": 1.12,
+}
 MASTERY_MOVE_COST: tuple[int, ...] = (2, 3, 4)
 MASTERY_MOVE_COOLDOWN: tuple[int, ...] = (2, 2, 3)
 
@@ -229,19 +266,19 @@ MASTERY_MOVES: dict[str, tuple[Move, CombatMods]] = {
     "king_fist": (Move("Кулак короля", "Урон ×1.5, пробитие 25%.", M(pierce=0.25), damage=1.5), M(pierce=0.05)),
     "vinjin_kick": (Move("Пробивной пинок", "Урон ×1.4, 25% атаки наверняка.", M(sure_hit=0.25), damage=1.4), M(attack=0.06)),
     "heavy_hand": (Move("Вес тела", "Урон ×1.6.", damage=1.6), M(crit_power=0.15)),
-    "gapryong_fist": (Move("Сквозь стену", "Урон ×1.8, пробитие 50%.", M(pierce=0.5), damage=1.8), M(attack=0.1)),
+    "gapryong_fist": (Move("Сквозь стену", "Урон ×1.8, пробитие 50%.", M(pierce=0.5), damage=1.8), M(attack=0.06)),
     "mandeok_quake": (Move("Землетрясение", "Захват 20% строя противника, удар по нескольким целям +40%.", M(grab_chance=1.0, grab_share=0.2, cleave=0.4)), M(durability=0.08)),
     "taejin_power": (Move("Выкованная мощь", "Урон ×1.7, гашение 10%.", M(reduction=0.1), damage=1.7), M(attack=0.08, durability=0.05)),
     # Скорость
     "zack_jab": (Move("Джеб", "Удар до обмена: выбивает 4% армии противника.", M(first_strike=0.04)), M(opening=0.1)),
     "jake_step": (Move("Шаг и встречный", "Уклонение +15%, контратака +15%.", M(dodge=0.15, counter=0.15)), M(dodge=0.03)),
     "taekkyeon": (Move("Танец", "Уклонение +20%.", M(dodge=0.2)), M(dodge=0.03)),
-    "jaegyeon_speed": (Move("Быстрейший", "Дополнительный удар 60%.", M(multi_hit=0.6)), M(multi_hit=0.08)),
-    "johan_choreo": (Move("Связка без пауз", "Доп. удары +40%, урон ×1.2.", M(multi_hit=0.4), damage=1.2), M(multi_hit=0.06)),
+    "jaegyeon_speed": (Move("Быстрейший", "Дополнительный удар 60%.", M(multi_hit=0.6)), M(multi_hit=0.04)),
+    "johan_choreo": (Move("Связка без пауз", "Доп. удары +40%, урон ×1.2.", M(multi_hit=0.4), damage=1.2), M(multi_hit=0.03)),
     "warren_rush": (Move("Рывок", "Натиск +50% в этом раунде.", M(rush=0.5, rush_rounds=10)), M(rush=0.1, rush_rounds=2)),
     "jinyoung_instant": (Move("За гранью реакции", "Реакции противника −40%.", M(suppress=0.4)), M(suppress=0.05)),
     "johan_shadow": (Move("Остаточный образ", "40% уклонения не сбить подавлением, шанс крита +20%.", M(dodge_true=0.4, crit_chance=0.2)), M(dodge=0.05)),
-    "sinu_storm": (Move("Шторм", "Доп. удары +100%.", M(multi_hit=1.0)), M(multi_hit=0.1)),
+    "sinu_storm": (Move("Шторм", "Доп. удары +100%.", M(multi_hit=1.0)), M(multi_hit=0.05)),
     # Выносливость
     "kyokushin_body": (Move("Полный контакт", "Прочность +25%.", M(durability=0.25)), M(durability=0.05)),
     "systema_breath": (Move("Дыхание", "Гашение 20%, +1⚡.", M(reduction=0.2), energy_gain=1), M(reduction=0.03)),
@@ -260,6 +297,6 @@ MASTERY_MOVES: dict[str, tuple[Move, CombatMods]] = {
     "moonlight_sword": (Move("Невидимый удар", "Невидимый удар: шанс 50%.", M(phantom_chance=0.5, phantom_power=0.3)), M(crit_chance=0.05)),
     "warren_jkd": (Move("Перехват", "Контратака +25%, сила контратак +60%.", M(counter=0.25, counter_power=0.6)), M(counter=0.04)),
     "daniel_copy": (Move("Абсолютная копия", "На раунд копирует 30% бафов противника.", copy_share=0.3), M(attack=0.05)),
-    "goo_four_swords": (Move("Четыре меча", "Доп. удары +80%, шанс крита +25%.", M(multi_hit=0.8, crit_chance=0.25)), M(crit_chance=0.06, sure_hit=0.04)),
+    "goo_four_swords": (Move("Четыре меча", "Доп. удары +80%, шанс крита +25%.", M(multi_hit=0.8, crit_chance=0.25)), M(crit_chance=0.04, sure_hit=0.02)),
     "killing_intent": (Move("Давление", "Противник проходит мини-игру — провал: его урон до −50%.", power=0.5), M(suppress=0.06)),
 }

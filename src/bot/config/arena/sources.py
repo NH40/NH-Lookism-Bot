@@ -148,7 +148,7 @@ def _mastery_mods(mastery: str, tier: int) -> tuple[CombatMods, float]:
 
 def mastery_perks() -> list[Perk]:
     """Свой приём у каждой из 36 техник мастерства (`config/arena/moves.MASTERY_MOVES`, 2026-11-23); пассив — в билде."""
-    from bot.config.arena.moves import MASTERY_MOVE_COOLDOWN, MASTERY_MOVE_COST, MASTERY_MOVES
+    from bot.config.arena.moves import MASTERY_BOOST, MASTERY_MOVE_COOLDOWN, MASTERY_MOVE_COST, MASTERY_MOVES
 
     out = []
     for mastery, tiers in MASTERY_TREES.items():
@@ -159,11 +159,13 @@ def mastery_perks() -> list[Perk]:
                     out.append(_p(f"mt:{t.code}", t.name, t.about, 2 + tier, 2 + tier // 2, self_mods=mods, damage=dmg))
                     continue
                 mv = MASTERY_MOVES[t.code][0]
+                b = MASTERY_BOOST.get(t.code, 1.0)
                 mini = "enemy" if mv.power else None
                 out.append(_p(
                     f"mt:{t.code}", mv.name, f"{t.name}: {mv.about}", MASTERY_MOVE_COST[tier - 1], MASTERY_MOVE_COOLDOWN[tier - 1],
-                    self_mods=mv.mods, enemy_mods=mv.enemy, damage=mv.damage, enemy_damage=mv.enemy_damage,
-                    minigame=mini, game="reaction" if mini else None, power=mv.power, copy_share=mv.copy_share,
+                    self_mods=mv.mods.scale(b), enemy_mods=mv.enemy.scale(b), damage=1 + (mv.damage - 1) * b,
+                    enemy_damage=1 - (1 - mv.enemy_damage) * b, minigame=mini, game="reaction" if mini else None,
+                    power=mv.power * b, copy_share=mv.copy_share,
                     energy_gain=mv.energy_gain,
                 ))
     return out

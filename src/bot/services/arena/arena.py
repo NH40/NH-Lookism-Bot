@@ -145,7 +145,7 @@ def _rebuild(st: dict) -> BattleRun:
     a_stacks, d_stacks, a_ch, d_ch = _unpack(st["snap"])
     run = BattleRun(a_stacks, d_stacks, attacker_chances=a_ch, defender_chances=d_ch, rng=Random(st["seed"]))
     for entry in st["log"]:
-        a_extra, d_extra = _extras(entry["a"]["code"], entry["d"]["code"])
+        a_extra, d_extra = _extras(entry["a"]["code"], entry["d"]["code"], run.weights)
         run.play_round(a_extra, d_extra, entry["a"]["dmg"], entry["d"]["dmg"])
     return run
 
@@ -160,10 +160,21 @@ def _action_mods(code: str) -> tuple[CombatMods, CombatMods]:
     return perk.self_mods, perk.enemy_mods
 
 
-def _extras(a_code: str, d_code: str) -> tuple[CombatMods, CombatMods]:
+def _extras(a_code: str, d_code: str, w: dict[str, float] | None = None) -> tuple[CombatMods, CombatMods]:
+    """Модификаторы действий раунда; `w` — доля прокачки сторон (влияние мощи, `BattleRun.weights`)."""
+    wa, wd = (w or {}).get("a", 1.0), (w or {}).get("d", 1.0)
     a_own, a_enemy = _action_mods(a_code)
     d_own, d_enemy = _action_mods(d_code)
+    if wa < 1:
+        a_own, a_enemy = a_own.scale(wa), a_enemy.scale(wa)
+    if wd < 1:
+        d_own, d_enemy = d_own.scale(wd), d_enemy.scale(wd)
     return a_own + d_enemy, d_own + a_enemy
+
+
+def _weigh(mult: float, w: float) -> float:
+    """Усиление урона действием слабой стороны — на долю `w` (защита ×0.6 — не бонус, не трогаем)."""
+    return 1 + (mult - 1) * w if mult > 1 else mult
 
 
 def _ready(side: dict, code: str, round_no: int) -> bool:
@@ -307,18 +318,20 @@ async def _play(redis: Redis, st: dict) -> dict:
     a_pow, d_pow = run.a.total_power(), run.d.total_power()
     a_code, a_dmg, a_perk = _resolve_action(st["a"], st["a"]["action"], round_no, a_pow, d_pow)
     d_code, d_dmg, d_perk = _resolve_action(st["d"], st["d"]["action"], round_no, d_pow, a_pow)
-    # Чужой перк на этот раунд и навязанная в прошлом раунде мини-игра.
-    for me, dmg_ref, enemy_perk in (("a", "ad", d_perk), ("d", "dd", a_perk)):
-        mult = enemy_perk.enemy_damage if enemy_perk else 1.0
+    w = run.weights
+    a_dmg, d_dmg = _weigh(a_dmg, w["a"]), _weigh(d_dmg, w["d"])
+    # Чужой перк на этот раунд и навязанная в прошлом раунде мини-игра (их сила — доля прокачки наложившего).
+    for me, other, enemy_perk in (("a", "d", d_perk), ("d", "a", a_perk)):
+        mult = 1 - (1 - enemy_perk.enemy_damage) * w[other] if enemy_perk else 1.0
         pending = st[me]["pending_game"]
         if pending:
             score = ARENA_AUTO_MINIGAME_SCORE if st[me]["auto"] else pending.get("score", 0.0)
-            mult *= 1 - pending["power"] * (1 - score)
+            mult *= 1 - pending["power"] * w[other] * (1 - score)
         if me == "a":
             a_dmg *= mult
         else:
             d_dmg *= mult
-    a_extra, d_extra = _extras(a_code, d_code)
+    a_extra, d_extra = _extras(a_code, d_code, w)
     entry_log = run.play_round(a_extra, d_extra, a_dmg, d_dmg)
     for me, code, perk, other in (("a", a_code, a_perk, "d"), ("d", d_code, d_perk, "a")):
         s = st[me]

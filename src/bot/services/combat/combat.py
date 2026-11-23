@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Hashable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from random import Random
 
 from bot.config.game import (
@@ -62,6 +62,8 @@ from bot.config.game import (
     BATTLE_INFLUENCE_GAP_CAP,
     BATTLE_INFLUENCE_STEP,
     BATTLE_PHANTOM_ROUND_CHANCE,
+    BATTLE_POWER_DECISIVE_RATIO,
+    battle_power_weight,
     BATTLE_PRE_STRIKE_MAX,
     BATTLE_REVIVE_STRIKE_MAX,
     BATTLE_VS_STRONGER_CAP,
@@ -813,6 +815,41 @@ def _loss_save_after(side: _Side, opponent: _Side, won: bool) -> float:
     return min(BATTLE_LOSS_SAVE_MAX, _loss_save(side, opponent) + extra)
 
 
+def _stacks_power(stacks: Sequence[CombatStack]) -> float:
+    return sum(s.unit_power * s.quantity for s in stacks if s.quantity > 0 and s.unit_power > 0)
+
+
+def _toward(v: float, base: float, w: float) -> float:
+    return base + (v - base) * w if v > base else v
+
+
+def _weaken(ch: CombatChances, w: float) -> CombatChances:
+    """Бонусы прокачки слабой стороны — на долю `w`: бафы систем (с ротацией и источниками для копирования),
+    реакции и спасение сверх базы, поглощение, дебафы противнику, навыки позиций. Не трогает то, что наложил
+    противник (`withheld` — подкуп/паника его шпиона)."""
+    if w >= 1:
+        return ch
+    b = ch.build
+    build = replace(b, total=b.total.scale(w), by_source=tuple((k, m.scale(w)) for k, m in b.by_source),
+                    rotation=tuple(m.scale(w) for m in b.rotation))
+    triggers = tuple(replace(t, mods=t.mods.scale(w), enemy_mods=t.enemy_mods.scale(w), revive=t.revive * w,
+                             loss_save=t.loss_save * w, enemy_extra_dead=t.enemy_extra_dead * w) for t in ch.triggers)
+    return replace(
+        ch, build=build, dodge=_toward(ch.dodge, BATTLE_BASE_DODGE, w), block=_toward(ch.block, BATTLE_BASE_BLOCK, w),
+        counter=_toward(ch.counter, BATTLE_BASE_COUNTER, w), flee=_toward(ch.flee, BATTLE_BASE_FLEE, w),
+        loss_save=_toward(ch.loss_save, BATTLE_BASE_LOSS_SAVE, w), absorb=ch.absorb * w,
+        enemy_mods=ch.enemy_mods.scale(w), triggers=triggers, loss_cap=ch.loss_cap * w,
+    )
+
+
+def _weaken_stacks(stacks: Sequence[CombatStack], w: float) -> Sequence[CombatStack]:
+    """Свои реакции бойцов (школы учителей статистов) — тоже прокачка: на долю `w`."""
+    if w >= 1:
+        return stacks
+    return [replace(s, dodge=s.dodge * w, block=s.block * w, counter=s.counter * w, flee=s.flee * w)
+            if (s.dodge or s.block or s.counter or s.flee) else s for s in stacks]
+
+
 class BattleRun:
     """Бой по раундам (2026-11-19, онлайн-бои): `play_round` — один раунд с действиями сторон (доп. модификаторы
     на раунд и множитель урона), `result` — итог. `simulate_battle` — тот же бой целиком без действий: порядок
@@ -828,6 +865,15 @@ class BattleRun:
         rng: Random | None = None,
     ) -> None:
         rng = self.rng = rng or Random()
+        # Влияние мощи: перевес R ослабляет прокачку слабой стороны, с ×DECISIVE бой решает мощь.
+        pa, pd = _stacks_power(attacker), _stacks_power(defender)
+        self.power_ratio = max(pa, pd) / min(pa, pd) if pa and pd else 1.0
+        self.stronger = "a" if pa >= pd else "d"
+        self.weights = {"a": 1.0, "d": 1.0}
+        self.weights["d" if self.stronger == "a" else "a"] = battle_power_weight(self.power_ratio)
+        attacker_chances = _weaken(attacker_chances, self.weights["a"])
+        defender_chances = _weaken(defender_chances, self.weights["d"])
+        attacker, defender = _weaken_stacks(attacker, self.weights["a"]), _weaken_stacks(defender, self.weights["d"])
         a, d = self.a, self.d = _Side(attacker, attacker_chances), _Side(defender, defender_chances)
         a.mods = attacker_chances.build.total + _copied(attacker_chances.build, defender_chances.build) + defender_chances.enemy_mods
         d.mods = defender_chances.build.total + _copied(defender_chances.build, attacker_chances.build) + attacker_chances.enemy_mods
@@ -941,6 +987,8 @@ class BattleRun:
         a.mods, d.mods = a.base_mods, d.base_mods
         a_remaining, d_remaining = a.total_power(), d.total_power()
         attacker_won = a_remaining > 0 and (d_remaining == 0 or a_remaining > d_remaining)
+        if self.power_ratio >= BATTLE_POWER_DECISIVE_RATIO:  # перевес ×10+ — побеждает сильный, что бы ни применял слабый
+            attacker_won = self.stronger == "a"
         a_after, d_after = _after_battle(a, d, attacker_won, rng), _after_battle(d, a, not attacker_won, rng)
         a_after += _despair(a, d, attacker_won, rng)
         d_after += _despair(d, a, not attacker_won, rng)

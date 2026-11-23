@@ -49,6 +49,8 @@ SCALARS: dict[str, tuple[str, str, str]] = {
     "BATTLE_MAX_ROUNDS": ("battle", "bot.config.game.game", "Раундов в бою, максимум"),
     "BATTLE_DAMAGE_FRACTION": ("battle", "bot.config.game.game", "Доля мощи, идущая в урон за раунд"),
     "BATTLE_DAMAGE_VARIANCE": ("battle", "bot.config.game.game", "Разброс урона"),
+    "BATTLE_POWER_DECISIVE_RATIO": ("battle", "bot.config.game.game", "Перевес мощи, с которого побеждает сильный всегда"),
+    "BATTLE_POWER_WEIGHT_EXP": ("battle", "bot.config.game.game", "Кривизна ослабления прокачки слабого при перевесе мощи"),
     "BATTLE_BASE_DODGE": ("battle", "bot.config.game.game", "Базовый шанс уклонения"),
     "BATTLE_BASE_BLOCK": ("battle", "bot.config.game.game", "Базовый шанс блока"),
     "BATTLE_BASE_COUNTER": ("battle", "bot.config.game.game", "Базовый шанс контратаки"),

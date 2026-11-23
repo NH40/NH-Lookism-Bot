@@ -1,5 +1,6 @@
 import { type ReactElement, useEffect, useRef, useState } from "react";
 import type { GameProps } from "./games";
+import { Hud } from "./Hud";
 
 // 13 механик (2026-11-19): вместе с 8 из games.tsx — 21; у каждой одна версия (2026-11-23).
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
@@ -13,9 +14,6 @@ function useAlive() {
   return alive;
 }
 
-function Hud({ left, right }: { left: string; right: string }) {
-  return <div className="mg-hud"><span>{left}</span><span>{right}</span></div>;
-}
 
 /** Ждать ответа игрока не дольше `ms`: → индекс ответа или null. */
 function useAnswer() {
@@ -79,7 +77,7 @@ export function Order({ p, onDone }: GameProps) {
   }, []);
   return (
     <>
-      <Hud left={`Раундов ${score}/${p.need}`} right={`${round}/${p.rounds}`} />
+      <Hud label="Раундов" score={score} need={p.need} right={`${round}/${p.rounds}`} />
       <div className="mg-area">
         {dots.map((d) => (
           <button key={d.n} className="mg-dot mg-num" style={{ left: `${d.x}%`, top: `${d.y}%` }} onPointerDown={() => {
@@ -123,7 +121,7 @@ function Choice({ p, onDone, total, options, show, hint, fixed }: GameProps & { 
   }, []);
   return (
     <>
-      <Hud left={`Верно ${score}/${p.need}`} right={`${i}/${total}`} />
+      <Hud label="Верно" score={score} need={p.need} right={`${i}/${total}`} />
       <div className="mg-area mg-choice">
         <div className="mg-cue">{cue === null ? "…" : show(cue)}</div>
         <small className="muted">{hint}</small>
@@ -139,7 +137,7 @@ export const Arrows = (g: GameProps) => <Choice {...g} total={g.p.rounds} option
 export const Stance = (g: GameProps) => <Choice {...g} total={g.p.rounds} options={STANCES.slice(0, 3)} show={(i) => STANCES[i]} hint="Повтори стойку" />;
 export const Parry = (g: GameProps) => <Choice {...g} total={g.p.strikes} options={ARROWS} show={(i) => `💥${ARROWS[i]}`} hint="Удар оттуда — парируй туда же" fixed />; // кнопки на месте — 550 мс на поиск стрелки не хватало
 
-/** Кроты: красных бить, синих не трогать. */
+/** Кроты: золотых бить, красных не трогать (палитра 2026-11-23: красный — опасность). */
 export function Whack({ p, onDone }: GameProps) {
   const [cell, setCell] = useState<{ i: number; bad: boolean; id: number } | null>(null);
   const [score, setScore] = useState(0);
@@ -163,7 +161,7 @@ export function Whack({ p, onDone }: GameProps) {
   }, []);
   return (
     <>
-      <Hud left={`Очков ${Math.max(0, score)}/${p.need}`} right={`${n}/${p.count}`} />
+      <Hud label="Очков" score={score} need={p.need} right={`${n}/${p.count}`} />
       <div className="mg-area mg-grid">
         {Array.from({ length: 9 }, (_, i) => (
           <button key={i} type="button" className={`mg-cell ${cell?.i === i ? (cell.bad ? "bad" : "hot") : ""}`} onPointerDown={() => {
@@ -208,7 +206,7 @@ export function Count({ p, onDone }: GameProps) {
   }, []);
   return (
     <>
-      <Hud left={`Верно ${score}/${p.need}`} right={`${r}/${p.rounds}`} />
+      <Hud label="Верно" score={score} need={p.need} right={`${r}/${p.rounds}`} />
       <div className="mg-area mg-choice">
         <div className={`mg-flash ${flash ? "on" : ""}`}>⚡</div>
         <div className="mg-opts">{opts.map((o, k) => <button key={k} type="button" className="btn" onPointerDown={() => answer(k)}>{o}</button>)}</div>
@@ -243,7 +241,7 @@ export function Pairs({ p, onDone }: GameProps) {
   };
   return (
     <>
-      <Hud left={`Пар ${ref.current}/${p.need}`} right={`${left.toFixed(1)} с`} />
+      <Hud label="Пар" score={ref.current} need={p.need} right={`${left.toFixed(1)} с`} />
       <div className="mg-area mg-grid mg-cards">
         {cards.map((c, i) => <button key={i} type="button" className={`mg-cell ${done.includes(i) ? "done" : ""}`} onPointerDown={() => tap(i)}>{open.includes(i) || done.includes(i) ? c : "❔"}</button>)}
       </div>
@@ -277,7 +275,7 @@ function Taps({ p, onDone, hit, render, label }: GameProps & { hit: (ph: number,
   };
   return (
     <>
-      <Hud left={`${label} ${score}/${p.need}`} right={`${Math.min(round + 1, p.rounds)}/${p.rounds}`} />
+      <Hud label={label} score={score} need={p.need} right={`${Math.min(round + 1, p.rounds)}/${p.rounds}`} />
       <div className="mg-area mg-tap" onPointerDown={round < p.rounds ? tap : undefined}>{render(ph, round)}</div>
     </>
   );
@@ -311,7 +309,7 @@ export function Chain({ p, onDone }: GameProps) {
   const left = useTimer(p.seconds, () => onDone(ref.current));
   return (
     <>
-      <Hud left={`Попаданий ${hits}/${p.need}`} right={`${left.toFixed(1)} с`} />
+      <Hud label="Попаданий" score={hits} need={p.need} right={`${left.toFixed(1)} с`} />
       <div className="mg-area">
         <button className="mg-target" style={{ left: `${t.x}%`, top: `${t.y}%`, width: `${p.size * 100}%`, height: `${p.size * 100}%` }}
           onPointerDown={() => { setHits((ref.current += 1)); setT({ x: rnd(4, 96 - p.size * 100), y: rnd(4, 96 - p.size * 100) }); }} />
@@ -353,7 +351,7 @@ export function Hold({ p, onDone }: GameProps) {
   const release = () => (held.current = false);
   return (
     <>
-      <Hud left={`В зоне ${(inZone / 10).toFixed(1)}/${(p.need / 10).toFixed(1)} с`} right={`${left.toFixed(1)} с`} />
+      <Hud label="В зоне" score={inZone} need={p.need} fmt={(v) => `${(v / 10).toFixed(1)} с`} right={`${left.toFixed(1)} с`} />
       <div className="mg-area mg-tap mg-hold" onPointerDown={press} onPointerUp={release} onPointerCancel={release}
         onLostPointerCapture={release} onContextMenu={(e) => e.preventDefault()}>
         <div className="mg-vbar"><div className="mg-zone" style={{ bottom: `${lo * 100}%`, height: `${zone * 100}%` }} /><div className="mg-fill" style={{ height: `${v * 100}%` }} /></div>
@@ -388,7 +386,7 @@ export function GoNoGo({ p, onDone }: GameProps) {
   }, []);
   return (
     <>
-      <Hud left={`Верно ${score}/${p.need}`} right={`${r}/${p.rounds}`} />
+      <Hud label="Верно" score={score} need={p.need} right={`${r}/${p.rounds}`} />
       <div className={`mg-area mg-tap mg-signal ${sig ?? ""}`} onPointerDown={() => sig && answer(1)}>
         <b>{sig === "go" ? "🟢 БЕЙ" : sig === "no" ? "🔴 СТОЙ" : "…"}</b>
       </div>
@@ -432,7 +430,7 @@ export function Split({ p, onDone }: GameProps) {
   };
   return (
     <>
-      <Hud left={`Пар ${score}/${p.need}`} right={`${n}/${p.count}`} />
+      <Hud label="Пар" score={score} need={p.need} right={`${n}/${p.count}`} />
       <div className="mg-area">
         {pair && [pair.a, pair.b].map((xy, w) => !pair.hit.includes(w) && (
           <button key={`${pair.id}-${w}`} className="mg-dot" style={{ left: `${xy[0]}%`, top: `${xy[1]}%` }} onPointerDown={() => tap(w)} />
@@ -443,17 +441,17 @@ export function Split({ p, onDone }: GameProps) {
 }
 
 export const NEW_GAMES = {
-  order: { name: "Порядок", hint: "Жми кружки по порядку 1, 2, 3…", C: Order },
-  arrows: { name: "Стрелки", hint: "Жми такую же стрелку", C: Arrows },
-  whack: { name: "Удары по целям", hint: "Красных бей, синих не трогай", C: Whack },
-  count: { name: "Счёт", hint: "Сосчитай вспышки", C: Count },
-  pairs: { name: "Пары", hint: "Найди одинаковые карточки", C: Pairs },
-  stance: { name: "Стойка", hint: "Повтори показанную стойку", C: Stance },
-  breath: { name: "Дыхание", hint: "Жми на самом вдохе", C: Breath },
-  aim: { name: "Прицел", hint: "Останови прицел в мишени", C: Aim },
-  parry: { name: "Парирование", hint: "Удар оттуда — парируй туда же", C: Parry },
-  chain: { name: "Цепочка", hint: "Бей цели одну за другой", C: Chain },
-  hold: { name: "Удержание", hint: "Держи шкалу в зелёной зоне", C: Hold },
-  gonogo: { name: "Сигнал", hint: "Зелёный — бей, красный — стой", C: GoNoGo },
-  split: { name: "Двойной удар", hint: "Две цели разом — успей обе", C: Split },
+  order: { icon: "🔢", name: "Порядок", hint: "Жми кружки по порядку 1, 2, 3…", tip: "Сначала найди глазами 1 и 2, потом жми без пауз", C: Order },
+  arrows: { icon: "⬆️", name: "Стрелки", hint: "Жми такую же стрелку", tip: "Кнопки перемешиваются — ищи стрелку, а не место", C: Arrows },
+  whack: { icon: "🔨", name: "Удары по целям", hint: "Золотых бей, красных не трогай", tip: "Красных не трогай: удар по красному отнимает очко", C: Whack },
+  count: { icon: "✨", name: "Счёт", hint: "Сосчитай вспышки", tip: "Считай вспышки шёпотом — так не собьёшься", C: Count },
+  pairs: { icon: "🃏", name: "Пары", hint: "Найди одинаковые карточки", tip: "Запоминай открытые карточки — промахи не штрафуются", C: Pairs },
+  stance: { icon: "🥋", name: "Стойка", hint: "Повтори показанную стойку", tip: "Варианты перемешиваются — сверяй картинку", C: Stance },
+  breath: { icon: "🌬️", name: "Дыхание", hint: "Жми на самом вдохе", tip: "Жми, когда круг почти перестал расти", C: Breath },
+  aim: { icon: "✛", name: "Прицел", hint: "Останови прицел в мишени", tip: "Жми, когда прицел подходит к мишени, а не уже в ней", C: Aim },
+  parry: { icon: "💥", name: "Парирование", hint: "Удар оттуда — парируй туда же", tip: "Кнопки на месте: удар сверху — верхняя стрелка", C: Parry },
+  chain: { icon: "⛓️", name: "Цепочка", hint: "Бей цели одну за другой", tip: "Не жди — новая цель появляется сразу после попадания", C: Chain },
+  hold: { icon: "📶", name: "Удержание", hint: "Держи шкалу в зелёной зоне", tip: "Короткими касаниями: держишь — растёт, отпустил — падает", C: Hold },
+  gonogo: { icon: "🚦", name: "Сигнал", hint: "Зелёный — бей, красный — стой", tip: "На красном не трогай экран — касание тоже ошибка", C: GoNoGo },
+  split: { icon: "✌️", name: "Двойной удар", hint: "Две цели разом — успей обе", tip: "Жми двумя пальцами сразу — по одному на каждую сторону", C: Split },
 };

@@ -1,11 +1,46 @@
-.mg-hud { display: flex; justify-content: space-between; font-family: var(--font-mono); font-weight: 800; font-size: 13px; margin: 6px 0; color: var(--cyan-2); text-shadow: 0 0 8px rgba(79, 216, 255, 0.6); }
+/* Единая палитра мини-игр (2026-11-23): цель — золото, попадание — зелёный, опасность — красный. */
+.page { --mg-target: var(--gold); --mg-hit: var(--green); --mg-danger: var(--red); }
+.mg-hud { margin: 6px 0 8px; font-family: var(--font-mono); font-weight: 800; font-size: 13px; color: var(--cyan-2); border-radius: 6px; }
+.mg-hud-row { display: flex; justify-content: space-between; gap: 8px; }
+.mg-hud-row b { color: var(--text); }
+.mg-hud-row b.ok { color: var(--mg-hit); }
+.mg-hud-right { color: var(--muted); }
+.mg-hud-bar { height: 8px; margin-top: 5px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.mg-hud-bar > div { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--mg-target)); transition: width 0.15s; }
+.mg-hud-bar.ok > div { background: var(--mg-hit); box-shadow: 0 0 10px var(--mg-hit); }
+.mg-hud-bar.danger > div { background: var(--mg-danger); }
+.mg-hud.hit { animation: mg-hit 0.25s; }
+.mg-hud.miss { animation: mg-miss 0.3s; }
+@keyframes mg-hit { 50% { background: rgba(46, 232, 138, 0.18); } }
+@keyframes mg-miss { 25% { transform: translateX(-4px); background: rgba(255, 61, 98, 0.2); } 75% { transform: translateX(4px); } }
+
+/* Каркас: правила → отсчёт → итог, список этапов */
+.mg-intro, .mg-result { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 6px 0; }
+.mg-icon { font-size: 52px; line-height: 1; filter: drop-shadow(0 0 12px rgba(255, 191, 60, 0.45)); }
+.mg-rule { font-size: 16px; font-weight: 700; margin: 0; }
+.mg-goal { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 16px; font-size: 14px; }
+.mg-goal b { color: var(--mg-target); }
+.mg-start { min-width: 200px; }
+.mg-result p { margin: 0; font-weight: 700; }
+.mg-tip { font-weight: 500 !important; color: var(--muted); max-width: 300px; }
+.mg-countdown { display: flex; align-items: center; justify-content: center; }
+.mg-countdown b { font-family: var(--font-display); font-size: 96px; color: var(--mg-target); text-shadow: 0 0 30px rgba(255, 191, 60, 0.6); animation: mg-count 0.65s ease-out; }
+@keyframes mg-count { from { transform: scale(1.6); opacity: 0; } 40% { opacity: 1; } to { transform: scale(0.9); } }
+.mg-steps { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.mg-dots { display: flex; gap: 6px; }
+.mg-dots i { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--line-soft); background: transparent; }
+.mg-dots i.done { background: var(--mg-hit); border-color: var(--mg-hit); }
+.mg-dots i.cur { border-color: var(--mg-target); box-shadow: 0 0 8px var(--mg-target); }
+.mg-stage-ic { font-size: 22px; width: 30px; text-align: center; }
+.mg-stage.locked { opacity: 0.5; }
+.mg-stage.cur b { color: var(--mg-target); }
 .mg-hint { margin: 4px 0 8px; font-size: 12px; }
 .mg-area { position: relative; height: 320px; border-radius: 6px; background: linear-gradient(rgba(79, 216, 255, 0.07) 1px, transparent 1px) 0 0 / 26px 26px, linear-gradient(90deg, rgba(79, 216, 255, 0.07) 1px, transparent 1px) 0 0 / 26px 26px, rgba(2, 8, 24, 0.8); border: 1px solid var(--line); box-shadow: inset 0 0 30px rgba(79, 216, 255, 0.12), 0 0 18px rgba(79, 216, 255, 0.15); overflow: hidden; touch-action: manipulation; user-select: none; }
 .mg-tap { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: pointer; }
-.mg-dot { position: absolute; width: 52px; height: 52px; border-radius: 50%; border: 0; background: radial-gradient(circle, #ff7a8a, #c2185b); box-shadow: 0 0 18px #ff4d6d; animation: mg-pop 0.15s ease-out; }
+.mg-dot { position: absolute; width: 58px; height: 58px; border-radius: 50%; border: 2px solid #fff6d8; background: radial-gradient(circle, #ffe39a, #d48a06); box-shadow: 0 0 18px rgba(255, 191, 60, 0.8); animation: mg-pop 0.15s ease-out; }
 @keyframes mg-pop { from { transform: scale(0.4); } to { transform: scale(1); } }
 .mg-track { position: relative; width: 88%; height: 26px; border-radius: 6px; background: rgba(255, 255, 255, 0.08); }
-.mg-zone { position: absolute; top: 0; bottom: 0; background: rgba(61, 220, 132, 0.55); border-radius: 6px; }
+.mg-zone { position: absolute; top: 0; bottom: 0; background: rgba(46, 232, 138, 0.5); border-radius: 6px; box-shadow: 0 0 10px rgba(46, 232, 138, 0.5); }
 .mg-marker { position: absolute; top: -6px; width: 6px; height: 38px; margin-left: -3px; background: #fff; border-radius: 3px; }
 .mg-combo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px; }
 .mg-key { font-size: 34px; border-radius: 6px; border: 0; background: rgba(167, 139, 250, 0.18); color: #fff; }
@@ -13,7 +48,7 @@
 .mg-dodge { display: grid; grid-template-columns: 1fr 1fr; }
 .mg-half { border: 0; background: transparent; font-size: 48px; color: #fff; }
 .mg-half + .mg-half { border-left: 1px dashed rgba(255, 255, 255, 0.15); }
-.mg-half.danger { background: rgba(255, 77, 109, 0.35); }
+.mg-half.danger { background: rgba(255, 61, 98, 0.4); box-shadow: inset 0 0 30px rgba(255, 61, 98, 0.6); }
 .mg-hp { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); margin-bottom: 6px; }
 .mg-hp > div { height: 100%; border-radius: 4px; background: #3ddc84; transition: width 0.2s; }
 .mg-charge { display: flex; align-items: center; justify-content: space-around; }
@@ -22,9 +57,10 @@
 .mg-fill { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(#ffd166, #ff7a8a); opacity: 0.85; }
 .mg-mash b { font-size: 46px; }
 .mg-react b { font-size: 34px; }
-.mg-react.go { background: rgba(61, 220, 132, 0.45); }
+.mg-react.go { background: rgba(46, 232, 138, 0.45); }
+.mg-react.hit { background: rgba(46, 232, 138, 0.2); }
 .mg-react.early, .mg-react.late { background: rgba(255, 77, 109, 0.3); }
-.mg-target { position: absolute; border-radius: 50%; border: 3px solid #fff; background: radial-gradient(circle, #ff4d6d 30%, #fff 32%, #ff4d6d 60%); }
+.mg-target { position: absolute; min-width: 44px; min-height: 44px; border-radius: 50%; border: 3px solid #fff6d8; background: radial-gradient(circle, #ffbf3c 30%, #fff6d8 32%, #ffbf3c 60%); box-shadow: 0 0 16px rgba(255, 191, 60, 0.7); }
 .mg-stage { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
 .mg-stage small { display: block; }
 .mg-msg { padding: 10px 12px; border-radius: 4px; border-left: 2px solid var(--cyan); background: rgba(79, 216, 255, 0.1); margin-bottom: 10px; font-weight: 700; }
@@ -38,8 +74,8 @@
 .mg-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px; }
 .mg-cards { grid-template-columns: repeat(4, 1fr); }
 .mg-cell { border-radius: 8px; border: 1px solid var(--line-soft); background: var(--card); font-size: 24px; min-height: 60px; }
-.mg-cell.hot { background: #ff4d6a; box-shadow: 0 0 14px #ff4d6a; }
-.mg-cell.bad { background: #3d7bff; box-shadow: 0 0 14px #3d7bff; }
+.mg-cell.hot { background: var(--mg-target); box-shadow: 0 0 14px var(--mg-target); }
+.mg-cell.bad { background: var(--mg-danger); box-shadow: 0 0 14px var(--mg-danger); }
 .mg-cell.done { opacity: 0.45; }
 .mg-flash { font-size: 54px; opacity: 0.1; transition: opacity 0.08s; }
 .mg-flash.on { opacity: 1; }

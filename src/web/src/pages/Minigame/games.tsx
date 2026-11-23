@@ -1,5 +1,6 @@
 import { type ReactElement, useEffect, useRef, useState } from "react";
 import { NEW_GAMES } from "./games2";
+import { Hud } from "./Hud";
 
 /** Параметры от сервера (`bot/config/minigame.params`). */
 export type P = Record<string, number>;
@@ -17,14 +18,6 @@ function useAlive() {
   return alive;
 }
 
-function Hud({ left, right }: { left: string; right: string }) {
-  return (
-    <div className="mg-hud">
-      <span>{left}</span>
-      <span>{right}</span>
-    </div>
-  );
-}
 
 /** Точки: появляются в случайных местах и гаснут — успеть нажать. */
 export function Dots({ p, onDone }: GameProps) {
@@ -48,7 +41,7 @@ export function Dots({ p, onDone }: GameProps) {
   }, []);
   return (
     <>
-      <Hud left={`Попаданий ${hits}/${p.need}`} right={`${shown}/${p.count}`} />
+      <Hud label="Попаданий" score={hits} need={p.need} right={`${shown}/${p.count}`} />
       <div className="mg-area">
         {dot && (
           <button
@@ -95,7 +88,7 @@ export function Rhythm({ p, onDone }: GameProps) {
   };
   return (
     <>
-      <Hud left={`Попаданий ${hits}/${p.need}`} right={`${round + 1}/${p.rounds}`} />
+      <Hud label="Попаданий" score={hits} need={p.need} right={`${round + 1}/${p.rounds}`} />
       <div className="mg-area mg-tap" onPointerDown={tap}>
         <div className="mg-track">
           <div className="mg-zone" style={{ left: `${zone * 100}%`, width: `${p.zone * 100}%` }} />
@@ -151,7 +144,7 @@ export function Combo({ p, onDone }: GameProps) {
   };
   return (
     <>
-      <Hud left={showing ? "Запоминай…" : `Повтори: ${input.length}/${seq.length}`} right={`Серия ${round + 1}/${p.rounds}`} />
+      <Hud label="Серий" score={score} need={p.need} right={showing ? `Серия ${round + 1}/${p.rounds} · запоминай…` : `Серия ${round + 1}/${p.rounds} · ${input.length}/${seq.length}`} />
       <div className="mg-area mg-combo">
         {ARROWS.map((a, i) => (
           <button key={a} className={`mg-key ${lit === i ? "lit" : ""}`} onPointerDown={() => press(i)}>
@@ -207,7 +200,7 @@ export function Dodge({ p, onDone }: GameProps) {
   const hp = p.army_power ? Math.max(0, p.army_power - miss * p.target_power * 0.12) / p.army_power : 1 - miss / (p.max_miss + 1);
   return (
     <>
-      <Hud left={`Пропущено ${miss}/${p.max_miss}`} right={`${n}/${p.strikes}`} />
+      <Hud label="Пропущено" score={miss} need={p.max_miss} danger right={`Удар ${n}/${p.strikes}`} />
       <div className="mg-hp"><div style={{ width: `${hp * 100}%` }} /></div>
       <div className="mg-area mg-dodge">
         <button className={`mg-half ${side === 0 ? "danger" : ""}`} onPointerDown={() => tap(0)}>{side === 0 ? "👊" : ""}</button>
@@ -247,7 +240,7 @@ export function Charge({ p, onDone }: GameProps) {
   };
   return (
     <>
-      <Hud left={`Попаданий ${hits}/${p.need}`} right={`${round + 1}/${p.rounds}`} />
+      <Hud label="Попаданий" score={hits} need={p.need} right={`${round + 1}/${p.rounds}`} />
       <div className="mg-area mg-charge">
         <div className="mg-gauge">
           <div className="mg-band" style={{ bottom: `${band * 100}%`, height: `${p.band * 100}%` }} />
@@ -288,7 +281,10 @@ export function Mash({ p, onDone }: GameProps) {
   return (
     <>
       <Hud
-        left={p.army_power ? `Мощь ${power.toLocaleString("ru")} / ${p.target_power.toLocaleString("ru")}` : `Ударов ${taps}/${p.need}`}
+        label={p.army_power ? "Мощь" : "Ударов"}
+        score={p.army_power ? power : taps}
+        need={p.army_power ? p.target_power : p.need}
+        fmt={(v) => v.toLocaleString("ru")}
         right={`${left.toFixed(1)} с`}
       />
       <div className="mg-area mg-tap mg-mash" onPointerDown={() => setTaps((ref.current += 1))}>
@@ -339,7 +335,7 @@ export function Reaction({ p, onDone }: GameProps) {
   const label = { wait: "Жди…", go: "БЕЙ!", early: "Фальстарт", late: "Поздно", hit: "Есть!" }[state];
   return (
     <>
-      <Hud left={`Попаданий ${hits}/${p.need}`} right={`${round + 1}/${p.rounds}`} />
+      <Hud label="Попаданий" score={hits} need={p.need} right={`${round + 1}/${p.rounds}`} />
       <div className={`mg-area mg-tap mg-react ${state}`} onPointerDown={tap}>
         <b>{label}</b>
       </div>
@@ -385,7 +381,7 @@ export function Track({ p, onDone }: GameProps) {
   }, []);
   return (
     <>
-      <Hud left={`Попаданий ${hits}/${p.need}`} right={`${left.toFixed(1)} с`} />
+      <Hud label="Попаданий" score={hits} need={p.need} right={`${left.toFixed(1)} с`} />
       <div className="mg-area">
         <button
           className="mg-target"
@@ -400,15 +396,24 @@ export function Track({ p, onDone }: GameProps) {
   );
 }
 
-export const GAMES: Record<string, { name: string; hint: string; C: (p: GameProps) => ReactElement }> = {
-  dots: { name: "Точки", hint: "Жми на точки, пока не погасли", C: Dots },
-  rhythm: { name: "Тайминг", hint: "Нажми, когда бегунок в зелёной зоне", C: Rhythm },
-  combo: { name: "Комбо", hint: "Запомни серию ударов и повтори", C: Combo },
-  dodge: { name: "Уклонение", hint: "Уходи от ударов в другую сторону", C: Dodge },
-  charge: { name: "Заряд", hint: "Держи и отпусти в зелёной полосе", C: Charge },
-  mash: { name: "Шквал", hint: "Бей как можно быстрее", C: Mash },
-  reaction: { name: "Реакция", hint: "Дождись сигнала — и сразу бей", C: Reaction },
-  track: { name: "Цель", hint: "Попадай по движущейся мишени", C: Track },
+export interface GameDef {
+  icon: string;
+  name: string;
+  hint: string;
+  /** Совет на экране итога, если не вышло. */
+  tip: string;
+  C: (p: GameProps) => ReactElement;
+}
+
+export const GAMES: Record<string, GameDef> = {
+  dots: { icon: "🎯", name: "Точки", hint: "Жми на точки, пока не погасли", tip: "Держи палец ближе к центру — до любой точки тянуться недалеко", C: Dots },
+  rhythm: { icon: "🎵", name: "Тайминг", hint: "Нажми, когда бегунок в зелёной зоне", tip: "Жми чуть раньше, чем бегунок войдёт в зону — касание запаздывает", C: Rhythm },
+  combo: { icon: "🧠", name: "Комбо", hint: "Запомни серию ударов и повтори", tip: "Проговаривай серию про себя: «верх, право, низ…»", C: Combo },
+  dodge: { icon: "🛡️", name: "Уклонение", hint: "Уходи от ударов в другую сторону", tip: "Удар слева — жми справа. Смотри в центр, а не на края", C: Dodge },
+  charge: { icon: "🔋", name: "Заряд", hint: "Держи и отпусти в зелёной полосе", tip: "Отпускай, как только заливка вошла в зелёную полосу", C: Charge },
+  mash: { icon: "👊", name: "Шквал", hint: "Бей как можно быстрее", tip: "Бей двумя пальцами по очереди — так быстрее", C: Mash },
+  reaction: { icon: "⚡", name: "Реакция", hint: "Дождись сигнала — и сразу бей", tip: "Не угадывай: жди зелёный, фальстарт сжигает раунд", C: Reaction },
+  track: { icon: "🏹", name: "Цель", hint: "Попадай по движущейся мишени", tip: "Веди палец за мишенью и жми, когда она разворачивается", C: Track },
   ...NEW_GAMES,
 };
 

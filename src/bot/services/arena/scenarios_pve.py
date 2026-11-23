@@ -20,7 +20,7 @@ async def _create_pve(session, redis, user, kind: str, stacks, enemy, m, enemy_n
     from bot.services.arena.sources import energy_for, perks_for
 
     return await core.create(
-        redis, kind=kind, a_uid=user.id, d_uid=None, a_stacks=stacks, d_stacks=enemy, a_chances=m.attacker, d_chances=m.defender,
+        redis, session=session, kind=kind, a_uid=user.id, d_uid=None, a_stacks=stacks, d_stacks=enemy, a_chances=m.attacker, d_chances=m.defender,
         a_perks=await perks_for(session, user.id), d_perks=[], a_auto=auto, d_auto=True, a_name=await _name(session, user.id),
         d_name=enemy_name, meta=meta, a_energy=await energy_for(session, user.id),
     )
@@ -136,7 +136,7 @@ async def start_war(session: AsyncSession, redis: Redis, defender_id: int, war_i
     a_id, d_id = war.attacker_id, war.defender_id
     war.expires_at = datetime.now(timezone.utc) + timedelta(seconds=ARENA_TTL_SECONDS)  # не заберёт как неявку
     st = await core.create(
-        redis, kind=KIND_WAR, a_uid=a_id, d_uid=d_id, a_stacks=stacks_a, d_stacks=stacks_d, a_chances=m.attacker, d_chances=m.defender,
+        redis, session=session, kind=KIND_WAR, a_uid=a_id, d_uid=d_id, a_stacks=stacks_a, d_stacks=stacks_d, a_chances=m.attacker, d_chances=m.defender,
         a_perks=await perks_for(session, a_id), d_perks=await perks_for(session, d_id), a_auto=False, d_auto=False,
         a_name=await _label(session, a_id), d_name=await _label(session, d_id), meta={"war_id": war_id},
         a_energy=await energy_for(session, a_id), d_energy=await energy_for(session, d_id),
@@ -167,7 +167,7 @@ async def start_war_expired(session: AsyncSession, redis: Redis, war_id: int) ->
     war.expires_at = datetime.now(timezone.utc) + timedelta(seconds=ARENA_TTL_SECONDS)  # не заберёт как неявку повторно
     a_name, d_name = await _label(session, a_id), await _label(session, d_id)
     st = await core.create(
-        redis, kind=KIND_WAR, a_uid=a_id, d_uid=d_id, a_stacks=stacks_a, d_stacks=stacks_d, a_chances=m.attacker, d_chances=m.defender,
+        redis, session=session, kind=KIND_WAR, a_uid=a_id, d_uid=d_id, a_stacks=stacks_a, d_stacks=stacks_d, a_chances=m.attacker, d_chances=m.defender,
         a_perks=await perks_for(session, a_id), d_perks=await perks_for(session, d_id), a_auto=False, d_auto=True,
         a_name=a_name, d_name=f"{d_name} (оборона)", meta={"war_id": war_id, "resolution": WAR_FORFEIT},
         a_energy=await energy_for(session, a_id), d_energy=await energy_for(session, d_id),

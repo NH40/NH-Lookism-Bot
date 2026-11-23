@@ -35,7 +35,7 @@ async def start_district(session: AsyncSession, redis: Redis, user, district_id:
     prep = await prepare_attack(session, redis, user, district_id)
     m = prep.matchup
     st = await core.create(
-        redis, kind=KIND_DISTRICT, a_uid=user.id, d_uid=None, a_stacks=prep.stacks, d_stacks=prep.defender,
+        redis, session=session, kind=KIND_DISTRICT, a_uid=user.id, d_uid=None, a_stacks=prep.stacks, d_stacks=prep.defender,
         a_chances=m.attacker, d_chances=m.defender, a_perks=await perks_for(session, user.id), d_perks=[],
         a_auto=auto, d_auto=True, a_name=await _name(session, user.id), d_name=f"Боты района {prep.row.number}",
         meta={"district_id": district_id}, a_energy=await energy_for(session, user.id),
@@ -120,7 +120,7 @@ async def start_challenge(session: AsyncSession, redis: Redis, defender, challen
         return ctx  # аннулирован — защитнику уже нечего терять
     a_id, d_id = claimed.attacker_id, claimed.defender_id
     st = await core.create(
-        redis, kind=KIND_CHALLENGE, a_uid=a_id, d_uid=d_id, a_stacks=ctx.stacks_a, d_stacks=ctx.stacks_d,
+        redis, session=session, kind=KIND_CHALLENGE, a_uid=a_id, d_uid=d_id, a_stacks=ctx.stacks_a, d_stacks=ctx.stacks_d,
         a_chances=ctx.m.attacker, d_chances=ctx.m.defender, a_perks=await perks_for(session, a_id), d_perks=await perks_for(session, d_id),
         a_auto=False, d_auto=False, a_name=ctx.base["attacker_label"], d_name=ctx.base["defender_label"],
         meta={"challenge_id": challenge_id}, a_energy=await energy_for(session, a_id), d_energy=await energy_for(session, d_id),
@@ -154,7 +154,7 @@ async def start_challenge_expired(session: AsyncSession, redis: Redis, challenge
         return ctx  # аннулирован или без боя — итог как раньше
     a_id, d_id = claimed.attacker_id, claimed.defender_id
     st = await core.create(
-        redis, kind=KIND_CHALLENGE, a_uid=a_id, d_uid=d_id, a_stacks=ctx.stacks_a, d_stacks=ctx.stacks_d,
+        redis, session=session, kind=KIND_CHALLENGE, a_uid=a_id, d_uid=d_id, a_stacks=ctx.stacks_a, d_stacks=ctx.stacks_d,
         a_chances=ctx.m.attacker, d_chances=ctx.m.defender, a_perks=await perks_for(session, a_id), d_perks=await perks_for(session, d_id),
         a_auto=False, d_auto=True, a_name=ctx.base["attacker_label"], d_name=f"{ctx.base['defender_label']} (оборона)",
         meta={"challenge_id": challenge_id, "resolution": RESOLUTION_TIMEOUT},
@@ -230,7 +230,7 @@ async def start_throne(session: AsyncSession, redis: Redis, user_id: int) -> dic
         country = (await phase_repo.get_phase(session, user_id))[1]
         kind = KIND_THRONE if opp.is_throne else KIND_LIBERATION
         st = await core.create(
-            redis, kind=kind, a_uid=user_id, d_uid=opp.user_id, a_stacks=camps[user_id], d_stacks=camps[opp.user_id],
+            redis, session=session, kind=kind, a_uid=user_id, d_uid=opp.user_id, a_stacks=camps[user_id], d_stacks=camps[opp.user_id],
             a_chances=m.attacker, d_chances=m.defender, a_perks=await perks_for(session, user_id), d_perks=await perks_for(session, opp.user_id),
             a_auto=False, d_auto=True, a_name=await _name(session, user_id), d_name=f"{opp.label} (оборона)",
             meta={"opp": opp.user_id, "country": country}, a_energy=await energy_for(session, user_id),
@@ -296,7 +296,7 @@ async def start_clan_war(session: AsyncSession, redis: Redis, user_id: int, targ
     if not isinstance(b, WarBattle):
         return b
     st = await core.create(
-        redis, kind=KIND_CLAN_WAR, a_uid=user_id, d_uid=None, a_stacks=b.a_stacks, d_stacks=b.d_stacks,
+        redis, session=session, kind=KIND_CLAN_WAR, a_uid=user_id, d_uid=None, a_stacks=b.a_stacks, d_stacks=b.d_stacks,
         a_chances=b.a_chances, d_chances=b.d_chances, a_perks=await perks_for(session, user_id), d_perks=[],
         a_auto=False, d_auto=True, a_name=f"Рота «{b.attacker_name}»", d_name=f"Рота «{b.defender_name}»",
         meta={"attacker": b.attacker_id, "defender": b.defender_id}, a_energy=await energy_for(session, user_id),

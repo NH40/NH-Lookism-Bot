@@ -234,6 +234,11 @@ export function BattlePage() {
           onClick={() => send("auto", { on: !b.me.auto })}>
           <Bot size={15} /> {b.me.auto ? "Авто: вкл" : "Авто-бой"}
         </button>
+        {live && b.foe.auto && (
+          <button type="button" className="bt-auto" disabled={busy} onClick={() => send("finish", {})} title="Соперник на автобое — доиграть сразу">
+            ⏩ Досчитать
+          </button>
+        )}
       </div>
       {b.power_line && <div className="bt-power">{b.power_line}</div>}
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from sqlalchemy import false as sa_false
+
 from datetime import date, datetime
 
 from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Integer, String
@@ -161,6 +163,8 @@ class User(Base):
     rank_locks: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
     # Онлайн-бои: коды перков, которые игрок отключил (их нет в бою, автоатака их не жмёт) — 2026-11-20.
     arena_perks_off: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
+    # Начинать онлайн-бои на автобое (2026-11-23) — можно выключить в самом бою.
+    arena_auto_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=sa_false())
     # Сенсорика «Снять безопасность»: до этого времени безопасность игрока не работает.
     security_off_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Мощь армии для топа/«/players» — снимок `services.extra.get_army_stats` (живой расчёт —

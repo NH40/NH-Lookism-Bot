@@ -20,9 +20,13 @@ from dataclasses import dataclass
 from random import Random
 
 from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config.arena import (
     ARENA_AI_DEFEND_RATIO,
+    ARENA_AI_SAVE_RATIO,
+    ARENA_AI_THREAT_DAMAGE,
+    ARENA_AI_THREAT_POWER,
     ARENA_AUTO_MINIGAME_SCORE,
     ARENA_DEFEND_DAMAGE,
     ARENA_DEFEND_ENERGY,
@@ -110,7 +114,7 @@ async def current_of(redis: Redis, user_id: int) -> str | None:
 
 
 async def create(
-    redis: Redis, *, kind: str,
+    redis: Redis, *, kind: str, session: AsyncSession | None = None,
     a_uid: int | None, d_uid: int | None,
     a_stacks: list[CombatStack], d_stacks: list[CombatStack],
     a_chances: CombatChances, d_chances: CombatChances,
@@ -137,6 +141,17 @@ async def create(
         "a": side(a_uid, a_perks, a_auto, a_name, a_stacks, a_energy), "d": side(d_uid, d_perks, d_auto, d_name, d_stacks, d_energy),
         "snap": _pack((a_stacks, d_stacks, a_chances, d_chances)), "result": None,
     }
+    if session is not None:  # «начинать на автобое» — настройка игрока (2026-11-23)
+        from sqlalchemy import select
+
+        from bot.db.models.user import User
+
+        uids = [u for u in (a_uid, d_uid) if u]
+        if uids:
+            on = set((await session.execute(select(User.id).where(User.id.in_(uids), User.arena_auto_default))).scalars())
+            for k in ("a", "d"):
+                if st[k]["uid"] in on:
+                    st[k]["auto"] = True
     await _save(redis, st)
     return st
 
@@ -198,22 +213,40 @@ def perk_value(p: Perk) -> float:
     return v * p.ai_weight / max(1, p.cost) ** 0.5
 
 
-def ai_action(side: dict, round_no: int, own_power: float, enemy_power: float) -> dict:
-    """Автоатака «нормального» уровня: перк, если хватает энергии (самый весомый из готовых), защита — когда
-    сильно проигрываешь, иначе атака. Мини-игры — средний результат."""
+def _threat(enemy: dict | None, round_no: int) -> float:
+    """Насколько сильный удар может нанести соперник в этом раунде: лучший множитель урона его готовых перков."""
+    if not enemy:
+        return 1.0
+    return max([PERK_REGISTRY[c].damage for c in enemy.get("perks", []) if c in PERK_REGISTRY and _ready(enemy, c, round_no)], default=1.0)
+
+
+def ai_action(side: dict, round_no: int, own_power: float, enemy_power: float, enemy: dict | None = None,
+              lost_last: bool = True) -> dict:
+    """Автобой (доработан 2026-11-23): лучший готовый перк, но лечение — только после потерь, а слабый перк не
+    жмётся, если через ход хватит энергии на заметно более сильный (копит); у соперника готов сильный удар, а
+    по мощи он не слабее — защита; сильно проигрываешь — защита; иначе атака. Мини-игры — средний результат."""
     ready = [PERK_REGISTRY[c] for c in side["perks"] if _ready(side, c, round_no)]
+    ready = [p for p in ready if lost_last or not p.self_mods.heal]
     if ready:
         best = max(ready, key=lambda p: (perk_value(p), p.code))
-        return {"kind": PERK, "perk": best.code, "score": ARENA_AUTO_MINIGAME_SCORE}
+        regen = side.get("regen", ARENA_ENERGY_REGEN)
+        # копить: перк, на который сейчас не хватает, но хватит через ход, если не тратить энергию
+        later = [PERK_REGISTRY[c] for c in side["perks"] if c in PERK_REGISTRY and side["cd"].get(c, 0) <= round_no + 1
+                 and side["energy"] < PERK_REGISTRY[c].cost <= side["energy"] + regen]
+        if not later or max(perk_value(p) for p in later) * ARENA_AI_SAVE_RATIO <= perk_value(best):
+            return {"kind": PERK, "perk": best.code, "score": ARENA_AUTO_MINIGAME_SCORE}
+    if _threat(enemy, round_no) >= ARENA_AI_THREAT_DAMAGE and enemy_power and own_power <= enemy_power * ARENA_AI_THREAT_POWER:
+        return {"kind": DEFEND}
     if enemy_power and own_power < enemy_power * ARENA_AI_DEFEND_RATIO:
         return {"kind": DEFEND}
     return {"kind": ATTACK}
 
 
-def _resolve_action(side: dict, action: dict | None, round_no: int, own_power: float, enemy_power: float) -> tuple[str, float, Perk | None]:
+def _resolve_action(side: dict, action: dict | None, round_no: int, own_power: float, enemy_power: float,
+                    enemy: dict | None = None, lost_last: bool = True) -> tuple[str, float, Perk | None]:
     """→ (код действия, множитель своего урона от действия, перк)."""
     if action is None or side["auto"]:
-        action = ai_action(side, round_no, own_power, enemy_power) if (action is None or side["auto"]) else action
+        action = ai_action(side, round_no, own_power, enemy_power, enemy, lost_last)
     kind = action.get("kind")
     if kind == DEFEND:
         return DEFEND, ARENA_DEFEND_DAMAGE, None
@@ -316,8 +349,9 @@ async def _play(redis: Redis, st: dict) -> dict:
     run = _rebuild(st)
     round_no = st["round"] + 1
     a_pow, d_pow = run.a.total_power(), run.d.total_power()
-    a_code, a_dmg, a_perk = _resolve_action(st["a"], st["a"]["action"], round_no, a_pow, d_pow)
-    d_code, d_dmg, d_perk = _resolve_action(st["d"], st["d"]["action"], round_no, d_pow, a_pow)
+    last = st["log"][-1]["kills"] if st["log"] else [0, 0]  # [убил нападающий, убил защитник]
+    a_code, a_dmg, a_perk = _resolve_action(st["a"], st["a"]["action"], round_no, a_pow, d_pow, st["d"], last[1] > 0)
+    d_code, d_dmg, d_perk = _resolve_action(st["d"], st["d"]["action"], round_no, d_pow, a_pow, st["a"], last[0] > 0)
     w = run.weights
     a_dmg, d_dmg = _weigh(a_dmg, w["a"]), _weigh(d_dmg, w["d"])
     # Чужой перк на этот раунд и навязанная в прошлом раунде мини-игра (их сила — доля прокачки наложившего).
@@ -376,6 +410,19 @@ async def _play(redis: Redis, st: dict) -> dict:
         return await load(redis, st["id"]) or st
     await _save(redis, st)
     return st
+
+
+async def finish_now(redis: Redis, battle_id: str, user_id: int) -> dict:
+    """«⏩ Досчитать» (2026-11-23): соперник — бот или на автобое → свой автобой и бой доигрывается сразу."""
+    st = await load(redis, battle_id)
+    if st is None or st["status"] != STATUS_LIVE:
+        raise ArenaError("no_battle")
+    side = _side_of(st, user_id)
+    other = "d" if side == "a" else "a"
+    if not st[other]["auto"]:
+        raise ArenaError("foe_live")
+    st[side]["auto"] = True
+    return await run_auto(redis, st)
 
 
 async def run_auto(redis: Redis, st: dict) -> dict:

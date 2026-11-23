@@ -23,11 +23,13 @@ CB_START_CHALLENGE = "ar:sc:"  # + id вызова
 CB_ACT = "ar:x:"  # + id боя + ":" + код действия
 CB_AUTO = "ar:au:"  # + id боя + ":" + 0/1
 CB_REFRESH = "ar:r:"  # + id боя
+CB_FINISH = "ar:f:"  # + id боя — «⏩ Досчитать» (соперник бот или на автобое)
 CB_HELP = "ar:h:"  # + id боя + ":" + 1 (перки) / 0 (лента)
 BTN_ONLINE = "⚔️ Бой онлайн (перки)"
 BTN_ACCEPT_ONLINE = "⚔️ Принять онлайн"
 _NAMES = {"attack": "атака", "defend": "защита"}
-_ERR = {"no_battle": "Бой уже закончен.", "not_yours": "Это не твой бой.", "in_battle": "Ты уже в бою — сначала доиграй его."}
+_ERR = {"no_battle": "Бой уже закончен.", "not_yours": "Это не твой бой.", "in_battle": "Ты уже в бою — сначала доиграй его.",
+        "foe_live": "Соперник ходит сам — досчитать сразу нельзя. Включи автобой, он доиграет за тебя."}
 _MAX_PERK_BUTTONS = 8
 
 
@@ -140,7 +142,10 @@ def render(st: dict, user_id: int, *, perks_help: bool = False, detail: bool = F
                      _b("🔄 Обновить", f"{CB_REFRESH}{bid}")])
         if st["log"] and not detail:
             rows.append([_b("🔎 Разбор раунда", f"{CB_HELP}{bid}:2")])
-        rows.append([_b("🤖 Выключить авто" if s["auto"] else "🤖 Автоатака", f"{CB_AUTO}{bid}:{0 if s['auto'] else 1}")])
+        auto_row = [_b("🤖 Выключить авто" if s["auto"] else "🤖 Автоатака", f"{CB_AUTO}{bid}:{0 if s['auto'] else 1}")]
+        if o["auto"]:  # соперник — бот или на автобое: можно доиграть мгновенно
+            auto_row.append(_b("⏩ Досчитать", f"{CB_FINISH}{bid}"))
+        rows.append(auto_row)
     else:
         won = st["result"]["attacker_won"] == (me == "a")
         lines.append(SEP)
@@ -239,6 +244,17 @@ async def cb_act(callback: CallbackQuery, redis: Redis) -> None:
     action["game_score"] = 0.0
     try:
         st = await svc.act(redis, bid, callback.from_user.id, action)
+    except svc.ArenaError as exc:
+        await callback.answer(_ERR.get(exc.code, "Не вышло."), show_alert=True)
+        return
+    await callback.answer()
+    await _show(callback, st)
+
+
+@router.callback_query(F.data.startswith(CB_FINISH))
+async def cb_finish(callback: CallbackQuery, redis: Redis) -> None:
+    try:
+        st = await svc.finish_now(redis, callback.data.removeprefix(CB_FINISH), callback.from_user.id)
     except svc.ArenaError as exc:
         await callback.answer(_ERR.get(exc.code, "Не вышло."), show_alert=True)
         return

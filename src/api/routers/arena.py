@@ -18,6 +18,7 @@ from bot.services.combat import explain
 router = APIRouter(prefix="/api/arena", tags=["arena"])
 
 _ERRORS = {"no_battle": "Бой уже закончен.", "not_yours": "Это не твой бой.", "in_battle": "Ты уже в бою — сначала доиграй его.",
+           "foe_live": "Соперник ходит сам — досчитать сразу нельзя.",
            "no_army": "В лагере атаки нет статистов."}
 _START_ERRORS = {  # имя исключения сервиса → текст (босс, город, рейд, война)
     "EventGoneError": "Босс уже ушёл.", "BossAlreadyDefeatedError": "Этого босса ты уже победил.",
@@ -310,6 +311,16 @@ async def act(battle_id: str, body: ActIn, user_id: int = Depends(get_current_us
     action = {k: v for k, v in body.model_dump().items() if v is not None}
     try:
         st = await svc.act(redis, battle_id, user_id, action)
+    except svc.ArenaError as exc:
+        raise bad(_ERRORS.get(exc.code, "Не вышло."))
+    return view(st, user_id)
+
+
+@router.post("/{battle_id}/finish")
+async def finish(battle_id: str, user_id: int = Depends(get_current_user_id), redis: Redis = Depends(get_redis)) -> dict:
+    """«⏩ Досчитать» (2026-11-23): соперник бот или на автобое — бой доигрывается сразу."""
+    try:
+        st = await svc.finish_now(redis, battle_id, user_id)
     except svc.ArenaError as exc:
         raise bad(_ERRORS.get(exc.code, "Не вышло."))
     return view(st, user_id)

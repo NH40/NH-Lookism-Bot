@@ -277,4 +277,53 @@ async def _finish_throne(redis: Redis, st: dict, result) -> None:
 
 
 core.register_finisher(KIND_THRONE, _finish_throne)
+
+
+# --- клановая война за земли (2026-11-23) ---
+
+KIND_CLAN_WAR = "clan_war"
+
+
+async def start_clan_war(session: AsyncSession, redis: Redis, user_id: int, target_id: int):
+    """Атака клана онлайн: бьётся нажавший (свои перки), рота защитника — на автобое. Пустая рота защитника —
+    сдача без боя (→ `WarOutcome` сразу)."""
+    from bot.services.arena.sources import energy_for, perks_for
+    from bot.services.clan.war import WarBattle, start_attack
+
+    if await core.current_of(redis, user_id):
+        raise core.ArenaError("in_battle")
+    b = await start_attack(session, redis, user_id, target_id)
+    if not isinstance(b, WarBattle):
+        return b
+    st = await core.create(
+        redis, kind=KIND_CLAN_WAR, a_uid=user_id, d_uid=None, a_stacks=b.a_stacks, d_stacks=b.d_stacks,
+        a_chances=b.a_chances, d_chances=b.d_chances, a_perks=await perks_for(session, user_id), d_perks=[],
+        a_auto=False, d_auto=True, a_name=f"Рота «{b.attacker_name}»", d_name=f"Рота «{b.defender_name}»",
+        meta={"attacker": b.attacker_id, "defender": b.defender_id}, a_energy=await energy_for(session, user_id),
+    )
+    return st
+
+
+async def _finish_clan_war(redis: Redis, st: dict, result) -> None:
+    from bot.constant.settings import NOTIFY_CLAN_WAR
+    from bot.handlers.clan.garrison import war_result_text
+    from bot.services.clan.war import finish_attack
+    from bot.services.settings import is_muted
+
+    uid = st["a"]["uid"]
+    async with _SF["sf"]() as session:
+        out = await finish_attack(session, uid, st["meta"]["attacker"], st["meta"]["defender"], result)
+        st["report"] = {"won": bool(out and out.attacker_won)}
+        await core.save(redis, st)
+        if out is None:
+            await _notify(uid, "🏁 Клановая война: клан исчез за время боя — итог не засчитан.")
+            return
+        text = war_result_text(out)
+        await _notify(uid, text)
+        for member in {*out.attacker_members, *out.defender_members} - {uid}:
+            if not await is_muted(session, member, NOTIFY_CLAN_WAR):
+                await _notify(member, text)
+
+
+core.register_finisher(KIND_CLAN_WAR, _finish_clan_war)
 core.register_finisher(KIND_LIBERATION, _finish_throne)

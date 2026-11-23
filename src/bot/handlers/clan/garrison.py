@@ -419,13 +419,23 @@ async def cb_war_attack(callback: CallbackQuery, session: AsyncSession, redis: R
         await send_screen(callback.bot, callback.message.chat.id, callback.message,
                           WAR_CONFIRM.format(name=esc(target.name), lands=target.lands), war_confirm_menu(target.id))
         return
+    from bot.handlers.arena.arena import render
+    from bot.services import arena
+
     try:
-        out = await clan_service.attack(session, redis, callback.from_user.id, target.id)
+        out = await arena.start_clan_war(session, redis, callback.from_user.id, target.id)
+    except arena.ArenaError:
+        await callback.answer("Ты уже в бою.", show_alert=True)
+        return
     except clan_service.ClanError as exc:
         value = format_countdown(exc.value) if exc.code in ("war_cooldown", "shielded") else exc.value
         await callback.answer(ERRORS[exc.code].format(value=value), show_alert=True)
         return
     await callback.answer()
+    if isinstance(out, dict):  # онлайн-бой — экран боя; итог и пуши — по окончании (`services/arena`)
+        text, markup = render(out, callback.from_user.id)
+        await callback.message.answer(text, reply_markup=markup)
+        return
     text = war_result_text(out)
     await send_screen(callback.bot, callback.message.chat.id, callback.message, text, back_menu(CB_CLAN_WAR))
     for uid in {*out.attacker_members, *out.defender_members} - {callback.from_user.id}:

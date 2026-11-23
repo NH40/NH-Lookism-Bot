@@ -1,5 +1,7 @@
 import { ChevronLeft, ChevronRight, Shield, Swords, Trophy } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { battlePath } from "../../constants";
 import type { ClanAttackResult, ClanCan, ClanWar, ClanWarTarget } from "../../types";
 import { Panel, Screen, StatRow, countdown, fmt } from "../../components/ui";
 import { Sheet } from "../../components/Sheet";
@@ -16,12 +18,14 @@ export function WarTab({ can, onChanged }: { can: ClanCan; onChanged: () => Prom
 	});
 	const [target, setTarget] = useState<ClanWarTarget | null>(null);
 	const [result, setResult] = useState<ClanAttackResult | null>(null);
+	const navigate = useNavigate();
 
 	const attack = async () => {
 		if (!target) return;
-		const r = (await run("/clan/war/attack", { clan_id: target.clan_id })) as ClanAttackResult | null;
+		const r = (await run("/clan/war/attack", { clan_id: target.clan_id })) as (ClanAttackResult & { battle_id?: string }) | null;
 		setTarget(null);
-		if (r) setResult(r);
+		if (r?.battle_id) return navigate(battlePath(r.battle_id)); // 2026-11-23: война — онлайн-бой
+		if (r) setResult(r); // рота защитника пуста — сдача без боя, итог сразу
 	};
 
 	return (

@@ -893,11 +893,17 @@ async def war_attack(
     body: ClanIdIn, user_id: int = Depends(get_current_user_id),
     session: AsyncSession = Depends(get_session), redis: Redis = Depends(get_redis),
 ) -> dict:
+    from bot.services import arena
+
     await _me(session, user_id)
     try:
-        r = await clan_service.attack(session, redis, user_id, body.clan_id)
+        r = await arena.start_clan_war(session, redis, user_id, body.clan_id)
+    except arena.ArenaError:
+        raise bad("Ты уже в бою.") from None
     except ClanError as exc:
         raise _err(exc) from None
+    if isinstance(r, dict):  # онлайн-бой (2026-11-23) — Mini App открывает экран боя
+        return _ok("Бой начался.", battle_id=r["id"])
     await push_many({*r.attacker_members, *r.defender_members} - {user_id}, NOTIFY_CLAN_WAR, war_result_text(r))
     message = (
         f"Победа над «{r.defender_name}»: земель +{r.lands_gained}, казна +{format_number(r.treasury_taken)}."

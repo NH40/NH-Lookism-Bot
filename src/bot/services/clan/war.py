@@ -127,82 +127,133 @@ def _cut_buildings(built: dict[str, int], lands: int) -> dict[str, int]:
     return lost
 
 
-async def attack(session: AsyncSession, redis: Redis, user_id: int, target_id: int, rng: random.Random | None = None) -> WarOutcome:
+async def _lock_pair(session: AsyncSession, member, target_id: int):
+    """Строки двух кланов под FOR UPDATE в порядке id (без взаимоблокировок) → (нападающий, защитник)."""
+    locked = {}
+    for cid in sorted((member.clan_id, target_id)):
+        locked[cid] = await clan_repo.get(session, cid, for_update=True)
+    return locked[member.clan_id], locked[target_id]
+
+
+def _check_attack(attacker, defender) -> None:
+    if defender is None:
+        raise ClanError("clan_gone")
+    if cooldown_left(attacker):
+        raise ClanError("war_cooldown", cooldown_left(attacker))
+    if shield_left(defender):
+        raise ClanError("shielded", shield_left(defender))
+
+
+async def _apply_outcome(session: AsyncSession, user_id: int, attacker, defender, won: bool, rounds: int,
+                         a_power: int, d_power: int, a_dead: int, d_dead: int) -> WarOutcome:
+    """Последствия войны (общие для онлайн-боя и сдачи пустой роты): земли, казна, снос, щиты, история. НЕ коммитит."""
+    lands_taken = lands_gained = treasury = 0
+    lost: dict[str, int] = {}
+    if won:
+        ratio = a_power / d_power if d_power > 0 else _NO_ARMY_RATIO
+        lands_taken = war_lands(ratio, defender.lands)
+        lands_gained = max(0, min(lands_taken, max_lands(attacker) - attacker.lands))
+        defender.lands -= lands_taken
+        attacker.lands += lands_gained
+        treasury = defender.treasury * CLAN_WAR_TREASURY_PERCENT // 100
+        defender.treasury -= treasury
+        attacker.treasury += treasury
+        lost = _cut_buildings(await clan_repo.buildings(session, defender.id), defender.lands)
+        for kind, n in lost.items():
+            await clan_repo.add_building(session, defender.id, kind, -n)
+    now = _now()
+    attacker.last_attack_at = now
+    defender.shield_until = now + timedelta(hours=CLAN_WAR_SHIELD_HOURS if won else CLAN_WAR_SHIELD_WIN_HOURS)
+    if CLAN_WAR_ATTACKER_SHIELD_HOURS > 0:
+        attacker.shield_until = now + timedelta(hours=CLAN_WAR_ATTACKER_SHIELD_HOURS)
+    await clan_repo.add_war(
+        session, attacker_id=attacker.id, defender_id=defender.id, attacker_name=attacker.name, defender_name=defender.name,
+        attacker_won=won, lands_taken=lands_taken, treasury_taken=treasury, attacker_power=a_power, defender_power=d_power,
+        attacker_dead=a_dead, defender_dead=d_dead,
+    )
+    actor = await _name(session, user_id)
+    await clan_repo.bump_stats(session, attacker.id, user_id, wars=1, wars_won=int(won), lands_won=lands_gained)
+    verdict = "победа" if won else "поражение"
+    await clan_repo.log(session, attacker.id, f"⚔️ {actor} напал(а) на «{defender.name}»: {verdict}, земель +{lands_gained}")
+    await clan_repo.log(session, defender.id, f"🛡 «{attacker.name}» напал на клан: {'оборона прорвана' if won else 'отбились'}, земель −{lands_taken}")
+    return WarOutcome(
+        attacker.id, defender.id, attacker.name, defender.name, won, rounds, a_power, d_power, a_dead, d_dead,
+        lands_taken, lands_gained, treasury, lost,
+        await clan_repo.member_ids(session, attacker.id), await clan_repo.member_ids(session, defender.id),
+    )
+
+
+async def start_attack(session: AsyncSession, redis: Redis, user_id: int, target_id: int):
+    """Атака на клан (2026-11-23 — онлайн-бой). Рота защитника пуста — сдача без боя, итог сразу (→ `WarOutcome`).
+    Иначе → данные для онлайн-боя (`WarBattle`): КД нападающего ставится сразу — второй управляющий не начнёт
+    параллельную войну. Коммитит."""
     member = await require_member(session, user_id, MANAGER_RANKS)
     if target_id == member.clan_id:
         raise ClanError("own_clan")
     lock = await _lock(redis, user_id)
     try:
-        locked = {}
-        for cid in sorted((member.clan_id, target_id)):
-            locked[cid] = await clan_repo.get(session, cid, for_update=True)
-        attacker, defender = locked[member.clan_id], locked[target_id]
-        if defender is None:
-            raise ClanError("clan_gone")
-        if cooldown_left(attacker):
-            raise ClanError("war_cooldown", cooldown_left(attacker))
-        if shield_left(defender):
-            raise ClanError("shielded", shield_left(defender))
+        attacker, defender = await _lock_pair(session, member, target_id)
+        _check_attack(attacker, defender)
         a_stacks = await garrison_stacks(session, attacker.id, for_update=True)
         if stacks_power(a_stacks) <= 0:
             raise ClanError("empty_garrison")
         d_stacks = await garrison_stacks(session, defender.id, for_update=True)
-        a_power, d_power = stacks_power(a_stacks), stacks_power(d_stacks)
-        if d_power > 0:
-            result = simulate_battle(
-                a_stacks, d_stacks,
-                attacker_chances=await _chances(session, attacker, True),
-                defender_chances=await _chances(session, defender, False),
-                rng=rng,
-            )
-            await apply_losses(session, attacker.id, result.attacker.dead)
-            await apply_losses(session, defender.id, result.defender.dead)
-            won, rounds = result.attacker_won, result.rounds
-            a_dead, d_dead = result.attacker.total_dead, result.defender.total_dead
-        else:
-            won, rounds, a_dead, d_dead = True, 0, 0, 0  # пустая рота — сдача без боя
-
-        lands_taken = lands_gained = treasury = 0
-        lost: dict[str, int] = {}
-        if won:
-            ratio = a_power / d_power if d_power > 0 else _NO_ARMY_RATIO
-            lands_taken = war_lands(ratio, defender.lands)
-            lands_gained = max(0, min(lands_taken, max_lands(attacker) - attacker.lands))
-            defender.lands -= lands_taken
-            attacker.lands += lands_gained
-            treasury = defender.treasury * CLAN_WAR_TREASURY_PERCENT // 100
-            defender.treasury -= treasury
-            attacker.treasury += treasury
-            lost = _cut_buildings(await clan_repo.buildings(session, defender.id), defender.lands)
-            for kind, n in lost.items():
-                await clan_repo.add_building(session, defender.id, kind, -n)
-        now = _now()
-        attacker.last_attack_at = now
-        defender.shield_until = now + timedelta(hours=CLAN_WAR_SHIELD_HOURS if won else CLAN_WAR_SHIELD_WIN_HOURS)
-        if CLAN_WAR_ATTACKER_SHIELD_HOURS > 0:
-            attacker.shield_until = now + timedelta(hours=CLAN_WAR_ATTACKER_SHIELD_HOURS)
-        await clan_repo.add_war(
-            session, attacker_id=attacker.id, defender_id=defender.id, attacker_name=attacker.name, defender_name=defender.name,
-            attacker_won=won, lands_taken=lands_taken, treasury_taken=treasury, attacker_power=a_power, defender_power=d_power,
-            attacker_dead=a_dead, defender_dead=d_dead,
-        )
-        actor = await _name(session, user_id)
-        await clan_repo.bump_stats(session, attacker.id, user_id, wars=1, wars_won=int(won), lands_won=lands_gained)
-        verdict = "победа" if won else "поражение"
-        await clan_repo.log(session, attacker.id, f"⚔️ {actor} напал(а) на «{defender.name}»: {verdict}, земель +{lands_gained}")
-        await clan_repo.log(session, defender.id, f"🛡 «{attacker.name}» напал на клан: {'оборона прорвана' if won else 'отбились'}, земель −{lands_taken}")
-        outcome = WarOutcome(
-            attacker.id, defender.id, attacker.name, defender.name, won, rounds, a_power, d_power, a_dead, d_dead,
-            lands_taken, lands_gained, treasury, lost,
-            await clan_repo.member_ids(session, attacker.id), await clan_repo.member_ids(session, defender.id),
-        )
+        if stacks_power(d_stacks) <= 0:  # пустая рота — сдача без боя
+            outcome = await _apply_outcome(session, user_id, attacker, defender, True, 0, stacks_power(a_stacks), 0, 0, 0)
+            await session.commit()
+            return outcome
+        battle = WarBattle(attacker.id, defender.id, attacker.name, defender.name, a_stacks, d_stacks,
+                           await _chances(session, attacker, True), await _chances(session, defender, False))
+        attacker.last_attack_at = _now()
         await session.commit()
-        return outcome
+        return battle
     except Exception:
         await session.rollback()
         raise
     finally:
         await redis.delete(lock)
+
+
+async def finish_attack(session: AsyncSession, user_id: int, attacker_id: int, defender_id: int, result) -> WarOutcome | None:
+    """Итог онлайн-войны: потери рот и последствия. Клан исчез за время боя — None. Коммитит."""
+    locked = {}
+    for cid in sorted((attacker_id, defender_id)):
+        locked[cid] = await clan_repo.get(session, cid, for_update=True)
+    attacker, defender = locked[attacker_id], locked[defender_id]
+    if attacker is None or defender is None:
+        await session.rollback()
+        return None
+    await apply_losses(session, attacker.id, result.attacker.dead)
+    await apply_losses(session, defender.id, result.defender.dead)
+    outcome = await _apply_outcome(
+        session, user_id, attacker, defender, result.attacker_won, result.rounds, result.attacker.initial_power,
+        result.defender.initial_power, result.attacker.total_dead, result.defender.total_dead,
+    )
+    await session.commit()
+    return outcome
+
+
+@dataclass(frozen=True, slots=True)
+class WarBattle:
+    attacker_id: int
+    defender_id: int
+    attacker_name: str
+    defender_name: str
+    a_stacks: list
+    d_stacks: list
+    a_chances: object
+    d_chances: object
+
+
+async def attack(session: AsyncSession, redis: Redis, user_id: int, target_id: int, rng: random.Random | None = None) -> WarOutcome:
+    """Война целиком мгновенно (для тестов и симуляций; в игре — онлайн-бой `services/arena.start_clan_war`)."""
+    b = await start_attack(session, redis, user_id, target_id)
+    if isinstance(b, WarOutcome):
+        return b
+    result = simulate_battle(b.a_stacks, b.d_stacks, attacker_chances=b.a_chances, defender_chances=b.d_chances, rng=rng)
+    out = await finish_attack(session, user_id, b.attacker_id, b.defender_id, result)
+    assert out is not None
+    return out
 
 
 async def history(session: AsyncSession, clan_id: int):

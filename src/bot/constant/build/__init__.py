@@ -3,6 +3,7 @@ from bot.constant.build.build import (  # noqa: F401
     SOURCES,
     SOURCE_BLOODLINE,
     SOURCE_BLOODLINE2,
+    SOURCE_MASTERY,
     SOURCE_GENIUS,
     SOURCE_PATH,
     SOURCE_PATH2,

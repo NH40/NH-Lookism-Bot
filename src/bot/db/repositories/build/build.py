@@ -96,3 +96,12 @@ async def list_memory(session: AsyncSession, user_id: int, limit: int) -> Sequen
         .limit(limit)
     )
     return [(r[0], r[1]) for r in rows.all()]
+
+
+async def learned_mastery_techniques(session: AsyncSession, user_id: int) -> list[str]:
+    """Коды изученных техник мастерства (пассивы в билде, 2026-11-23)."""
+    from sqlalchemy import select
+
+    from bot.db.models.development import MasteryTechnique
+
+    return list((await session.execute(select(MasteryTechnique.code).where(MasteryTechnique.user_id == user_id))).scalars().all())

@@ -144,10 +144,23 @@ def _mastery_mods(mastery: str, tier: int) -> tuple[CombatMods, float]:
 
 
 def mastery_perks() -> list[Perk]:
+    """Свой приём у каждой из 36 техник мастерства (`config/arena/moves.MASTERY_MOVES`, 2026-11-23); пассив — в билде."""
+    from bot.config.arena.moves import MASTERY_MOVE_COOLDOWN, MASTERY_MOVE_COST, MASTERY_MOVES
+
     out = []
     for mastery, tiers in MASTERY_TREES.items():
         for tier, techs in enumerate(tiers, 1):
-            mods, dmg = _mastery_mods(mastery, tier)
             for t in techs:
-                out.append(_p(f"mt:{t.code}", t.name, t.about, 2 + tier, 2 + tier // 2, self_mods=mods, damage=dmg))
+                if t.code not in MASTERY_MOVES:
+                    mods, dmg = _mastery_mods(mastery, tier)
+                    out.append(_p(f"mt:{t.code}", t.name, t.about, 2 + tier, 2 + tier // 2, self_mods=mods, damage=dmg))
+                    continue
+                mv = MASTERY_MOVES[t.code][0]
+                mini = "enemy" if mv.power else None
+                out.append(_p(
+                    f"mt:{t.code}", mv.name, f"{t.name}: {mv.about}", MASTERY_MOVE_COST[tier - 1], MASTERY_MOVE_COOLDOWN[tier - 1],
+                    self_mods=mv.mods, enemy_mods=mv.enemy, damage=mv.damage, enemy_damage=mv.enemy_damage,
+                    minigame=mini, game="reaction" if mini else None, power=mv.power, copy_share=mv.copy_share,
+                    energy_gain=mv.energy_gain,
+                ))
     return out

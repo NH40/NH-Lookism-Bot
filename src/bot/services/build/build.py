@@ -295,6 +295,12 @@ async def _compute_build(session: AsyncSession, user_id: int) -> Build:
     technique_power = sum(e.eco.technique_power for e in effects.values())
     if technique_power:
         combat_parts[SOURCE_TECHNIQUE] = combat_parts[SOURCE_TECHNIQUE].scale(1 + technique_power)
+    # Пассивы изученных техник мастерства (2026-11-23) — свой источник: виден в разборе боя, его можно копировать.
+    from bot.config.arena.moves import MASTERY_MOVES
+    from bot.constant.build import SOURCE_MASTERY
+    learned = await build_repo.learned_mastery_techniques(session, user_id)
+    if learned:
+        combat_parts[SOURCE_MASTERY] = sum_mods(MASTERY_MOVES[c][1] for c in learned if c in MASTERY_MOVES)
     resonance = _resonance(row)
     # Родословная Гапрена усиливает сам резонанс «трёх камней» (`resonance_bonus`).
     extra_combat = (

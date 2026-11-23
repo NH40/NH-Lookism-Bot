@@ -186,3 +186,53 @@ BLOOD_MOVES: dict[str, tuple[Move, Move, Move, Move]] = {
         Move("Монополия", "Урон ×2; мини-игра противнику — провал: его урон до −50%.", damage=2.0, power=0.5),
     ),
 }
+
+
+# Техники мастерства (36): приём (кнопка в бою, цена/КД по ступени дерева) + пассив на весь бой, пока техника изучена
+# (пассив — источник «mastery» в билде, `services/build`). Упрощения против черновика: «Чем хуже, тем злее» — атака
+# +30% с 20% потерь (адаптация); пассив «Абсолютного копирования» — атака +5% (пассивное копирование — только у пути).
+MASTERY_MOVE_COST: tuple[int, ...] = (2, 3, 4)
+MASTERY_MOVE_COOLDOWN: tuple[int, ...] = (2, 2, 3)
+
+MASTERY_MOVES: dict[str, tuple[Move, CombatMods]] = {
+    # Сила
+    "ssireum": (Move("Бросок через корпус", "Захват 20% армии противника, бросок бьёт.", M(grab_chance=1.0, grab_share=0.2, throw_power=0.3)), M(durability=0.05)),
+    "yakuza": (Move("Без правил", "Урон ×1.3, атака +15%.", M(attack=0.15), damage=1.3), M(ramp=0.03)),
+    "mandeok_brute": (Move("Сквозь блок", "Пробитие 40%.", M(pierce=0.4)), M(attack=0.05)),
+    "king_fist": (Move("Кулак короля", "Урон ×1.5, пробитие 25%.", M(pierce=0.25), damage=1.5), M(pierce=0.05)),
+    "vinjin_kick": (Move("Пробивной пинок", "Урон ×1.4, 25% атаки наверняка.", M(sure_hit=0.25), damage=1.4), M(attack=0.06)),
+    "heavy_hand": (Move("Вес тела", "Урон ×1.6.", damage=1.6), M(crit_power=0.15)),
+    "gapryong_fist": (Move("Сквозь стену", "Урон ×1.8, пробитие 50%.", M(pierce=0.5), damage=1.8), M(attack=0.1)),
+    "mandeok_quake": (Move("Землетрясение", "Захват 20% строя противника, удар по нескольким целям +40%.", M(grab_chance=1.0, grab_share=0.2, cleave=0.4)), M(durability=0.08)),
+    "taejin_power": (Move("Выкованная мощь", "Урон ×1.7, гашение 10%.", M(reduction=0.1), damage=1.7), M(attack=0.08, durability=0.05)),
+    # Скорость
+    "zack_jab": (Move("Джеб", "Удар до обмена: выбивает 4% армии противника.", M(first_strike=0.04)), M(opening=0.1)),
+    "jake_step": (Move("Шаг и встречный", "Уклонение +15%, контратака +15%.", M(dodge=0.15, counter=0.15)), M(dodge=0.03)),
+    "taekkyeon": (Move("Танец", "Уклонение +20%.", M(dodge=0.2)), M(dodge=0.03)),
+    "jaegyeon_speed": (Move("Быстрейший", "Дополнительный удар 60%.", M(multi_hit=0.6)), M(multi_hit=0.08)),
+    "johan_choreo": (Move("Связка без пауз", "Доп. удары +40%, урон ×1.2.", M(multi_hit=0.4), damage=1.2), M(multi_hit=0.06)),
+    "warren_rush": (Move("Рывок", "Натиск +50% в этом раунде.", M(rush=0.5, rush_rounds=10)), M(rush=0.1, rush_rounds=2)),
+    "jinyoung_instant": (Move("За гранью реакции", "Реакции противника −40%.", M(suppress=0.4)), M(suppress=0.05)),
+    "johan_shadow": (Move("Остаточный образ", "40% уклонения не сбить подавлением, шанс крита +20%.", M(dodge_true=0.4, crit_chance=0.2)), M(dodge=0.05)),
+    "sinu_storm": (Move("Шторм", "Доп. удары +100%.", M(multi_hit=1.0)), M(multi_hit=0.1)),
+    # Выносливость
+    "kyokushin_body": (Move("Полный контакт", "Прочность +25%.", M(durability=0.25)), M(durability=0.05)),
+    "systema_breath": (Move("Дыхание", "Гашение 20%, +1⚡.", M(reduction=0.2), energy_gain=1), M(reduction=0.03)),
+    "seokdu_iron": (Move("Железо", "Гашение 25%.", M(reduction=0.25)), M(durability=0.06)),
+    "pichon_blood": (Move("Вторая кровь", "15% павших встают и бьют, лечение +5%.", M(revive_strike=0.15, heal=0.05)), M(heal=0.03)),
+    "zack_wind": (Move("Встать после нокдауна", "12% павших встают и бьют, урон ×1.2.", M(revive_strike=0.12), damage=1.2), M(loss_save=0.05)),
+    "eli_wild": (Move("Чем хуже, тем злее", "Атака +30%, когда потеряно 20% армии и больше.", M(adapt_bonus=0.3, adapt_threshold=0.2)), M(reduction=0.04)),
+    "gapryong_will": (Move("Не сломать", "Спасение павших +30%, прочность +20%.", M(loss_save=0.3, durability=0.2)), M(loss_save=0.08)),
+    "mandeok_wall": (Move("Стена", "Гашение 35%.", M(reduction=0.35)), M(reduction=0.06)),
+    "seongji_iron": (Move("До последнего", "Никто не бежит: побег обеих сторон — 0; прочность +30%.", M(flee=-1.0, durability=0.3), enemy=M(flee=-1.0)), M(durability=0.08)),
+    # Техника
+    "johan_eye": (Move("Повтор", "На раунд копирует 15% бафов противника.", copy_share=0.15), M(crit_chance=0.03)),
+    "kim_grips": (Move("Болевой захват", "Захват 15%, кровотечение 15%.", M(grab_chance=1.0, grab_share=0.15, bleed=0.15)), M(pierce=0.04)),
+    "pen_sword": (Move("Клинок из ничего", "30% атаки наверняка, шанс крита +15%.", M(sure_hit=0.3, crit_chance=0.15)), M(sure_hit=0.04)),
+    "god_eye": (Move("Читает движения", "Уклонение +20%, реакции противника −20%.", M(dodge=0.2, suppress=0.2)), M(dodge=0.04)),
+    "moonlight_sword": (Move("Невидимый удар", "Невидимый удар: шанс 50%.", M(phantom_chance=0.5, phantom_power=0.3)), M(crit_chance=0.05)),
+    "warren_jkd": (Move("Перехват", "Контратака +25%, сила контратак +60%.", M(counter=0.25, counter_power=0.6)), M(counter=0.04)),
+    "daniel_copy": (Move("Абсолютная копия", "На раунд копирует 30% бафов противника.", copy_share=0.3), M(attack=0.05)),
+    "goo_four_swords": (Move("Четыре меча", "Доп. удары +80%, шанс крита +25%.", M(multi_hit=0.8, crit_chance=0.25)), M(crit_chance=0.06, sure_hit=0.04)),
+    "killing_intent": (Move("Давление", "Противник проходит мини-игру — провал: его урон до −50%.", power=0.5), M(suppress=0.06)),
+}

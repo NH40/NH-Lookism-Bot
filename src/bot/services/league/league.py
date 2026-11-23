@@ -93,20 +93,27 @@ async def promote(session: AsyncSession, user_id: int, league: int) -> None:
     await session.commit()
 
 
-async def daily_sweep(session_factory: async_sessionmaker[AsyncSession]) -> list[tuple[int, int]]:
-    """Пересчитать счёт всем и повысить заслуживших (только вверх). → [(игрок, новая лига)]."""
+async def daily_sweep(session_factory: async_sessionmaker[AsyncSession]) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
+    """Пересчитать счёт всем, повысить заслуживших и (лиги по силе) опустить неактивных на одну лигу.
+    → ([(игрок, новая лига) повышенные], [(игрок, новая лига) опущенные])."""
+    from bot.config import league as cfg
     from bot.services.top import refresh_powers
 
     # До разового запуска все ещё в первой лиге: иначе проход поднял бы всех сразу и снял им территорию.
     async with session_factory() as session:
         if not await session.scalar(text("SELECT 1 FROM users WHERE league > 0 LIMIT 1")):
-            return []
+            return [], []
     await refresh_powers(session_factory, everyone=True)
     async with session_factory() as session:
         scores = await compute_scores(session)
         await repo.set_scores(session, [(u, s) for u, _, s, _ in scores])
+        inactive: set[int] = set()
+        if cfg.league.LEAGUE_STATIC_AXES:
+            inactive = {int(u) for (u,) in (await session.execute(text(
+                "SELECT id FROM users WHERE league > 0 AND last_active_at < now() - make_interval(days => :d)"
+            ), {"d": int(cfg.league.LEAGUE_INACTIVE_DAYS)})).all()}
         await session.commit()
-    promoted = []
+    promoted, demoted = [], []
     token = set_source("league:promotion")
     try:
         for user_id, current, _score, target in scores:
@@ -114,9 +121,13 @@ async def daily_sweep(session_factory: async_sessionmaker[AsyncSession]) -> list
                 async with session_factory() as session:
                     await promote(session, user_id, target)
                 promoted.append((user_id, target))
+            elif target < current and user_id in inactive:  # неактивный и уже слабее своей лиги — на одну вниз
+                async with session_factory() as session:
+                    await promote(session, user_id, current - 1)
+                demoted.append((user_id, current - 1))
     finally:
         reset_source(token)
-    return promoted
+    return promoted, demoted
 
 
 async def sweep_due(redis: Redis) -> bool:

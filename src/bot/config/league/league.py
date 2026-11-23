@@ -60,6 +60,9 @@ SCORE_CLAN_TOP25 = 30
 LEAGUE_STATIC_AXES = 0
 LEAGUE_POWER_THRESHOLDS: tuple[int, ...] = (0, 1_000_000, 10_000_000, 100_000_000, 500_000_000)
 LEAGUE_DEV_THRESHOLDS: tuple[int, ...] = (0, 150, 350, 600, 900)
+# Вниз — только неактивный (пользователь 2026-11-23): не заходил столько дней и по силе уже ниже своей лиги — на одну
+# лигу за пересчёт, территория уходит ботам. Только при включённых лигах по силе.
+LEAGUE_INACTIVE_DAYS = 14
 
 
 def _by(thresholds: tuple[int, ...], value: float) -> int:

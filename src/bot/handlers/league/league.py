@@ -19,11 +19,15 @@ log = logging.getLogger(__name__)
 _PUSHES_PER_SECOND = 20
 
 
-async def send_promotions(bot: Bot, session_factory: async_sessionmaker[AsyncSession], promoted: list[tuple[int, int]]) -> None:
+async def send_promotions(bot: Bot, session_factory: async_sessionmaker[AsyncSession], promoted: list[tuple[int, int]],
+                          *, demoted: bool = False) -> None:
+    from bot.config.league import LEAGUE_INACTIVE_DAYS
+    from bot.texts.league import DEMOTED
+
     async with session_factory() as session:
         closed = await closed_entries(session)
     for i, (user_id, league) in enumerate(promoted, 1):
-        text = PROMOTED.format(name=LEAGUES[league].name, income=round(LEAGUE_INCOME_STEP * league * 100), power=round(LEAGUE_POWER_STEP * league * 100))
+        text = DEMOTED.format(name=LEAGUES[league].name, days=LEAGUE_INACTIVE_DAYS) if demoted else PROMOTED.format(name=LEAGUES[league].name, income=round(LEAGUE_INCOME_STEP * league * 100), power=round(LEAGUE_POWER_STEP * league * 100))
         await notify(bot, user_id, text, reply_markup=country_menu(closed, league))
         if i % _PUSHES_PER_SECOND == 0:
             await asyncio.sleep(1)
@@ -37,9 +41,10 @@ async def league_loop(bot: Bot, session_factory: async_sessionmaker[AsyncSession
     while True:
         try:
             if await sweep_due(redis):
-                promoted = await daily_sweep(session_factory)
-                log.info("League sweep: promoted %d", len(promoted))
+                promoted, demoted = await daily_sweep(session_factory)
+                log.info("League sweep: promoted %d, demoted %d", len(promoted), len(demoted))
                 await send_promotions(bot, session_factory, promoted)
+                await send_promotions(bot, session_factory, demoted, demoted=True)
         except Exception:
             log.exception("League sweep failed")
         # Пересчёт из Mini App идёт здесь, в процессе бота: пересчёт мощи всем тяжёлый, у API лимит памяти меньше.

@@ -1,5 +1,6 @@
 """Публичное API домена league (тексты)."""
 from bot.texts.league.league import (  # noqa: F401
+    DEMOTED,
     LEAGUE_BAR,
     LEAGUE_BUFF,
     LEAGUE_HEAD,

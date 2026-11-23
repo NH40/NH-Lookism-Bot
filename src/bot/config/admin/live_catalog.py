@@ -228,6 +228,7 @@ SCALARS: dict[str, tuple[str, str, str]] = {
     "MASTERY_STAGE_DELAY_MULT": ("dev", "bot.config.mastery.mastery", "Мастерство: рост задержки по этапам"),
     "MASTERY_POINTS_PER_STAGE": ("dev", "bot.config.mastery.mastery", "Мастерство: очков за этап"),
     "EQUAL_WIN_POWER_PERCENT": ("dev", "bot.config.mastery.mastery", "Мастерство: «равный» по мощи, ±%"),
+    "LEAGUE_INACTIVE_DAYS": ("league", "bot.config.league.league", "Лиги: дней без входа, после которых неактивный опускается"),
     "LEAGUE_STATIC_AXES": ("league", "bot.config.league.league", "Лиги по мощи и силе развития: 1 — включено, 0 — прежний счёт"),
     "TOM_POWER_MIN": ("dev", "bot.config.mastery.mastery", "Том Ли: минимум мощи"),
     "PATH_AWAKEN_FRAGMENTS": ("dev", "bot.config.unique_path.unique_path", "Путь: фрагментов для пробуждения"),

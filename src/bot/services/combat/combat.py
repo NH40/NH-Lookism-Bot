@@ -980,6 +980,10 @@ class BattleRun:
         if d_extra is not None:
             d.mods = d.mods + d_extra
         a_dead_before, d_dead_before = sum(a.dead.values()), sum(d.dead.values())
+        # Удар до обмена от действия раунда (приём «Первым» и т.п., 2026-11-23); стартовый — в __init__.
+        for side, target, extra in ((a, d, a_extra), (d, a, d_extra)):
+            if extra is not None and extra.first_strike > 0:
+                side.kills += _first_strike(target, extra.first_strike * (1 - min(1.0, target.mods.slow)), rng)
         am, dm = _round_mods(a, round_number), _round_mods(d, round_number)
         a.round_dead, d.round_dead = {}, {}
         a.events, d.events = [], []

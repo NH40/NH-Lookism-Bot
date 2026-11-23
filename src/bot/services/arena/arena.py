@@ -252,7 +252,7 @@ def _resolve_action(side: dict, action: dict | None, round_no: int, own_power: f
         return DEFEND, ARENA_DEFEND_DAMAGE, None
     if kind == PERK and _ready(side, action.get("perk", ""), round_no):
         perk = PERK_REGISTRY[action["perk"]]
-        dmg = perk.damage
+        dmg = perk.first_round_damage if (perk.first_round_damage and round_no == 1) else perk.damage
         if perk.minigame == "self":
             score = max(0.0, min(1.0, float(action.get("score", 0.0))))
             dmg *= 1 + perk.power * score

@@ -25,6 +25,7 @@ class Perk:
     game: str | None = None  # код мини-игры (`config/minigame`)
     power: float = 0.0  # сила эффекта мини-игры: self — +урон за идеальную игру, enemy — −урон противнику за провал
     ai_weight: float = 1.0  # как охотно автоатака его жмёт
+    first_round_damage: float = 0.0  # приём в первом раунде боя бьёт этим множителем вместо `damage` (Удар одного шага)
 
 
 BASE_PERKS: dict[str, Perk] = {p.code: p for p in (

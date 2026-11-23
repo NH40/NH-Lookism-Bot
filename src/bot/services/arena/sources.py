@@ -40,7 +40,63 @@ async def perks_for(session: AsyncSession, user_id: int, *, include_off: bool = 
     from bot.db.models.user import User
 
     off = set(await session.scalar(select(User.arena_perks_off).where(User.id == user_id)) or [])
-    return [c for c in out if c not in off]
+    return _cap([c for c in out if c not in off])
+
+
+def _cap(enabled: list[str]) -> list[str]:
+    """Набор на бой — не больше `ARENA_LOADOUT_MAX`: лишние (игрок ещё не настраивал) — отсекаются по силе для
+    автобоя (`perk_value`), порядок показа сохраняется."""
+    from bot.config.arena import ARENA_LOADOUT_MAX
+    from bot.services.arena.arena import PERK_REGISTRY, perk_value
+
+    if len(enabled) <= ARENA_LOADOUT_MAX:
+        return enabled
+    keep = set(sorted(enabled, key=lambda c: (-perk_value(PERK_REGISTRY[c]), c))[:ARENA_LOADOUT_MAX])
+    return [c for c in enabled if c in keep]
+
+
+class LoadoutFullError(Exception):
+    """В наборе уже `ARENA_LOADOUT_MAX` перков — сначала выключи другой."""
+
+
+async def loadout(session: AsyncSession, user_id: int) -> tuple[list[str], list[str], bool]:
+    """Экран набора: (все доступные перки, те, что в наборе на бой, «начинать на автобое»)."""
+    from sqlalchemy import select
+
+    from bot.db.models.user import User
+
+    row = (await session.execute(select(User.arena_perks_off, User.arena_auto_default).where(User.id == user_id))).one()
+    every = await perks_for(session, user_id, include_off=True)
+    off = set(row[0] or [])
+    return every, _cap([c for c in every if c not in off]), bool(row[1])
+
+
+async def toggle_loadout(session: AsyncSession, user_id: int, code: str) -> None:
+    """Перк в набор / из набора. Первое изменение фиксирует набор (то, что не влезло в 8, — выключается), девятый
+    не включить. Коммитит."""
+    from sqlalchemy import update
+
+    from bot.config.arena import ARENA_LOADOUT_MAX
+    from bot.db.models.user import User
+
+    every, chosen, _ = await loadout(session, user_id)
+    if code not in every:
+        return
+    chosen = [c for c in chosen if c != code] if code in chosen else chosen + [code]
+    if len(chosen) > ARENA_LOADOUT_MAX:
+        raise LoadoutFullError
+    off = [c for c in every if c not in chosen]
+    await session.execute(update(User).where(User.id == user_id).values(arena_perks_off=off))
+    await session.commit()
+
+
+async def set_auto_default(session: AsyncSession, user_id: int, on: bool) -> None:
+    from sqlalchemy import update
+
+    from bot.db.models.user import User
+
+    await session.execute(update(User).where(User.id == user_id).values(arena_auto_default=bool(on)))
+    await session.commit()
 
 
 async def energy_for(session: AsyncSession, user_id: int) -> tuple[int, int, int]:

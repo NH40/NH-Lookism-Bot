@@ -5,7 +5,7 @@ from collections.abc import Sequence
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from bot.constant.mastery import CB_MASTERY_INVEST_PREFIX, CB_MASTERY_OPEN, CB_MASTERY_TOM_FIGHT
+from bot.constant.mastery import CB_MASTERY_LOADOUT, CB_MASTERY_INVEST_PREFIX, CB_MASTERY_OPEN, CB_MASTERY_TOM_FIGHT
 from bot.constant.profile import CB_PROFILE_OPEN
 from bot.texts.common import BTN_BACK_TO_PROFILE
 from bot.texts.mastery import BTN_FIGHT_TOM, BTN_FIGHT_TOM_ONLINE, BTN_INVEST, BTN_OPEN_MASTERY
@@ -24,6 +24,7 @@ def mastery_menu(*, tom: bool, investable: Sequence[str], tom_fight: bool = Fals
     invest = [_btn(BTN_INVEST.format(label=MASTERY_LABELS[m]), f"{CB_MASTERY_INVEST_PREFIX}{m}") for m in investable]
     rows.extend(invest[i : i + 2] for i in range(0, len(invest), 2))
     rows.append([_btn("🌳 Техники мастерства", "mastery:tree")])
+    rows.append([_btn("⚔️ Набор в бой", CB_MASTERY_LOADOUT)])
     rows.append([_btn(BTN_BACK_TO_PROFILE, CB_PROFILE_OPEN)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

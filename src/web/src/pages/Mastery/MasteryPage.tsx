@@ -5,6 +5,8 @@ import type { MasteryData } from "../../types";
 import { BackHeader, Bar, Panel, Screen, StatRow, fmt } from "../../components/ui";
 import { ROUTE_DEVELOPMENT, ROUTE_PLAY, battlePath } from "../../constants/constants";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { ArenaPerksSheet } from "../../components/ArenaPerksSheet";
 import { useAction, useApi } from "../../hooks/useApi";
 import "./Mastery.css";
 
@@ -20,12 +22,17 @@ export function MasteryPage() {
   const { data, status, error, reload } = useApi<MasteryData>("/mastery");
   const { run, busy } = useAction(reload);
   const navigate = useNavigate();
+  const [loadoutOpen, setLoadoutOpen] = useState(false);
 
   return (
     <Screen status={status} error={error}>
       {data && (
         <div className="page">
           <BackHeader title="Мастерство" backLabel="Развитие" to={ROUTE_DEVELOPMENT} />
+          <button type="button" className="btn block" style={{ marginBottom: 10 }} onClick={() => setLoadoutOpen(true)}>
+            ⚔️ Набор в бой — способности и автобой
+          </button>
+          {loadoutOpen && <ArenaPerksSheet onClose={() => setLoadoutOpen(false)} />}
 
           <Panel title="Ступени">
             {data.tiers.map((t) => (

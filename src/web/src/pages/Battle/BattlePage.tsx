@@ -157,6 +157,13 @@ export function BattlePage() {
   const [info, setInfo] = useState<Perk | null>(null);
   const [perksOpen, setPerksOpen] = useState(false);
   const [fullLog, setFullLog] = useState(readLogMode);
+  const [perksHidden, setPerksHidden] = useState(() => {
+    try { return localStorage.getItem("lbp.battle.perksHidden") === "1"; } catch { return false; }
+  });
+  const togglePerks = () => {
+    setPerksHidden(!perksHidden);
+    try { localStorage.setItem("lbp.battle.perksHidden", perksHidden ? "0" : "1"); } catch { /* приватный режим */ }
+  };
   const lastRound = useRef(0);
 
   const apply = useCallback((v: BattleView) => {
@@ -278,8 +285,10 @@ export function BattlePage() {
           </div>
           {b.perks.length > 0 && (
             <>
-              <div className="bt-sub">Способности <small>{b.perks.filter((p) => p.ready_in === 0 && p.affordable).length} из {b.perks.length} готовы</small></div>
-              <div className="bt-plist">
+              <div className="bt-sub">Способности <small>{b.perks.filter((p) => p.ready_in === 0 && p.affordable).length} из {b.perks.length} готовы</small>
+                <button type="button" className="bt-why-btn" style={{ marginLeft: "auto" }} onClick={togglePerks}>{perksHidden ? "показать" : "скрыть"}</button>
+              </div>
+              {!perksHidden && <div className="bt-plist">
                 {b.perks.map((p) => {
                   const ok = canAct && p.ready_in === 0 && p.affordable;
                   const tag = p.ready_in > 0 ? `⏳ ${p.ready_in} р.` : !p.affordable ? "мало ⚡" : null;
@@ -292,7 +301,7 @@ export function BattlePage() {
                     </button>
                   );
                 })}
-              </div>
+              </div>}
             </>
           )}
         </>

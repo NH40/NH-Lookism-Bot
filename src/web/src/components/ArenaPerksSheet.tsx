@@ -1,42 +1,60 @@
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "../api";
 import { Sheet } from "./Sheet";
+import { useToast } from "./ui";
 
-// Способности для онлайн-боёв (2026-11-20, просьба игрока): отключённые не попадают в бой и автоатака их не жмёт.
+// Набор на бой (2026-11-23): в бою и у автобоя — только способности из набора, не больше `max` (8).
+// Без настройки в набор идут самые сильные. Там же — «начинать бой на автобое».
 interface PerkRow { code: string; name: string; about: string; cost: number; cooldown: number; minigame: string | null; source: string; off: boolean }
+interface Loadout { perks: PerkRow[]; max: number; auto_default: boolean }
 
 export function ArenaPerksSheet({ onClose }: { onClose: () => void }) {
-  const [perks, setPerks] = useState<PerkRow[] | null>(null);
+  const toast = useToast();
+  const [data, setData] = useState<Loadout | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  useEffect(() => { apiGet<{ perks: PerkRow[] }>("/arena/perks").then((d) => setPerks(d.perks)).catch(() => setPerks([])); }, []);
-  const toggle = async (p: PerkRow) => {
-    setBusy(p.code);
+  useEffect(() => {
+    apiGet<Loadout>("/arena/perks").then(setData).catch(() => setData({ perks: [], max: 8, auto_default: false }));
+  }, []);
+  const call = async (key: string, path: string, body: object) => {
+    setBusy(key);
     try {
-      setPerks((await apiPost<{ perks: PerkRow[] }>("/arena/perks", { code: p.code, off: !p.off })).perks);
+      setData(await apiPost<Loadout>(path, body));
+    } catch (e) {
+      toast(String((e as Error).message || e)); // «в наборе уже 8 — сначала выключи другую»
     } finally {
       setBusy(null);
     }
   };
-  const on = perks?.filter((p) => !p.off).length ?? 0;
+  const on = data?.perks.filter((p) => !p.off).length ?? 0;
   return (
-    <Sheet title="Способности в бою" onClose={onClose}>
-      <p className="muted" style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 700 }}>
-        Выключенные не появятся в онлайн-боях, и автоатака не будет их использовать. Изменения — со следующего боя.
-        {perks && ` Включено ${on} из ${perks.length}.`}
-      </p>
-      {!perks ? <div className="skeleton" style={{ height: 200 }} /> : (
-        <div className="ap-list">
-          {perks.map((p) => (
-            <button key={p.code} type="button" className={`ap-row ${p.off ? "off" : ""}`} disabled={busy === p.code} onClick={() => toggle(p)}>
-              <span className="ap-txt">
-                <b>{p.minigame === "self" ? "🎮 " : p.minigame === "enemy" ? "🎯 " : ""}{p.name}</b>
-                <small>{p.source} · ⚡{p.cost} · перезарядка {p.cooldown} р.</small>
-                <small className="ap-about">{p.about}</small>
-              </span>
-              <span className={`ap-switch ${p.off ? "" : "on"}`}><i /></span>
-            </button>
-          ))}
-        </div>
+    <Sheet title="Набор в бой" onClose={onClose}>
+      {!data ? <div className="skeleton" style={{ height: 200 }} /> : (
+        <>
+          <button type="button" className={`ap-row ${data.auto_default ? "" : "off"}`} disabled={busy === "auto"}
+            onClick={() => call("auto", "/arena/prefs", { auto_default: !data.auto_default })}>
+            <span className="ap-txt">
+              <b>🤖 Начинать бой на автобое</b>
+              <small className="ap-about">В самом бою автобой можно выключить и ходить самому.</small>
+            </span>
+            <span className={`ap-switch ${data.auto_default ? "on" : ""}`}><i /></span>
+          </button>
+          <p className="muted" style={{ margin: "10px 0", fontSize: 12, fontWeight: 700 }}>
+            В наборе <b>{on} из {data.max}</b>. В бою на панели и у автобоя — только они. Изменения — со следующего боя.
+          </p>
+          <div className="ap-list">
+            {data.perks.map((p) => (
+              <button key={p.code} type="button" className={`ap-row ${p.off ? "off" : ""}`} disabled={busy === p.code}
+                onClick={() => call(p.code, "/arena/perks", { code: p.code, off: !p.off })}>
+                <span className="ap-txt">
+                  <b>{p.minigame === "self" ? "🎮 " : p.minigame === "enemy" ? "🎯 " : ""}{p.name}</b>
+                  <small>{p.source} · ⚡{p.cost} · перезарядка {p.cooldown} р.</small>
+                  <small className="ap-about">{p.about}</small>
+                </span>
+                <span className={`ap-switch ${p.off ? "" : "on"}`}><i /></span>
+              </button>
+            ))}
+          </div>
+        </>
       )}
     </Sheet>
   );

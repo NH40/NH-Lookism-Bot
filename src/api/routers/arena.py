@@ -222,36 +222,39 @@ _SOURCE_NAMES = {"base": "Базовый", "tech": "Техника", "path": "П
 
 @router.get("/perks")
 async def my_perks(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
-    """Способности для онлайн-боёв (2026-11-20): все доступные перки игрока и какие отключены."""
-    from sqlalchemy import select
+    """Набор на бой (2026-11-23): все доступные перки, какие в наборе (не больше 8), «начинать на автобое»."""
+    from bot.config.arena import ARENA_LOADOUT_MAX
 
-    from bot.db.models.user import User
-    from bot.services.arena.sources import perks_for
-
-    codes = await perks_for(session, user_id, include_off=True)
-    off = set(await session.scalar(select(User.arena_perks_off).where(User.id == user_id)) or [])
+    every, chosen, auto_default = await svc.loadout(session, user_id)
+    picked = set(chosen)
     out = []
-    for c in codes:
+    for c in every:
         p = svc.PERK_REGISTRY[c]
         src = c.split(":", 1)[0] if ":" in c else "base"
         out.append({"code": c, "name": p.name, "about": p.about, "cost": p.cost, "cooldown": p.cooldown,
-                    "minigame": p.minigame, "source": _SOURCE_NAMES.get(src, "Другое"), "off": c in off})
-    return {"perks": out}
+                    "minigame": p.minigame, "source": _SOURCE_NAMES.get(src, "Другое"), "off": c not in picked})
+    return {"perks": out, "max": ARENA_LOADOUT_MAX, "auto_default": auto_default}
 
 
 @router.post("/perks")
 async def toggle_perk(body: PerkToggleIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
-    from sqlalchemy import select, update
+    try:
+        await svc.toggle_loadout(session, user_id, body.code)
+    except svc.LoadoutFullError:
+        from bot.config.arena import ARENA_LOADOUT_MAX
 
-    from bot.db.models.user import User
+        raise bad(f"В наборе уже {ARENA_LOADOUT_MAX} — сначала выключи другую способность.")
+    return await my_perks(user_id, session)
 
-    off = list(await session.scalar(select(User.arena_perks_off).where(User.id == user_id)) or [])
-    if body.off and body.code not in off:
-        off.append(body.code)
-    if not body.off:
-        off = [c for c in off if c != body.code]
-    await session.execute(update(User).where(User.id == user_id).values(arena_perks_off=off))
-    await session.commit()
+
+class PrefsIn(BaseModel):
+    auto_default: bool
+
+
+@router.post("/prefs")
+async def set_prefs(body: PrefsIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    """«Начинать бой на автобое» (2026-11-23)."""
+    await svc.set_auto_default(session, user_id, body.auto_default)
     return await my_perks(user_id, session)
 
 

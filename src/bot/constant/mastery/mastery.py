@@ -21,6 +21,9 @@ TASK_TOM = "tom"  # каждый этап: победить Тома Ли (от�
 CB_MASTERY_OPEN = "mastery:open"
 CB_MASTERY_TOM_FIGHT = "mastery:tom"
 CB_MASTERY_INVEST_PREFIX = "mastery:inv:"
+CB_MASTERY_LOADOUT = "mastery:ld"  # набор перков в бой (2026-11-23)
+CB_MASTERY_LOADOUT_TOGGLE_PREFIX = "mastery:ld:t:"  # + код перка
+CB_MASTERY_LOADOUT_AUTO = "mastery:ld:auto"
 """f"{CB_MASTERY_INVEST_PREFIX}{mastery_code}" — вложить очко мастерства."""
 
 # Прорывы перед этапами 2 и 3 (пользователь 2026-10-28): «сделать что-то грандиозное».

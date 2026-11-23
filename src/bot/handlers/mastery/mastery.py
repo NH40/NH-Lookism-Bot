@@ -13,6 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.constant.characteristic import MASTERIES
 from bot.constant.mastery import (
+    CB_MASTERY_LOADOUT,
+    CB_MASTERY_LOADOUT_AUTO,
+    CB_MASTERY_LOADOUT_TOGGLE_PREFIX,
     CB_MASTERY_INVEST_PREFIX,
     CB_MASTERY_OPEN,
     CB_MASTERY_TOM_FIGHT,
@@ -248,3 +251,63 @@ async def cb_learn(callback: CallbackQuery, session: AsyncSession) -> None:
     await callback.answer(f"Изучено: {name}" + (f" — {found[1].about}" if found else ""), show_alert=True)
     text, markup = await _tree_screen(session, callback.from_user.id)
     await callback.message.edit_text(text, reply_markup=markup)
+
+
+# --- набор перков в бой (2026-11-23) ---
+
+
+async def _loadout_screen(callback: CallbackQuery, session: AsyncSession) -> None:
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    from bot.config.arena import ARENA_LOADOUT_MAX
+    from bot.constant.mastery import CB_MASTERY_OPEN
+    from bot.services import arena
+    from bot.utils.formatting import esc
+
+    every, chosen, auto_default = await arena.loadout(session, callback.from_user.id)
+    picked = set(chosen)
+    lines = [f"⚔️ <b>Набор в бой</b> — {len(chosen)}/{ARENA_LOADOUT_MAX}",
+             "В онлайн-бою на панели только способности из набора; автобой жмёт тоже только их. Изменения — со следующего боя.", ""]
+    rows = []
+    for c in every:
+        p = arena.PERK_REGISTRY[c]
+        mark = "✅" if c in picked else "⬜"
+        lines.append(f"{mark} <b>{esc(p.name)}</b> · ⚡{p.cost} · КД {p.cooldown}\n   <i>{esc(p.about)}</i>")
+        rows.append([InlineKeyboardButton(text=f"{mark} {p.name}"[:60], callback_data=f"{CB_MASTERY_LOADOUT_TOGGLE_PREFIX}{c}")])
+    rows.append([InlineKeyboardButton(text=f"🤖 Начинать бой на автобое: {'вкл' if auto_default else 'выкл'}", callback_data=CB_MASTERY_LOADOUT_AUTO)])
+    rows.append([InlineKeyboardButton(text="◀️ Мастерство", callback_data=CB_MASTERY_OPEN)])
+    text = "\n".join(lines)[:4000]
+    try:
+        await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+    except Exception:  # noqa: BLE001 — то же сообщение
+        pass
+
+
+@router.callback_query(F.data == CB_MASTERY_LOADOUT)
+async def cb_loadout(callback: CallbackQuery, session: AsyncSession) -> None:
+    await callback.answer()
+    await _loadout_screen(callback, session)
+
+
+@router.callback_query(F.data.startswith(CB_MASTERY_LOADOUT_TOGGLE_PREFIX))
+async def cb_loadout_toggle(callback: CallbackQuery, session: AsyncSession) -> None:
+    from bot.config.arena import ARENA_LOADOUT_MAX
+    from bot.services import arena
+
+    try:
+        await arena.toggle_loadout(session, callback.from_user.id, callback.data.removeprefix(CB_MASTERY_LOADOUT_TOGGLE_PREFIX))
+    except arena.LoadoutFullError:
+        await callback.answer(f"В наборе уже {ARENA_LOADOUT_MAX} — сначала выключи другую способность.", show_alert=True)
+        return
+    await callback.answer()
+    await _loadout_screen(callback, session)
+
+
+@router.callback_query(F.data == CB_MASTERY_LOADOUT_AUTO)
+async def cb_loadout_auto(callback: CallbackQuery, session: AsyncSession) -> None:
+    from bot.services import arena
+
+    _, _, auto_default = await arena.loadout(session, callback.from_user.id)
+    await arena.set_auto_default(session, callback.from_user.id, not auto_default)
+    await callback.answer("Автобой по умолчанию: " + ("включён" if not auto_default else "выключен"))
+    await _loadout_screen(callback, session)

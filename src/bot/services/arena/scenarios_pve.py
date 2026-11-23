@@ -187,7 +187,17 @@ async def _finish_war(redis: Redis, st: dict, result) -> None:
 
     async with _SF["sf"]() as session:
         o = await settle_war_online(session, redis, st["meta"]["war_id"], result, st["meta"].get("resolution") or WAR_ACCEPTED)
-    won = bool(o and o.attacker_won)
+    from bot.constant.empire import WAR_VOID
+
+    if o is None or o.resolution == WAR_VOID:  # 2026-11-24: раньше аннулированная война приходила «поражением»
+        st["report"] = {"won": False, "void": True}
+        await core.save(redis, st)
+        text = ("🏁 Война вождей отменена: к концу боя противник уже не император или у него не осталось городов. "
+                "Без последствий — казна и владения не переходят.")
+        await _notify(st["a"]["uid"], text)
+        await _notify(st["d"]["uid"], text)
+        return
+    won = bool(o.attacker_won)
     st["report"] = {"won": won}
     await core.save(redis, st)
     await _notify(st["a"]["uid"], f"🏁 Война вождей: {'победа' if won else 'поражение'}.")

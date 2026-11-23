@@ -42,9 +42,6 @@ from bot.config.penguan import (
     PG_MONOPOLY_CUT_CAP,
     PG_RECRUIT_MARKUP,
     PG_REPEAT_STEP,
-    PG_SCHOOL_LEVEL_MULT,
-    PG_SCHOOL_MULT,
-    PG_STAR_MULT,
     PG_STATIST_MARKUP,
     PG_WEALTH_CAP,
 )
@@ -276,9 +273,7 @@ def _clamp(d: Design, ceiling: str) -> Design:
 
 def unit_price(d: Design, purchases_today: int) -> tuple[float, int]:
     power = statist_unit_power(d.rank, d.stars, d.level, d.school, d.school_level)
-    mult = PG_STATIST_MARKUP * PG_STAR_MULT ** d.stars * (1 + PG_REPEAT_STEP * purchases_today)
-    if d.school:
-        mult *= PG_SCHOOL_MULT * PG_SCHOOL_LEVEL_MULT ** d.school_level
+    mult = PG_STATIST_MARKUP * (1 + PG_REPEAT_STEP * purchases_today)  # звёзды и школа уже в мощи (2026-11-24)
     return power, max(1, int(power * CONTRACT_COINS_PER_POWER * mult))
 
 

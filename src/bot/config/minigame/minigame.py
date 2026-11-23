@@ -4,9 +4,8 @@
 Ли — 4 игры, по одной на мастерство. Параметры уходят клиенту (Mini App) как есть; сервер проверяет время и
 правдоподобный счёт.
 
-2026-11-19 (пользователь): у каждой техники 8 СВОИХ игр, без повторов между техниками. 21 механика × варианты
-(быстрый, плотный, точный, долгий, жёсткий): пары «механика~вариант» раздаются техникам по их профилю, каждая
-пара достаётся одной технике.
+2026-11-23 (пользователь): 21 механика, у каждой ОДНА версия (варианты «быстрый/плотный/точный/долгий/жёсткий»
+убраны); у техники 8 игр из её профиля, повторы между техниками разрешены.
 """
 from __future__ import annotations
 
@@ -30,8 +29,6 @@ ALL_GAMES: tuple[str, ...] = (
 STAGES_PER_LEVEL = 3
 GAMES_PER_TECH = 8
 
-V_BASE, V_FAST, V_DENSE, V_PRECISE, V_LONG, V_TOUGH, V_SPRINT = "", "fast", "dense", "precise", "long", "tough", "sprint"
-VARIANTS: tuple[str, ...] = (V_BASE, V_FAST, V_DENSE, V_PRECISE, V_LONG, V_TOUGH, V_SPRINT)
 _PROFILE: dict[str, tuple[str, ...]] = {  # профиль техники — какие механики ей ближе (первые — чаще)
     "speed": (G_DOTS, G_REACTION, G_CHAIN, G_SPLIT, G_ARROWS, G_TRACK, G_PARRY, G_DODGE, G_GONOGO, G_WHACK),
     "power": (G_MASH, G_CHARGE, G_HOLD, G_BREATH, G_WHACK, G_RHYTHM, G_AIM, G_REACTION, G_PARRY, G_CHAIN),
@@ -46,36 +43,17 @@ _TECH_PROFILE: tuple[tuple[str, str], ...] = (
 _FALLBACK = (G_COMBO, G_RHYTHM, G_DODGE, G_TRACK, G_CHARGE, G_DOTS, G_REACTION, G_MASH)
 
 
-def _variant_ok(game: str, variant: str) -> bool:
-    """Вариант должен реально менять игру — иначе это повтор."""
-    keys = set(_base_params(game, 0.5))
-    if variant == V_FAST:
-        return any(k.endswith("_ms") for k in keys) or "speed" in keys
-    if variant == V_DENSE:
-        return bool(keys & {"count", "rounds", "strikes"})
-    if variant == V_PRECISE:
-        return bool(keys & {"zone", "band", "size"})
-    return True
-
-
 def _assign() -> dict[str, tuple[str, ...]]:
-    pool = {(g, v) for g in ALL_GAMES for v in VARIANTS if _variant_ok(g, v)}
+    """8 игр техники — из списка её профиля (10 механик), сдвиг по кругу на 2 для каждой следующей техники
+    того же профиля: наборы и порядок у «соседей» по профилю не совпадают. Повторы между техниками разрешены
+    (пользователь 2026-11-23)."""
     out: dict[str, tuple[str, ...]] = {}
+    seen: dict[str, int] = {}
     for tech, profile in _TECH_PROFILE:
-        order = _PROFILE[profile] + tuple(g for g in ALL_GAMES if g not in _PROFILE[profile])
-        picks: list[str] = []
-        for strict in (True, False):  # сначала разные механики; не хватило — второй вариант той же
-            for g in order:
-                if len(picks) == GAMES_PER_TECH:
-                    break
-                if strict and any(x.split("~")[0] == g for x in picks):
-                    continue
-                v = next((v for v in VARIANTS if (g, v) in pool), None)
-                if v is None:
-                    continue
-                pool.discard((g, v))
-                picks.append(f"{g}~{v}" if v else g)
-        out[tech] = tuple(picks)
+        games = _PROFILE[profile]
+        shift = 2 * seen.get(profile, 0)
+        seen[profile] = seen.get(profile, 0) + 1
+        out[tech] = tuple(games[(shift + i) % len(games)] for i in range(GAMES_PER_TECH))
     return out
 
 
@@ -100,30 +78,10 @@ def difficulty_for_stage(stage: int) -> float:
 
 
 def params(game: str, d: float) -> dict:
-    """Параметры игры (код может быть «механика~вариант»); вариант меняет базовые параметры."""
-    base, _, variant = game.partition("~")
+    """Параметры игры при сложности `d`. Старый код «механика~вариант» (варианты убраны 2026-11-23) —
+    берётся только механика."""
+    base = game.partition("~")[0]
     p = _base_params(base, d)
-    if "pairs" in p and variant:  # пар на поле фиксировано — вариант меняет только время
-        p["seconds"] = p["seconds"] * {V_LONG: 1.4, V_SPRINT: 0.75, V_FAST: 0.8, V_TOUGH: 0.85}.get(variant, 1.0)
-        return p
-    if variant == V_FAST:
-        p = {k: (int(v * 0.75) if k.endswith("_ms") else round(v * 1.3, 2) if k == "speed" else v) for k, v in p.items()}
-    elif variant in (V_DENSE, V_LONG):
-        mult = 1.35 if variant == V_DENSE else 1.5
-        counted = [k for k in ("count", "rounds", "strikes") if k in p]
-        for k in counted:
-            p[k] = math.ceil(p[k] * mult)
-        p["need"], p["max_score"], p["seconds"] = math.ceil(p["need"] * mult), math.ceil(p["max_score"] * mult), p["seconds"] * mult
-    elif variant == V_PRECISE:
-        p = {k: (round(v * 0.7, 3) if k in ("zone", "band", "size") else v) for k, v in p.items()}
-    elif variant == V_TOUGH:
-        p["need"] = math.ceil(p["need"] * 1.15)
-    elif variant == V_SPRINT:  # короче, но почти та же планка
-        counted = [k for k in ("count", "rounds", "strikes") if k in p]
-        for k in counted:
-            p[k] = max(3, math.ceil(p[k] * 0.7))
-        p["max_score"] = max(3, math.ceil(p["max_score"] * 0.7))
-        p["need"], p["seconds"] = math.ceil(p["need"] * 0.75), p["seconds"] * 0.7
     p["need"] = min(p["need"], p["max_score"])
     return _playable(base, p)
 

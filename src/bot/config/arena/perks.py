@@ -31,6 +31,31 @@ class Perk:
     energy_gain: int = 0  # +⚡ после применения
 
 
+CHAR_ACTION_NAMES = {"crush": "💥 Сокрушить", "dash": "⚡ Рывок вперёд", "evade": "🌀 Увернуться", "stand": "🛡 Стоять насмерть"}
+CHAR_ACTION_ABOUT = {"crush": "Сила: урон ×{v}.", "dash": "Скорость: дополнительный удар {p}%.",
+                     "evade": "Ловкость: уклонение +{p}%, свой урон ×0.8.", "stand": "Выносливость: гашение {p}%, прочность +10%, свой урон ×0.7."}
+
+
+def char_action(code: str) -> Perk | None:
+    """Действие характеристики `ch:<вид>:<ранг>` → перк-на-лету (сила — от ранга, ранг подставляет сервер)."""
+    from bot.config.arena.arena import CHAR_ACTIONS
+
+    parts = code.split(":")
+    if len(parts) != 3 or parts[0] != "ch" or parts[1] not in CHAR_ACTIONS or not parts[2].isdigit():
+        return None
+    kind, rank = parts[1], int(parts[2])
+    _, cost, cd, base, per, cap = CHAR_ACTIONS[kind]
+    v = min(cap, base + per * rank)
+    about = CHAR_ACTION_ABOUT[kind].format(v=f"{v:.2f}".rstrip("0").rstrip("."), p=round(v * 100))
+    if kind == "crush":
+        return Perk(code, CHAR_ACTION_NAMES[kind], about, cost, cd, damage=v, ai_weight=0.6)
+    if kind == "dash":
+        return Perk(code, CHAR_ACTION_NAMES[kind], about, cost, cd, self_mods=CombatMods(multi_hit=v), ai_weight=0.6)
+    if kind == "evade":
+        return Perk(code, CHAR_ACTION_NAMES[kind], about, cost, cd, self_mods=CombatMods(dodge=v), damage=0.8, ai_weight=0.3)
+    return Perk(code, CHAR_ACTION_NAMES[kind], about, cost, cd, self_mods=CombatMods(reduction=v, durability=0.1), damage=0.7, ai_weight=0.3)
+
+
 BASE_PERKS: dict[str, Perk] = {p.code: p for p in (
     Perk("rush", "Рывок", "Удар на полную: урон ×1.5 в этом раунде.", cost=3, cooldown=2, damage=1.5, ai_weight=1.2),
     Perk("guard_break", "Пробой", "Сквозь блок и уклонение: пробитие 40%, 30% атаки проходит наверняка.", cost=4, cooldown=3,

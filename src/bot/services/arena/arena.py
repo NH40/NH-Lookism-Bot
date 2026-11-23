@@ -13,6 +13,7 @@ from __future__ import annotations
 import base64
 import json
 import pickle
+import random
 import secrets
 import time
 from collections.abc import Awaitable, Callable
@@ -23,11 +24,17 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config.arena import (
+    ARENA_AGI_ECHO_CAP,
+    ARENA_AGI_ECHO_PER_RANK,
     ARENA_AI_DEFEND_RATIO,
     ARENA_AI_SAVE_RATIO,
     ARENA_AI_THREAT_DAMAGE,
     ARENA_AI_THREAT_POWER,
     ARENA_AUTO_MINIGAME_SCORE,
+    ARENA_SPD_CD_RANKS,
+    ARENA_STR_MOVE_DAMAGE_CAP,
+    ARENA_STR_MOVE_DAMAGE_PER_RANK,
+    CHAR_ACTIONS,
     ARENA_DEFEND_DAMAGE,
     ARENA_DEFEND_ENERGY,
     ARENA_DEFEND_REDUCTION,
@@ -37,7 +44,7 @@ from bot.config.arena import (
     ARENA_ROUND_SECONDS,
     ARENA_TTL_SECONDS,
 )
-from bot.config.arena.perks import BASE_PERKS, Perk
+from bot.config.arena.perks import BASE_PERKS, Perk, char_action
 from bot.services.combat import BattleRun, CombatChances, CombatStack
 from bot.services.combat.combat import BattleResult
 from bot.services.combat.mods import CombatMods, sum_mods
@@ -148,10 +155,16 @@ async def create(
 
         uids = [u for u in (a_uid, d_uid) if u]
         if uids:
-            on = set((await session.execute(select(User.id).where(User.id.in_(uids), User.arena_auto_default))).scalars())
+            rows = {r[0]: r for r in (await session.execute(select(
+                User.id, User.arena_auto_default, User.stat_strength, User.stat_speed, User.stat_agility, User.stat_endurance,
+            ).where(User.id.in_(uids)))).all()}
             for k in ("a", "d"):
-                if st[k]["uid"] in on:
-                    st[k]["auto"] = True
+                r = rows.get(st[k]["uid"])
+                if r is None:
+                    continue
+                st[k]["auto"] = st[k]["auto"] or bool(r[1])
+                # ранги характеристик — для их действий и усиления приёмов (2026-11-23)
+                st[k]["ch"] = {"s": int(r[2] or 0), "v": int(r[3] or 0), "a": int(r[4] or 0), "e": int(r[5] or 0)}
     await _save(redis, st)
     return st
 
@@ -170,7 +183,7 @@ def _action_mods(code: str, foe_build=None) -> tuple[CombatMods, CombatMods]:
     (копирование на раунд, Джинена)."""
     if code == DEFEND:
         return _DEFEND_MODS, CombatMods()
-    perk = PERK_REGISTRY.get(code)
+    perk = _perk(code)
     if perk is None:
         return CombatMods(), CombatMods()
     own = perk.self_mods
@@ -196,9 +209,29 @@ def _weigh(mult: float, w: float) -> float:
     return 1 + (mult - 1) * w if mult > 1 else mult
 
 
+def _perk(code: str | None) -> Perk | None:
+    """Перк по коду: реестр или действие характеристики `ch:<вид>:<ранг>` (сила от ранга)."""
+    if not code:
+        return None
+    return PERK_REGISTRY.get(code) or char_action(code)
+
+
+def char_codes(side: dict) -> list[str]:
+    """Действия характеристик стороны с её рангами (у ботов рангов нет — действий нет)."""
+    ch = side.get("ch")
+    if not ch:
+        return []
+    return [f"ch:{kind}:{ch[spec[0]]}" for kind, spec in CHAR_ACTIONS.items()]
+
+
+def _cost(side: dict, perk: Perk) -> int:
+    return 0 if side.get("free") == perk.code else perk.cost
+
+
 def _ready(side: dict, code: str, round_no: int) -> bool:
-    perk = PERK_REGISTRY.get(code)
-    return perk is not None and code in side["perks"] and side["energy"] >= perk.cost and side["cd"].get(code, 0) <= round_no
+    perk = _perk(code)
+    known = code in side["perks"] or code in char_codes(side)
+    return perk is not None and known and side["energy"] >= _cost(side, perk) and side["cd"].get(code, 0) <= round_no
 
 
 _VALUE_FIELDS = {  # вклад поля модификаторов в «силу» перка для автоатаки (грубо, в долях урона)
@@ -254,9 +287,14 @@ def _resolve_action(side: dict, action: dict | None, round_no: int, own_power: f
     kind = action.get("kind")
     if kind == DEFEND:
         return DEFEND, ARENA_DEFEND_DAMAGE, None
-    if kind == PERK and _ready(side, action.get("perk", ""), round_no):
-        perk = PERK_REGISTRY[action["perk"]]
+    code = action.get("perk", "")
+    if kind == PERK and code.startswith("ch:") and code.count(":") == 1:  # клиент шлёт вид — ранг подставляет сервер
+        code = next((c for c in char_codes(side) if c.startswith(code + ":")), code)
+    if kind == PERK and _ready(side, code, round_no):
+        perk = _perk(code)
         dmg = perk.first_round_damage if (perk.first_round_damage and round_no == 1) else perk.damage
+        if not code.startswith("ch:") and side.get("ch"):  # Сила усиливает приёмы
+            dmg *= 1 + min(ARENA_STR_MOVE_DAMAGE_CAP, ARENA_STR_MOVE_DAMAGE_PER_RANK * side["ch"]["s"])
         if perk.minigame == "self":
             score = max(0.0, min(1.0, float(action.get("score", 0.0))))
             dmg *= 1 + perk.power * score
@@ -387,9 +425,17 @@ async def _play(redis: Redis, st: dict) -> dict:
         s = st[me]
         s["pending_game"] = None
         if perk is not None:
-            s["energy"] -= perk.cost
+            s["energy"] -= _cost(s, perk)
             s["energy"] += perk.energy_gain
-            s["cd"][perk.code] = round_no + perk.cooldown + 1
+            s.pop("free", None) if s.get("free") == perk.code else None
+            cd = perk.cooldown
+            ch = s.get("ch")
+            if ch and not perk.code.startswith("ch:"):
+                cd = max(1, cd - sum(1 for r in ARENA_SPD_CD_RANKS if ch["v"] >= r))  # Скорость
+            s["cd"][perk.code] = round_no + cd + 1
+            if ch and not perk.code.startswith("ch:") and random.random() < min(ARENA_AGI_ECHO_CAP, ARENA_AGI_ECHO_PER_RANK * ch["a"]):
+                s["cd"][perk.code] = round_no + 1  # Ловкость: приём сразу готов, следующий — бесплатно
+                s["free"] = perk.code
             if perk.minigame == "enemy":
                 st[other]["pending_game"] = {"game": perk.game, "power": perk.power, "from": round_no, "score": 0.0}
         if code == DEFEND:
@@ -465,7 +511,17 @@ def perks_view(st: dict, side: str) -> list[PerkView]:
     out = []
     for code in s["perks"]:
         p = PERK_REGISTRY[code]
-        out.append(PerkView(code, p.name, p.about, p.cost, max(0, s["cd"].get(code, 0) - next_round), s["energy"] >= p.cost))
+        out.append(PerkView(code, p.name, p.about, _cost(s, p), max(0, s["cd"].get(code, 0) - next_round), s["energy"] >= _cost(s, p)))
+    return out
+
+
+def actions_view(st: dict, side: str) -> list[PerkView]:
+    """Действия характеристик стороны (рядом с «Атака/Защита»); код без ранга — его подставит сервер."""
+    s, next_round = st[side], st["round"] + 1
+    out = []
+    for code in char_codes(s):
+        p = _perk(code)
+        out.append(PerkView(code.rsplit(":", 1)[0], p.name, p.about, p.cost, max(0, s["cd"].get(code, 0) - next_round), s["energy"] >= p.cost))
     return out
 
 

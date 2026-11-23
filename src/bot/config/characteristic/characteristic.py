@@ -76,7 +76,7 @@ def extra_unit_power(rank: str, stars: int, training_level: int, cap_mult: float
 # «каждый повышения ранга силы даёт по +1% к мощи» — процентных пунктов ровно столько,
 # сколько ступеней пройдено от старта (F-, 0%).
 
-STRENGTH_POWER_PERCENT_PER_RANK = 1
+STRENGTH_POWER_PERCENT_PER_RANK = 1.25  # было 1 (характеристики в бою, 2026-11-23)
 
 
 def strength_power_percent(rank: str) -> int:
@@ -207,7 +207,7 @@ def technique_mastery_multiplier(tier: int) -> int:
 AGILITY_DODGE_PP_PER_RANK = 0.05  # +п.п. уклонения за ранг Ловкости
 SPEED_FLEE_PP_PER_RANK = 0.05  # +п.п. побега за ранг Скорости
 ENDURANCE_BLOCK_MULT_PERCENT_PER_RANK = 1  # блок × (1 + 1% за ранг Выносливости)
-ENDURANCE_ABSORB_PERCENT_PER_RANK = 0.2  # доля поглощённого урона, % за ранг (Infinity 10.4%)
+ENDURANCE_ABSORB_PERCENT_PER_RANK = 0.25  # было 0.2 (2026-11-23); доля поглощённого урона, % за ранг (Infinity 10.4%)
 # 2026-11-19 (пользователь): выносливость — четыре части. Защита — блок и поглощение (выше); прочность — ХП статистов;
 # живучесть — доля павших, выживающих после боя; энергия — запас и прирост энергии онлайн-боя (`config/arena`).
 ENDURANCE_DURABILITY_PERCENT_PER_RANK = 0.3  # +% ХП единиц за ранг
@@ -216,7 +216,7 @@ ENDURANCE_VITALITY_PERCENT_PER_RANK = 0.15  # +% выживших павших �
 # «Скорость — −1% времени у противника на принятие сражения с каждым рангом».
 AGILITY_FREE_ATTACK_PERCENT_PER_RANK = 1
 SPEED_ACCEPT_WINDOW_PERCENT_PER_RANK = 1
-REACTION_MAX = 0.40  # потолок одной реакции (уклонение/блок/контратака/побег)
+REACTION_MAX = 0.45  # было 0.40 (2026-11-23); потолок одной реакции (уклонение/блок/контратака/побег)
 REACTIONS_TOTAL_MAX = 0.80  # потолок суммы всех реакций
 
 

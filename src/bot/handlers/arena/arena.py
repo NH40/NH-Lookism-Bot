@@ -52,7 +52,9 @@ def _act_name(code: str | None) -> str:
         return "Атака"
     if code == "defend":
         return "Защита"
-    perk = svc.PERK_REGISTRY.get(code)
+    from bot.config.arena.perks import char_action
+
+    perk = svc.PERK_REGISTRY.get(code) or char_action(code or "")
     return perk.name if perk else "Перк"
 
 
@@ -134,6 +136,9 @@ def render(st: dict, user_id: int, *, perks_help: bool = False, detail: bool = F
         else:
             lines.append("👇 <b>Твой ход</b>")
             rows.append([_b("🗡 Атака", f"{CB_ACT}{bid}:attack"), _b("🛡 Защита +⚡", f"{CB_ACT}{bid}:defend")])
+            acts = [a for a in svc.actions_view(st, me) if a.ready_in == 0 and a.affordable]  # действия характеристик
+            for i in range(0, len(acts), 2):
+                rows.append([_b(f"{a.name} ⚡{a.cost}"[:60], f"{CB_ACT}{bid}:{a.code}") for a in acts[i:i + 2]])
             ready = [p for p in perks if p.ready_in == 0 and p.affordable][:_MAX_PERK_BUTTONS]
             for i in range(0, len(ready), 2):
                 rows.append([_b(f"{'🎯' if svc.PERK_REGISTRY[p.code].minigame == 'enemy' else '✦'} {p.name} ⚡{p.cost}"[:60],

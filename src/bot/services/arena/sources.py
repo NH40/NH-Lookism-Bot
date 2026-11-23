@@ -116,5 +116,6 @@ async def energy_for(session: AsyncSession, user_id: int) -> tuple[int, int, int
     yama = max(l1 if b1 == BLOODLINE_YAMAZAKI else 0, l2 if b2 == BLOODLINE_YAMAZAKI else 0)
     start = cfg.ARENA_ENERGY_START + int(endurance or 0) // cfg.ARENA_ENERGY_RANKS_PER_START + (2 if yama >= cfg.ARENA_YAMAZAKI_START_LEVEL else 0)
     regen = cfg.ARENA_ENERGY_REGEN + (1 if (mastery or 0) >= cfg.ARENA_ENERGY_MASTERY_REGEN_TIER else 0) + (1 if yama >= cfg.ARENA_YAMAZAKI_REGEN_LEVEL else 0)
+    regen += 1 if int(endurance or 0) >= cfg.ARENA_END_REGEN_RANK else 0  # Выносливость (2026-11-23)
     cap = cfg.ARENA_ENERGY_MAX + int(mastery or 0)
     return min(start, cap), regen, cap

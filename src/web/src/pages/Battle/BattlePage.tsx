@@ -26,6 +26,8 @@ interface LogEntry {
 interface BattleView {
   id: string; kind: string; status: "live" | "done"; round: number; left: number; me: Side; foe: Side; perks: Perk[];
   log: LogEntry[]; result: unknown; report: Record<string, unknown> | null; won: boolean | null;
+  /** Действия характеристик (Сокрушить, Рывок вперёд, Увернуться, Стоять насмерть). */
+  actions?: Perk[];
   /** Влияние мощи: перевес и сколько прокачки слабого работает. */
   power_line?: string | null;
 }
@@ -283,6 +285,20 @@ export function BattlePage() {
             <button type="button" className="bt-act atk" disabled={!canAct} onClick={() => act("attack")}><Swords size={20} /><b>Атака</b><small>обычный удар</small></button>
             <button type="button" className="bt-act def" disabled={!canAct} onClick={() => act("defend")}><Shield size={20} /><b>Защита</b><small>меньше урона · +⚡</small></button>
           </div>
+          {(b.actions?.length ?? 0) > 0 && (
+            <div className="bt-chacts">
+              {b.actions!.map((a) => {
+                const ok = canAct && a.ready_in === 0 && a.affordable;
+                return (
+                  <button key={a.code} type="button" className={`bt-chact ${ok ? "" : "off"}`} disabled={!ok} title={a.about}
+                    onClick={() => act("perk", { perk: a.code })}>
+                    <b>{a.name}</b>
+                    <small>{a.ready_in > 0 ? `⏳ ${a.ready_in} р.` : `⚡${a.cost}`}</small>
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {b.perks.length > 0 && (
             <>
               <div className="bt-sub">Способности <small>{b.perks.filter((p) => p.ready_in === 0 && p.affordable).length} из {b.perks.length} готовы</small>

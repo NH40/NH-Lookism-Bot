@@ -107,7 +107,9 @@ def _act_name(code: str | None) -> str:
         return "Атака"
     if code == "defend":
         return "Защита"
-    perk = svc.PERK_REGISTRY.get(code)
+    from bot.config.arena.perks import char_action
+
+    perk = svc.PERK_REGISTRY.get(code) or char_action(code or "")
     return perk.name if perk else "Перк"
 
 
@@ -139,6 +141,9 @@ def view(st: dict, user_id: int) -> dict:
         "foe": {"name": o["name"], "power": o["power"], "energy": o["energy"], "emax": o.get("emax", 10), "auto": o["auto"], "afk": o.get("afk", False),
                 "ava": o.get("ava"), "bot": o["uid"] is None,
                 "waiting": o["action"] is not None, "power0": o.get("power0", o["power"]), "units": o.get("units"), "units0": o.get("units0")},
+        # действия характеристик (2026-11-23): код без ранга — ранг подставит сервер
+        "actions": [{"code": a.code, "name": a.name, "about": a.about, "cost": a.cost, "ready_in": a.ready_in, "affordable": a.affordable}
+                    for a in svc.actions_view(st, me)],
         "perks": [{"code": p.code, "name": p.name, "about": p.about, "cost": p.cost, "ready_in": p.ready_in, "affordable": p.affordable,
                    "minigame": svc.PERK_REGISTRY[p.code].minigame, "game": svc.PERK_REGISTRY[p.code].game}
                   for p in svc.perks_view(st, me)],

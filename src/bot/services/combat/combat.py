@@ -153,6 +153,10 @@ class RoundLog:
     defender_chaos: bool = False
     attacker_fired: tuple[str, ...] = ()
     defender_fired: tuple[str, ...] = ()
+    # Разбор раунда для журнала (`services/combat/explain`): {"out": удар стороны, "in": что с ней сделал удар
+    # противника, "healed": встали после лечения}. Только данные — текст строит explain.
+    attacker_detail: dict = field(default_factory=dict)
+    defender_detail: dict = field(default_factory=dict)
 
 
 def base_chances() -> CombatChances:
@@ -235,6 +239,9 @@ class _Side:
         self.guard_bonus = 0.0  # гашение от динамики боя
         self.events: list[str] = []  # что сработало в этом раунде (журнал)
         self.broken = 0.0  # доля стаков, сбитая Сейримом противника (затухает по раундам)
+        self.hp_parts: dict[str, float] = {}  # из чего сложилась hp_bonus (журнал)
+        self.det: dict = {}  # разбор текущего раунда (журнал)
+        self.rx = [0, 0, 0, 0]  # за раунд: ушли, уклонились, заблокировали, контратаковали
 
     def total_power(self) -> int:
         return round(sum(q * self.power[k] for k, q in self.alive.items()))
@@ -314,7 +321,9 @@ def _influence_edge(side: _Side, opponent: _Side, m: CombatMods) -> float:
 
 def _refresh_dynamics(side: _Side, opponent: _Side, m: CombatMods, round_number: int) -> None:
     """Прочность и гашение, которые зависят от соперника и номера раунда."""
-    side.hp_bonus = _gap_boost(side, opponent, m, round_number) + _dominance(side, opponent, m) + _influence_edge(side, opponent, m)
+    side.hp_parts = {"gap": _gap_boost(side, opponent, m, round_number), "dominance": _dominance(side, opponent, m),
+                     "influence": _influence_edge(side, opponent, m)}
+    side.hp_bonus = sum(side.hp_parts.values())
     side.guard_bonus = m.endure_guard * (round_number - 1)
     if m.endure_unique and round_number > 1:
         for key in side.unique_keys:
@@ -355,39 +364,55 @@ def _seirim(side: _Side, opponent: _Side, m: CombatMods, round_number: int, rng:
 
 
 def _attack_multiplier(side: _Side, opponent: _Side, m: CombatMods, round_number: int, rng: Random) -> float:
-    mult = 1.0 + m.attack + m.cleave + side.hp_bonus
-    stacked = 0.0  # прибавки-стаки: их сбивает Сейрим противника (`side.broken`)
+    """Множитель атаки за раунд. Слагаемые пишутся в `side.det["out"]["parts"]` (журнал): (код, прибавка)."""
+    parts: list[tuple[str, float]] = []
+    stacks: list[tuple[str, float]] = []  # прибавки-стаки: их сбивает Сейрим противника (`side.broken`)
+    for code, v in (("attack", m.attack), ("cleave", m.cleave)):
+        if v:
+            parts.append((code, v))
+    for code, v in side.hp_parts.items():
+        if v:
+            parts.append((code, v))
     if m.endure_attack:
-        stacked += m.endure_attack * (round_number - 1)
+        stacks.append(("endure", m.endure_attack * (round_number - 1)))
     if m.vs_stronger and _power_ratio(side, opponent) > 1:
-        mult += m.vs_stronger * min(BATTLE_VS_STRONGER_CAP, math.log2(_power_ratio(side, opponent)))
+        parts.append(("vs_stronger", m.vs_stronger * min(BATTLE_VS_STRONGER_CAP, math.log2(_power_ratio(side, opponent)))))
     if m.absorb_power and side.initial_power:
-        stacked += m.absorb_power * min(BATTLE_ABSORB_POWER_CAP, side.absorbed / side.initial_power)
+        stacks.append(("absorb_power", m.absorb_power * min(BATTLE_ABSORB_POWER_CAP, side.absorbed / side.initial_power)))
     if m.dodge_surge and side.initial_quantity:
-        stacked += m.dodge_surge * min(1.0, side.dodged / side.initial_quantity)
+        stacks.append(("dodge_surge", m.dodge_surge * min(1.0, side.dodged / side.initial_quantity)))
     if m.overcome:
         taken = min(BATTLE_OVERCOME_TAKEN_CAP, side.taken / side.initial_power) if side.initial_power else 0.0
         crowd = (opponent.initial_quantity / side.initial_quantity) ** 0.5 if side.initial_quantity else 1.0
-        stacked += m.overcome * taken * min(BATTLE_OVERCOME_CROWD_CAP, max(1.0, crowd))
+        stacks.append(("overcome", m.overcome * taken * min(BATTLE_OVERCOME_CROWD_CAP, max(1.0, crowd))))
     if m.despair:
-        stacked += m.despair * _despair_gauge(side, opponent, m)
+        stacks.append(("despair", m.despair * _despair_gauge(side, opponent, m)))
     if m.adapt_bonus and side.lost_fraction() >= m.adapt_threshold:
-        mult += m.adapt_bonus
+        parts.append(("adapt", m.adapt_bonus))
     if m.rush and round_number <= m.rush_rounds:
-        mult += m.rush * (1 - min(1.0, opponent.mods.slow))  # замедление Сейрима
+        parts.append(("rush", m.rush * (1 - min(1.0, opponent.mods.slow))))  # замедление Сейрима
     if m.ramp:
-        stacked += min(m.ramp_cap, m.ramp * (round_number - 1)) if m.ramp_cap else m.ramp * (round_number - 1)
+        stacks.append(("ramp", min(m.ramp_cap, m.ramp * (round_number - 1)) if m.ramp_cap else m.ramp * (round_number - 1)))
     if m.opening and round_number == 1:
-        mult += m.opening * (1 - min(1.0, opponent.mods.slow))
+        parts.append(("opening", m.opening * (1 - min(1.0, opponent.mods.slow))))
     if m.grow_on_kill and side.initial_quantity:
         # Рост от числа убитых относительно своей численности: толпа слабых кормит босса,
         # немногие сильные — нет (raw-notes: «против него должны быть эффективны сильные»).
-        stacked += min(BATTLE_GROW_ON_KILL_CAP, m.grow_on_kill * side.kills / side.initial_quantity)
+        stacks.append(("grow_on_kill", min(BATTLE_GROW_ON_KILL_CAP, m.grow_on_kill * side.kills / side.initial_quantity)))
     if m.cqc:
-        stacked += _cqc_bonus(side, opponent, m)
-    mult += stacked * (1 - min(1.0, side.broken))
+        stacks.append(("cqc", _cqc_bonus(side, opponent, m)))
+    keep = 1 - min(1.0, side.broken)
+    parts += [(code, v * keep) for code, v in stacks if v]
+    if side.broken and any(v for _, v in stacks):
+        parts.append(("broken", -sum(v for _, v in stacks) * (1 - keep)))
+    mult = 1.0 + sum(v for _, v in parts)
+    crit = 1.0
     if m.crit_chance:
-        mult *= 1 + min(1.0, m.crit_chance) * (BATTLE_CRIT_BASE_BONUS + m.crit_power) * rng.uniform(0.5, 1.5)
+        crit = 1 + min(1.0, m.crit_chance) * (BATTLE_CRIT_BASE_BONUS + m.crit_power) * rng.uniform(0.5, 1.5)
+        mult *= crit
+    out = side.det.setdefault("out", {})
+    out["parts"] = [(c, round(v, 4)) for c, v in parts]
+    out["crit"] = round(crit, 4)
     return max(0.0, mult)
 
 
@@ -475,6 +500,10 @@ def _resolve_incoming(
         side.round_dead[key] = side.round_dead.get(key, 0) + deaths
         side.fled += fled
         side.dodged += dodged
+        side.rx[0] += fled
+        side.rx[1] += dodged
+        side.rx[2] += blocked
+        side.rx[3] += countered
         counter_damage += countered * unit_power * (1 + m.counter_power) + dodged * unit_power * m.dodge_counter
         reached += effective
         deaths_total += deaths
@@ -537,6 +566,8 @@ def _heal(side: _Side, opponent: _Side, rng: Random) -> None:
         revived = min(rng.binomialvariate(count, fraction), max(side.dead[key], 0))
         side.alive[key] += revived
         side.dead[key] -= revived
+        side.det["healed"] = side.det.get("healed", 0) + revived
+        side.det["heal"] = round(fraction, 4)
 
 
 def _hit(attacker: _Side, defender: _Side, damage: float, am: CombatMods, chaos: bool, rng: Random) -> float:
@@ -551,11 +582,22 @@ def _hit(attacker: _Side, defender: _Side, damage: float, am: CombatMods, chaos:
         defender.absorb_store += stored
         defender.absorbed += stored
         damage -= stored
+    incoming = damage
     reduction, hp_mult = _armor(defender, am)
     sure = damage * min(BATTLE_SURE_HIT_MAX, am.sure_hit) if am.sure_hit else 0.0
+    rx = _reactions(defender, am, chaos)
     counter, reached, deaths = _resolve_incoming(
-        defender, (damage - sure) * (1 - reduction), _reactions(defender, am, chaos), rng, hp_mult, min(1.0, am.spill)
+        defender, (damage - sure) * (1 - reduction), rx, rng, hp_mult, min(1.0, am.spill)
     )
+    dc = defender.chances
+    defender.det["in"] = {
+        "damage": round(incoming), "ward": EVENT_WARD in defender.events, "stored": round(defender.absorb_store) if dm.absorb_store else 0,
+        "reduction": round(reduction, 4), "absorb": round(dc.absorb, 4), "armor": round(dm.reduction, 4),
+        "guard": round(defender.guard_bonus, 4), "pierce": round(min(1.0, am.pierce), 4), "sure": round(sure),
+        "chances": [round(rx.flee, 4), round(rx.dodge, 4), round(rx.block, 4), round(rx.counter, 4)],
+        "suppress": round(min(1.0, am.suppress + am.slow + (BATTLE_CHAOS_SUPPRESS if chaos else 0.0)), 4),
+        "hp": round(hp_mult, 4), "durability": round(dm.durability, 4),
+    }
     if sure:
         sure_reached, sure_deaths = _apply_plain_damage(defender, sure * (1 - reduction), rng, hp_mult)
         reached += sure_reached
@@ -567,6 +609,7 @@ def _hit(attacker: _Side, defender: _Side, damage: float, am: CombatMods, chaos:
     if am.bleed:
         attacker.pending_bleed += reached * am.bleed
     attacker.kills += deaths
+    defender.det["in"].update(reached=round(reached), deaths=deaths, counter=round(counter))
     return counter
 
 
@@ -819,6 +862,25 @@ def _stacks_power(stacks: Sequence[CombatStack]) -> float:
     return sum(s.unit_power * s.quantity for s in stacks if s.quantity > 0 and s.unit_power > 0)
 
 
+def _attack_sources(side: _Side, own: CombatMods, enemy: CombatMods, extra: CombatMods | None) -> list[tuple[str, float]]:
+    """Из чего сложилась прибавка «атака» стороны в раунде: источники билда, условные навыки, действие раунда,
+    ослабление от противника; что не разложилось (зелья, пробуждение, мастерство) — «прочее»."""
+    out: list[tuple[str, float]] = []
+    for source, mods in side.chances.build.by_source:
+        if mods.attack:
+            out.append((source, mods.attack))
+    if own.attack:
+        out.append(("triggers", own.attack))
+    if extra is not None and extra.attack:
+        out.append(("action", extra.attack))
+    if enemy.attack:
+        out.append(("enemy", enemy.attack))
+    rest = side.mods.attack - sum(v for _, v in out)
+    if abs(rest) > 1e-4:  # зелья, пробуждение, мастерство, копирование, навыки позиций противника
+        out.append(("other", rest))
+    return [(k, round(v, 4)) for k, v in out]
+
+
 def _toward(v: float, base: float, w: float) -> float:
     return base + (v - base) * w if v > base else v
 
@@ -921,6 +983,8 @@ class BattleRun:
         am, dm = _round_mods(a, round_number), _round_mods(d, round_number)
         a.round_dead, d.round_dead = {}, {}
         a.events, d.events = [], []
+        a.det, d.det = {}, {}
+        a.rx, d.rx = [0, 0, 0, 0], [0, 0, 0, 0]
         _refresh_dynamics(a, d, am, round_number)
         _refresh_dynamics(d, a, dm, round_number)
 
@@ -931,8 +995,14 @@ class BattleRun:
                 side.kills += kills
                 side.pending_bleed *= min(1.0, m.bleed_linger)
 
-        damage_to_d = a_power * BATTLE_DAMAGE_FRACTION * rng.uniform(1 - BATTLE_DAMAGE_VARIANCE, 1 + BATTLE_DAMAGE_VARIANCE)
-        damage_to_a = d_power * BATTLE_DAMAGE_FRACTION * rng.uniform(1 - BATTLE_DAMAGE_VARIANCE, 1 + BATTLE_DAMAGE_VARIANCE)
+        a_var = rng.uniform(1 - BATTLE_DAMAGE_VARIANCE, 1 + BATTLE_DAMAGE_VARIANCE)
+        damage_to_d = a_power * BATTLE_DAMAGE_FRACTION * a_var
+        d_var = rng.uniform(1 - BATTLE_DAMAGE_VARIANCE, 1 + BATTLE_DAMAGE_VARIANCE)
+        damage_to_a = d_power * BATTLE_DAMAGE_FRACTION * d_var
+        for side, power, var, act, own, enemy, extra in ((a, a_power, a_var, a_damage, a_own, d_enemy, a_extra),
+                                                         (d, d_power, d_var, d_damage, d_own, a_enemy, d_extra)):
+            side.det["out"] = {"power": power, "var": round(var, 4), "act": round(act, 4),
+                               "src": _attack_sources(side, own, enemy, extra)}
         damage_to_d *= a_damage
         damage_to_a *= d_damage
         if am != _ZERO or dm != _ZERO:
@@ -943,12 +1013,15 @@ class BattleRun:
         d_hold, d_throw = _seirim(d, a, dm, round_number, rng)
         damage_to_a *= 1 - a_hold
         damage_to_d *= 1 - d_hold
+        a.det["out"]["held"], d.det["out"]["held"] = round(d_hold, 4), round(a_hold, 4)
         a_chaos = bool(am.chaos) and rng.random() < am.chaos
         d_chaos = bool(dm.chaos) and rng.random() < dm.chaos
         if a_chaos:
             damage_to_d *= 2
         if d_chaos:
             damage_to_a *= 2
+        a.det["out"].update(chaos=a_chaos, total=round(damage_to_d))
+        d.det["out"].update(chaos=d_chaos, total=round(damage_to_a))
 
         counter_to_a = _hit(a, d, damage_to_d, am, a_chaos, rng)
         counter_to_d = _hit(d, a, damage_to_a, dm, d_chaos, rng)
@@ -971,6 +1044,8 @@ class BattleRun:
         _revive_strike(d, a, dm, rng)
         _heal(a, d, rng)
         _heal(d, a, rng)
+        for side in (a, d):
+            side.det["rx"] = list(side.rx)
         a_lost, d_lost = sum(a.dead.values()) - a_dead_before, sum(d.dead.values()) - d_dead_before
         a.prev_round_lost = a_lost / a.initial_quantity if a.initial_quantity else 0.0
         d.prev_round_lost = d_lost / d.initial_quantity if d.initial_quantity else 0.0
@@ -978,6 +1053,7 @@ class BattleRun:
             number=round_number, attacker_damage=round(damage_to_d), defender_damage=round(damage_to_a),
             attacker_kills=max(0, d_lost), defender_kills=max(0, a_lost), attacker_chaos=a_chaos, defender_chaos=d_chaos,
             attacker_fired=tuple(a_fired + a.events), defender_fired=tuple(d_fired + d.events),
+            attacker_detail=a.det, defender_detail=d.det,
         )
         self.log.append(entry)
         return entry

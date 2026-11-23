@@ -349,7 +349,12 @@ async def _play(redis: Redis, st: dict) -> dict:
                       "kills": [entry_log.attacker_kills, entry_log.defender_kills] if entry_log else [0, 0],
                       # для живого журнала в Mini App: урон сторон и сработавшие навыки/события раунда
                       "hit": [entry_log.attacker_damage, entry_log.defender_damage] if entry_log else [0, 0],
-                      "fired": [list(entry_log.attacker_fired)[:4], list(entry_log.defender_fired)[:4]] if entry_log else [[], []]})
+                      "fired": [list(entry_log.attacker_fired)[:4], list(entry_log.defender_fired)[:4]] if entry_log else [[], []],
+                      # разбор раунда для журнала «откуда что» (`services/combat/explain`)
+                      "det": [entry_log.attacker_detail, entry_log.defender_detail] if entry_log else [{}, {}]})
+    # влияние мощи — для шапки боя: перевес, кто сильнее, доля прокачки слабого
+    weak = "d" if run.stronger == "a" else "a"
+    st["pw"] = {"ratio": round(run.power_ratio, 3), "stronger": run.stronger, "w": round(run.weights[weak], 4)}
     st["round"] = round_no
     st["a"]["power"], st["d"]["power"] = int(run.a.total_power()), int(run.d.total_power())
     st["a"]["units"], st["d"]["units"] = int(run.a.alive_quantity()), int(run.d.alive_quantity())

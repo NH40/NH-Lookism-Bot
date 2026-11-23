@@ -14,6 +14,7 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.services import arena as svc
+from bot.services.combat import explain
 from bot.utils.formatting import esc, format_number
 
 router = Router(name="arena")
@@ -71,7 +72,7 @@ def _side_lines(mark: str, side: dict, mine: bool) -> list[str]:
     ]
 
 
-def render(st: dict, user_id: int, *, perks_help: bool = False) -> tuple[str, InlineKeyboardMarkup]:
+def render(st: dict, user_id: int, *, perks_help: bool = False, detail: bool = False) -> tuple[str, InlineKeyboardMarkup]:
     """Текстовый экран боя (дизайн 2026-11-20): обе стороны полосками, лента раундов, кнопки ходов и перков.
     Мини-игр в боте нет: свой перк — без бонуса мини-игры, навязанное испытание — провалено (полный дебафф)."""
     me = "a" if st["a"]["uid"] == user_id else "d"
@@ -83,6 +84,9 @@ def render(st: dict, user_id: int, *, perks_help: bool = False) -> tuple[str, In
     head = f"⚔️ <b>{KIND_TITLE.get(st['kind'], 'Бой')}</b>"
     head += f" · раунд {st['round'] + 1} · ⏳ {left} с" if live else f" · раундов: {st['round']}"
     lines = [head, SEP, *_side_lines("🟦", s, True), "", *_side_lines("🟥", o, False), SEP]
+    pw = st.get("pw")
+    if pw:
+        lines.append(esc(explain.power_line(pw["ratio"], pw["stronger"] == me, pw["w"])))
     perks = svc.perks_view(st, me)
     if perks_help:
         lines.append("📖 <b>Твои способности</b>")
@@ -92,6 +96,14 @@ def render(st: dict, user_id: int, *, perks_help: bool = False) -> tuple[str, In
             ready = "готов" if p.ready_in == 0 and p.affordable else f"через {p.ready_in} р." if p.ready_in else "мало ⚡"
             lines.append(f"✦ <b>{esc(p.name)}</b>{mg} · ⚡{p.cost} · {ready}\n   <i>{esc(p.about)}</i>")
         lines.append("🎮 — в Mini App мини-игра усиливает удар, в боте перк бьёт без бонуса. 🎯 — сопернику испытание.")
+    elif detail and st["log"] and st["log"][-1].get("det"):
+        e = st["log"][-1]
+        det = e["det"]
+        lines.append(f"🔎 <b>Разбор раунда {len(st['log'])}</b>")
+        lines.append(f"🟦 <b>Ты: {esc(_act_name(e[me]['code']))}</b>")
+        lines += [esc(x) for x in explain.side_lines(det[i_me], det[1 - i_me], _act_name(e[me]["code"]))]
+        lines.append(f"🟥 <b>Противник: {esc(_act_name(e[foe]['code']))}</b>")
+        lines += [esc(x) for x in explain.side_lines(det[1 - i_me], det[i_me], _act_name(e[foe]["code"]))]
     else:
         log = st["log"][-4:]
         if log:
@@ -123,8 +135,10 @@ def render(st: dict, user_id: int, *, perks_help: bool = False) -> tuple[str, In
             for i in range(0, len(ready), 2):
                 rows.append([_b(f"{'🎯' if svc.PERK_REGISTRY[p.code].minigame == 'enemy' else '✦'} {p.name} ⚡{p.cost}"[:60],
                                 f"{CB_ACT}{bid}:{p.code}") for p in ready[i:i + 2]])
-        rows.append([_b("📜 Лента" if perks_help else "📖 Перки", f"{CB_HELP}{bid}:{0 if perks_help else 1}"),
+        rows.append([_b("📜 Лента" if perks_help or detail else "📖 Перки", f"{CB_HELP}{bid}:{0 if perks_help or detail else 1}"),
                      _b("🔄 Обновить", f"{CB_REFRESH}{bid}")])
+        if st["log"] and not detail:
+            rows.append([_b("🔎 Разбор раунда", f"{CB_HELP}{bid}:2")])
         rows.append([_b("🤖 Выключить авто" if s["auto"] else "🤖 Автоатака", f"{CB_AUTO}{bid}:{0 if s['auto'] else 1}")])
     else:
         won = st["result"]["attacker_won"] == (me == "a")
@@ -136,8 +150,8 @@ def render(st: dict, user_id: int, *, perks_help: bool = False) -> tuple[str, In
     return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-async def _show(callback: CallbackQuery, st: dict, *, perks_help: bool = False) -> None:
-    text, markup = render(st, callback.from_user.id, perks_help=perks_help)
+async def _show(callback: CallbackQuery, st: dict, *, perks_help: bool = False, detail: bool = False) -> None:
+    text, markup = render(st, callback.from_user.id, perks_help=perks_help, detail=detail)
     try:
         await callback.message.edit_text(text, reply_markup=markup)
     except Exception:  # то же сообщение — не страшно
@@ -240,4 +254,4 @@ async def cb_help(callback: CallbackQuery, redis: Redis) -> None:
         await callback.answer(_ERR["no_battle"] if st is None else _ERR["not_yours"], show_alert=True)
         return
     await callback.answer()
-    await _show(callback, st, perks_help=on == "1")
+    await _show(callback, st, perks_help=on == "1", detail=on == "2")

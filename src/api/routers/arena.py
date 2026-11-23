@@ -13,6 +13,7 @@ from api.db import get_session
 from api.deps import get_redis
 from api.routers._common import bad, cooldown_text, require_user
 from bot.services import arena as svc
+from bot.services.combat import explain
 
 router = APIRouter(prefix="/api/arena", tags=["arena"])
 
@@ -109,11 +110,24 @@ def _act_name(code: str | None) -> str:
     return perk.name if perk else "Перк"
 
 
+def _lines(e: dict, i: int, me: str, foe: str) -> tuple[list[str], list[str]]:
+    """Разбор раунда: свой ход и ход противника — готовые строки (`services/combat/explain`)."""
+    det = e.get("det")
+    if not det:
+        return [], []
+    mine, theirs = det[i], det[1 - i]
+    return (explain.side_lines(mine, theirs, _act_name(e[me]["code"])),
+            explain.side_lines(theirs, mine, _act_name(e[foe]["code"])))
+
+
 def view(st: dict, user_id: int) -> dict:
     me = "a" if st["a"]["uid"] == user_id else "d"
     foe = "d" if me == "a" else "a"
     s, o = st[me], st[foe]
+    i = 0 if me == "a" else 1
+    pw = st.get("pw")
     return {
+        "power_line": explain.power_line(pw["ratio"], pw["stronger"] == me, pw["w"]) if pw else None,
         "id": st["id"], "kind": st["kind"], "status": st["status"], "round": st["round"],
         "left": max(0, int(st["deadline"] - time.time())),
         "me": {"name": s["name"], "power": s["power"], "energy": s["energy"], "emax": s.get("emax", 10), "auto": s["auto"],
@@ -130,7 +144,8 @@ def view(st: dict, user_id: int) -> dict:
         "log": [{"round": n, "me": e[me]["code"], "foe": e[foe]["code"], "me_name": _act_name(e[me]["code"]), "foe_name": _act_name(e[foe]["code"]),
                  "kills": e["kills"][0 if me == "a" else 1], "lost": e["kills"][1 if me == "a" else 0],
                  "hit": e.get("hit", [0, 0])[0 if me == "a" else 1], "taken": e.get("hit", [0, 0])[1 if me == "a" else 0],
-                 "fired": e.get("fired", [[], []])[0 if me == "a" else 1], "foe_fired": e.get("fired", [[], []])[1 if me == "a" else 0]}
+                 "fired": e.get("fired", [[], []])[0 if me == "a" else 1], "foe_fired": e.get("fired", [[], []])[1 if me == "a" else 0],
+                 **dict(zip(("lines", "foe_lines"), _lines(e, i, me, foe)))}
                 for n, e in list(enumerate(st["log"], 1))[-12:]],
         "result": st["result"], "report": st.get("report"), "won": (st["result"]["attacker_won"] == (me == "a")) if st["result"] else None,
     }

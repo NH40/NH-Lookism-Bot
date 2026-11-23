@@ -20,10 +20,35 @@ interface Side {
 interface LogEntry {
   round: number; me: string; foe: string; me_name: string; foe_name: string; kills: number; lost: number;
   hit: number; taken: number; fired: string[]; foe_fired: string[];
+  /** Разбор раунда «откуда что» — готовые строки с сервера (`services/combat/explain`). */
+  lines?: string[]; foe_lines?: string[];
 }
 interface BattleView {
   id: string; kind: string; status: "live" | "done"; round: number; left: number; me: Side; foe: Side; perks: Perk[];
   log: LogEntry[]; result: unknown; report: Record<string, unknown> | null; won: boolean | null;
+  /** Влияние мощи: перевес и сколько прокачки слабого работает. */
+  power_line?: string | null;
+}
+
+const LOG_MODE_KEY = "lbp.battle.logMode"; // «кратко / подробно» — удобство одного зрителя, не игровое состояние
+function readLogMode(): boolean {
+  try {
+    return localStorage.getItem(LOG_MODE_KEY) === "full";
+  } catch {
+    return false;
+  }
+}
+function saveLogMode(full: boolean) {
+  try {
+    localStorage.setItem(LOG_MODE_KEY, full ? "full" : "short");
+  } catch {
+    /* приватный режим — просто не запоминаем */
+  }
+}
+
+function Lines({ lines }: { lines?: string[] }) {
+  if (!lines?.length) return null;
+  return <div className="bt-why">{lines.map((l, i) => <div key={i} className={l.startsWith("  ") ? "sub" : ""}>{l.trim()}</div>)}</div>;
 }
 type Pending = { perk?: string; enemy?: boolean; game: string; name?: string } | null;
 
@@ -81,8 +106,11 @@ function Fighter({ side, mine, kind }: { side: Side; mine: boolean; kind: string
   );
 }
 
-function RoundCard({ e, fresh }: { e: LogEntry; fresh: boolean }) {
+function RoundCard({ e, fresh, full }: { e: LogEntry; fresh: boolean; full: boolean }) {
   const won = e.kills >= e.lost;
+  const [open, setOpen] = useState(full);
+  useEffect(() => setOpen(full), [full]);
+  const has = !!(e.lines?.length || e.foe_lines?.length);
   return (
     <div className={`bt-rc ${fresh ? "fresh" : ""}`}>
       <div className="bt-rc-head">
@@ -95,6 +123,7 @@ function RoundCard({ e, fresh }: { e: LogEntry; fresh: boolean }) {
           <b>{e.me_name}</b>
           <small>💥 {fmt(e.hit)} · ☠️ −{fmt(e.kills)} у врага</small>
           {e.fired.length > 0 && <div className="bt-tags">{e.fired.map((f) => <i key={f}>{f}</i>)}</div>}
+          {open && <Lines lines={e.lines} />}
         </div>
       </div>
       <div className="bt-rc-side foe">
@@ -103,8 +132,14 @@ function RoundCard({ e, fresh }: { e: LogEntry; fresh: boolean }) {
           <b>{e.foe_name}</b>
           <small>💥 {fmt(e.taken)} · ☠️ −{fmt(e.lost)} у тебя</small>
           {e.foe_fired.length > 0 && <div className="bt-tags">{e.foe_fired.map((f) => <i key={f}>{f}</i>)}</div>}
+          {open && <Lines lines={e.foe_lines} />}
         </div>
       </div>
+      {has && (
+        <button type="button" className="bt-why-btn" onClick={() => setOpen(!open)}>
+          {open ? "Свернуть разбор" : "🔎 Почему столько? Разбор раунда"}
+        </button>
+      )}
     </div>
   );
 }
@@ -120,6 +155,7 @@ export function BattlePage() {
   const [flash, setFlash] = useState<LogEntry | null>(null);
   const [info, setInfo] = useState<Perk | null>(null);
   const [perksOpen, setPerksOpen] = useState(false);
+  const [fullLog, setFullLog] = useState(readLogMode);
   const lastRound = useRef(0);
 
   const apply = useCallback((v: BattleView) => {
@@ -198,6 +234,7 @@ export function BattlePage() {
           <Bot size={15} /> {b.me.auto ? "Авто: вкл" : "Авто-бой"}
         </button>
       </div>
+      {b.power_line && <div className="bt-power">{b.power_line}</div>}
 
       <div className="bt-vs">
         <Fighter side={b.me} mine kind={b.kind} />
@@ -270,7 +307,14 @@ export function BattlePage() {
               {" · "}соперник — <b>{b.foe.waiting ? "сходил" : b.foe.auto ? "автоатака" : "думает…"}</b></span>
           </div>
         )}
-        {[...b.log].reverse().map((e) => <RoundCard key={e.round} e={e} fresh={e.round === lastLog?.round && !!flash} />)}
+        {b.log.length > 0 && (
+          <div className="bt-logmode">
+            <span>Лог боя</span>
+            <button type="button" className={!fullLog ? "on" : ""} onClick={() => { setFullLog(false); saveLogMode(false); }}>кратко</button>
+            <button type="button" className={fullLog ? "on" : ""} onClick={() => { setFullLog(true); saveLogMode(true); }}>подробно</button>
+          </div>
+        )}
+        {[...b.log].reverse().map((e) => <RoundCard key={e.round} e={e} full={fullLog} fresh={e.round === lastLog?.round && !!flash} />)}
         {!b.log.length && !live && <small className="muted">Раундов не было.</small>}
       </div>
 

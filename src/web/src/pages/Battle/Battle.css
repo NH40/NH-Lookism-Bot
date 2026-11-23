@@ -128,3 +128,15 @@
 .bt-game-box .mg-area { min-height: 260px; }
 .bt-afk { display: block; width: 100%; padding: 10px 12px; border-radius: 12px; border: 0; text-align: center; font-size: 13px; font-weight: 700; color: #1a0d00; background: linear-gradient(160deg, #ffe08a, #f5b942); }
 .bt-afk b { text-decoration: underline; }
+
+/* Журнал «откуда что» и влияние мощи (2026-11-23) */
+.bt-power { margin: 6px 0 2px; padding: 7px 10px; border-radius: 10px; font-size: 12px; font-weight: 700; line-height: 1.35;
+  background: rgba(255, 191, 60, 0.1); border: 1px solid rgba(255, 191, 60, 0.35); color: var(--text); }
+.bt-why { margin-top: 6px; padding: 6px 8px; border-radius: 8px; background: rgba(0, 0, 0, 0.25); font-size: 11.5px; line-height: 1.45; }
+.bt-why div.sub { padding-left: 10px; color: var(--muted); }
+.bt-why div:not(.sub) { font-weight: 800; }
+.bt-why-btn { align-self: flex-start; border: 0; background: none; color: var(--cyan); font-size: 11px; font-weight: 800; padding: 2px 0; cursor: pointer; }
+.bt-logmode { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; color: var(--muted); }
+.bt-logmode span { margin-right: auto; text-transform: uppercase; letter-spacing: 0.06em; }
+.bt-logmode button { border: 1px solid var(--line-soft); background: none; color: var(--muted); border-radius: 8px; padding: 3px 9px; font-size: 11px; font-weight: 800; }
+.bt-logmode button.on { color: var(--text); border-color: var(--cyan); background: rgba(79, 216, 255, 0.12); }

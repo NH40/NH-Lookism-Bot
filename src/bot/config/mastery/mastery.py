@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from bot.constant.characteristic import POTENTIAL_ORDER
-from bot.constant.mastery import TASK_EQUAL_WIN, TASK_EXTRAS, TASK_PVP_WINS, TASK_TOM, TASK_TRAININGS
+from bot.constant.mastery import TASK_EXTRAS, TASK_PVP_WINS, TASK_TOM, TASK_TRAININGS
 
 MASTERY_UNLOCK_RANK_INDEX = 33  # CX — все четыре характеристики не ниже (было EXR/40, снижено 2026-10-28)
 # Ожидание задания этапа (пользователь 2026-10-28): случайно в диапазоне, чем выше потенциал —
@@ -50,7 +50,7 @@ TOM_COMBAT_UNITS = 1_000
 STAGE_TASKS: dict[int, tuple[tuple[str, int], ...]] = {
     1: ((TASK_TRAININGS, 6), (TASK_EXTRAS, 4), (TASK_TOM, 1)),
     2: ((TASK_TRAININGS, 12), (TASK_EXTRAS, 8), (TASK_TOM, 1)),
-    3: ((TASK_TRAININGS, 15), (TASK_EXTRAS, 10), (TASK_PVP_WINS, 3), (TASK_EQUAL_WIN, 1), (TASK_TOM, 1)),
+    3: ((TASK_TRAININGS, 15), (TASK_EXTRAS, 10), (TASK_PVP_WINS, 3), (TASK_TOM, 1)),  # «победа над равным ±10%» убрана 2026-11-23
 }
 EQUAL_WIN_POWER_PERCENT = 10  # «победить игрока с мощью ±10% от своей»
 

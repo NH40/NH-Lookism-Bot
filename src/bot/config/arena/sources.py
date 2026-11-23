@@ -12,7 +12,7 @@ from bot.config.arena.perks import Perk
 from bot.config.bloodline import LEVELS as BLOODLINE_LEVELS
 from bot.config.mastery.techniques import MASTERY_TREES
 from bot.config.unique_path import LEVELS as PATH_LEVELS
-from bot.config.arena.moves import TECH_MOVES
+from bot.config.arena.moves import BLOOD_MOVES, TECH_MOVES
 from bot.config.unique_technique import LEVELS as TECH_LEVELS
 from bot.services.combat.mods import CombatMods
 
@@ -58,9 +58,11 @@ def _tier_perks(kind: str, table: dict, code: str, name: str, idx: int) -> list[
 
 def _move_perks(kind: str, table: dict, code: str, idx: int) -> list[Perk]:
     """Свои приёмы источника (`config/arena/moves`, 2026-11-23) — на тех же ступенях и кодах, что шаблонные перки."""
-    from bot.config.arena.moves import MOVE_COOLDOWN, MOVE_COST, TECH_MOVES
+    from bot.config.arena.moves import BLOOD_MOVES, MOVE_COOLDOWN, MOVE_COST, TECH_MOVES
 
-    moves = TECH_MOVES[code]
+    moves = (TECH_MOVES if kind == "tech" else BLOOD_MOVES)[code]
+    mini = "self" if kind == "tech" else "enemy"
+    games = _SELF_GAMES if kind == "tech" else _ENEMY_GAMES
     out = []
     for t, level in enumerate(TIER_LEVELS):
         if level > len(table.get(code, ())):
@@ -70,8 +72,8 @@ def _move_perks(kind: str, table: dict, code: str, idx: int) -> list[Perk]:
         out.append(Perk(
             code=f"{kind}:{code}:{t + 1}", name=mv.name, about=mv.about, cost=MOVE_COST[t], cooldown=MOVE_COOLDOWN[t],
             self_mods=mv.mods, enemy_mods=mv.enemy, damage=mv.damage, enemy_damage=mv.enemy_damage,
-            minigame="self" if top else None, game=_SELF_GAMES[idx % 4] if top else None, power=mv.power if top else 0.0,
-            first_round_damage=mv.first_round_damage,
+            minigame=mini if top else None, game=games[idx % 4] if top else None, power=mv.power if top else 0.0,
+            first_round_damage=mv.first_round_damage, copy_share=mv.copy_share, mirror=mv.mirror, energy_gain=mv.energy_gain,
         ))
     return out
 
@@ -87,7 +89,7 @@ def build_source_perks() -> dict[str, Perk]:
     for i, code in enumerate(PATH_LEVELS):
         perks += _tier_perks("path", PATH_LEVELS, code, PATH_NAMES.get(code, code), i)
     for i, code in enumerate(BLOODLINE_LEVELS):
-        perks += _tier_perks("blood", BLOODLINE_LEVELS, code, BLOODLINE_NAMES.get(code, code), i)
+        perks += _move_perks("blood", BLOODLINE_LEVELS, code, i) if code in BLOOD_MOVES else _tier_perks("blood", BLOODLINE_LEVELS, code, BLOODLINE_NAMES.get(code, code), i)
     perks += ABSOLUTE_PERKS + POSITION_PERKS + mastery_perks()
     return {p.code: p for p in perks}
 

@@ -40,7 +40,7 @@ from bot.config.arena import (
 from bot.config.arena.perks import BASE_PERKS, Perk
 from bot.services.combat import BattleRun, CombatChances, CombatStack
 from bot.services.combat.combat import BattleResult
-from bot.services.combat.mods import CombatMods
+from bot.services.combat.mods import CombatMods, sum_mods
 
 ATTACK, DEFEND, PERK = "attack", "defend", "perk"
 SIDES = ("a", "d")
@@ -160,26 +160,30 @@ def _rebuild(st: dict) -> BattleRun:
     a_stacks, d_stacks, a_ch, d_ch = _unpack(st["snap"])
     run = BattleRun(a_stacks, d_stacks, attacker_chances=a_ch, defender_chances=d_ch, rng=Random(st["seed"]))
     for entry in st["log"]:
-        a_extra, d_extra = _extras(entry["a"]["code"], entry["d"]["code"], run.weights)
+        a_extra, d_extra = _extras(entry["a"].get("as") or entry["a"]["code"], entry["d"].get("as") or entry["d"]["code"], run.weights, run)
         run.play_round(a_extra, d_extra, entry["a"]["dmg"], entry["d"]["dmg"])
     return run
 
 
-def _action_mods(code: str) -> tuple[CombatMods, CombatMods]:
-    """(своё, противнику) по коду действия: "attack" | "defend" | код перка."""
+def _action_mods(code: str, foe_build=None) -> tuple[CombatMods, CombatMods]:
+    """(своё, противнику) по коду действия: "attack" | "defend" | код перка. `foe_build` — билд противника
+    (копирование на раунд, Джинена)."""
     if code == DEFEND:
         return _DEFEND_MODS, CombatMods()
     perk = PERK_REGISTRY.get(code)
     if perk is None:
         return CombatMods(), CombatMods()
-    return perk.self_mods, perk.enemy_mods
+    own = perk.self_mods
+    if perk.copy_share and foe_build is not None:
+        own = own + sum_mods(m for _, m in foe_build.by_source).scale(perk.copy_share)
+    return own, perk.enemy_mods
 
 
-def _extras(a_code: str, d_code: str, w: dict[str, float] | None = None) -> tuple[CombatMods, CombatMods]:
+def _extras(a_code: str, d_code: str, w: dict[str, float] | None = None, run: BattleRun | None = None) -> tuple[CombatMods, CombatMods]:
     """Модификаторы действий раунда; `w` — доля прокачки сторон (влияние мощи, `BattleRun.weights`)."""
     wa, wd = (w or {}).get("a", 1.0), (w or {}).get("d", 1.0)
-    a_own, a_enemy = _action_mods(a_code)
-    d_own, d_enemy = _action_mods(d_code)
+    a_own, a_enemy = _action_mods(a_code, run.d.chances.build if run else None)
+    d_own, d_enemy = _action_mods(d_code, run.a.chances.build if run else None)
     if wa < 1:
         a_own, a_enemy = a_own.scale(wa), a_enemy.scale(wa)
     if wd < 1:
@@ -352,6 +356,18 @@ async def _play(redis: Redis, st: dict) -> dict:
     last = st["log"][-1]["kills"] if st["log"] else [0, 0]  # [убил нападающий, убил защитник]
     a_code, a_dmg, a_perk = _resolve_action(st["a"], st["a"]["action"], round_no, a_pow, d_pow, st["d"], last[1] > 0)
     d_code, d_dmg, d_perk = _resolve_action(st["d"], st["d"]["action"], round_no, d_pow, a_pow, st["a"], last[0] > 0)
+    # Абсолютная копия: повторить последний приём противника (его эффекты и урон).
+    as_code = {"a": None, "d": None}
+    prev = st["log"][-1] if st["log"] else None
+    for me, other, perk in (("a", "d", a_perk), ("d", "a", d_perk)):
+        if perk is not None and perk.mirror and prev:
+            mirrored = PERK_REGISTRY.get(prev[other].get("as") or prev[other]["code"])
+            if mirrored is not None and not mirrored.mirror:
+                as_code[me] = mirrored.code
+                if me == "a":
+                    a_dmg = mirrored.damage
+                else:
+                    d_dmg = mirrored.damage
     w = run.weights
     a_dmg, d_dmg = _weigh(a_dmg, w["a"]), _weigh(d_dmg, w["d"])
     # Чужой перк на этот раунд и навязанная в прошлом раунде мини-игра (их сила — доля прокачки наложившего).
@@ -365,13 +381,14 @@ async def _play(redis: Redis, st: dict) -> dict:
             a_dmg *= mult
         else:
             d_dmg *= mult
-    a_extra, d_extra = _extras(a_code, d_code, w)
+    a_extra, d_extra = _extras(as_code["a"] or a_code, as_code["d"] or d_code, w, run)
     entry_log = run.play_round(a_extra, d_extra, a_dmg, d_dmg)
     for me, code, perk, other in (("a", a_code, a_perk, "d"), ("d", d_code, d_perk, "a")):
         s = st[me]
         s["pending_game"] = None
         if perk is not None:
             s["energy"] -= perk.cost
+            s["energy"] += perk.energy_gain
             s["cd"][perk.code] = round_no + perk.cooldown + 1
             if perk.minigame == "enemy":
                 st[other]["pending_game"] = {"game": perk.game, "power": perk.power, "from": round_no, "score": 0.0}
@@ -379,7 +396,8 @@ async def _play(redis: Redis, st: dict) -> dict:
             s["energy"] += ARENA_DEFEND_ENERGY
         s["energy"] = min(s.get("emax", ARENA_ENERGY_MAX), s["energy"] + s.get("regen", ARENA_ENERGY_REGEN))
         s["action"] = None
-    st["log"].append({"a": {"code": a_code, "dmg": a_dmg}, "d": {"code": d_code, "dmg": d_dmg},
+    st["log"].append({"a": {"code": a_code, "dmg": a_dmg, **({"as": as_code["a"]} if as_code["a"] else {})},
+                      "d": {"code": d_code, "dmg": d_dmg, **({"as": as_code["d"]} if as_code["d"] else {})},
                       "kills": [entry_log.attacker_kills, entry_log.defender_kills] if entry_log else [0, 0],
                       # для живого журнала в Mini App: урон сторон и сработавшие навыки/события раунда
                       "hit": [entry_log.attacker_damage, entry_log.defender_damage] if entry_log else [0, 0],

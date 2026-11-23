@@ -26,6 +26,9 @@ class Perk:
     power: float = 0.0  # сила эффекта мини-игры: self — +урон за идеальную игру, enemy — −урон противнику за провал
     ai_weight: float = 1.0  # как охотно автоатака его жмёт
     first_round_damage: float = 0.0  # приём в первом раунде боя бьёт этим множителем вместо `damage` (Удар одного шага)
+    copy_share: float = 0.0  # копирует на раунд эту долю бафов источников противника
+    mirror: bool = False  # повторяет последний перк противника
+    energy_gain: int = 0  # +⚡ после применения
 
 
 BASE_PERKS: dict[str, Perk] = {p.code: p for p in (

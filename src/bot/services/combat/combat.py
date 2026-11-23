@@ -980,6 +980,10 @@ class BattleRun:
         if d_extra is not None:
             d.mods = d.mods + d_extra
         a_dead_before, d_dead_before = sum(a.dead.values()), sum(d.dead.values())
+        # Щит на следующий удар от действия раунда (Ямадзаки) — заново, даже если первый удар боя уже был.
+        for side, extra in ((a, a_extra), (d, d_extra)):
+            if extra is not None and extra.first_hit_ward > 0:
+                side.warded = False
         # Удар до обмена от действия раунда (приём «Первым» и т.п., 2026-11-23); стартовый — в __init__.
         for side, target, extra in ((a, d, a_extra), (d, a, d_extra)):
             if extra is not None and extra.first_strike > 0:

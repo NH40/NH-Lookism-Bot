@@ -174,7 +174,7 @@ async def finish(session: AsyncSession, redis: Redis, user_id: int, token: str, 
     if data["u"] != user_id:
         raise MinigameError("expired")
     p = data["p"]
-    if time.time() - data["t"] < p.get("seconds", 0) * MIN_TIME_SHARE:
+    if time.time() - data["t"] < p.get("min_seconds", p.get("seconds", 0) * MIN_TIME_SHARE):
         raise MinigameError("too_fast")
     if not p["need"] <= score <= p["max_score"]:
         raise MinigameError("failed")

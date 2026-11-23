@@ -1,7 +1,7 @@
 import { type ReactElement, useEffect, useRef, useState } from "react";
 import type { GameProps } from "./games";
 
-// 13 новых механик (2026-11-19): вместе с 8 старыми — 21; варианты задаёт сервер параметрами.
+// 13 механик (2026-11-19): вместе с 8 из games.tsx — 21; у каждой одна версия (2026-11-23).
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const ARROWS = ["⬆️", "⬇️", "⬅️", "➡️"];
@@ -42,6 +42,17 @@ function useTimer(seconds: number, onEnd: () => void) {
   return left;
 }
 
+/** N точек без наложения (раньше кружки могли лечь друг на друга — нажимался не тот). */
+function spread(n: number): [number, number][] {
+  const out: [number, number][] = [];
+  for (let tries = 0; out.length < n && tries < 400; tries++) {
+    const x = rnd(6, 84), y = rnd(6, 84);
+    if (out.every(([a, b]) => Math.hypot(a - x, b - y) > 18)) out.push([x, y]);
+  }
+  while (out.length < n) out.push([rnd(6, 84), rnd(6, 84)]);
+  return out;
+}
+
 /** Порядок: нажми кружки 1…N по порядку. */
 export function Order({ p, onDone }: GameProps) {
   const [dots, setDots] = useState<{ n: number; x: number; y: number }[]>([]);
@@ -57,7 +68,7 @@ export function Order({ p, onDone }: GameProps) {
         if (!alive.current) return;
         setRound(r + 1);
         next.current = 1;
-        setDots(Array.from({ length: p.length }, (_, i) => ({ n: i + 1, x: rnd(6, 84), y: rnd(6, 84) })));
+        setDots(spread(p.length).map(([x, y], i) => ({ n: i + 1, x, y })));
         const ok = await ask(p.round_ms);
         if (ok === 1) setScore(++s);
         setDots([]);
@@ -84,7 +95,7 @@ export function Order({ p, onDone }: GameProps) {
 }
 
 /** Выбор из вариантов под таймер: стрелки, стойки, парирование. */
-function Choice({ p, onDone, total, options, show, hint }: GameProps & { total: number; options: string[]; show: (i: number) => string; hint: string }) {
+function Choice({ p, onDone, total, options, show, hint, fixed }: GameProps & { total: number; options: string[]; show: (i: number) => string; hint: string; fixed?: boolean }) {
   const [cue, setCue] = useState<number | null>(null);
   const [score, setScore] = useState(0);
   const [i, setI] = useState(0);
@@ -97,7 +108,7 @@ function Choice({ p, onDone, total, options, show, hint }: GameProps & { total: 
       let s = 0;
       for (let k = 0; k < total; k++) {
         if (!alive.current) return;
-        const shuffled = [...options].sort(() => Math.random() - 0.5);
+        const shuffled = fixed ? options : [...options].sort(() => Math.random() - 0.5);
         const target = Math.floor(Math.random() * options.length);
         setOpts(shuffled);
         setCue(target);
@@ -126,7 +137,7 @@ function Choice({ p, onDone, total, options, show, hint }: GameProps & { total: 
 
 export const Arrows = (g: GameProps) => <Choice {...g} total={g.p.rounds} options={ARROWS} show={(i) => ARROWS[i]} hint="Жми такую же стрелку" />;
 export const Stance = (g: GameProps) => <Choice {...g} total={g.p.rounds} options={STANCES.slice(0, 3)} show={(i) => STANCES[i]} hint="Повтори стойку" />;
-export const Parry = (g: GameProps) => <Choice {...g} total={g.p.strikes} options={ARROWS} show={(i) => `💥${ARROWS[i]}`} hint="Удар оттуда — парируй туда же" />;
+export const Parry = (g: GameProps) => <Choice {...g} total={g.p.strikes} options={ARROWS} show={(i) => `💥${ARROWS[i]}`} hint="Удар оттуда — парируй туда же" fixed />; // кнопки на месте — 550 мс на поиск стрелки не хватало
 
 /** Кроты: красных бить, синих не трогать. */
 export function Whack({ p, onDone }: GameProps) {
@@ -137,9 +148,11 @@ export function Whack({ p, onDone }: GameProps) {
   const alive = useAlive();
   useEffect(() => {
     (async () => {
+      // ровно p.decoys синих (сервер считает цели от этого числа; раньше синие выпадали случайно)
+      const plan = Array.from({ length: p.count }, (_, k) => k < (p.decoys ?? 0)).sort(() => Math.random() - 0.5);
       for (let k = 0; k < p.count; k++) {
         if (!alive.current) return;
-        setCell({ i: Math.floor(Math.random() * 9), bad: Math.random() < p.decoy, id: k });
+        setCell({ i: Math.floor(Math.random() * 9), bad: plan[k], id: k });
         setN(k + 1);
         await sleep(p.life_ms);
         setCell(null);
@@ -318,7 +331,7 @@ export function Hold({ p, onDone }: GameProps) {
   // и чаще (50 мс) — раньше шаг 6–12% перепрыгивал узкую зону «точно».
   const zone = Math.max(p.zone, 0.12);
   const lo = 0.5 - zone / 2;
-  const step = Math.min(p.speed * 0.05, zone / 3);
+  const step = Math.min(p.speed * 0.05, zone / 8); // зона проходится ≥0.4 с (zone/3 — за 150 мс, не удержать)
   const ticks = useRef(0);
   const left = useTimer(p.seconds, () => onDone(score.current));
   useEffect(() => {
@@ -385,7 +398,9 @@ export function GoNoGo({ p, onDone }: GameProps) {
 
 /** Двойная: две точки разом — успей обе. */
 export function Split({ p, onDone }: GameProps) {
-  const [pair, setPair] = useState<{ id: number; a: [number, number]; b: [number, number]; hit: number[] } | null>(null);
+  type Pair = { id: number; a: [number, number]; b: [number, number]; hit: number[] };
+  const [pair, setPair] = useState<Pair | null>(null);
+  const pairRef = useRef<Pair | null>(null); // два пальца разом: состояние в ref, не в updater (тот может вызваться дважды)
   const [score, setScore] = useState(0);
   const [n, setN] = useState(0);
   const ref = useRef(0);
@@ -394,21 +409,27 @@ export function Split({ p, onDone }: GameProps) {
     (async () => {
       for (let k = 0; k < p.count; k++) {
         if (!alive.current) return;
-        setPair({ id: k, a: [rnd(6, 40), rnd(8, 84)], b: [rnd(54, 88), rnd(8, 84)], hit: [] });
+        pairRef.current = { id: k, a: [rnd(6, 40), rnd(8, 84)], b: [rnd(54, 88), rnd(8, 84)], hit: [] };
+        setPair(pairRef.current);
         setN(k + 1);
         await sleep(p.life_ms);
+        pairRef.current = null;
         setPair(null);
         await sleep(200);
       }
       if (alive.current) onDone(ref.current);
     })();
   }, []);
-  const tap = (w: number) => setPair((cur) => {
-    if (!cur || cur.hit.includes(w)) return cur;
+  const tap = (w: number) => {
+    const cur = pairRef.current;
+    if (!cur || cur.hit.includes(w)) return;
     const hit = [...cur.hit, w];
-    if (hit.length === 2) { setScore((ref.current += 1)); return null; }
-    return { ...cur, hit };
-  });
+    if (hit.length === 2) {
+      setScore((ref.current += 1));
+      pairRef.current = null;
+    } else pairRef.current = { ...cur, hit };
+    setPair(pairRef.current);
+  };
   return (
     <>
       <Hud left={`Пар ${score}/${p.need}`} right={`${n}/${p.count}`} />
@@ -435,7 +456,4 @@ export const NEW_GAMES = {
   hold: { name: "Удержание", hint: "Держи шкалу в зелёной зоне", C: Hold },
   gonogo: { name: "Сигнал", hint: "Зелёный — бей, красный — стой", C: GoNoGo },
   split: { name: "Двойной удар", hint: "Две цели разом — успей обе", C: Split },
-};
-export const VARIANT_NAMES: Record<string, string> = {
-  fast: "быстро", dense: "плотно", precise: "точно", long: "долго", tough: "жёстко", sprint: "спринт",
 };

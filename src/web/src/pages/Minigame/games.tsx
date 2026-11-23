@@ -1,5 +1,5 @@
 import { type ReactElement, useEffect, useRef, useState } from "react";
-import { NEW_GAMES, VARIANT_NAMES } from "./games2";
+import { NEW_GAMES } from "./games2";
 
 /** Параметры от сервера (`bot/config/minigame.params`). */
 export type P = Record<string, number>;
@@ -118,8 +118,9 @@ export function Combo({ p, onDone }: GameProps) {
   const [showing, setShowing] = useState(true);
   const [score, setScore] = useState(0);
   const alive = useAlive();
-  const play = async (r: number) => {
-    const s = Array.from({ length: p.length + r }, () => Math.floor(Math.random() * 4));
+  const play = async () => {
+    // длина серии — только от сложности (раньше +1 за каждую серию — к концу до 8 ударов)
+    const s = Array.from({ length: p.length }, () => Math.floor(Math.random() * 4));
     setSeq(s);
     setInput([]);
     setShowing(true);
@@ -133,13 +134,13 @@ export function Combo({ p, onDone }: GameProps) {
     }
     setShowing(false);
   };
-  useEffect(() => void play(0), []);
+  useEffect(() => void play(), []);
   const next = (ok: boolean) => {
     const sc = score + (ok ? 1 : 0);
     setScore(sc);
-    if (!ok || round + 1 >= p.rounds) return onDone(sc);
+    if (round + 1 >= p.rounds) return onDone(sc); // ошибка не обрывает игру — сервер допускает промах
     setRound(round + 1);
-    void play(round + 1);
+    void play();
   };
   const press = (k: number) => {
     if (showing) return;
@@ -391,7 +392,7 @@ export function Track({ p, onDone }: GameProps) {
           style={{ left: `${pos.x * 100}%`, top: `${pos.y * 100}%`, width: `${p.size * 100}%`, height: `${p.size * 100}%` }}
           onPointerDown={() => {
             setHits((ref.current += 1));
-            v.current = { x: -v.current.x * 1.05, y: v.current.y * 1.05 };
+            v.current = { x: -v.current.x, y: v.current.y }; // без разгона: раньше ×1.05 за попадание — к концу ×2
           }}
         />
       </div>
@@ -411,10 +412,7 @@ export const GAMES: Record<string, { name: string; hint: string; C: (p: GameProp
   ...NEW_GAMES,
 };
 
-/** Игра по коду «механика~вариант» (вариант — в названии). */
+/** Игра по коду механики (старый код «механика~вариант» — вариант отбрасывается, варианты убраны). */
 export function gameOf(code: string) {
-  const [base, variant] = code.split("~");
-  const g = GAMES[base];
-  if (!g) return undefined;
-  return variant ? { ...g, name: `${g.name} · ${VARIANT_NAMES[variant] ?? variant}` } : g;
+  return GAMES[code.split("~")[0]];
 }

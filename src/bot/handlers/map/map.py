@@ -284,21 +284,22 @@ async def cb_city_view(callback: CallbackQuery, session: AsyncSession) -> None:
 @router.callback_query(F.data == CB_MAP_THRONE)
 async def cb_throne(callback: CallbackQuery, session: AsyncSession, redis: Redis, bot: Bot) -> None:
     """Бой за трон по кнопке — те же бои за освобождение и трон, что после захвата, закрывшего страну."""
-    from bot.constant.phase import PHASE_FIST
-    from bot.keyboards.common import back_menu
-    from bot.handlers.district.district import _liberation_lines, _notify_liberations, _notify_throne, _throne_line
-    from bot.services.district import BattleOnCooldownError, NoThroneTargetError, NotThroneContenderError, challenge_throne
-    from bot.texts.map import (
-        THRONE_COOLDOWN, THRONE_CROWNED, THRONE_NO_TARGET, THRONE_NOT_CONTENDER, THRONE_NOT_CONTENDER_MISSING, THRONE_REPORT,
-    )
+    from bot.services.district import BattleOnCooldownError, NoThroneTargetError, NotThroneContenderError
+    from bot.texts.map import THRONE_COOLDOWN, THRONE_NO_TARGET, THRONE_NOT_CONTENDER, THRONE_NOT_CONTENDER_MISSING
     from bot.utils.formatting import format_countdown
 
     user = await _onboarded_user(session, callback.from_user.id)
     if user is None:
         await callback.answer(NOT_ONBOARDED, show_alert=True)
         return
+    from bot.handlers.arena.arena import render
+    from bot.services import arena
+
     try:
-        promoted, throne, liberations = await challenge_throne(session, redis, user.id)
+        st = await arena.start_throne(session, redis, user.id)
+    except arena.ArenaError:
+        await callback.answer("Ты или противник уже в бою.", show_alert=True)
+        return
     except NotThroneContenderError as exc:
         await callback.answer(THRONE_NOT_CONTENDER_MISSING.format(missing=exc.missing) if exc.missing else THRONE_NOT_CONTENDER, show_alert=True)
         return
@@ -309,10 +310,5 @@ async def cb_throne(callback: CallbackQuery, session: AsyncSession, redis: Redis
         await callback.answer(THRONE_COOLDOWN.format(countdown=format_countdown(exc.retry_after_seconds)), show_alert=True)
         return
     await callback.answer()
-    text = THRONE_REPORT.format(
-        liberations=_liberation_lines(liberations), throne=_throne_line(throne),
-        crowned=THRONE_CROWNED if promoted == PHASE_FIST else "",
-    )
-    await callback.message.answer(text, reply_markup=back_menu(CB_MAP_OPEN))
-    await _notify_liberations(bot, session, liberations)
-    await _notify_throne(bot, session, throne)
+    text, markup = render(st, callback.from_user.id)
+    await callback.message.answer(text, reply_markup=markup)

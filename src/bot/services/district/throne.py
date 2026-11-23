@@ -36,7 +36,6 @@ from bot.constant.dev_quest import TASK_WIN_PVP
 from bot.services.dev_quest import emit as quest_event
 from bot.services.district.army import apply_losses, load_camp
 from bot.services.gang import get_gang
-from bot.constant.phase import PHASE_FIST
 from bot.services.phase import check_promotion, crown, demote_to_gang
 from bot.config.empire import war_treasury_percent
 from bot.db.repositories import empire as empire_repo
@@ -60,20 +59,28 @@ class ThroneOutcome:
     defender_journal: tuple[str, ...] = ()  # тот же бой глазами защитника
 
 
-async def resolve_throne(session: AsyncSession, contender_id: int, incumbent_id: int) -> ThroneOutcome:
-    """Бой за трон и его последствия. НЕ коммитит — коммитит вызывающий захват (правило 10)."""
-    sides = sorted([(contender_id, CAMP_ATTACK), (incumbent_id, CAMP_DEFENSE)])
+async def throne_context(session: AsyncSession, contender_id: int, opponent_id: int):
+    """Лагерь атаки круга против лагеря защиты противника (трон или освобождение) → (лагеря, matchup).
+    Блокирует стопки — вызывающий коммитит или откатывает."""
+    sides = sorted([(contender_id, CAMP_ATTACK), (opponent_id, CAMP_DEFENSE)])
     camps = {uid: await load_camp(session, uid, camp, for_update=True) for uid, camp in sides}
-    contender_profile = await get_combat_profile(session, contender_id)
-    incumbent_profile = await get_combat_profile(session, incumbent_id)
-    m = matchup(contender_profile, incumbent_profile, vs=(VS_THRONE,), scouted=await has_scout_report(session, contender_id, incumbent_id),
-              attacker_stacks=camps[contender_id], defender_stacks=camps[incumbent_id])
-    result = simulate_battle(
-        camps[contender_id],
-        camps[incumbent_id],
-        attacker_chances=m.attacker,
-        defender_chances=m.defender,
+    m = matchup(
+        await get_combat_profile(session, contender_id), await get_combat_profile(session, opponent_id), vs=(VS_THRONE,),
+        scouted=await has_scout_report(session, contender_id, opponent_id),
+        attacker_stacks=camps[contender_id], defender_stacks=camps[opponent_id],
     )
+    return camps, m
+
+
+async def resolve_throne(session: AsyncSession, contender_id: int, incumbent_id: int) -> ThroneOutcome:
+    """Бой за трон целиком (мгновенный расчёт; в игре — онлайн-бой, `services/arena.start_throne`). НЕ коммитит."""
+    camps, m = await throne_context(session, contender_id, incumbent_id)
+    result = simulate_battle(camps[contender_id], camps[incumbent_id], attacker_chances=m.attacker, defender_chances=m.defender)
+    return await settle_throne(session, contender_id, incumbent_id, camps, m, result)
+
+
+async def settle_throne(session: AsyncSession, contender_id: int, incumbent_id: int, camps, m, result) -> ThroneOutcome:
+    """Последствия боя за трон (общие для онлайн-боя и мгновенного расчёта). НЕ коммитит."""
     await apply_losses(session, contender_id, CAMP_ATTACK, result.attacker.dead)
     abs_lines = await after_battle(session, m, result, kind=BATTLE_THRONE, attacker_id=contender_id, attacker_stacks=camps[contender_id], defender_id=incumbent_id)
     await apply_losses(session, incumbent_id, CAMP_DEFENSE, result.defender.dead)
@@ -146,14 +153,13 @@ async def resolve_liberation(session: AsyncSession, contender_id: int, holder_id
     (на коронации станут кругу), доля казны (как в войне императоров, по перевесу) и владения из
     этих городов — кругу; без городов и бизнесов император падает в банду. Поражение — круг
     остаётся кругом (теряет только погибших). НЕ коммитит."""
-    sides = sorted([(contender_id, CAMP_ATTACK), (holder_id, CAMP_DEFENSE)])
-    camps = {uid: await load_camp(session, uid, camp, for_update=True) for uid, camp in sides}
-    m = matchup(
-        await get_combat_profile(session, contender_id), await get_combat_profile(session, holder_id), vs=(VS_THRONE,),
-        scouted=await has_scout_report(session, contender_id, holder_id),
-        attacker_stacks=camps[contender_id], defender_stacks=camps[holder_id],
-    )
+    camps, m = await throne_context(session, contender_id, holder_id)
     result = simulate_battle(camps[contender_id], camps[holder_id], attacker_chances=m.attacker, defender_chances=m.defender)
+    return await settle_liberation(session, contender_id, holder_id, country_code, camps, m, result)
+
+
+async def settle_liberation(session: AsyncSession, contender_id: int, holder_id: int, country_code: str, camps, m, result) -> LiberationOutcome:
+    """Последствия боя за освобождение (общие для онлайн-боя и мгновенного расчёта). НЕ коммитит."""
     await apply_losses(session, contender_id, CAMP_ATTACK, result.attacker.dead)
     abs_lines = await after_battle(session, m, result, kind=BATTLE_THRONE, attacker_id=contender_id, attacker_stacks=camps[contender_id], defender_id=holder_id)
     await apply_losses(session, holder_id, CAMP_DEFENSE, result.defender.dead)
@@ -201,19 +207,15 @@ async def promote_or_throne(
     все выиграны — как обычно: бой за трон, если трон своей страны занят, иначе коронация.
     → (новая фаза или None, итог боя за трон или None, бои за освобождение). НЕ коммитит."""
     promotion = await check_promotion(session, user_id, city_id)
-    liberations: list[LiberationOutcome] = []
-    if promotion.foreign_holders:
-        country_code = (await phase_repo.get_phase(session, user_id))[1]
-        for holder in promotion.foreign_holders:
-            outcome = await resolve_liberation(session, user_id, holder, country_code)
-            liberations.append(outcome)
-            if not outcome.contender_won:
-                return promotion.phase, None, tuple(liberations)
-        promotion = await check_promotion(session, user_id, city_id)  # все свободны — коронация/трон
-    if promotion.throne_incumbent is None:
-        return promotion.phase, None, tuple(liberations)
-    outcome = await resolve_throne(session, user_id, promotion.throne_incumbent)
-    return (PHASE_FIST if outcome.contender_won else None), outcome, tuple(liberations)
+    if promotion.foreign_holders or promotion.throne_incumbent is not None:
+        # 2026-11-23: бои за освобождение и трон — только онлайн, по кнопке «👑 Бой за трон» (по очереди,
+        # `services/arena.start_throne`); здесь — лишь подсказка, что очередь открыта.
+        from bot.services.arena.scenarios import _notify
+        from bot.texts.map import THRONE_READY_PUSH
+
+        await _notify(user_id, THRONE_READY_PUSH)
+        return None, None, ()
+    return promotion.phase, None, ()
 
 
 # ---------------------------------------------------------------- вызов на трон вручную (2026-10-20)

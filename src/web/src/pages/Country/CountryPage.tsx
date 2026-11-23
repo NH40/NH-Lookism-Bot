@@ -2,12 +2,12 @@ import { ChevronRight, Flag, Home, Shield, Skull, Swords, Users } from "lucide-r
 import { CityScoutButton } from "../Intel/WorldScout";
 import { OnlineBattleButton } from "../../components/OnlineBattleButton";
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type { CityBattle, CityData, CityOwner, CountryData } from "../../types";
 import { BackHeader, Panel, Screen, StatRow, countdown, fmt, useCountdown } from "../../components/ui";
 import { Sheet } from "../../components/Sheet";
 import { Journal } from "../../components/Journal";
-import { ROUTE_MAP } from "../../constants";
+import { ROUTE_MAP, battlePath } from "../../constants";
 import { useAction, useApi } from "../../hooks/useApi";
 import "./Country.css";
 
@@ -116,6 +116,7 @@ function CityView({ cityId }: { cityId: number }) {
 }
 
 export function CountryPage() {
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const cityId = Number(params.get("city")) || null;
   const { data, status, error, reload } = useApi<CountryData>(cityId ? null : "/country");
@@ -144,7 +145,11 @@ export function CountryPage() {
                       {i + 1}. {o.throne ? `👑 Трон: император «${o.name}»` : `🏴 Освобождение у «${o.name}» — держит городов: ${o.cities}`}
                     </div>
                   ))}
-                  <button className="btn gold block" type="button" disabled={busy} onClick={() => run("/country/throne")}>
+                  <button className="btn gold block" type="button" disabled={busy} onClick={async () => {
+                    // 2026-11-23: бои очереди — онлайн; сервер отдаёт id боя
+                    const r = (await run("/country/throne")) as { battle_id?: string | null } | null;
+                    if (r?.battle_id) navigate(battlePath(r.battle_id));
+                  }}>
                     {data.throne.queue?.length ? `Бой: «${data.throne.queue[0].name}»` : "Бой за трон"}
                   </button>
                 </Panel>

@@ -271,6 +271,7 @@ class ThroneBattleOut(BaseModel):
     message: str
     crowned: bool
     won: bool
+    battle_id: str | None = None  # 2026-11-23: бой идёт онлайн — Mini App открывает экран боя
 
 
 @router.post("/throne", response_model=ThroneBattleOut)
@@ -281,37 +282,20 @@ async def post_throne(
 ) -> ThroneBattleOut:
     """Бой за трон по кнопке (2026-10-20) — те же бои за освобождение и трон, что после захвата,
     закрывшего страну; круг, державший всю страну, больше не застревает после проигрыша."""
-    from api.push import get_bot
-    from bot.constant.phase import PHASE_FIST
-    from bot.handlers.district.district import _notify_liberations, _notify_throne
-    from bot.services.district import BattleOnCooldownError, NoThroneTargetError, NotThroneContenderError, challenge_throne
+    from bot.services.district import BattleOnCooldownError, NoThroneTargetError, NotThroneContenderError
     from bot.texts.map import THRONE_NO_TARGET, THRONE_NOT_CONTENDER, THRONE_NOT_CONTENDER_MISSING
 
     await require_user(session, user_id)
+    from bot.services import arena
+
     try:
-        promoted, throne, liberations = await challenge_throne(session, redis, user_id)
+        st = await arena.start_throne(session, redis, user_id)
+    except arena.ArenaError:
+        raise bad("Ты или противник уже в бою.")
     except NotThroneContenderError as exc:
         raise bad(THRONE_NOT_CONTENDER_MISSING.format(missing=exc.missing) if exc.missing else THRONE_NOT_CONTENDER)
     except NoThroneTargetError:
         raise bad(THRONE_NO_TARGET)
     except BattleOnCooldownError as exc:
         raise bad(cooldown_text(BATTLE_PREFIX, exc.retry_after_seconds))
-    parts = []
-    for lib in liberations:
-        parts.append(
-            f"Освобождение: победа над «{lib.holder_label}», вернул городов {len(lib.city_names)}."
-            if lib.contender_won else f"Освобождение: поражение от «{lib.holder_label}» — ты остаёшься кругом."
-        )
-    if throne is not None:
-        parts.append(
-            f"Бой за трон: победа над «{throne.incumbent_label}» за {throne.rounds} раунд."
-            if throne.contender_won else f"Бой за трон: поражение от «{throne.incumbent_label}»."
-        )
-    crowned = promoted == PHASE_FIST
-    if crowned:
-        parts.append("Ты — император страны!")
-    bot = get_bot()
-    await _notify_liberations(bot, session, liberations)
-    await _notify_throne(bot, session, throne)
-    won = crowned or bool(liberations and all(lib.contender_won for lib in liberations) and (throne is None or throne.contender_won))
-    return ThroneBattleOut(message=" ".join(parts) or "Бой окончен.", crowned=crowned, won=won)
+    return ThroneBattleOut(message="Бой начался.", crowned=False, won=False, battle_id=st["id"])

@@ -187,3 +187,94 @@ async def _finish_challenge(redis: Redis, st: dict, result) -> None:
 
 
 core.register_finisher(KIND_CHALLENGE, _finish_challenge)
+
+
+# --- трон и освобождение страны — по кнопке, по очереди (2026-11-23) ---
+
+KIND_THRONE, KIND_LIBERATION = "throne", "liberation"
+
+
+async def start_throne(session: AsyncSession, redis: Redis, user_id: int) -> dict:
+    """Следующий бой очереди (чужие держатели, потом трон) — онлайн. Проверки и КД — как у прежнего
+    `challenge_throne`; противник не в сети — за него автобой лагерем защиты, может зайти и вести сам."""
+    from bot.cache.keys import battle_cooldown
+    from bot.constant.cooldown import CD_BATTLE
+    from bot.constant.phase import PHASE_CIRCLE
+    from bot.db.repositories import phase as phase_repo
+    from bot.services.admin.live_config import battle_cooldown_seconds
+    from bot.services.arena.sources import energy_for, perks_for
+    from bot.services.characteristic import get_combat_profile
+    from bot.services.cooldown import schedule as schedule_ready
+    from bot.services.country import ensure_battles_open_for
+    from bot.services.district.district import BattleOnCooldownError
+    from bot.services.district.throne import NoThroneTargetError, NotThroneContenderError, throne_context, throne_status
+
+    await ensure_battles_open_for(session, user_id)
+    status = await throne_status(session, user_id)
+    if not status.can_challenge:
+        if status.missing:
+            raise NotThroneContenderError(status.missing)
+        if (await phase_repo.get_phase(session, user_id))[0] != PHASE_CIRCLE:
+            raise NotThroneContenderError
+        raise NoThroneTargetError
+    opp = status.queue[0]
+    for uid in (user_id, opp.user_id):
+        if await core.current_of(redis, uid):
+            raise core.ArenaError("in_battle")
+    key = battle_cooldown(user_id)
+    profile = await get_combat_profile(session, user_id)
+    if not await redis.set(key, "1", nx=True, ex=profile.cooldown(battle_cooldown_seconds(PHASE_CIRCLE), profile.eco.battle_cooldown)):
+        raise BattleOnCooldownError(retry_after_seconds=max(0, await redis.ttl(key)))
+    try:
+        camps, m = await throne_context(session, user_id, opp.user_id)
+        country = (await phase_repo.get_phase(session, user_id))[1]
+        kind = KIND_THRONE if opp.is_throne else KIND_LIBERATION
+        st = await core.create(
+            redis, kind=kind, a_uid=user_id, d_uid=opp.user_id, a_stacks=camps[user_id], d_stacks=camps[opp.user_id],
+            a_chances=m.attacker, d_chances=m.defender, a_perks=await perks_for(session, user_id), d_perks=await perks_for(session, opp.user_id),
+            a_auto=False, d_auto=True, a_name=await _name(session, user_id), d_name=f"{opp.label} (оборона)",
+            meta={"opp": opp.user_id, "country": country}, a_energy=await energy_for(session, user_id),
+            d_energy=await energy_for(session, opp.user_id),
+        )
+    except Exception:
+        await redis.delete(key)
+        raise
+    finally:
+        await session.rollback()  # снять FOR UPDATE со стопок — бой идёт без транзакции
+    await schedule_ready(redis, user_id, CD_BATTLE, await redis.ttl(key))
+    title = "бой за трон" if opp.is_throne else "бой за освобождение страны"
+    await _notify(opp.user_id, f"🚨 <b>{st['a']['name']} начал {title} с тобой!</b> Бьётся лагерь защиты на автоатаке — "
+                               "зайди в бой и веди его сам.", st["id"])
+    return st
+
+
+async def _finish_throne(redis: Redis, st: dict, result) -> None:
+    from bot.services.district.throne import settle_liberation, settle_throne, throne_context, throne_status
+
+    a_id, opp = st["a"]["uid"], st["meta"]["opp"]
+    async with _SF["sf"]() as session:
+        camps, m = await throne_context(session, a_id, opp)
+        if st["kind"] == KIND_THRONE:
+            o = await settle_throne(session, a_id, opp, camps, m, result)
+            text = (f"👑 Бой за трон с «{o.incumbent_label}»: победа — ты император страны!" if o.contender_won
+                    else f"👑 Бой за трон с «{o.incumbent_label}»: поражение.")
+            foe_text = (f"👑 «{o.contender_label}» взял твой трон." if o.contender_won else f"👑 Трон устоял: «{o.contender_label}» отбит.")
+        else:
+            o = await settle_liberation(session, a_id, opp, st["meta"]["country"], camps, m, result)
+            text = (f"🏴 Освобождение у «{o.holder_label}»: победа, городов возвращено {len(o.city_names)}." if o.contender_won
+                    else f"🏴 Освобождение у «{o.holder_label}»: поражение — ты остаёшься кругом.")
+            foe_text = (f"🏴 «{o.contender_label}» освободил города своей страны." if o.contender_won
+                        else f"🏴 «{o.contender_label}» не смог освободить страну — города твои.")
+        await session.commit()
+        more = (await throne_status(session, a_id)).can_challenge
+    won = bool(o.contender_won)
+    st["report"] = {"won": won}
+    await core.save(redis, st)
+    if won and more:
+        text += " Следующий бой очереди — «👑 Бой за трон»."
+    await _notify(a_id, "🏁 " + text)
+    await _notify(opp, "🏁 " + foe_text)
+
+
+core.register_finisher(KIND_THRONE, _finish_throne)
+core.register_finisher(KIND_LIBERATION, _finish_throne)

@@ -76,6 +76,7 @@ class MasteryOut(BaseModel):
     tasks: list[MasteryTaskOut]
     tom_power: int
     tom_unlocked: bool
+    games_done: bool = False  # 4 испытания пройдены — дальше онлайн-бой с Томом
     points_bought: int
     points_free: int
     points_per_stage: int
@@ -139,6 +140,7 @@ async def get_mastery(
         ],
         tom_power=view.tom_power,
         tom_unlocked=view.tom_unlocked,
+        games_done=view.games_done,
         points_bought=view.points_bought,
         points_free=view.points_free,
         points_per_stage=MASTERY_POINTS_PER_STAGE,
@@ -152,9 +154,19 @@ async def get_mastery(
 
 
 @router.post("/tom")
-async def post_tom(user_id: int = Depends(get_current_user_id)) -> dict:
-    """Бой с Томом Ли заменён 4 мини-играми мастерства (`/api/minigame`, 2026-11-13)."""
-    raise bad("Том Ли заменён испытаниями мастерства — пройди 4 мини-игры.")
+async def post_tom(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session),
+                   redis: Redis = Depends(get_redis)) -> dict:
+    """Онлайн-бой с Томом Ли после 4 мини-игр мастерства (2026-11-23) → вид боя (`id` — на экран боя)."""
+    from api.routers.arena import _start
+    from bot.db.repositories.user import get_by_id
+    from bot.services import arena
+
+    try:
+        return await _start(arena.start_tom(session, redis, await get_by_id(session, user_id)), user_id)
+    except TomLockedError:
+        raise bad("Сначала пройди 4 испытания мастерства и остальные задания этапа.")
+    except QuestNotActiveError:
+        raise bad("Этап мастерства сейчас не активен.")
 
 
 class InvestIn(BaseModel):

@@ -253,6 +253,7 @@ class MasteryView:
     available_in_seconds: int | None
     breakthrough: dict[str, bool] | None = None  # статус QUEST_BREAKTHROUGH — что уже сделано
     breakthrough_need: int = 0
+    games_done: bool = False  # 4 испытания пройдены — дальше бой с Томом
 
 
 async def get_view(session: AsyncSession, user_id: int) -> MasteryView:
@@ -283,6 +284,7 @@ async def get_view(session: AsyncSession, user_id: int) -> MasteryView:
         tasks=_tasks(quest) if in_progress else [],
         tom_power=quest.tom_power,
         tom_unlocked=_tom_unlocked(quest),
+        games_done=games_ready(quest),
         points_bought=quest.points_bought,
         points_free=quest.points_free,
         available_in_seconds=(
@@ -329,7 +331,7 @@ async def lock_quest_for_tom(session: AsyncSession, user_id: int) -> MasteryQues
     quest = await mastery_repo.get(session, user_id, for_update=True)
     if quest is None or quest.status != QUEST_ACTIVE:
         raise QuestNotActiveError
-    if not _tom_unlocked(quest):
+    if not _tom_unlocked(quest) or not games_ready(quest):
         raise TomLockedError
     return quest
 
@@ -340,13 +342,17 @@ def mark_tom_defeated(quest: MasteryQuest) -> None:
 
 
 def grant_game_point(quest: MasteryQuest, bit: int) -> None:
-    """Мини-игра мастерства пройдена → +1 очко сразу; все 4 — этап закрыт (как победа над Томом). НЕ коммитит."""
+    """Мини-игра мастерства пройдена → +1 очко сразу. Все 4 — открывается онлайн-бой с Томом Ли, этап закрывает
+    победа над ним (пользователь 2026-11-23; было — этап закрывали сами игры). НЕ коммитит."""
     quest.games_done |= bit
     if quest.points_bought < MASTERY_POINTS_PER_STAGE:
         quest.points_free += 1
         quest.points_bought += 1
-    if quest.games_done == 0b1111:
-        _grant_stage_points(quest)
+
+
+def games_ready(quest: MasteryQuest) -> bool:
+    """Все 4 испытания мастерства этапа пройдены — можно в бой с Томом."""
+    return quest.games_done == 0b1111
 
 
 def _grant_stage_points(quest: MasteryQuest) -> None:

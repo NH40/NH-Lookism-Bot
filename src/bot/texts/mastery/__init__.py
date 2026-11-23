@@ -4,6 +4,7 @@ from bot.texts.mastery.mastery import (  # noqa: F401
     BREAKTHROUGH_LABELS,
     BREAKTHROUGH_TODO,
     BTN_FIGHT_TOM,
+    BTN_FIGHT_TOM_ONLINE,
     BTN_INVEST,
     BTN_OPEN_MASTERY,
     CHAIN_COMPLETE_ALERT,

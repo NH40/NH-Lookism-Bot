@@ -3,7 +3,7 @@ import { MASTERY_COLORS, MasteryTechniques } from "./MasteryTechniques";
 import type { ReactNode } from "react";
 import type { MasteryData } from "../../types";
 import { BackHeader, Bar, Panel, Screen, StatRow, fmt } from "../../components/ui";
-import { ROUTE_DEVELOPMENT, ROUTE_PLAY } from "../../constants/constants";
+import { ROUTE_DEVELOPMENT, ROUTE_PLAY, battlePath } from "../../constants/constants";
 import { useNavigate } from "react-router-dom";
 import { useAction, useApi } from "../../hooks/useApi";
 import "./Mastery.css";
@@ -94,13 +94,17 @@ export function MasteryPage() {
               ))}
               <div className="ms-tom">
                 <StatRow icon={<Swords size={16} color="#ff7a8a" />} label="Мощь испытаний" value={fmt(data.tom_power)} />
-                <div className="muted ms-note">4 мини-игры: сила, скорость, выносливость, техника — каждая +1 очко.</div>
+                <div className="muted ms-note">4 мини-игры: сила, скорость, выносливость, техника — каждая +1 очко. Потом — бой с Томом Ли, он закрывает этап.</div>
                 <button
                   className={`btn red block ${data.tom_unlocked ? "" : "off"}`}
                   disabled={!data.tom_unlocked}
-                  onClick={() => navigate(`${ROUTE_PLAY}?ctx=m:all`)}
+                  onClick={async () => {
+                    if (!data.games_done) return navigate(`${ROUTE_PLAY}?ctx=m:all`);
+                    const r = (await run("/mastery/tom")) as { id?: string | null } | null;
+                    if (r?.id) navigate(battlePath(r.id));
+                  }}
                 >
-                  {data.tom_unlocked ? "🎮 Испытания мастерства" : "Испытания откроются после остальных заданий"}
+                  {!data.tom_unlocked ? "Испытания откроются после остальных заданий" : data.games_done ? "⚔️ Бой с Томом Ли — закрыть этап" : "🎮 Испытания мастерства"}
                 </button>
               </div>
             </Panel>

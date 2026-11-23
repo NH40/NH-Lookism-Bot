@@ -210,6 +210,8 @@ export interface MasteryData {
   tasks: { label: string; progress: number; target: number; done: boolean; locked: boolean }[];
   tom_power: number;
   tom_unlocked: boolean;
+  /** 4 испытания пройдены — этап закрывает онлайн-бой с Томом Ли. */
+  games_done?: boolean;
   points_bought: number;
   points_free: number;
   points_per_stage: number;

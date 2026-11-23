@@ -35,7 +35,8 @@ def _b(text: str, data: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, callback_data=data)
 
 
-KIND_TITLE = {"district": "Бой за район", "challenge": "Вызов", "boss": "Босс", "city": "Штурм города", "raid": "Рейд", "war": "Война вождей"}
+KIND_TITLE = {"district": "Бой за район", "challenge": "Вызов", "boss": "Босс", "city": "Штурм города", "raid": "Рейд", "war": "Война вождей",
+              "tom": "Том Ли", "throne": "Бой за трон", "liberation": "Освобождение страны", "clan_war": "Клановая война", "tutorial": "Обучение"}
 SEP = "━━━━━━━━━━━━━━━━━━"
 
 
@@ -156,6 +157,28 @@ async def _show(callback: CallbackQuery, st: dict, *, perks_help: bool = False, 
         await callback.message.edit_text(text, reply_markup=markup)
     except Exception:  # то же сообщение — не страшно
         pass
+
+
+async def start_reply(callback: CallbackQuery, coro) -> None:
+    """Запустить онлайн-бой из кнопки другого экрана (Том, трон, клановая война): ошибки → алерт, бой → экран боя."""
+    from bot.handlers.district.district import attack_error_text
+
+    try:
+        st = await coro
+    except svc.ArenaError as exc:
+        await callback.answer(_ERR.get(exc.code, "Не вышло."), show_alert=True)
+        return
+    except Exception as exc:  # noqa: BLE001 — ошибки атаки (КД, лагерь пуст…) — тем же текстом, что у автобоя
+        text = attack_error_text(exc)
+        if text is None:
+            raise
+        await callback.answer(text, show_alert=True)
+        return
+    await callback.answer()
+    if not isinstance(st, dict):
+        return
+    text, markup = render(st, callback.from_user.id)
+    await callback.message.answer(text, reply_markup=markup)
 
 
 @router.callback_query(F.data.startswith(CB_START_DISTRICT))

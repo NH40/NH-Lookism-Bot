@@ -189,7 +189,7 @@ export function MinigamePage() {
       <div className="page">
         <BackHeader title={mastery ? "Испытания мастерства" : "Занятие у учителя"} backLabel="Назад" to={back} />
         {msg && <div className="mg-msg">{msg}</div>}
-        {data && total === 0 && <Panel title="Готово">Все испытания пройдены — вкладывай очки мастерства.</Panel>}
+        {data && total === 0 && <Panel title="Готово">Все 4 испытания пройдены — остался бой с Томом Ли: он закрывает этап (экран «Мастерство»).</Panel>}
         {data && total > 0 && (
           <Panel title={mastery ? `Этап ${data.level}` : `Уровень ${data.level}`}>
             <div className="mg-steps">

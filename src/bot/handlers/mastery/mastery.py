@@ -121,7 +121,7 @@ def render_mastery(view: MasteryView):
     if view.points_free:
         quest += FREE_POINTS_LINE.format(free=view.points_free)
     investable = [m for m in MASTERIES if view.mastery[m] < MASTERY_LEVEL_CAP] if view.points_free else []
-    markup = mastery_menu(tom=view.status == QUEST_ACTIVE and view.tom_unlocked, investable=investable)
+    markup = mastery_menu(tom=view.status == QUEST_ACTIVE and view.tom_unlocked, investable=investable, tom_fight=view.games_done)
     return MASTERY_SCREEN.format(tiers=tiers, quest_block=quest), markup
 
 
@@ -143,12 +143,21 @@ async def cb_mastery_open(callback: CallbackQuery, session: AsyncSession) -> Non
 
 @router.callback_query(F.data == CB_MASTERY_TOM_FIGHT)
 async def cb_mastery_tom(callback: CallbackQuery, session: AsyncSession, redis: Redis) -> None:
-    """Вместо боя с Томом Ли — 4 мини-игры мастерства в Mini App (пользователь 2026-11-13)."""
+    """Сначала 4 мини-игры мастерства в Mini App, затем онлайн-бой с Томом Ли — он закрывает этап (2026-11-23)."""
+    from bot.db.repositories.user import get_by_id
+    from bot.handlers.arena.arena import start_reply
     from bot.handlers.minigame import send_play
+    from bot.services import arena
+    from bot.services.mastery import get_view
     from bot.services.minigame import CTX_MASTERY
     from bot.texts.minigame import PLAY_MASTERY
 
-    await send_play(callback, f"{CTX_MASTERY}:all", PLAY_MASTERY)
+    view = await get_view(session, callback.from_user.id)
+    if not view.games_done:
+        await send_play(callback, f"{CTX_MASTERY}:all", PLAY_MASTERY)
+        return
+    user = await get_by_id(session, callback.from_user.id)
+    await start_reply(callback, arena.start_tom(session, redis, user))
 
 
 @router.callback_query(F.data.startswith(CB_MASTERY_INVEST_PREFIX))

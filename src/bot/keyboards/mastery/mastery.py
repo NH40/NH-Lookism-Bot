@@ -8,7 +8,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from bot.constant.mastery import CB_MASTERY_INVEST_PREFIX, CB_MASTERY_OPEN, CB_MASTERY_TOM_FIGHT
 from bot.constant.profile import CB_PROFILE_OPEN
 from bot.texts.common import BTN_BACK_TO_PROFILE
-from bot.texts.mastery import BTN_FIGHT_TOM, BTN_INVEST, BTN_OPEN_MASTERY
+from bot.texts.mastery import BTN_FIGHT_TOM, BTN_FIGHT_TOM_ONLINE, BTN_INVEST, BTN_OPEN_MASTERY
 from bot.texts.profile import MASTERY_LABELS
 
 
@@ -16,11 +16,11 @@ def _btn(text: str, callback_data: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text=text, callback_data=callback_data)
 
 
-def mastery_menu(*, tom: bool, investable: Sequence[str]) -> InlineKeyboardMarkup:
+def mastery_menu(*, tom: bool, investable: Sequence[str], tom_fight: bool = False) -> InlineKeyboardMarkup:
     """`investable` — мастерства, куда можно вложить очко (есть свободные и ниже 3 уровня)."""
     rows = []
     if tom:
-        rows.append([_btn(BTN_FIGHT_TOM, CB_MASTERY_TOM_FIGHT)])
+        rows.append([_btn(BTN_FIGHT_TOM_ONLINE if tom_fight else BTN_FIGHT_TOM, CB_MASTERY_TOM_FIGHT)])
     invest = [_btn(BTN_INVEST.format(label=MASTERY_LABELS[m]), f"{CB_MASTERY_INVEST_PREFIX}{m}") for m in investable]
     rows.extend(invest[i : i + 2] for i in range(0, len(invest), 2))
     rows.append([_btn("🌳 Техники мастерства", "mastery:tree")])

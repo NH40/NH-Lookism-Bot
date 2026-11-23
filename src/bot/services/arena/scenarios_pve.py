@@ -13,7 +13,7 @@ from bot.config.arena import ARENA_TTL_SECONDS
 from bot.services.arena import arena as core
 from bot.services.arena.scenarios import _SF, _name, _notify
 
-KIND_BOSS, KIND_CITY, KIND_RAID, KIND_WAR = "boss", "city", "raid", "war"
+KIND_BOSS, KIND_CITY, KIND_RAID, KIND_WAR, KIND_TOM = "boss", "city", "raid", "war", "tom"
 
 
 async def _create_pve(session, redis, user, kind: str, stacks, enemy, m, enemy_name: str, meta: dict, auto: bool) -> dict:
@@ -193,7 +193,83 @@ async def _finish_war(redis: Redis, st: dict, result) -> None:
     await _notify(st["d"]["uid"], f"🏁 Война вождей: {'поражение' if won else 'победа'}.")
 
 
+# --- Том Ли: финал этапа мастерства после 4 мини-игр (2026-11-23) ---
+
+
+def _tom_army(quest):
+    from bot.config.mastery import TOM_COMBAT_UNITS
+    from bot.services.combat import CombatStack
+
+    return [CombatStack(key="tom", unit_power=quest.tom_power / TOM_COMBAT_UNITS, quantity=TOM_COMBAT_UNITS)]
+
+
+def _tom_matchup(profile, stacks):
+    from bot.constant.position_skill import VS_BOSS
+    from bot.services.combat import base_chances
+    from bot.services.position_skill.battle import matchup
+
+    return matchup(profile, vs=(VS_BOSS,), defender_chances=base_chances(), attacker_kw={"no_block_no_flee": True}, attacker_stacks=stacks)
+
+
+async def start_tom(session: AsyncSession, redis: Redis, user, *, auto: bool = False) -> dict:
+    """Онлайн-бой с Томом Ли: те же проверки и КД, что у прежнего `fight_tom`; Том — 80/100/120% мощи лагеря атаки."""
+    from bot.cache.keys import battle_cooldown
+    from bot.constant.cooldown import CD_BATTLE
+    from bot.constant.extra import CAMP_ATTACK
+    from bot.services.admin.live_config import battle_cooldown_seconds
+    from bot.services.characteristic import get_combat_profile
+    from bot.services.cooldown import schedule as schedule_ready
+    from bot.services.country import ensure_battles_open
+    from bot.services.district.district import BattleOnCooldownError, NoAttackersError, load_camp
+    from bot.services.mastery import lock_quest_for_tom
+
+    if await core.current_of(redis, user.id):
+        raise core.ArenaError("in_battle")
+    await ensure_battles_open(session, user.country_code)
+    quest = await lock_quest_for_tom(session, user.id)
+    stacks = await load_camp(session, user.id, CAMP_ATTACK, for_update=True)
+    if not stacks:
+        raise NoAttackersError
+    profile = await get_combat_profile(session, user.id)
+    key = battle_cooldown(user.id)
+    if not await redis.set(key, "1", nx=True, ex=profile.cooldown(battle_cooldown_seconds(user.phase), profile.eco.battle_cooldown)):
+        raise BattleOnCooldownError(retry_after_seconds=max(0, await redis.ttl(key)))
+    st = await _create_pve(session, redis, user, KIND_TOM, stacks, _tom_army(quest), _tom_matchup(profile, stacks),
+                           "🥋 Том Ли", {"stage": quest.stage}, auto)
+    await session.rollback()  # бой идёт без открытой транзакции
+    await schedule_ready(redis, user.id, CD_BATTLE, await redis.ttl(key))
+    return st
+
+
+async def _finish_tom(redis: Redis, st: dict, result) -> None:
+    from bot.constant.extra import CAMP_ATTACK
+    from bot.constant.ledger import BATTLE_TOM
+    from bot.db.models.user import User
+    from bot.db.repositories import mastery as mastery_repo
+    from bot.services.absolute import after_battle
+    from bot.services.characteristic import get_combat_profile
+    from bot.services.district.district import apply_losses, load_camp
+    from bot.services.mastery import games_ready, mark_tom_defeated
+
+    async with _SF["sf"]() as session:
+        user = await session.get(User, st["a"]["uid"])
+        quest = await mastery_repo.get(session, user.id, for_update=True)
+        stacks = await load_camp(session, user.id, CAMP_ATTACK, for_update=True)
+        m = _tom_matchup(await get_combat_profile(session, user.id), stacks)
+        await apply_losses(session, user.id, CAMP_ATTACK, result.attacker.dead)
+        await after_battle(session, m, result, kind=BATTLE_TOM, attacker_id=user.id, attacker_stacks=stacks)
+        # этап мог смениться (админ) — засчитываем победу только тому этапу, за который бились
+        won = bool(result.attacker_won and quest is not None and quest.stage == st["meta"].get("stage") and games_ready(quest))
+        if won:
+            mark_tom_defeated(quest)
+        await session.commit()
+    st["report"] = {"won": bool(result.attacker_won), "stage_closed": won}
+    await core.save(redis, st)
+    await _notify(st["a"]["uid"], "🏁 Том Ли побеждён — этап мастерства закрыт!" if won else "🏁 Том Ли устоял. Подготовься и попробуй снова.")
+
+
 core.register_finisher(KIND_BOSS, _finish_boss)
 core.register_finisher(KIND_CITY, _finish_city)
 core.register_finisher(KIND_RAID, _finish_raid)
 core.register_finisher(KIND_WAR, _finish_war)
+core.register_finisher(KIND_TOM, _finish_tom)

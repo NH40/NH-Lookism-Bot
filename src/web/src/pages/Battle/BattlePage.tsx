@@ -72,8 +72,9 @@ function battleParams(game: string): P {
 
 const KIND_TITLE: Record<string, string> = {
   district: "Бой за район", challenge: "Вызов", boss: "Босс", city: "Штурм города", raid: "Рейд", war: "Война вождей",
+  tom: "Том Ли", throne: "Бой за трон", liberation: "Освобождение страны", clan_war: "Клановая война", tutorial: "Обучение",
 };
-const BOT_FACE: Record<string, string> = { boss: "👹", raid: "🏴‍☠️", district: "🤖", city: "🏯" };
+const BOT_FACE: Record<string, string> = { boss: "👹", raid: "🏴‍☠️", district: "🤖", city: "🏯", tom: "🥋", clan_war: "🏰", tutorial: "🎓" };
 
 function status(side: Side, mine: boolean): string {
   if (side.afk) return mine ? "пропустил ходы · автоатака" : "не ходит · автоатака";

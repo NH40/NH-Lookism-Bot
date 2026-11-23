@@ -17,6 +17,7 @@ from bot.services.mastery.mastery import (  # noqa: F401
     check_unlock,
     get_view,
     invest_point,
+    games_ready,
     lock_quest_for_tom,
     mark_tom_defeated,
     record_pvp_win,

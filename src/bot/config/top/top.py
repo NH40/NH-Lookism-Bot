@@ -43,3 +43,16 @@ def clan_reward(place: int) -> tuple[int, int, int]:
 
 TOP_PLAYER_PLACES = max(len(TOP_PLAYER_DONATE), len(TOP_PLAYER_COINS), len(TOP_PLAYER_TICKETS))
 TOP_CLAN_PLACES = max(len(TOP_CLAN_DONATE), len(TOP_CLAN_COINS), len(TOP_CLAN_TICKETS))
+
+# Сила развития (СР) — в рублях стоимости прокачки (пользователь 2026-11-24, `services/top/dev_score`). Где есть
+# реальная цена (чёрный рынок, донат-уровни клана) — она; ниже — оценки в том же масштабе.
+SR_STAT_RANK = 40  # за ранг каждой из 4 характеристик
+SR_MASTERY_LEVEL = 300  # за уровень каждого из 4 мастерств
+SR_AWAKENING_LEVEL = 1_500  # за этап пробуждения
+SR_MASTERY_TECH_TIER = 300  # техника мастерства: × ступень дерева (300 / 600 / 900)
+SR_ABSOLUTE = 2_000  # за карту абсолюта
+SR_SCHOOL = 500  # за учителя статистов
+SR_MONSTER = 5_000  # 67 MONSTER
+SR_BUSINESS_LEVEL = 100  # за уровень прокачки и вместимости бизнеса
+SR_NHCOIN_PER_RUB = 1_000  # курс для NHCoin-вложений клана (земли, здания)
+SR_CLAN_ACTIVE_DAYS = 7  # в СР клана — участники, заходившие за столько дней

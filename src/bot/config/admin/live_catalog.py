@@ -228,6 +228,7 @@ SCALARS: dict[str, tuple[str, str, str]] = {
     "MASTERY_STAGE_DELAY_MULT": ("dev", "bot.config.mastery.mastery", "Мастерство: рост задержки по этапам"),
     "MASTERY_POINTS_PER_STAGE": ("dev", "bot.config.mastery.mastery", "Мастерство: очков за этап"),
     "EQUAL_WIN_POWER_PERCENT": ("dev", "bot.config.mastery.mastery", "Мастерство: «равный» по мощи, ±%"),
+    "LEAGUE_STATIC_AXES": ("league", "bot.config.league.league", "Лиги по мощи и силе развития: 1 — включено, 0 — прежний счёт"),
     "TOM_POWER_MIN": ("dev", "bot.config.mastery.mastery", "Том Ли: минимум мощи"),
     "PATH_AWAKEN_FRAGMENTS": ("dev", "bot.config.unique_path.unique_path", "Путь: фрагментов для пробуждения"),
     "PATH_LEVEL_COST_PER_LEVEL": ("dev", "bot.config.unique_path.unique_path", "Путь: цена уровня, шаг"),
@@ -374,6 +375,8 @@ GROUP_OTHER = "Прочее"
 # Таблица (dict или tuple чисел) → (раздел, модуль, заголовок): каждое значение — своя настройка.
 TABLES: dict[str, tuple[str, str, str]] = {
     "LEAGUE_THRESHOLDS": ("league", "bot.config.league.league", "Лиги: счёт для лиги №"),
+    "LEAGUE_POWER_THRESHOLDS": ("league", "bot.config.league.league", "Лиги по силе: мощь армии для лиги №"),
+    "LEAGUE_DEV_THRESHOLDS": ("league", "bot.config.league.league", "Лиги по силе: сила развития для лиги №"),
     "EMPIRE_WAR_COOLDOWN_BY_LEAGUE_SECONDS": ("shield", "bot.config.empire.empire", "Война империй: КД нападения, сек, лига №"),
     "EMPIRE_WAR_SHIELD_BY_LEAGUE_SECONDS": ("shield", "bot.config.empire.empire", "Война империй: щит проигравшему, сек, лига №"),
     "BUSINESS_BUILD_COST": ("business", "bot.config.game.game", "Цена постройки"),

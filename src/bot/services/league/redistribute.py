@@ -70,8 +70,9 @@ def _clan_bonus(rank: int | None) -> int:
     return league_cfg.league.SCORE_CLAN_TOP25
 
 
-async def compute_scores(session: AsyncSession) -> list[tuple[int, int, int]]:
-    """(игрок, текущая лига, новый счёт) всех игроков."""
+async def compute_scores(session: AsyncSession) -> list[tuple[int, int, int, int]]:
+    """(игрок, текущая лига, счёт, лига по правилам) всех игроков. Счёт — прежняя формула (хранится и в профиле);
+    лига — по счёту, а при включённых лигах по силе (`LEAGUE_STATIC_AXES`) — по мощи и силе развития."""
     from bot.db.repositories.clan.clan import top_page
     from bot.services.business.business import income_for
 
@@ -80,16 +81,58 @@ async def compute_scores(session: AsyncSession) -> list[tuple[int, int, int]]:
     top = {c.id: i for i, (c, _) in enumerate(await top_page(session, 25, 0))}
     clan_of = await repo.clan_of_all(session)
     weight = league_cfg.league.SCORE_INCOME_LOG
+    axes = bool(league_cfg.league.LEAGUE_STATIC_AXES)
+    power, dev = (await _axes(session)) if axes else ({}, {})
     result = []
     for uid, current, score in base:
         rate = income_for(counts[uid], levels.get(uid, 0), 60, random.Random(0)) if uid in counts else 0
         extra = weight * math.log10(max(rate, 0) + 1) + _clan_bonus(top.get(clan_of.get(uid)))
-        result.append((uid, current, int(round(score + extra))))
+        total = int(round(score + extra))
+        target = league_cfg.league_for_axes(power.get(uid, 0), dev.get(uid, 0)) if axes else league_cfg.league_for_score(total)
+        result.append((uid, current, total, target))
     return result
 
 
-def _plan(scores: list[tuple[int, int, int]]) -> Plan:
-    targets = [(cur, league_cfg.league_for_score(s)) for _, cur, s in scores]
+async def _axes(session: AsyncSession) -> tuple[dict[int, int], dict[int, int]]:
+    """Мощь армии (последний снимок) и сила развития всех игроков — двумя запросами."""
+    from bot.services.top.dev_score import player_scores
+
+    power = {int(u): int(p or 0) for u, p in (await session.execute(text("SELECT id, army_power_cache FROM users"))).all()}
+    return power, await player_scores(session)
+
+
+@dataclass(frozen=True, slots=True)
+class AxisStats:
+    """Разброс по нынешней лиге среди активных за 3 дня: (10%, медиана, 90%) мощи и силы развития."""
+
+    league: int
+    players: int
+    power: tuple[int, int, int]
+    dev: tuple[int, int, int]
+
+
+async def axis_stats(session: AsyncSession) -> list[AxisStats]:
+    """Для подбора порогов лиг по силе (админка): кто сейчас в какой лиге и насколько силён."""
+    from bot.services.top.dev_score import player_scores
+
+    rows = (await session.execute(text(
+        "SELECT id, league, army_power_cache FROM users WHERE last_active_at > now() - interval '3 days'"
+    ))).all()
+    dev = await player_scores(session, [int(r[0]) for r in rows]) if rows else {}
+    by: dict[int, list[tuple[int, int]]] = {}
+    for uid, league, pw in rows:
+        by.setdefault(int(league), []).append((int(pw or 0), int(dev.get(int(uid), 0))))
+
+    def q(values: list[int]) -> tuple[int, int, int]:
+        v = sorted(values)
+        pick = lambda f: v[min(len(v) - 1, int(f * (len(v) - 1)))]  # noqa: E731
+        return pick(0.1), pick(0.5), pick(0.9)
+
+    return [AxisStats(lg, len(xs), q([p for p, _ in xs]), q([d for _, d in xs])) for lg, xs in sorted(by.items())]
+
+
+def _plan(scores: list[tuple[int, int, int, int]]) -> Plan:
+    targets = [(cur, target) for _, cur, _, target in scores]
     moves = Counter((a, b) for a, b in targets if a != b)
     return Plan(
         counts=dict(sorted(Counter(b for _, b in targets).items())), moves=dict(sorted(moves.items())),
@@ -217,8 +260,8 @@ async def redistribute(session_factory: async_sessionmaker[AsyncSession], redis:
         async with session_factory() as session:
             scores = await compute_scores(session)
             plan = _plan(scores)
-            moves = {u: league_cfg.league_for_score(s) for u, cur, s in scores if league_cfg.league_for_score(s) != cur}
-            await repo.set_scores(session, [(u, s) for u, _, s in scores])
+            moves = {u: t for u, cur, _, t in scores if t != cur}
+            await repo.set_scores(session, [(u, s) for u, _, s, _ in scores])
             if moves:
                 await accrue_many(session, sorted(moves))  # доход по старому месту — до переезда
                 params = {"cancelled": CHALLENGE_CANCELLED, "admin": RESOLUTION_ADMIN, "pending": CHALLENGE_PENDING, "ids": list(moves)}
@@ -239,7 +282,7 @@ async def redistribute(session_factory: async_sessionmaker[AsyncSession], redis:
             else:
                 stats = (0, 0, 0, 0, 0)
             await session.commit()
-        moved = sorted((u, cur, moves[u]) for u, cur, _ in scores if u in moves)
+        moved = sorted((u, cur, moves[u]) for u, cur, _, _ in scores if u in moves)
         log.info("League redistribute: %s moved, stats %s", len(moved), stats)
         return Result(plan, *stats, moved=moved)
     finally:

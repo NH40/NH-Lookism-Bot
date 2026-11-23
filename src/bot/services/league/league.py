@@ -14,7 +14,7 @@ from sqlalchemy import text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bot.cache.keys import league_sweep_flag
-from bot.config.league import LEAGUE_SWEEP_HOUR_UTC, league_for_score, next_league
+from bot.config.league import LEAGUE_SWEEP_HOUR_UTC, next_league
 from bot.constant.admin.world import CHALLENGE_CANCELLED, RESOLUTION_ADMIN, WAR_CANCELLED
 from bot.constant.district import CHALLENGE_PENDING
 from bot.constant.empire import WAR_PENDING
@@ -65,15 +65,15 @@ async def launch(session_factory: async_sessionmaker[AsyncSession]) -> dict[int,
     try:
         async with session_factory() as session:
             scores = await compute_scores(session)
-            await repo.set_scores(session, [(u, s) for u, _, s in scores])
-            await repo.set_leagues(session, [(u, league_for_score(s)) for u, _, s in scores if league_for_score(s) > 0])
+            await repo.set_scores(session, [(u, s) for u, _, s, _ in scores])
+            await repo.set_leagues(session, [(u, t) for u, _, _, t in scores if t > 0])
             await repo.move_to_league_maps(session, _PARAMS)
             await session.commit()
     finally:
         reset_source(token)
     counts: dict[int, int] = {}
-    for _, _, s in scores:
-        counts[league_for_score(s)] = counts.get(league_for_score(s), 0) + 1
+    for _, _, _, t in scores:
+        counts[t] = counts.get(t, 0) + 1
     return counts
 
 
@@ -104,13 +104,12 @@ async def daily_sweep(session_factory: async_sessionmaker[AsyncSession]) -> list
     await refresh_powers(session_factory, everyone=True)
     async with session_factory() as session:
         scores = await compute_scores(session)
-        await repo.set_scores(session, [(u, s) for u, _, s in scores])
+        await repo.set_scores(session, [(u, s) for u, _, s, _ in scores])
         await session.commit()
     promoted = []
     token = set_source("league:promotion")
     try:
-        for user_id, current, score in scores:
-            target = league_for_score(score)
+        for user_id, current, _score, target in scores:
             if target > current:
                 async with session_factory() as session:
                     await promote(session, user_id, target)

@@ -333,10 +333,16 @@ async def get_leagues_preview(user_id: int = Depends(get_current_user_id), sessi
     """Что будет при пересчёте лиг сейчас (мощь — из последнего снимка)."""
     role = await access(session, user_id, SECTION_WORLD)
     from bot.config.league import LEAGUE_THRESHOLDS, LEAGUES
-    from bot.services.league import preview
+    from bot.config import league as cfg
+    from bot.services.league import axis_stats, preview
 
     plan = await preview(session)
+    stats = await axis_stats(session)
     return {
+        # лиги по силе (2026-11-23): выключатель, пороги, разброс мощи и СР по нынешним лигам — для подбора порогов
+        "axes": {"enabled": bool(cfg.league.LEAGUE_STATIC_AXES), "power": list(cfg.league.LEAGUE_POWER_THRESHOLDS),
+                 "dev": list(cfg.league.LEAGUE_DEV_THRESHOLDS),
+                 "stats": [{"league": LEAGUES[s.league].name, "players": s.players, "power": list(s.power), "dev": list(s.dev)} for s in stats]},
         "thresholds": list(LEAGUE_THRESHOLDS), "up": plan.up, "down": plan.down, "can_run": role == ROLE_SUPER,
         "counts": [{"name": LEAGUES[lg].name, "count": n} for lg, n in plan.counts.items()],
         "moves": [{"from": LEAGUES[a].name, "to": LEAGUES[b].name, "count": n} for (a, b), n in plan.moves.items()],

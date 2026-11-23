@@ -442,18 +442,19 @@ async def cb_league_recalc(callback: CallbackQuery, session: AsyncSession) -> No
     if not await guard(callback, session, SECTION_WORLD):
         return
     from bot.config.league import LEAGUE_THRESHOLDS
-    from bot.handlers.league.league import plan_lines
-    from bot.services.league import preview
+    from bot.handlers.league.league import axes_lines, plan_lines
+    from bot.services.league import axis_stats, preview
 
     await callback.answer()
     plan = await preview(session)
+    axes = axes_lines(await axis_stats(session))
     counts, moves = plan_lines(plan)
     is_super = await roles.role_of(session, callback.from_user.id) == ROLE_SUPER
     text = T.LEAGUE_RECALC_PREVIEW.format(
         thresholds=" / ".join(str(x) for x in LEAGUE_THRESHOLDS), counts=counts, up=plan.up, down=plan.down, moves=moves,
         note="" if is_super else T.LEAGUE_RECALC_SUPER_ONLY,
     )
-    await safe_edit_text(callback.message, text, reply_markup=K.league_recalc(is_super))
+    await safe_edit_text(callback.message, (axes + "\n\n" + text)[:4000], reply_markup=K.league_recalc(is_super))
 
 
 async def run_league_recalc(bot, session_factory, redis, admin_id: int, chat_id: int) -> None:

@@ -67,6 +67,26 @@ async def send_moved(bot: Bot, moved: list[tuple[int, int, int]]) -> None:
             await asyncio.sleep(1)
 
 
+def axes_lines(stats) -> str:
+    """Лиги по силе для админки: выключатель, пороги и разброс мощи/СР по нынешним лигам (подбор порогов)."""
+    from bot.config import league as cfg
+    from bot.services.combat.explain import compact
+
+    on = bool(cfg.league.LEAGUE_STATIC_AXES)
+    lines = [
+        f"⚖️ <b>Лиги по силе</b>: {'включены' if on else 'выключены (работает прежний счёт)'}",
+        "Пороги мощи: " + " / ".join(compact(x) for x in cfg.league.LEAGUE_POWER_THRESHOLDS),
+        "Пороги силы развития: " + " / ".join(str(x) for x in cfg.league.LEAGUE_DEV_THRESHOLDS),
+        "Сейчас (активные за 3 дня, 10% · медиана · 90%):",
+    ]
+    for s in stats:
+        p, d = s.power, s.dev
+        lines.append(f"• {LEAGUES[s.league].name} ({s.players}): мощь {compact(p[0])} · {compact(p[1])} · {compact(p[2])}; "
+                     f"СР {d[0]} · {d[1]} · {d[2]}")
+    lines.append("Пороги и выключатель — «Настройки игры» → лиги. Предпросмотр ниже считает по ним.")
+    return "\n".join(lines)
+
+
 def plan_lines(plan) -> tuple[str, str]:
     """Тексты «игроков по лигам» и «переезды» для админки (бот и Mini App)."""
     counts = "\n".join(f"• {LEAGUES[lg].name}: <b>{n}</b>" for lg, n in plan.counts.items())

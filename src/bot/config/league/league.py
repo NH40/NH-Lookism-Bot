@@ -53,6 +53,28 @@ SCORE_CLAN_TOP10 = 60
 SCORE_CLAN_TOP25 = 30
 
 
+# Лиги по реальной силе (пользователь 2026-11-23): две оси со статичными порогами — мощь армии и сила развития
+# (вся прокачка, `services/top/dev_score`). Лига — старшая из двух: перерос порог по любой оси — выше. Донат не
+# считается отдельно (он и так превращается в мощь и прокачку). Пока выключатель 0 — работает прежний счёт; пороги
+# подбираются по предпросмотру в админке (распределение мощи и СР по лигам), потом выключатель → 1.
+LEAGUE_STATIC_AXES = 0
+LEAGUE_POWER_THRESHOLDS: tuple[int, ...] = (0, 1_000_000, 10_000_000, 100_000_000, 500_000_000)
+LEAGUE_DEV_THRESHOLDS: tuple[int, ...] = (0, 150, 350, 600, 900)
+
+
+def _by(thresholds: tuple[int, ...], value: float) -> int:
+    league = 0
+    for index, threshold in enumerate(thresholds):
+        if value >= threshold:
+            league = index
+    return league
+
+
+def league_for_axes(power: float, dev: float) -> int:
+    """Лига по двум осям — старшая из лиги по мощи и лиги по силе развития."""
+    return max(_by(LEAGUE_POWER_THRESHOLDS, power), _by(LEAGUE_DEV_THRESHOLDS, dev))
+
+
 def league_for_score(score: int) -> int:
     league = 0
     for index, threshold in enumerate(LEAGUE_THRESHOLDS):

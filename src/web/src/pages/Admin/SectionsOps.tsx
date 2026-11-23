@@ -375,7 +375,9 @@ export function WorldSection() {
   );
 }
 
-type LeaguePlan = { thresholds: number[]; up: number; down: number; can_run: boolean; counts: { name: string; count: number }[]; moves: { from: string; to: string; count: number }[] };
+type LeaguePlan = { thresholds: number[]; up: number; down: number; can_run: boolean; counts: { name: string; count: number }[]; moves: { from: string; to: string; count: number }[] ; axes?: LeagueAxes };
+/** Лиги по силе (2026-11-23): выключатель, пороги мощи и силы развития, разброс по нынешним лигам (10% · медиана · 90%). */
+type LeagueAxes = { enabled: boolean; power: number[]; dev: number[]; stats: { league: string; players: number; power: number[]; dev: number[] }[] };
 
 /** Пересчёт лиг (2026-11-19): очки всем заново и раскидать по текущим порогам в обе стороны, территория едет с игроком. */
 function LeagueRecalc() {
@@ -399,6 +401,16 @@ function LeagueRecalc() {
         <button type="button" className="btn ghost block" disabled={loading} onClick={load}>{loading ? "Считаю…" : "Посчитать, что будет"}</button>
       ) : (
         <div style={{ display: "grid", gap: 8 }}>
+          {plan.axes && (
+            <div className="adm-hint">
+              <b>Лиги по силе: {plan.axes.enabled ? "включены" : "выключены (прежний счёт)"}</b>
+              <br />Мощь: {plan.axes.power.map((x) => fmt(x)).join(" / ")} · СР: {plan.axes.dev.join(" / ")}
+              {plan.axes.stats.map((st) => (
+                <div key={st.league}>{st.league} ({st.players}): мощь {st.power.map((x) => fmt(x)).join(" · ")}; СР {st.dev.join(" · ")}</div>
+              ))}
+              Пороги и выключатель — «Настройки игры» → лиги.
+            </div>
+          )}
           <Kv rows={[["Пороги", plan.thresholds.join(" / ")], ...plan.counts.map((c) => [c.name, fmt(c.count)] as [string, string]), ["Переезды", `вверх ${plan.up} · вниз ${plan.down}`]]} />
           {plan.moves.length > 0 && <div className="adm-hint">{plan.moves.map((m) => `${m.from} → ${m.to}: ${m.count}`).join(" · ")}</div>}
           <div className="adm-hint">Территория едет с игроком: занятый район — на свободный в том же городе (нет мест — здания возвращаются NHCoin), занятый трон теряется. Мощь пересчитается при запуске.</div>

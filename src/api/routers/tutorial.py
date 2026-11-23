@@ -13,7 +13,7 @@ from api.routers._common import bad, clean_label, require_user
 from bot.config.tutorial import TRAINING_LESSONS, TRAINING_POWER_DISTRICTS, TRAINING_REWARDS, TRAINING_STEPS
 from bot.handlers.tutorial.tutorial import advance_text, error_text, reward_text
 from bot.services import tutorial as svc
-from bot.texts.tutorial import BUILT, COLLECTED, FIGHT_LOST, FIGHT_WON, NOT_YET, NOTHING_TO_COLLECT, STEP_TEXTS, STEP_TITLES
+from bot.texts.tutorial import BUILT, COLLECTED, NOT_YET, NOTHING_TO_COLLECT, STEP_TEXTS, STEP_TITLES
 from bot.utils.formatting import format_number
 
 router = APIRouter(prefix="/api/tutorial", tags=["tutorial"])
@@ -63,10 +63,14 @@ async def start(user_id: int = Depends(get_current_user_id), session: AsyncSessi
 
 @router.post("/attack")
 async def attack(body: TargetIn, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session), redis: Redis = Depends(get_redis)) -> dict:
-    await require_user(session, user_id)
-    report, adv = await _do(svc.attack(session, redis, user_id, body.city, body.district))
-    msg = (FIGHT_WON if report.won else FIGHT_LOST).format(city=report.city, captured=report.captured, dead=format_number(report.dead), attackers=format_number(report.attackers))
-    return {"message": msg, "won": report.won, **_adv(adv)}
+    from bot.services import arena
+
+    user = await require_user(session, user_id)
+    try:  # 2026-11-23: бой обучения — онлайн; Mini App открывает экран боя
+        st = await _do(arena.start_tutorial(session, redis, user, body.city, body.district))
+    except arena.ArenaError:
+        raise bad("Ты уже в бою.") from None
+    return {"message": "Бой начался.", "battle_id": st["id"]}
 
 
 @router.post("/build")

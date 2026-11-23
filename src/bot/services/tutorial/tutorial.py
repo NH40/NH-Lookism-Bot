@@ -218,14 +218,15 @@ def _touch(run: TrainingRun) -> None:
     flag_modified(run, "map")  # JSONB правится на месте — без отметки SQLAlchemy изменений не увидит
 
 
-async def attack(session: AsyncSession, redis: Redis, user_id: int, city: int, district: int | None) -> tuple[FightReport, Advance]:
-    """Бой на учебной карте: район посёлка или город целиком. Коммитит."""
+async def prepare_attack(session: AsyncSession, redis: Redis, user_id: int, city: int, district: int | None):
+    """Проверки и КД боя на учебной карте → (лагерь, боты, matchup, цели). Блокирует стопки — вызывающий
+    откатывает (онлайн-бой, 2026-11-23) или коммитит."""
     from bot.config.characteristic import extra_power_for_rank
     from bot.constant.extra import CAMP_ATTACK
     from bot.constant.position_skill import VS_DISTRICT
     from bot.services.characteristic import get_combat_profile
-    from bot.services.combat import CombatStack, base_chances, simulate_battle
-    from bot.services.district.army import apply_losses, load_camp
+    from bot.services.combat import CombatStack, base_chances
+    from bot.services.district.army import load_camp
     from bot.services.position_skill.battle import matchup
 
     run = await _active(session, user_id)
@@ -250,7 +251,16 @@ async def attack(session: AsyncSession, redis: Redis, user_id: int, city: int, d
     profile = await get_combat_profile(session, user_id)
     defender = [CombatStack(key="bot", unit_power=extra_power_for_rank(spec.bot_rank), quantity=spec.bots)]
     m = matchup(profile, vs=(VS_DISTRICT,), defender_chances=base_chances(), attacker_stacks=stacks)
-    result = simulate_battle(stacks, defender, attacker_chances=m.attacker, defender_chances=m.defender)
+    return stacks, defender, m, targets
+
+
+async def settle_attack(session: AsyncSession, user_id: int, city: int, targets: list[int], result) -> tuple[FightReport, Advance]:
+    """Итог боя на учебной карте: потери, районы, шаги обучения. Коммитит."""
+    from bot.constant.extra import CAMP_ATTACK
+    from bot.services.district.army import apply_losses
+
+    run = await _active(session, user_id)
+    spec, state = cfg.TRAINING_CITIES[city], run.map["c"][city]
     await apply_losses(session, user_id, CAMP_ATTACK, result.attacker.dead)
     if result.attacker_won:
         for i in targets:
@@ -261,6 +271,15 @@ async def attack(session: AsyncSession, redis: Redis, user_id: int, city: int, d
     adv = await _advance(session, run, user_id)
     await session.commit()
     return report, adv
+
+
+async def attack(session: AsyncSession, redis: Redis, user_id: int, city: int, district: int | None) -> tuple[FightReport, Advance]:
+    """Бой целиком мгновенно (тесты; в игре — онлайн-бой `services/arena.start_tutorial`). Коммитит."""
+    from bot.services.combat import simulate_battle
+
+    stacks, defender, m, targets = await prepare_attack(session, redis, user_id, city, district)
+    result = simulate_battle(stacks, defender, attacker_chances=m.attacker, defender_chances=m.defender)
+    return await settle_attack(session, user_id, city, targets, result)
 
 
 async def build(session: AsyncSession, user_id: int, city: int, district: int) -> tuple[int, Advance]:

@@ -9,5 +9,6 @@ from bot.services.arena.scenarios import (  # noqa: F401,E402
     start_challenge, start_clan_war, start_district, start_throne,
 )
 from bot.services.arena.scenarios_pve import (  # noqa: F401,E402
-    KIND_BOSS, KIND_CITY, KIND_RAID, KIND_TOM, KIND_WAR, start_boss, start_city, start_raid, start_tom, start_war,
+    KIND_BOSS, KIND_CITY, KIND_RAID, KIND_TOM, KIND_TUTORIAL, KIND_WAR, start_boss, start_city, start_raid, start_tom,
+    start_tutorial, start_war,
 )

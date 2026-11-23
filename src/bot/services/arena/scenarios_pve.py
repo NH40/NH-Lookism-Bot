@@ -268,8 +268,43 @@ async def _finish_tom(redis: Redis, st: dict, result) -> None:
     await _notify(st["a"]["uid"], "🏁 Том Ли побеждён — этап мастерства закрыт!" if won else "🏁 Том Ли устоял. Подготовься и попробуй снова.")
 
 
+# --- обучение (2026-11-23) ---
+
+KIND_TUTORIAL = "tutorial"
+
+
+async def start_tutorial(session: AsyncSession, redis: Redis, user, city: int, district: int | None) -> dict:
+    """Бой на учебной карте онлайн — с первого боя новичок видит перки и журнал «откуда что»."""
+    from bot.config.tutorial.tutorial import TRAINING_CITIES
+    from bot.services.tutorial.tutorial import prepare_attack
+
+    if await core.current_of(redis, user.id):
+        raise core.ArenaError("in_battle")
+    stacks, defender, m, targets = await prepare_attack(session, redis, user.id, city, district)
+    st = await _create_pve(session, redis, user, KIND_TUTORIAL, stacks, defender, m, f"Боты: {TRAINING_CITIES[city].name}",
+                           {"city": city, "targets": targets}, False)
+    await session.rollback()
+    return st
+
+
+async def _finish_tutorial(redis: Redis, st: dict, result) -> None:
+    from bot.handlers.tutorial.tutorial import advance_text
+    from bot.services.tutorial.tutorial import settle_attack
+    from bot.texts.tutorial import FIGHT_LOST, FIGHT_WON
+    from bot.utils.formatting import format_number
+
+    async with _SF["sf"]() as session:
+        report, adv = await settle_attack(session, st["a"]["uid"], st["meta"]["city"], st["meta"]["targets"], result)
+    st["report"] = {"won": report.won, "captured": report.captured}
+    await core.save(redis, st)
+    msg = (FIGHT_WON if report.won else FIGHT_LOST).format(
+        city=report.city, captured=report.captured, dead=format_number(report.dead), attackers=format_number(report.attackers))
+    await _notify(st["a"]["uid"], "🎓 " + msg + ("\n\n" + advance_text(adv) if advance_text(adv) else ""))
+
+
 core.register_finisher(KIND_BOSS, _finish_boss)
 core.register_finisher(KIND_CITY, _finish_city)
 core.register_finisher(KIND_RAID, _finish_raid)
 core.register_finisher(KIND_WAR, _finish_war)
 core.register_finisher(KIND_TOM, _finish_tom)
+core.register_finisher(KIND_TUTORIAL, _finish_tutorial)

@@ -18,8 +18,6 @@ from bot.texts.tutorial import (
     COLLECTED,
     DONE_SCREEN,
     ERRORS,
-    FIGHT_LOST,
-    FIGHT_WON,
     GRADUATED,
     INCOME_LINE,
     INTRO_LEGACY,
@@ -123,16 +121,22 @@ async def cb_attack(callback: CallbackQuery, session: AsyncSession, redis: Redis
         await callback.answer()
         return
     city, district = target
-    try:
-        report, adv = await svc.attack(session, redis, callback.from_user.id, city, None if district < 0 else district)
+    from bot.db.repositories.user import get_by_id
+    from bot.handlers.arena.arena import render
+    from bot.services import arena
+
+    try:  # 2026-11-23: бой обучения — онлайн; итог и шаги обучения — по окончании (пуш)
+        st = await arena.start_tutorial(session, redis, await get_by_id(session, callback.from_user.id), city,
+                                        None if district < 0 else district)
+    except arena.ArenaError:
+        await callback.answer("Ты уже в бою.", show_alert=True)
+        return
     except svc.TutorialError as exc:
         await callback.answer(error_text(exc), show_alert=True)
         return
-    msg = (FIGHT_WON if report.won else FIGHT_LOST).format(
-        city=report.city, captured=report.captured, dead=format_number(report.dead), attackers=format_number(report.attackers)
-    )
-    await callback.answer(msg, show_alert=True)
-    await _show(callback, session, redis, advance_text(adv))
+    await callback.answer()
+    text, markup = render(st, callback.from_user.id)
+    await callback.message.answer(text, reply_markup=markup)
 
 
 @router.callback_query(F.data.startswith(CB_TUT_BUILD_PREFIX))

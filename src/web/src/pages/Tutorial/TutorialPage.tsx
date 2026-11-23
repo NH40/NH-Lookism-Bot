@@ -1,7 +1,7 @@
 import { Check, Coins, Hammer, Lock, Swords } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { BackHeader, Bar, Panel, Screen, fmt, useCountdown } from "../../components/ui";
-import { ROUTE_MORE } from "../../constants";
+import { ROUTE_MORE, battlePath } from "../../constants";
 import { useAction, useApi } from "../../hooks/useApi";
 import "./Tutorial.css";
 
@@ -16,6 +16,12 @@ interface TutData {
 export function TutorialPage() {
   const { data, status, error, reload } = useApi<TutData>("/tutorial");
   const { run, busy } = useAction(reload);
+  const navigate = useNavigate();
+  // 2026-11-23: бой обучения — онлайн; сервер отдаёт id боя
+  const fight = async (body: { city: number; district?: number }) => {
+    const r = (await run("/tutorial/attack", body)) as { battle_id?: string } | null;
+    if (r?.battle_id) navigate(battlePath(r.battle_id));
+  };
   const cd = useCountdown(data?.cooldown ?? 0);
   const spot = data?.cities.flatMap((c) => c.owned.map((o, i) => (o && c.buildings[i] < data.capacity ? [c.index, i] : null))).find(Boolean) as number[] | undefined;
   const built = data?.cities.reduce((s, c) => s + c.buildings.reduce((a, b) => a + b, 0), 0) ?? 0;
@@ -60,14 +66,14 @@ export function TutorialPage() {
                         {c.owned.map((o, i) => (
                           <button key={i} type="button" className={`tut-d ${o ? "mine" : "bot"}`}
                             disabled={busy || o || !c.open || cd > 0 || c.whole}
-                            onClick={() => run("/tutorial/attack", { city: c.index, district: i })}>
+                            onClick={() => void fight({ city: c.index, district: i })}>
                             {o ? "🏠" : "🤖"}{c.buildings[i] ? <em>{c.buildings[i]}</em> : null}
                           </button>
                         ))}
                       </div>
                       {c.whole && c.open && !all && (
                         <button type="button" className="btn red small block" style={{ marginTop: 6 }} disabled={busy || cd > 0}
-                          onClick={() => run("/tutorial/attack", { city: c.index })}>
+                          onClick={() => void fight({ city: c.index })}>
                           <Swords size={14} /> Взять город целиком
                         </button>
                       )}

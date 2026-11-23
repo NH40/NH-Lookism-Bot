@@ -1,8 +1,12 @@
 """Рейды на игроков (сервис, пользователь 2026-11-19). Баланс — `config/raid`.
 
 Фоновый проход (`sweep`): назначает рейды подходящим игрокам (есть районы, заходил за 3 дня, не в обязательном
-обучении, лимит в сутки и интервал) и разыгрывает просроченные — лагерем защиты. Игрок, получив пуш, может
-встретить рейд раньше лагерем атаки (`fight`). Каждый бой — своя транзакция.
+обучении, лимит в сутки и интервал) и разыгрывает просроченные. Игрок, получив пуш, может встретить рейд раньше
+(`fight`, онлайн — `services/arena.start_raid`). Каждый бой — своя транзакция.
+
+2026-11-24 (пользователь): рейд всегда бьёт по БОЛЕЕ СИЛЬНОМУ лагерю (`target_camp`: больше мощи, при равенстве —
+больше статистов) — и заранее, и по сроку. Раньше по сроку бился лагерь защиты: держали его пустым и отдавали
+район, сильный лагерь атаки рейд не трогал.
 """
 from __future__ import annotations
 
@@ -83,6 +87,19 @@ async def spawn(session_factory: async_sessionmaker[AsyncSession], rng: random.R
     return created
 
 
+async def target_camp(session: AsyncSession, user_id: int) -> str:
+    """Лагерь, по которому бьёт рейд: больше мощи, при равенстве — больше статистов; оба пусты — защиты."""
+    from bot.constant.extra import CAMP_ATTACK, CAMP_DEFENSE
+    from bot.services.district.army import load_camp
+
+    def score(stacks) -> tuple[float, int]:
+        return sum(s.unit_power * s.quantity for s in stacks), sum(s.quantity for s in stacks)
+
+    attack = score(await load_camp(session, user_id, CAMP_ATTACK, for_update=False))
+    defense = score(await load_camp(session, user_id, CAMP_DEFENSE, for_update=False))
+    return CAMP_ATTACK if attack > defense else CAMP_DEFENSE
+
+
 async def _resolve(session: AsyncSession, raid: Raid, camp: str, result_override=None) -> RaidOutcome:
     """Бой рейда против лагеря игрока. НЕ проверяет статус — вызывающий держит строку под блокировкой. Коммитит."""
     from bot.constant.position_skill import VS_DISTRICT
@@ -134,19 +151,15 @@ async def _resolve(session: AsyncSession, raid: Raid, camp: str, result_override
 
 
 async def fight(session: AsyncSession, user_id: int) -> RaidOutcome:
-    """Игрок встречает свой рейд лагерем атаки, не дожидаясь срока. Коммитит."""
-    from bot.constant.extra import CAMP_ATTACK
-
+    """Игрок встречает свой рейд, не дожидаясь срока, — бьётся более сильный лагерь. Коммитит."""
     raid = await session.scalar(select(Raid).where(Raid.user_id == user_id, Raid.status == STATUS_PENDING).with_for_update())
     if raid is None:
         raise RaidError("no_raid")
-    return await _resolve(session, raid, CAMP_ATTACK)
+    return await _resolve(session, raid, await target_camp(session, user_id))
 
 
 async def resolve_due(session_factory: async_sessionmaker[AsyncSession]) -> list[RaidOutcome]:
-    """Просроченные рейды — лагерем защиты."""
-    from bot.constant.extra import CAMP_DEFENSE
-
+    """Просроченные рейды — бьётся более сильный лагерь игрока."""
     async with session_factory() as session:
         ids = [int(i) for (i,) in (await session.execute(
             select(Raid.id).where(Raid.status == STATUS_PENDING, Raid.starts_at <= _now())
@@ -156,7 +169,7 @@ async def resolve_due(session_factory: async_sessionmaker[AsyncSession]) -> list
         async with session_factory() as session:
             raid = await session.scalar(select(Raid).where(Raid.id == rid, Raid.status == STATUS_PENDING).with_for_update(skip_locked=True))
             if raid is not None:
-                out.append(await _resolve(session, raid, CAMP_DEFENSE))
+                out.append(await _resolve(session, raid, await target_camp(session, raid.user_id)))
     return out
 
 
@@ -166,11 +179,11 @@ def raid_enemy(raid: Raid) -> list:
     return [CombatStack(key="raid", unit_power=max(1.0, raid.power / cfg.RAID_STACK_SIZE), quantity=cfg.RAID_STACK_SIZE)]
 
 
-async def settle_online(session: AsyncSession, raid_id: int, result) -> RaidOutcome | None:
-    """Итог онлайн-боя с рейдом (лагерь атаки): рейд ещё pending, срок сдвинут на время боя."""
+async def settle_online(session: AsyncSession, raid_id: int, result, camp: str | None = None) -> RaidOutcome | None:
+    """Итог онлайн-боя с рейдом: рейд ещё pending, срок сдвинут на время боя. `camp` — лагерь, что вышел в бой."""
     from bot.constant.extra import CAMP_ATTACK
 
     raid = await session.scalar(select(Raid).where(Raid.id == raid_id, Raid.status == STATUS_PENDING).with_for_update())
     if raid is None:
         return None
-    return await _resolve(session, raid, CAMP_ATTACK, result_override=result)
+    return await _resolve(session, raid, camp or CAMP_ATTACK, result_override=result)

@@ -86,25 +86,26 @@ async def _finish_city(redis: Redis, st: dict, result) -> None:
 # --- рейд ---
 
 async def start_raid(session: AsyncSession, redis: Redis, user, *, auto: bool = False) -> dict:
-    """Встретить свой рейд лагерем атаки онлайн. Срок рейда сдвигается на время боя — фоновый проход его не тронет."""
-    from bot.constant.extra import CAMP_ATTACK
+    """Встретить свой рейд онлайн — бьётся более сильный лагерь (2026-11-24). Срок рейда сдвигается на время боя —
+    фоновый проход его не тронет."""
     from bot.constant.position_skill import VS_DISTRICT
     from bot.services.characteristic import get_combat_profile
     from bot.services.combat import base_chances
     from bot.services.district.army import load_camp
     from bot.services.position_skill.battle import matchup
-    from bot.services.raid.raid import RaidError, pending_of, raid_enemy
+    from bot.services.raid.raid import RaidError, pending_of, raid_enemy, target_camp
 
     await _free(redis, user.id)
     raid = await pending_of(session, user.id)
     if raid is None:
         raise RaidError("no_raid")
-    stacks = await load_camp(session, user.id, CAMP_ATTACK, for_update=True)
+    camp = await target_camp(session, user.id)
+    stacks = await load_camp(session, user.id, camp, for_update=True)
     if not stacks:
         raise core.ArenaError("no_army")
     m = matchup(await get_combat_profile(session, user.id), vs=(VS_DISTRICT,), defender_chances=base_chances(), attacker_stacks=stacks)
     raid.starts_at = datetime.now(timezone.utc) + timedelta(seconds=ARENA_TTL_SECONDS)
-    st = await _create_pve(session, redis, user, KIND_RAID, stacks, raid_enemy(raid), m, "Рейд", {"raid_id": raid.id}, auto)
+    st = await _create_pve(session, redis, user, KIND_RAID, stacks, raid_enemy(raid), m, "Рейд", {"raid_id": raid.id, "camp": camp}, auto)
     await session.commit()
     return st
 
@@ -113,7 +114,7 @@ async def _finish_raid(redis: Redis, st: dict, result) -> None:
     from bot.services.raid.raid import settle_online
 
     async with _SF["sf"]() as session:
-        o = await settle_online(session, st["meta"]["raid_id"], result)
+        o = await settle_online(session, st["meta"]["raid_id"], result, st["meta"].get("camp"))
     st["report"] = {"won": bool(o and o.won), "rewards": o.rewards if o else {}, "lost": o.districts_lost if o else 0}
     await core.save(redis, st)
 

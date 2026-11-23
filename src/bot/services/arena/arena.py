@@ -414,7 +414,7 @@ async def _play(redis: Redis, st: dict) -> dict:
         pending = st[me]["pending_game"]
         if pending:
             score = ARENA_AUTO_MINIGAME_SCORE if st[me]["auto"] else pending.get("score", 0.0)
-            mult *= 1 - pending["power"] * w[other] * (1 - score)
+            mult *= max(0.1, 1 - pending["power"] * w[other] * (1 - score))  # урон не ниже 10% — сила игры может быть ~1
         if me == "a":
             a_dmg *= mult
         else:

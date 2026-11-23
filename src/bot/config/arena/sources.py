@@ -72,13 +72,24 @@ def _move_perks(kind: str, table: dict, code: str, idx: int) -> list[Perk]:
             break
         mv = moves[t]
         top = t == len(TIER_LEVELS) - 1
-        out.append(Perk(
+        p = Perk(
             code=f"{kind}:{code}:{t + 1}", name=mv.name, about=mv.about, cost=MOVE_COST[t], cooldown=MOVE_COOLDOWN[t],
             self_mods=mv.mods.scale(b), enemy_mods=mv.enemy.scale(b), damage=up(mv.damage), enemy_damage=down(mv.enemy_damage),
             minigame=mini if top else None, game=games[idx % 4] if top else None, power=mv.power * b if top else 0.0,
             first_round_damage=up(mv.first_round_damage), copy_share=mv.copy_share * b, mirror=mv.mirror, energy_gain=mv.energy_gain,
-        ))
+        )
+        out.append(_true_about(p) if b != 1.0 else p)
     return out
+
+
+def _true_about(p: Perk, prefix: str = "") -> Perk:
+    """Описание из настоящих чисел перка (после множителя силы из баланса)."""
+    from dataclasses import replace
+
+    from bot.config.arena.moves import describe
+
+    return replace(p, about=prefix + describe(p.self_mods, p.damage, p.enemy_damage, p.power, p.copy_share, p.minigame,
+                                              p.first_round_damage, p.energy_gain, p.mirror))
 
 
 def build_source_perks() -> dict[str, Perk]:
@@ -161,11 +172,12 @@ def mastery_perks() -> list[Perk]:
                 mv = MASTERY_MOVES[t.code][0]
                 b = MASTERY_BOOST.get(t.code, 1.0)
                 mini = "enemy" if mv.power else None
-                out.append(_p(
+                p = _p(
                     f"mt:{t.code}", mv.name, f"{t.name}: {mv.about}", MASTERY_MOVE_COST[tier - 1], MASTERY_MOVE_COOLDOWN[tier - 1],
                     self_mods=mv.mods.scale(b), enemy_mods=mv.enemy.scale(b), damage=1 + (mv.damage - 1) * b,
                     enemy_damage=1 - (1 - mv.enemy_damage) * b, minigame=mini, game="reaction" if mini else None,
                     power=mv.power * b, copy_share=mv.copy_share * b,
                     energy_gain=mv.energy_gain,
-                ))
+                )
+                out.append(_true_about(p, prefix=f"{t.name}: ") if b != 1.0 else p)
     return out

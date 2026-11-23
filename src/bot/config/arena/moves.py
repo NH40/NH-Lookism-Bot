@@ -301,3 +301,46 @@ MASTERY_MOVES: dict[str, tuple[Move, CombatMods]] = {
     "goo_four_swords": (Move("Четыре меча", "Доп. удары +80%, шанс крита +25%.", M(multi_hit=0.8, crit_chance=0.25)), M(crit_chance=0.04, sure_hit=0.02)),
     "killing_intent": (Move("Давление", "Противник проходит мини-игру — провал: его урон до −50%.", power=0.5), M(suppress=0.06)),
 }
+
+
+# Описание приёма из его настоящих чисел (после множителя силы) — иначе текст «урон ×1.5» расходился бы с делом.
+_DESC: tuple[tuple[str, str, bool], ...] = (  # поле, подпись, в процентах
+    ("attack", "атака", True), ("pierce", "пробитие", True), ("sure_hit", "наверняка", True), ("crit_chance", "шанс крита", True),
+    ("crit_power", "сила крита", True), ("multi_hit", "доп. удары", True), ("cleave", "по нескольким целям", True),
+    ("bleed", "кровотечение", True), ("dodge", "уклонение", True), ("dodge_true", "уклонение сквозь подавление", True),
+    ("block", "блок", True), ("counter", "контратака", True), ("counter_power", "сила контратак", True),
+    ("reduction", "гашение", True), ("durability", "прочность", True), ("loss_save", "спасение павших", True),
+    ("heal", "лечение", True), ("revive_strike", "павшие встают и бьют", True), ("suppress", "реакции противника −", True),
+    ("chaos", "шанс хаоса", True), ("first_strike", "удар до обмена", True), ("first_hit_ward", "щит на удар", True),
+    ("grab_share", "захват армии", True), ("stack_break", "сбить стаки", True), ("slow", "замедление", True),
+    ("phantom_chance", "невидимый удар", True), ("rush", "натиск", True), ("overcome", "Преодоление", True),
+    ("vs_stronger", "против сильного", True), ("cqc_boost", "стаки CQC", True), ("reflect", "отражение", True),
+)
+
+
+def describe(mods: CombatMods, damage: float = 1.0, enemy_damage: float = 1.0, power: float = 0.0, copy_share: float = 0.0,
+             minigame: str | None = None, first_round_damage: float = 0.0, energy_gain: int = 0, mirror: bool = False) -> str:
+    parts: list[str] = []
+    if first_round_damage:
+        parts.append(f"в 1-м раунде урон ×{first_round_damage:.2f}".rstrip("0").rstrip("."))
+    if abs(damage - 1) >= 0.005:
+        parts.append(f"урон ×{damage:.2f}".rstrip("0").rstrip("."))
+    if abs(enemy_damage - 1) >= 0.005:
+        parts.append(f"урон противника ×{enemy_damage:.2f}".rstrip("0").rstrip("."))
+    for name, label, pct in _DESC:
+        v = getattr(mods, name, 0.0) or 0.0
+        if abs(v) >= 0.005:
+            sign = "" if label.endswith("−") else ("+" if v > 0 else "−")
+            parts.append(f"{label}{sign}{round(abs(v) * 100)}%" if label.endswith("−") else f"{label} {sign}{round(abs(v) * 100)}%")
+    if copy_share:
+        parts.append(f"копия {round(copy_share * 100)}% бафов противника")
+    if mirror:
+        parts.append("повтор последнего приёма противника")
+    if energy_gain:
+        parts.append(f"+{energy_gain}⚡")
+    if minigame == "self" and power:
+        parts.append(f"мини-игра: удар до ×{1 + power:.1f}")
+    elif minigame == "enemy" and power:
+        parts.append(f"мини-игра противнику: провал — его урон до −{round(min(1.0, power) * 100)}%")
+    s = ", ".join(parts) or "удар в стиле источника"
+    return s[0].upper() + s[1:] + "."

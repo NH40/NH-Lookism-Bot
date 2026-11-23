@@ -1,6 +1,17 @@
 """Публичное API домена league (тексты)."""
 from bot.texts.league.league import (  # noqa: F401
+    BTN_CLAIM,
+    CLAIMS_LINE,
+    CLAIM_ERRORS,
+    CLAIM_EXPIRED_PUSH,
+    CLAIM_TAKEN,
     DEMOTED,
+    MOVED_LINE,
+    NO_CITY_LINE,
+    PROMOTED_MOVED,
+    REFUND_LINE,
+    THRONE_LOST_LINE,
+    THRONE_MOVED_LINE,
     LEAGUE_BAR,
     LEAGUE_BUFF,
     LEAGUE_HEAD,

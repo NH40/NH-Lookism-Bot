@@ -530,6 +530,9 @@ async def settle_challenge(session: AsyncSession, redis: Redis, ctx: ChallengeFi
         # (±10% мощи — сравниваются армии, вышедшие в этот бой).
         await record_pvp_win(session, challenge.attacker_id, result.attacker.initial_power, result.defender.initial_power)
     await challenge_repo.set_outcome(session, challenge_id, resolution=resolution, attacker_won=result.attacker_won)
+    from bot.services.league.move import settle_claim  # вызов по заявке после перехода в лигу (2026-11-23)
+
+    await settle_claim(session, challenge_id, bool(result.attacker_won), captured_districts > 0)
     won = result.attacker_won
     await log_activity(
         session, challenge.attacker_id, ACT_CAPTURE if captured_districts else ACT_BATTLE,

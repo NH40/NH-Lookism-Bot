@@ -28,6 +28,7 @@ from api.routers import payments
 from api.routers import minigame, sale
 from api.routers import bank, penguan
 from api.routers import tutorial as tutorial_router
+from api.routers import league_claims
 from api.routers import raid as raid_router
 from api.routers import arena as arena_router
 from api.routers import support as support_router
@@ -162,6 +163,7 @@ app.add_middleware(
 app.include_router(profile.router)
 app.include_router(battle_pass.router)
 app.include_router(img.router)
+app.include_router(league_claims.router)
 app.include_router(sale.router)
 app.include_router(minigame.router)
 app.include_router(map_router.router)

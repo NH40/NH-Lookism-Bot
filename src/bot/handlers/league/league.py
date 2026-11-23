@@ -26,11 +26,44 @@ async def send_promotions(bot: Bot, session_factory: async_sessionmaker[AsyncSes
 
     async with session_factory() as session:
         closed = await closed_entries(session)
-    for i, (user_id, league) in enumerate(promoted, 1):
+    for i, item in enumerate(promoted, 1):
+        user_id, league = item[0], item[1]
+        report = item[2] if len(item) > 2 else None
+        if report is not None:  # повышение с переездом (2026-11-23)
+            text, markup = _moved_push(report, league, closed)
+            await notify(bot, user_id, text, reply_markup=markup)
+            if i % _PUSHES_PER_SECOND == 0:
+                await asyncio.sleep(1)
+            continue
         text = DEMOTED.format(name=LEAGUES[league].name, days=LEAGUE_INACTIVE_DAYS) if demoted else PROMOTED.format(name=LEAGUES[league].name, income=round(LEAGUE_INCOME_STEP * league * 100), power=round(LEAGUE_POWER_STEP * league * 100))
         await notify(bot, user_id, text, reply_markup=country_menu(closed, league))
         if i % _PUSHES_PER_SECOND == 0:
             await asyncio.sleep(1)
+
+
+def _moved_push(report, league: int, closed):
+    """Пуш повышения с переездом: что переехало, заявки кнопками, возврат, трон; без города — выбор страны."""
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    from bot.constant.league import CB_LEAGUE_CLAIM_PREFIX
+    from bot.texts.league import (
+        BTN_CLAIM, CLAIMS_LINE, MOVED_LINE, NO_CITY_LINE, PROMOTED_MOVED, REFUND_LINE, THRONE_LOST_LINE, THRONE_MOVED_LINE,
+    )
+    from bot.utils.formatting import format_number
+
+    text = PROMOTED_MOVED.format(
+        name=LEAGUES[league].name, income=round(LEAGUE_INCOME_STEP * league * 100), power=round(LEAGUE_POWER_STEP * league * 100),
+        moved=MOVED_LINE.format(n=report.moved) if report.moved else "",
+        claims=CLAIMS_LINE.format(n=len(report.claims)) if report.claims else "",
+        refund=REFUND_LINE.format(coins=format_number(report.refunded)) if report.refunded else "",
+        throne=(THRONE_LOST_LINE if report.thrones_lost and not report.thrones_moved else THRONE_MOVED_LINE if report.thrones_moved else ""),
+    )
+    rows = [[InlineKeyboardButton(text=BTN_CLAIM.format(number=n, city=c)[:60], callback_data=f"{CB_LEAGUE_CLAIM_PREFIX}{cid}")]
+            for cid, n, c in report.claims]
+    if not report.city_kept:
+        text += NO_CITY_LINE
+        rows += country_menu(closed, league).inline_keyboard
+    return text, InlineKeyboardMarkup(inline_keyboard=rows) if rows else None
 
 
 REDISTRIBUTE_REQUEST_KEY = "league:redistribute:request"  # Mini App просит бота пересчитать лиги (значение — id админа)

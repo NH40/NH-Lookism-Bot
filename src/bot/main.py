@@ -111,6 +111,18 @@ async def _challenge_sweep_loop(
                         await send_pvp_reports(bot, session, outcome)
         except Exception:
             log.exception("Challenge sweep failed")
+        # Заявки на районы после перехода в лигу: срок вышел — здания NHCoin (2026-11-23).
+        try:
+            from bot.services.league.move import sweep_expired as sweep_claims
+            from bot.texts.league import CLAIM_EXPIRED_PUSH
+            from bot.utils.formatting import format_number
+            from bot.utils.notify import notify
+
+            async with session_factory() as session:
+                for uid, refund in await sweep_claims(session):
+                    await notify(bot, uid, CLAIM_EXPIRED_PUSH.format(refund=format_number(refund)))
+        except Exception:
+            log.exception("League claims sweep failed")
         # Тот же проход — неявки на войну императоров (не принял вызов — поражение без боя).
         try:
             wars = await resolve_expired_wars(session_factory, redis)

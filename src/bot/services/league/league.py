@@ -77,11 +77,23 @@ async def launch(session_factory: async_sessionmaker[AsyncSession]) -> dict[int,
     return counts
 
 
-async def promote(session: AsyncSession, user_id: int, league: int) -> None:
-    """Перевести в лигу: территория и бизнес теряются, страну игрок выбирает заново. Коммитит."""
+async def promote(session: AsyncSession, user_id: int, league: int, *, keep_territory: bool = False):
+    """Перевести в лигу. Коммитит.
+    `keep_territory` (ежедневное повышение, 2026-11-23) — территория переезжает: свободные районы со зданиями, на
+    занятые — заявки с бесплатным вызовом на 24 часа (`services/league/move`) → `MoveReport`.
+    Иначе (неактивный вниз, ручная смена в админке) — всё теряется, страна заново → None."""
     user = await travel_repo.lock_user(session, user_id)
     if user is None:
-        return
+        return None
+    if keep_territory:
+        from bot.services.league.move import move_on_promotion
+
+        if user.city_id is not None:
+            await accrue_many(session, [user_id])
+            await travel_repo.cancel_challenges(session, user_id)
+        report = await move_on_promotion(session, user_id, league)
+        await session.commit()
+        return report
     if user.city_id is not None:
         await accrue_many(session, [user_id])
         await travel_repo.cancel_challenges(session, user_id)
@@ -91,11 +103,12 @@ async def promote(session: AsyncSession, user_id: int, league: int) -> None:
         update(User).where(User.id == user_id).values(league=league, phase=PHASE_GANG, country_code=None, city_id=None)
     )
     await session.commit()
+    return None
 
 
-async def daily_sweep(session_factory: async_sessionmaker[AsyncSession]) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
+async def daily_sweep(session_factory: async_sessionmaker[AsyncSession]) -> tuple[list[tuple], list[tuple[int, int]]]:
     """Пересчитать счёт всем, повысить заслуживших и (лиги по силе) опустить неактивных на одну лигу.
-    → ([(игрок, новая лига) повышенные], [(игрок, новая лига) опущенные])."""
+    → ([(игрок, новая лига, отчёт переезда) повышенные], [(игрок, новая лига) опущенные])."""
     from bot.config import league as cfg
     from bot.services.top import refresh_powers
 
@@ -119,8 +132,8 @@ async def daily_sweep(session_factory: async_sessionmaker[AsyncSession]) -> tupl
         for user_id, current, _score, target in scores:
             if target > current:
                 async with session_factory() as session:
-                    await promote(session, user_id, target)
-                promoted.append((user_id, target))
+                    report = await promote(session, user_id, target, keep_territory=True)
+                promoted.append((user_id, target, report))
             elif target < current and user_id in inactive:  # неактивный и уже слабее своей лиги — на одну вниз
                 async with session_factory() as session:
                     await promote(session, user_id, current - 1)

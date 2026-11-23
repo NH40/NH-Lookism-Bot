@@ -86,7 +86,7 @@ class StatsView:
     stats: list[StatView]
     potential: str
     dev_points: int
-    strength_power_percent: int
+    strength_power_percent: float  # 1.25% за ранг (2026-11-23) — дробный
     monster: bool = False
     league: int = 0
     league_score: int = 0

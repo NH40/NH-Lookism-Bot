@@ -34,7 +34,7 @@ class StatsOut(BaseModel):
     stats: list[StatOut]
     potential: str
     dev_points: int
-    strength_power_percent: int
+    strength_power_percent: float  # 1.25% за ранг (2026-11-23) — дробный
     modes: list[str]  # +1 / +5 / максимум — значения `mode` для POST /up
 
 

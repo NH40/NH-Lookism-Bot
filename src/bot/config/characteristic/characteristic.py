@@ -79,7 +79,7 @@ def extra_unit_power(rank: str, stars: int, training_level: int, cap_mult: float
 STRENGTH_POWER_PERCENT_PER_RANK = 1.25  # было 1 (характеристики в бою, 2026-11-23)
 
 
-def strength_power_percent(rank: str) -> int:
+def strength_power_percent(rank: str) -> float:
     return RANK_INDEX[rank] * STRENGTH_POWER_PERCENT_PER_RANK
 
 

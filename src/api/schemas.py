@@ -64,6 +64,12 @@ class LeagueOut(BaseModel):
     income_percent: int
     power_percent: int
     ladder: list[str]
+    # Лиги по силе (2026-11-24): мощь армии и сила развития против порогов следующей лиги (хватит любой оси).
+    axes: bool = False
+    power: int | None = None
+    power_need: int | None = None
+    dev: int | None = None
+    dev_need: int | None = None
 
 
 class ProfileOut(BaseModel):

@@ -43,7 +43,28 @@ function LeagueCard({ league: l }: { league: ProfileData["league"] }) {
           </span>
           <b className="lg-score">{fmt(l.score)}</b>
         </div>
-        {l.next_name !== null && l.next_score !== null ? (
+        {l.axes && l.next_name !== null && l.power_need && l.dev_need ? (
+          <>
+            {([["⚔️ мощь армии", l.power ?? 0, l.power_need], ["📈 сила развития", l.dev ?? 0, l.dev_need]] as const).map(([label, have, need]) => (
+              <div key={label}>
+                <div className="lg-bar">
+                  <i style={{ width: `${Math.min(100, (have / need) * 100)}%` }} />
+                </div>
+                <div className="lg-next">
+                  <span>{label}</span>
+                  <span>{fmt(Math.min(have, need))} / {fmt(need)}</span>
+                </div>
+              </div>
+            ))}
+            <div className="lg-next">
+              <span>
+                {(l.power ?? 0) >= l.power_need || (l.dev ?? 0) >= l.dev_need
+                  ? `«${l.next_name}» — в полночь по Москве`
+                  : `до «${l.next_name}» хватит любой из двух полос`}
+              </span>
+            </div>
+          </>
+        ) : l.next_name !== null && l.next_score !== null ? (
           <>
             <div className="lg-bar">
               <i style={{ width: `${need > 0 ? (done / need) * 100 : 0}%` }} />

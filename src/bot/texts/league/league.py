@@ -7,6 +7,10 @@ LEAGUE_BAR = "{bar} {score} / {target}"
 LEAGUE_NEXT = "↑ Дальше: «{name}» с {score} очков"
 LEAGUE_READY = "↑ «{name}»: повышение в полночь по Москве"
 LEAGUE_TOP = "Высшая лига"
+LEAGUE_HEAD_AXES = "\n{icon} Лига: <b>{name}</b>"
+LEAGUE_AXES_NEXT = ("↑ До «{name}» — хватит любого из двух:\n"
+                    "   ⚔️ мощь армии {power} / {power_need}\n   📈 сила развития {dev} / {dev_need}")
+LEAGUE_AXES_READY = "↑ «{name}»: повышение в полночь по Москве"
 LEAGUE_BUFF = "💪 Бафф: +{income}% дохода, +{power}% атаки и прочности\n"
 LEAGUE_NO_BUFF = "💪 Бафф появится со следующей лиги\n"
 PROMOTED = (

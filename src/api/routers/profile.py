@@ -32,9 +32,20 @@ from bot.texts.unique_technique import TECHNIQUE_NAMES
 
 from bot.config.league import LEAGUE_THRESHOLDS, LEAGUES, league_bonus, next_league  # noqa: E402
 
-def _league_out(league: int, score: int) -> LeagueOut:
+def _league_out(league: int, score: int, power_now: int | None = None, dev_now: int | None = None) -> LeagueOut:
     following = next_league(league)
     income, power = league_bonus(league)
+    if power_now is not None:  # лиги по силе (2026-11-24)
+        from bot.config.league import axes_progress
+
+        progress = axes_progress(league, power_now, dev_now or 0)
+        return LeagueOut(
+            index=league, name=LEAGUES[league].name, score=score, floor=0,
+            next_name=following[0].name if following else None, next_score=None,
+            income_percent=income, power_percent=power, ladder=[item.name for item in LEAGUES], axes=True,
+            power=power_now, dev=dev_now or 0,
+            power_need=progress[1] if progress else None, dev_need=progress[3] if progress else None,
+        )
     return LeagueOut(
         index=league, name=LEAGUES[league].name, score=score, floor=LEAGUE_THRESHOLDS[league],
         next_name=following[0].name if following else None, next_score=following[1] if following else None,
@@ -145,7 +156,7 @@ async def get_my_profile(
         phase=profile.phase,
         phase_label=PHASE_LABELS.get(profile.phase, profile.phase),
         potential_label=POTENTIAL_LABELS.get(profile.stats.potential, profile.stats.potential) + (" · 67 MONSTER" if profile.stats.monster else ""),
-        league=_league_out(profile.stats.league, profile.stats.league_score),
+        league=_league_out(profile.stats.league, profile.stats.league_score, profile.stats.league_power, profile.stats.league_dev),
         potential_points=pot.points, potential_cost=pot.cost,
         potential_next=POTENTIAL_LABELS.get(pot.next_potential) if pot.next_potential else None,
         gang_name=profile.gang_name,

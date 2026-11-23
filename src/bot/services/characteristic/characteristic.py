@@ -90,6 +90,9 @@ class StatsView:
     monster: bool = False
     league: int = 0
     league_score: int = 0
+    # Лиги по силе (2026-11-23): мощь армии и сила развития — только при включённом `LEAGUE_STATIC_AXES`.
+    league_power: int | None = None
+    league_dev: int | None = None
 
 
 async def get_stats_view(session: AsyncSession, user_id: int) -> StatsView:
@@ -105,7 +108,19 @@ async def get_stats_view(session: AsyncSession, user_id: int) -> StatsView:
         )
         for code in STATS
     ]
+    from bot.config import league as league_cfg
+
+    power = dev = None
+    if league_cfg.league.LEAGUE_STATIC_AXES:
+        from sqlalchemy import text
+
+        from bot.services.top.dev_score import player_scores
+
+        power = int(await session.scalar(text("SELECT army_power_cache FROM users WHERE id = :u"), {"u": user_id}) or 0)
+        dev = int((await player_scores(session, [user_id])).get(user_id, 0))
     return StatsView(
+        league_power=power,
+        league_dev=dev,
         stats=stats,
         potential=potential,
         dev_points=row.dev_points,

@@ -70,11 +70,39 @@ def render_stats_block(stats: StatsView) -> str:
         lines.append(STAT_LINE.format(label=STAT_LABELS[stat.code], rank=stat.rank, bonus=bonus))
     lines.append(POTENTIAL_LINE.format(potential=POTENTIAL_LABELS[stats.potential] + (MONSTER_TAG if stats.monster else "")))
     lines.append(DEV_POINTS_LINE.format(points=format_number(stats.dev_points)))
-    lines.extend(_league_block(stats.league, stats.league_score))
+    if stats.league_power is not None:  # лиги по силе (2026-11-24)
+        lines.extend(_league_axes_block(stats.league, stats.league_power, stats.league_dev or 0))
+    else:
+        lines.extend(_league_block(stats.league, stats.league_score))
     return "\n".join(lines)
 
 
 _LEAGUE_BAR_CELLS = 10
+
+
+def _league_axes_block(league: int, power: int, dev: int) -> list[str]:
+    """Лига по силе: название, прогресс по мощи и по силе развития (хватит любой оси), бафф."""
+    from bot.config.league import axes_progress
+    from bot.services.combat.explain import compact
+    from bot.texts.league import LEAGUE_AXES_NEXT, LEAGUE_AXES_READY, LEAGUE_HEAD_AXES
+
+    lines = [LEAGUE_HEAD_AXES.format(icon=LEAGUE_ICONS[league], name=LEAGUES[league].name)]
+    progress = axes_progress(league, power, dev)
+    following = next_league(league)
+    if progress is None or following is None:
+        lines.append(LEAGUE_TOP)
+    else:
+        p, need_p, d, need_d, best = progress
+        filled = int(best * _LEAGUE_BAR_CELLS)
+        lines.append("▰" * filled + "▱" * (_LEAGUE_BAR_CELLS - filled))
+        if best >= 1:
+            lines.append(LEAGUE_AXES_READY.format(name=following[0].name))
+        else:
+            lines.append(LEAGUE_AXES_NEXT.format(name=following[0].name, power=compact(p), power_need=compact(need_p),
+                                                 dev=format_number(d), dev_need=format_number(need_d)))
+    income, bonus = league_bonus(league)
+    lines.append(LEAGUE_BUFF.format(income=income, power=bonus) if league else LEAGUE_NO_BUFF)
+    return lines
 
 
 def _league_block(league: int, score: int) -> list[str]:

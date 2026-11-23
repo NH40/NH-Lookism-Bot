@@ -78,6 +78,15 @@ def league_for_axes(power: float, dev: float) -> int:
     return max(_by(LEAGUE_POWER_THRESHOLDS, power), _by(LEAGUE_DEV_THRESHOLDS, dev))
 
 
+def axes_progress(league: int, power: float, dev: float) -> tuple[int, int, int, int, float] | None:
+    """До следующей лиги по силе: (мощь, нужно мощи, СР, нужно СР, лучшая доля 0..1). None — Легенды."""
+    if league + 1 >= len(LEAGUES):
+        return None
+    need_p, need_d = LEAGUE_POWER_THRESHOLDS[league + 1], LEAGUE_DEV_THRESHOLDS[league + 1]
+    best = max(min(1.0, power / need_p) if need_p else 1.0, min(1.0, dev / need_d) if need_d else 1.0)
+    return int(power), int(need_p), int(dev), int(need_d), best
+
+
 def league_for_score(score: int) -> int:
     league = 0
     for index, threshold in enumerate(LEAGUE_THRESHOLDS):

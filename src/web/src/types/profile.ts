@@ -30,6 +30,12 @@ export interface ProfileData {
     income_percent: number;
     power_percent: number;
     ladder: string[];
+    /** Лиги по силе: мощь и сила развития против порогов следующей лиги (хватит любой оси). */
+    axes?: boolean;
+    power?: number | null;
+    power_need?: number | null;
+    dev?: number | null;
+    dev_need?: number | null;
   };
   potential_points?: number;
   potential_cost?: number | null;

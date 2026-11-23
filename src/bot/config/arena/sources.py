@@ -165,7 +165,7 @@ def mastery_perks() -> list[Perk]:
                     f"mt:{t.code}", mv.name, f"{t.name}: {mv.about}", MASTERY_MOVE_COST[tier - 1], MASTERY_MOVE_COOLDOWN[tier - 1],
                     self_mods=mv.mods.scale(b), enemy_mods=mv.enemy.scale(b), damage=1 + (mv.damage - 1) * b,
                     enemy_damage=1 - (1 - mv.enemy_damage) * b, minigame=mini, game="reaction" if mini else None,
-                    power=mv.power * b, copy_share=mv.copy_share,
+                    power=mv.power * b, copy_share=mv.copy_share * b,
                     energy_gain=mv.energy_gain,
                 ))
     return out

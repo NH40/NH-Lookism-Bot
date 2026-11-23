@@ -58,9 +58,12 @@ def _tier_perks(kind: str, table: dict, code: str, name: str, idx: int) -> list[
 
 def _move_perks(kind: str, table: dict, code: str, idx: int) -> list[Perk]:
     """Свои приёмы источника (`config/arena/moves`, 2026-11-23) — на тех же ступенях и кодах, что шаблонные перки."""
-    from bot.config.arena.moves import BLOOD_MOVES, MOVE_COOLDOWN, MOVE_COST, TECH_MOVES
+    from bot.config.arena.moves import BLOOD_MOVES, MOVE_BOOST, MOVE_COOLDOWN, MOVE_COST, TECH_MOVES
 
     moves = (TECH_MOVES if kind == "tech" else BLOOD_MOVES)[code]
+    b = MOVE_BOOST.get(f"{kind}:{code}", 1.0)
+    up = lambda x: 1 + (x - 1) * b if x else x  # noqa: E731 — прибавка к множителю урона
+    down = lambda x: 1 - (1 - x) * b  # noqa: E731 — ослабление урона противника
     mini = "self" if kind == "tech" else "enemy"
     games = _SELF_GAMES if kind == "tech" else _ENEMY_GAMES
     out = []
@@ -71,9 +74,9 @@ def _move_perks(kind: str, table: dict, code: str, idx: int) -> list[Perk]:
         top = t == len(TIER_LEVELS) - 1
         out.append(Perk(
             code=f"{kind}:{code}:{t + 1}", name=mv.name, about=mv.about, cost=MOVE_COST[t], cooldown=MOVE_COOLDOWN[t],
-            self_mods=mv.mods, enemy_mods=mv.enemy, damage=mv.damage, enemy_damage=mv.enemy_damage,
-            minigame=mini if top else None, game=games[idx % 4] if top else None, power=mv.power if top else 0.0,
-            first_round_damage=mv.first_round_damage, copy_share=mv.copy_share, mirror=mv.mirror, energy_gain=mv.energy_gain,
+            self_mods=mv.mods.scale(b), enemy_mods=mv.enemy.scale(b), damage=up(mv.damage), enemy_damage=down(mv.enemy_damage),
+            minigame=mini if top else None, game=games[idx % 4] if top else None, power=mv.power * b if top else 0.0,
+            first_round_damage=up(mv.first_round_damage), copy_share=mv.copy_share * b, mirror=mv.mirror, energy_gain=mv.energy_gain,
         ))
     return out
 

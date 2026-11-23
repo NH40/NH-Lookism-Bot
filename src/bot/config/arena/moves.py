@@ -11,6 +11,33 @@ from dataclasses import dataclass, field
 
 from bot.services.combat.mods import CombatMods
 
+# Сила приёмов источника (баланс симуляцией 2026-11-23, `docs/design/combat_moves.md`): множитель их эффектов,
+# прибавки урона, ослабления противника и мини-игры. Цель — у каждого источника приёмы дают ~70% побед против того
+# же билда без приёмов (было 45–85%). Ключ «вид:код».
+MOVE_BOOST: dict[str, float] = {
+    "blood:elite": 2.19,
+    "blood:gapryong": 0.85,
+    "blood:hansu": 1.88,
+    "blood:jincheol": 1.7,
+    "blood:jinyeong": 2.11,
+    "blood:kuroda": 1.31,
+    "blood:mujin": 1.3,
+    "blood:penguan": 1.25,
+    "blood:samdak": 1.16,
+    "blood:sophia": 2.11,
+    "blood:yamazaki": 1.8,
+    "tech:beast": 0.78,
+    "tech:blade_hands": 0.82,
+    "tech:cqc": 0.78,
+    "tech:invisible": 1.85,
+    "tech:kyokushin": 0.56,
+    "tech:midnight": 1.51,
+    "tech:muay_thai": 0.95,
+    "tech:ninjutsu": 1.72,
+    "tech:overcome": 0.63,
+    "tech:taekwondo": 1.8,
+}
+
 # Цена и КД по ступеням (Приём, Связка, Коронный, Предел).
 MOVE_COST: tuple[int, ...] = (2, 3, 4, 5)
 MOVE_COOLDOWN: tuple[int, ...] = (2, 2, 3, 3)

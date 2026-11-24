@@ -19,7 +19,6 @@ from bot.config.path_gauge import (
     PATH_GAUGES,
 )
 from bot.constant.unique_path import (
-    COPYING_PATHS,
     PATH_ABSORPTION,
     PATH_ADAPTATION,
     PATH_COPY,
@@ -85,7 +84,7 @@ async def add_for_paths(session: AsyncSession, user_id: int, codes: frozenset[st
 
 def _speed(row, code: str) -> float:
     """Ускорение шкалы от родословной: Джинен — копирование, Александровы — адаптация."""
-    key = "copy_gauge_speed" if code in COPYING_PATHS else "adaptation_gauge_speed" if code == PATH_ADAPTATION else None
+    key = "copy_gauge_speed" if code == PATH_COPY else "adaptation_gauge_speed" if code == PATH_ADAPTATION else None
     if key is None:
         return 1.0
     from bot.services.build import level_effect

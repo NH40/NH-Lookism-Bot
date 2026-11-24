@@ -11,7 +11,7 @@ export function CopySlots() {
   const free = data.taken.length < data.slots;
   return (
     <Panel title={`Слоты копирования · ${data.taken.length}/${data.slots}`} tone="violet">
-      <div className="muted dev-note">Копируется только то, что в слотах. Новый противник ложится сам только в свободный слот. Слотов: 1, +1 на 4, 7 и 10 уровне.</div>
+      <div className="muted dev-note">Копируется только то, что в слотах. Новый противник ложится сам только в свободный слот. Слотов: 1, +1 за каждые 25 шкалы копирования, до 5. С 30 шкалы в онлайн-бою — перк «Копия».</div>
       {data.taken.map((s) => (
         <div key={s.slot} className="row" style={{ marginTop: 8 }}>
           <span style={{ fontSize: 13, fontWeight: 700 }}>{s.slot}. {s.name} · ур. {s.level}</span>

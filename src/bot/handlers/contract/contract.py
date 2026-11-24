@@ -189,3 +189,21 @@ async def cb_contract_buy(callback: CallbackQuery, session: AsyncSession, redis:
     )
     text, markup = await render_contracts(session, callback.from_user.id)
     await safe_edit_text(callback.message, text, reply_markup=markup)
+
+
+async def send_retained_pushes(bot, session_factory, stayed: list[tuple[int, str, int]]) -> None:
+    """Пуш Джинчолю: сколько наёмников осталось в армии после конца контрактов — одним сообщением на игрока."""
+    from bot.constant.settings import NOTIFY_CONTRACT
+    from bot.services.settings import notify_player
+    from bot.texts.contract import PUSH_RETAINED_HEAD, PUSH_RETAINED_LINE
+
+    by_user: dict[int, dict[str, int]] = {}
+    for user_id, rank, quantity in stayed:
+        ranks = by_user.setdefault(user_id, {})
+        ranks[rank] = ranks.get(rank, 0) + quantity
+    async with session_factory() as session:
+        for user_id, ranks in by_user.items():
+            text_ = PUSH_RETAINED_HEAD + "".join(
+                PUSH_RETAINED_LINE.format(quantity=format_number(q), rank=r) for r, q in ranks.items()
+            )
+            await notify_player(bot, session, user_id, NOTIFY_CONTRACT, text_)

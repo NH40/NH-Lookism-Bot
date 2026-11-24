@@ -13,12 +13,14 @@ RAID_EASY, RAID_MEDIUM, RAID_HARD = "easy", "medium", "hard"
 RAID_DIFFICULTIES: dict[str, tuple[int, float, int]] = {  # вес выпадения, доля мощи игрока, районов при поражении
     RAID_EASY: (60, 0.5, 1),
     RAID_MEDIUM: (32, 0.8, 2),
-    RAID_HARD: (8, 1.1, 3),  # редкий: ≈ раз в 5 дней на игрока — единственный рейд с кровью
+    # редкий и по-настоящему сложный (2026-11-24: кровь фармили, экономика падала): ≈ 3% рейдов — раз в ~2 недели
+    # на игрока, отряд в 1.6 мощи армии (было 8% и 1.1) — единственный рейд с кровью
+    RAID_HARD: (3, 1.6, 3),
 }
 RAID_REWARDS: dict[str, dict[str, int]] = {
     RAID_EASY: {RES_COINS: 2_000, RES_TICKETS: 1},
     RAID_MEDIUM: {RES_COINS: 6_000, RES_TICKETS: 2, RES_TECHNIQUE_FRAGMENTS: 3},
-    RAID_HARD: {RES_COINS: 15_000, RES_TICKETS: 4, RES_BLOOD: 4, RES_TECHNIQUE_FRAGMENTS: 5, RES_PATH_FRAGMENTS: 3},
+    RAID_HARD: {RES_COINS: 15_000, RES_TICKETS: 4, RES_BLOOD: 3, RES_TECHNIQUE_FRAGMENTS: 5, RES_PATH_FRAGMENTS: 3},
 }
 # Монеты за победу — часы дохода игрока (пользователь 2026-11-20); суммы в RAID_REWARDS — минимум для новичков.
 RAID_COIN_HOURS: dict[str, float] = {RAID_EASY: 0.5, RAID_MEDIUM: 1.0, RAID_HARD: 2.0}

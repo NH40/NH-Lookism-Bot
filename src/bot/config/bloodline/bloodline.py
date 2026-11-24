@@ -156,16 +156,17 @@ LEVELS: dict[str, tuple[dict, ...]] = {
         _s({"first_strike": 0.03}, {"security": 2, "false_intel": 0.20, "spy_chance": 0.15, "spy_resist": 0.15, "scout": 3}),
     ),
     # Джинчоля: игра через контракты и вербовку. Контракты дешевле, вместе с купленными приходят бесплатные,
-    # часть выживших остаётся навсегда, вербовка приводит больше бойцов.
+    # часть выживших остаётся навсегда, вербовка приводит больше бойцов. Удержание выживших (пользователь
+    # 2026-11-24): 5% с первого уровня, +1/+2/+2 на 5/8/10 — 10% на 10-м (было 1→5%).
     BLOODLINE_JINCHEOL: (
-        _e(contract_discount=0.10, contract_retain=0.01),
+        _e(contract_discount=0.10, contract_retain=0.05),
         _e(recruit_quantity=0.25),
         _e(contract_bonus=0.10, recruit_cap=5),
         _e(contract_discount=0.10, recruit_cooldown=0.15),
         _e(contract_retain=0.01, contract_duration=0.25),
         _e(recruit_rank_bonus=1, contract_bonus=0.10),
         _s({"attack": 0.04}, {"contract_discount": 0.10}),
-        _e(contract_retain=0.01, recruit_quantity=0.25),
+        _e(contract_retain=0.02, recruit_quantity=0.25),
         _e(contract_bonus=0.15, recruit_cap=25),
         _e(contract_discount=0.15, contract_retain=0.02, contract_bonus=0.15, recruit_rank_bonus=1),
     ),

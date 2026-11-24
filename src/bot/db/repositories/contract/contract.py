@@ -32,11 +32,18 @@ async def create(
 
 
 async def lock_expired_with_retain(session: AsyncSession) -> Sequence[StatistContract]:
-    """Истёкшие контракты с выжившими и правом остаться (Джинчоль) — под блокировкой, перед удалением."""
+    """Истёкшие контракты с выжившими и правом остаться (Джинчоль: снимок при покупке или родословная сейчас —
+    любое из двух тел) — под блокировкой, перед удалением."""
+    from bot.constant.bloodline import BLOODLINE_JINCHEOL
+    from bot.db.models.user import User
+
+    jincheol = select(User.id).where((User.bloodline == BLOODLINE_JINCHEOL) | (User.bloodline2 == BLOODLINE_JINCHEOL))
     return (
         await session.scalars(
             select(StatistContract)
-            .where(StatistContract.expires_at <= func.now(), StatistContract.quantity > 0, StatistContract.retain > 0)
+            .where(StatistContract.expires_at <= func.now(), StatistContract.quantity > 0,
+                   (StatistContract.retain > 0) | StatistContract.user_id.in_(jincheol))
+            .order_by(StatistContract.user_id, StatistContract.id)
             .with_for_update(skip_locked=True)
         )
     ).all()

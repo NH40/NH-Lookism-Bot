@@ -41,8 +41,14 @@ GAUGE_SENSORY_SCOUT = 1.0
 GAUGE_SENSORY_SABOTAGE = 2.0
 # Шкала Предвидения: за разведку.
 GAUGE_FORESIGHT_SCOUT = 0.5
-# Шкала копирования: за подъём уровня любой техники.
+# Шкала Копирования и шкала техник Бесконечной техники: за подъём уровня любой техники.
 GAUGE_COPY_TECH_LEVEL = 3.0
+# Путь Копирования (пользователь 2026-11-24): шкала открывает слоты для пассивок чужих путей — 1 сразу и ещё
+# по одному за каждые `COPY_GAUGE_PER_SLOT` шкалы, до `COPY_SLOTS_MAX`, — и перк «Копия» в онлайн-бою.
+COPY_GAUGE_PER_SLOT = 25.0
+COPY_SLOTS_MAX = 5
+COPY_PERK_GAUGE = 30.0
+COPY_PERK_CODE = "copy:mirror"
 
 
 @dataclass(frozen=True, slots=True)

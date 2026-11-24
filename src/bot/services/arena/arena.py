@@ -243,6 +243,8 @@ _VALUE_FIELDS = {  # вклад поля модификаторов в «сил�
 def perk_value(p: Perk) -> float:
     """Оценка силы перка для автоатаки: прирост урона + взвешенные модификаторы + мини-игра (средне) — на единицу энергии."""
     v = (p.damage - 1) + (1 - p.enemy_damage)
+    if p.mirror:  # повтор чужого приёма — сила как у среднего перка (своего эффекта у «Копии» нет)
+        v += 0.5
     for name, w in _VALUE_FIELDS.items():
         v += w * float(getattr(p.self_mods, name, 0) or 0) + 0.5 * w * float(getattr(p.enemy_mods, name, 0) or 0)
     if p.minigame:

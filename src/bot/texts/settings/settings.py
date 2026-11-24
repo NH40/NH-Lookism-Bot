@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from bot.constant.settings import (
     NOTIFY_CD_BATTLE,
+    NOTIFY_CONTRACT,
     NOTIFY_CD_EXTRAS,
     NOTIFY_ARKHANGEL,
     NOTIFY_RAID,
@@ -56,6 +57,7 @@ NOTIFY_LABELS: dict[str, str] = {
     NOTIFY_ARKHANGEL: "♾ Архангел: часовой доход",
     NOTIFY_RAID: "🚨 Рейды на земли",
     NOTIFY_EMPEROR: "📜 Объявления императора",
+    NOTIFY_CONTRACT: "🤝 Наёмники остались в армии",
 }
 NOTIFY_ON = "✅"
 NOTIFY_OFF = "🔕"

@@ -104,7 +104,7 @@ def build_source_perks() -> dict[str, Perk]:
         perks += _tier_perks("path", PATH_LEVELS, code, PATH_NAMES.get(code, code), i)
     for i, code in enumerate(BLOODLINE_LEVELS):
         perks += _move_perks("blood", BLOODLINE_LEVELS, code, i) if code in BLOOD_MOVES else _tier_perks("blood", BLOODLINE_LEVELS, code, BLOODLINE_NAMES.get(code, code), i)
-    perks += ABSOLUTE_PERKS + POSITION_PERKS + mastery_perks()
+    perks += ABSOLUTE_PERKS + POSITION_PERKS + mastery_perks() + [COPY_PATH_PERK]
     return {p.code: p for p in perks}
 
 
@@ -129,6 +129,15 @@ ABSOLUTE_PERKS: list[Perk] = [
     _p("abs:arian_absolute", "Абсолют Ариана", "Глушит противника: его урон ×0.75 и мини-игра.", 5, 4,
        enemy_damage=0.75, minigame="enemy", game="parry", power=0.4),
 ]
+
+# Путь Копирования (пользователь 2026-11-24): шкала копирования с `COPY_PERK_GAUGE` открывает этот перк.
+def _copy_path_perk() -> Perk:
+    from bot.config.path_gauge import COPY_PERK_CODE
+
+    return _p(COPY_PERK_CODE, "Копия", "Повторяет последний приём противника — его урон и эффекты.", 4, 3, mirror=True)
+
+
+COPY_PATH_PERK = _copy_path_perk()
 
 # Позиции банды: уник на позиции даёт перк своей роли.
 POSITION_PERKS: list[Perk] = [

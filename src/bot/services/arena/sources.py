@@ -33,6 +33,14 @@ async def perks_for(session: AsyncSession, user_id: int, *, include_off: bool = 
     codes += [f"pos:{p.position}" for p in await list_positions(session, user_id) if p.card_code]
     learned = (await session.execute(select(MasteryTechnique.code).where(MasteryTechnique.user_id == user_id))).scalars().all()
     codes += [f"mt:{c}" for c in learned]
+    # Путь Копирования: шкала открывает перк «Копия» (2026-11-24).
+    if row is not None:
+        from bot.config.path_gauge import COPY_PERK_CODE, COPY_PERK_GAUGE
+        from bot.constant.unique_path import PATH_COPY
+
+        gauge = row.path_gauge if row.path == PATH_COPY else row.path2_gauge if row.path2 == PATH_COPY else None
+        if gauge is not None and gauge >= COPY_PERK_GAUGE:
+            codes.append(COPY_PERK_CODE)
     seen: set[str] = set()
     out = [c for c in codes if c in PERK_REGISTRY and not (c in seen or seen.add(c))]
     if include_off:

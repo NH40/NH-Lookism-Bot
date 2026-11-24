@@ -26,6 +26,7 @@ NOTIFY_CD_EXTRAS = "cd_extras"  # тренировка статистов гот
 NOTIFY_ARKHANGEL = "arkhangel"  # абсолют Архангел принёс часовой доход
 NOTIFY_RAID = "raid"  # рейды на твои земли: предупреждение и итог
 NOTIFY_EMPEROR = "emperor_msg"  # объявление императора земли, где живёт игрок
+NOTIFY_CONTRACT = "contract"  # Джинчоль: наёмники остались в армии после контракта
 
 NOTIFY_CATEGORIES: tuple[str, ...] = (
     NOTIFY_PVP_CALL,
@@ -48,6 +49,7 @@ NOTIFY_CATEGORIES: tuple[str, ...] = (
     NOTIFY_ARKHANGEL,
     NOTIFY_RAID,
     NOTIFY_EMPEROR,
+    NOTIFY_CONTRACT,
 )
 
 CB_NOTIFY_OPEN = "settings:notify"

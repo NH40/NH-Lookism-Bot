@@ -13,6 +13,7 @@ from bot.constant.dev_quest import TASK_CONTRACT
 
 from bot.services.dev_quest import emit as quest_event
 
+import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -152,12 +153,30 @@ async def buy(session: AsyncSession, redis: Redis, user_id: int, rank: str, quan
         await redis.delete(key)
 
 
-async def purge(session_factory: async_sessionmaker[AsyncSession]) -> None:
+def _stayed(quantity: int, share: float, rng: random.Random) -> int:
+    """Сколько из `quantity` выживших остаётся при доле `share`: целая часть + дробь шансом. Раньше дробь
+    отбрасывалась, и с контракта на 50 бойцов при 1% не оставался никто (жалоба 2026-11-24)."""
+    exact = quantity * share
+    whole = int(exact)
+    return whole + (1 if rng.random() < exact - whole else 0)
+
+
+async def purge(session_factory: async_sessionmaker[AsyncSession], rng: random.Random | None = None) -> list[tuple[int, str, int]]:
+    """Удалить истёкшие и выбитые контракты. Джинчоль: часть выживших остаётся навсегда («им понравилось работать
+    с тобой») — до удаления. Доля — большая из снимка при покупке и текущей родословной (контракт, купленный до
+    уровня Джинчоля, тоже считается). → [(игрок, ранг, сколько осталось)] для пушей — после commit."""
+    rng = rng or random.Random()
+    stayed_out: list[tuple[int, str, int]] = []
     async with session_factory() as session:
-        # Джинчоль: часть выживших остаётся навсегда («им понравилось работать с тобой») — до удаления.
+        current: dict[int, float] = {}
         for c in await contract_repo.lock_expired_with_retain(session):
-            stayed = int(c.quantity * c.retain)
+            if c.user_id not in current:
+                eco = (await get_build(session, c.user_id)).eco
+                current[c.user_id] = min(CONTRACT_RETAIN_CAP, eco.contract_retain)
+            stayed = _stayed(c.quantity, max(c.retain, current[c.user_id]), rng)
             if stayed:
                 await add_to_stack(session, user_id=c.user_id, camp=c.camp, rank=c.rank, stars=0, training_level=0, quantity=stayed)
+                stayed_out.append((c.user_id, c.rank, stayed))
         await contract_repo.purge(session)
         await session.commit()
+    return stayed_out

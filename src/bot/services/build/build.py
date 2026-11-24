@@ -173,14 +173,16 @@ def _resonance(row: BuildRow) -> int:
     return stones if stones >= 2 else 0
 
 
-async def _memory_copies(session: AsyncSession, user_id: int) -> list[CombatMods]:
+async def _memory_copies(session: AsyncSession, user_id: int, gauge: float) -> list[CombatMods]:
     """Боевые способности путей в слотах Копирования (без копирующих путей — без рекурсии). 2026-11-19: раньше —
-    5 последних противников автоматически, теперь игрок сам решает, что лежит в слотах."""
-    from bot.services.unique_path.copy_slots import taken
+    5 последних противников автоматически, теперь игрок сам решает, что лежит в слотах. 2026-11-24: работают
+    только слоты, открытые шкалой Копирования (`gauge`)."""
+    from bot.services.unique_path.copy_slots import slot_count, taken
 
     copies = []
-    for _, code, level in await taken(session, user_id):
-        if code in COPYING_PATHS:
+    open_slots = slot_count(gauge)
+    for slot, code, level in await taken(session, user_id):
+        if code in COPYING_PATHS or slot > open_slots:
             continue
         copies.append(level_effect(PATH_LEVELS, code, level).combat)
     return copies
@@ -320,7 +322,10 @@ async def _compute_build(session: AsyncSession, user_id: int) -> Build:
     if memory_copy or memory_rotation:
         # Родословная Джинена усиливает путь Копирования (пользователь).
         boost = 1 + special.get("copy_path_boost", 0.0)
-        copies = await _memory_copies(session, user_id)
+        from bot.constant.unique_path import PATH_COPY
+
+        copy_gauge = row.path_gauge if row.path == PATH_COPY else row.path2_gauge if row.path2 == PATH_COPY else 0.0
+        copies = await _memory_copies(session, user_id, copy_gauge)
         if memory_copy and copies:
             merged = sum_mods(c.scale(w) for c, w in zip(copies, PATH_MEMORY_WEIGHTS))
             extra_combat = extra_combat + merged.scale(memory_copy * boost)

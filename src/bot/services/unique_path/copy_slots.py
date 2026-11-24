@@ -2,7 +2,10 @@
 
 Пути противников по-прежнему запоминаются (`battle_memory`, последние 5) — это «что можно скопировать».
 Копируется только то, что лежит в слотах: игрок сам занимает слот из памяти и освобождает его; после боя
-путь противника сам ложится только в СВОБОДНЫЙ слот. Слотов: 1, +1 на 4, 7 и 10 уровне копирующего пути.
+путь противника сам ложится только в СВОБОДНЫЙ слот.
+
+2026-11-24 (пользователь): слоты — только у пути Копирования (у Бесконечной техники своя шкала — число активных
+техник), и их число решает шкала Копирования: 1 сразу, +1 за каждые 25 шкалы, до 5 на полной.
 """
 from __future__ import annotations
 
@@ -12,10 +15,10 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config.development import PATH_MEMORY_SIZE
-from bot.constant.unique_path import COPYING_PATHS
-from bot.db.models.development import BattleMemory, PathCopySlot
-
-COPY_SLOT_LEVELS: tuple[int, ...] = (1, 4, 7, 10)
+from bot.config.path_gauge import COPY_GAUGE_PER_SLOT, COPY_SLOTS_MAX
+from bot.constant.unique_path import COPYING_PATHS, PATH_COPY
+from bot.db.models.development import BattleMemory, PathCopySlot, UserPath
+from bot.db.models.user import User
 
 
 class CopySlotError(Exception):
@@ -32,15 +35,19 @@ class CopyState:
     memory: list[tuple[int, str, int]]  # (id памяти, путь, уровень) — можно занять
 
 
-def slot_count(level: int) -> int:
-    return sum(1 for need in COPY_SLOT_LEVELS if level >= need)
+def slot_count(gauge: float) -> int:
+    """Слотов при шкале Копирования `gauge`: 1 + по одному за каждые 25, не больше 5."""
+    return min(COPY_SLOTS_MAX, 1 + int(max(0.0, gauge) // COPY_GAUGE_PER_SLOT))
 
 
-async def _copy_level(session: AsyncSession, user_id: int) -> int:
-    from bot.db.repositories.activity import active_path
-
-    path = await active_path(session, user_id)
-    return path[1] if path and path[0] in COPYING_PATHS else 0
+async def copy_gauge(session: AsyncSession, user_id: int) -> float | None:
+    """Шкала активного пути Копирования; None — путь Копирования не активен."""
+    row = (await session.execute(
+        select(UserPath.gauge)
+        .join(User, (User.id == UserPath.user_id) & (User.active_path == UserPath.code))
+        .where(User.id == user_id, UserPath.code == PATH_COPY)
+    )).one_or_none()
+    return float(row[0] or 0.0) if row else None
 
 
 async def taken(session: AsyncSession, user_id: int) -> list[tuple[int, str, int]]:
@@ -51,13 +58,13 @@ async def taken(session: AsyncSession, user_id: int) -> list[tuple[int, str, int
 
 
 async def state(session: AsyncSession, user_id: int) -> CopyState:
-    level = await _copy_level(session, user_id)
+    gauge = await copy_gauge(session, user_id)
     rows = await session.execute(
         select(BattleMemory.id, BattleMemory.path_code, BattleMemory.path_level).where(BattleMemory.user_id == user_id)
         .order_by(BattleMemory.fought_at.desc(), BattleMemory.id.desc()).limit(PATH_MEMORY_SIZE)
     )
     memory = [(int(i), c, int(lv)) for i, c, lv in rows.all() if c not in COPYING_PATHS]
-    return CopyState(level > 0, slot_count(level), await taken(session, user_id), memory)
+    return CopyState(gauge is not None, slot_count(gauge or 0.0), await taken(session, user_id), memory)
 
 
 def _free_slot(used: list[tuple[int, str, int]], slots: int) -> int | None:
@@ -92,13 +99,13 @@ async def auto_fill(session: AsyncSession, user_id: int, opponent_id: int, path:
     """После боя: путь противника — в свободный слот, если он есть и такого пути ещё нет. НЕ коммитит."""
     if path[0] in COPYING_PATHS:
         return
-    level = await _copy_level(session, user_id)
-    if not level:
+    gauge = await copy_gauge(session, user_id)
+    if gauge is None:
         return
     used = await taken(session, user_id)
     if any(c == path[0] for _, c, _ in used):
         return
-    slot = _free_slot(used, slot_count(level))
+    slot = _free_slot(used, slot_count(gauge))
     if slot is not None:
         session.add(PathCopySlot(user_id=user_id, slot=slot, path_code=path[0], path_level=path[1], opponent_id=opponent_id))
         await session.flush()

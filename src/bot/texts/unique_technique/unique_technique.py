@@ -50,7 +50,7 @@ TEACHER_NAMES: dict[str, str] = {
 }
 INFINITE_LINE = "\n♾ <b>Бесконечная техника:</b> одновременно {slots} (с активной). Выбраны: {selected}"
 INFINITE_AUTO = "самые прокачанные"
-SLOTS_FULL_ALERT = "Сейчас можно держать {limit} техник с активной. Шкала копирования откроет больше."
+SLOTS_FULL_ALERT = "Сейчас можно держать {limit} техник с активной. Шкала техник пути Бесконечной техники откроет больше."
 BTN_SELECT = "♾ Использовать вместе с активной"
 BTN_UNSELECT = "♾ Убрать из активных"
 TECHNIQUE_THEMES: dict[str, str] = {

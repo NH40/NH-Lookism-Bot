@@ -378,7 +378,7 @@ function PathTab({ d, max, post, busy }: { d: PathData; max: number; post: Post;
               <Bar value={d.gauges[selected.code].value} max={d.gauges[selected.code].max} fill="gold" />
             </div>
           )}
-          {(selected.code === "copy" || selected.code === "infinite") && isActive && <CopySlots />}
+          {selected.code === "copy" && isActive && <CopySlots />}
           {selected.code === "training" && (isActive || isSecond) && (
             <div className="muted dev-note">
               🏋️ КПД тренировок: +{Math.round(d.training_kpd * 100)}% (потолок уровня +{Math.round(d.training_kpd_cap * 100)}%)

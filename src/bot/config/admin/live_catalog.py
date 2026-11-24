@@ -295,7 +295,7 @@ SCALARS: dict[str, tuple[str, str, str]] = {
     "GAUGE_SENSORY_SCOUT": ("dev", "bot.config.path_gauge.path_gauge", "Шкала Чувств: за разведку"),
     "GAUGE_SENSORY_SABOTAGE": ("dev", "bot.config.path_gauge.path_gauge", "Шкала Чувств: за саботаж"),
     "GAUGE_FORESIGHT_SCOUT": ("dev", "bot.config.path_gauge.path_gauge", "Шкала Предвидения: за разведку"),
-    "GAUGE_COPY_TECH_LEVEL": ("dev", "bot.config.path_gauge.path_gauge", "Шкала Копирования: за уровень техники"),
+    "GAUGE_COPY_TECH_LEVEL": ("dev", "bot.config.path_gauge.path_gauge", "Шкала Копирования и техник: за уровень техники"),
     "BOSS_SPAWN_CHANCE_PER_TICK": ("events", "bot.config.event.event", "Босс: шанс появления за тик"),
     "TEACHER_SPAWN_CHANCE_PER_TICK": ("events", "bot.config.event.event", "Учитель: шанс появления за тик"),
     "LEAGUE_POWER_STEP": ("league", "bot.config.league.league", "Лиги: атака и прочность за ступень"),

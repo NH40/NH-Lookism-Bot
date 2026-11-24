@@ -49,6 +49,7 @@ from bot.services.activity import purge as purge_activity
 from bot.services.contract import purge as purge_contracts
 from bot.services.potion import renew_auto as renew_potions
 from bot.handlers.potion import send_auto_pushes as send_potion_pushes
+from bot.handlers.contract.contract import send_retained_pushes
 from bot.config.potion import POTION_AUTO_SWEEP_SECONDS
 from bot.config.poker import POKER_TICK_SECONDS
 from bot.config.exchange import EXCHANGE_SWEEP_SECONDS
@@ -150,7 +151,11 @@ async def _events_loop(bot: Bot, session_factory: async_sessionmaker[AsyncSessio
         try:
             if tick % 12 == 0:  # раз в час — старые записи журнала и истёкшие контракты
                 await purge_activity(session_factory)
-                await purge_contracts(session_factory)
+                retained = await purge_contracts(session_factory)
+                if retained:
+                    task = asyncio.create_task(send_retained_pushes(bot, session_factory, retained))
+                    _BACKGROUND.add(task)
+                    task.add_done_callback(_BACKGROUND.discard)
             spawned = await spawn_due(session_factory)
             if spawned:
                 task = asyncio.create_task(send_spawn_pushes(bot, session_factory, spawned, _teacher_push_text))

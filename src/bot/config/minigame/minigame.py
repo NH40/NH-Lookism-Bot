@@ -100,7 +100,7 @@ def _min_seconds(game: str, p: dict) -> float:
     if game == G_PAIRS:
         return p["pairs"] * 2 * _MIN_UNIT_S
     if game == G_COMBO:  # показ серии идёт сам: 0.5 с + (показ + пауза) на удар
-        return p["rounds"] * (0.5 + p["length"] * (p["show_ms"] + 150) / 1000)
+        return p["rounds"] * (0.5 + p["length"] * (p["show_ms"] + p.get("gap_ms", 150)) / 1000)
     if game == G_ORDER:
         return p["rounds"] * p["length"] * _MIN_UNIT_S
     if game == G_REACTION:  # ожидание сигнала не короче 0.9 с + пауза 0.5 с
@@ -241,11 +241,38 @@ MASTERY_GAMES: dict[str, str] = {"strength": G_MASH, "speed": G_DOTS, "technique
 # Сила: 20 с шквала, каждое нажатие бьёт долей мощи армии; нужно набить мощь Тома этапа.
 MASTERY_STRENGTH_SECONDS = 20
 MASTERY_POWER_PER_TAP = 1 / 40  # доля мощи армии за нажатие
-MASTERY_TAPS_MIN, MASTERY_TAPS_MAX = 30, 140  # 1,5–7 нажатий в секунду
+MASTERY_TAPS_MIN, MASTERY_TAPS_MAX = 30, 110  # 1,5–5,5 нажатия в секунду (было до 7 — на телефоне почти предел)
 # Выносливость: 20 ударов мощью Тома; каждый пропущенный снимает `MASTERY_HIT_SHARE` его мощи с армии.
 MASTERY_STRIKES = 20
 MASTERY_HIT_SHARE = 0.12
-MASTERY_MISS_MIN, MASTERY_MISS_MAX = 2, 12
+MASTERY_MISS_MIN, MASTERY_MISS_MAX = 4, 12  # хотя бы 4 пропуска допустимы (было 2 — при слабой армии почти без права на ошибку)
+# Мастерство (жалоба 2026-11-24: «практически непроходимо», особенно стрелки комбо и уклонение): свои, более
+# щадящие параметры — сложность этапа идёт вполсилы, а то, что показывается на экране, держится дольше.
+MASTERY_DIFFICULTY_SHARE = 0.5
+
+
+def mastery_params(game: str, d: float) -> dict:
+    """Параметры игр «Преодоления стены» при сложности этапа `d` (0..1). Время показа — с запасом на
+    «посмотреть и нажать» на телефоне."""
+    d *= MASTERY_DIFFICULTY_SHARE
+    if game == G_COMBO:  # стрелка серии горит 0,8–0,9 с, между стрелками 0,4 с; серия 3–4 удара
+        length, show, gap = 3 + round(2 * d), int(900 - 200 * d), 400
+        p = {"rounds": 3, "length": length, "show_ms": show, "gap_ms": gap, "need": 2, "max_score": 3,
+             "seconds": 3 * (0.5 + length * (show + gap + 600) / 1000)}  # показ + ~0,6 с на ввод удара
+    elif game == G_DOTS:  # точка живёт 1,4–1,6 с
+        n = 14
+        gap = 950 - 200 * d
+        p = {"count": n, "life_ms": int(1600 - 400 * d), "gap_ms": int(gap), "need": math.ceil(n * (0.55 + 0.1 * d)),
+             "max_score": n, "seconds": n * gap / 1000}
+    elif game == G_DODGE:  # удар виден 1,1–1,3 с (было 0,55–0,95)
+        n = MASTERY_STRIKES
+        warn = int(1300 - 400 * d)
+        p = {"strikes": n, "warn_ms": warn, "max_miss": MASTERY_MISS_MIN, "need": n - MASTERY_MISS_MIN, "max_score": n,
+             "seconds": n * (warn + 300) / 1000}
+    else:
+        return params(game, d)
+    p["min_seconds"] = round(_min_seconds(game, p), 2)
+    return p
 
 MIN_TIME_SHARE = 0.6  # быстрее этой доли длительности игру пройти нельзя (защита от подделки)
 TOKEN_TTL_SECONDS = 15 * 60

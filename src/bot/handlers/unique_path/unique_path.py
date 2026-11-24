@@ -32,7 +32,7 @@ from bot.constant.unique_path import (
     PATH_STAGE_NONE,
 )
 from bot.keyboards.unique_path import awaken_choice_menu, path_menu
-from bot.constant.unique_path import COPYING_PATHS, CB_PATH_SLOTS, CB_PATH_SLOT_FREE_PREFIX, CB_PATH_SLOT_TAKE_PREFIX
+from bot.constant.unique_path import PATH_COPY, CB_PATH_SLOTS, CB_PATH_SLOT_FREE_PREFIX, CB_PATH_SLOT_TAKE_PREFIX
 from bot.services.gang import get_gang
 from bot.services.unique_path import (
     NoSecondBodyError,
@@ -140,7 +140,7 @@ async def render_path(session: AsyncSession, redis: Redis, user_id: int):
     return text, path_menu(
         cost=view.next_cost, others=others,
         cost2=view.next_cost2 if view.active2 else None, others2=others2,
-        copy_slots=view.active in COPYING_PATHS,
+        copy_slots=view.active == PATH_COPY,
     )
 
 
@@ -299,7 +299,7 @@ async def _slots_screen(session: AsyncSession, user_id: int):
     lines = [f"📋 <b>Слоты копирования</b> · {len(st.taken)}/{st.slots}", "━━━━━━━━━━━━━━━━━━"]
     lines += [f"{s}. {PATH_NAMES.get(c, c)} · ур. {lv}" for s, c, lv in st.taken] or ["Слоты пусты."]
     lines.append("\nКопируется только то, что в слотах. Новый противник ложится сам только в свободный слот. "
-                 "Слотов: 1, +1 на 4, 7 и 10 уровне пути.")
+                 "Слотов: 1, +1 за каждые 25 шкалы копирования, до 5. С 30 шкалы в онлайн-бою — перк «Копия».")
     rows = [[InlineKeyboardButton(text=f"✖️ Освободить {s}", callback_data=f"{CB_PATH_SLOT_FREE_PREFIX}{s}")] for s, _, _ in st.taken]
     copied = {c for _, c, _ in st.taken}
     if len(st.taken) < st.slots:
@@ -335,7 +335,7 @@ async def cb_slot_action(callback: CallbackQuery, session: AsyncSession) -> None
 
 
 COPY_SLOT_ERRORS = {
-    "not_copying": "Слоты — только у пути Копирования или Бесконечной техники.",
+    "not_copying": "Слоты — только у активного пути Копирования.",
     "no_memory": "Этого противника уже нет в памяти.",
     "already": "Этот путь уже копируется.",
     "full": "Все слоты заняты — освободи один.",

@@ -123,7 +123,7 @@ export function Combo({ p, onDone }: GameProps) {
       setLit(k);
       await sleep(p.show_ms);
       setLit(null);
-      await sleep(150);
+      await sleep(p.gap_ms ?? 150); // пауза между стрелками: одинаковые подряд видно как два удара
     }
     setShowing(false);
   };

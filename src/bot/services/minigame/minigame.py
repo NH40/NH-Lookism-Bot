@@ -32,6 +32,7 @@ from bot.config.minigame import (
     TOKEN_TTL_SECONDS,
     difficulty_for_level,
     difficulty_for_stage,
+    mastery_params,
     params,
     tech_stages,
 )
@@ -127,20 +128,17 @@ async def _mastery_params(session: AsyncSession, user_id: int, mastery: str, que
     from bot.services.extra import get_army_stats
 
     d = difficulty_for_stage(quest.stage)
+    p = mastery_params(MASTERY_GAMES[mastery], d)
     army = max(1, (await get_army_stats(session, user_id)).total_power)
     target = max(1, quest.tom_power)
     if mastery == MASTERY_STRENGTH:  # шквал: каждое нажатие — доля мощи армии, набить мощь Тома
         taps = min(MASTERY_TAPS_MAX, max(MASTERY_TAPS_MIN, math.ceil(target / (army * MASTERY_POWER_PER_TAP))))
         return {"seconds": MASTERY_STRENGTH_SECONDS, "need": taps, "max_score": MASTERY_STRENGTH_SECONDS * 16,
-                "army_power": army, "target_power": target}
+                "min_seconds": MASTERY_STRENGTH_SECONDS * 0.9, "army_power": army, "target_power": target}
     if mastery == MASTERY_ENDURANCE:  # блоки: пропущенный удар снимает долю мощи Тома с армии
         miss = min(MASTERY_MISS_MAX, max(MASTERY_MISS_MIN, int((army - 1) // max(1, target * MASTERY_HIT_SHARE))))
-        p = params(MASTERY_GAMES[mastery], d)
-        warn = p["warn_ms"]
-        return {"strikes": MASTERY_STRIKES, "warn_ms": warn, "max_miss": miss, "need": MASTERY_STRIKES - miss,
-                "max_score": MASTERY_STRIKES, "seconds": MASTERY_STRIKES * (warn + 300) / 1000,
-                "army_power": army, "target_power": target}
-    return params(MASTERY_GAMES[mastery], d)
+        return {**p, "max_miss": miss, "need": MASTERY_STRIKES - miss, "army_power": army, "target_power": target}
+    return p
 
 
 async def start(session: AsyncSession, redis: Redis, user_id: int, ctx: str, stage: int) -> dict:

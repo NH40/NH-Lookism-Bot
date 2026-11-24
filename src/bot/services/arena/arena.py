@@ -45,6 +45,7 @@ from bot.config.arena import (
     ARENA_TTL_SECONDS,
 )
 from bot.config.arena.perks import BASE_PERKS, Perk, char_action
+from bot.constant.build import SOURCE_PATH, SOURCE_PATH2
 from bot.services.combat import BattleRun, CombatChances, CombatStack
 from bot.services.combat.combat import BattleResult
 from bot.services.combat.mods import CombatMods, sum_mods
@@ -155,9 +156,17 @@ async def create(
 
         uids = [u for u in (a_uid, d_uid) if u]
         if uids:
+            from bot.config.arena import ARENA_SHADOW_LEVEL
+            from bot.constant.bloodline import BLOODLINE_KURODA
+            from bot.constant.unique_path import PATH_FORESIGHT
+            from bot.db.models.development import UserPath
+
             rows = {r[0]: r for r in (await session.execute(select(
                 User.id, User.arena_auto_default, User.stat_strength, User.stat_speed, User.stat_agility, User.stat_endurance,
+                User.bloodline, User.bloodline_level, User.bloodline2, User.bloodline2_level, User.active_path, User.active_path2,
             ).where(User.id.in_(uids)))).all()}
+            reads = dict((await session.execute(select(UserPath.user_id, UserPath.level).where(
+                UserPath.user_id.in_(uids), UserPath.code == PATH_FORESIGHT))).all())
             for k in ("a", "d"):
                 r = rows.get(st[k]["uid"])
                 if r is None:
@@ -165,6 +174,12 @@ async def create(
                 st[k]["auto"] = st[k]["auto"] or bool(r[1])
                 # ранги характеристик — для их действий и усиления приёмов (2026-11-23)
                 st[k]["ch"] = {"s": int(r[2] or 0), "v": int(r[3] or 0), "a": int(r[4] or 0), "e": int(r[5] or 0)}
+                # уникальные механики ветвей (2026-11-24): «Тень» Куроды, «Прочитать ход» Предвидения
+                kuroda = max(r[7] or 0 if r[6] == BLOODLINE_KURODA else 0, r[9] or 0 if r[8] == BLOODLINE_KURODA else 0)
+                if kuroda >= ARENA_SHADOW_LEVEL:
+                    st[k]["shadow"] = True
+                if PATH_FORESIGHT in (r[10], r[11]):
+                    st[k]["read"] = int(reads.get(r[0], 0))
     await _save(redis, st)
     return st
 
@@ -173,7 +188,9 @@ def _rebuild(st: dict) -> BattleRun:
     a_stacks, d_stacks, a_ch, d_ch = _unpack(st["snap"])
     run = BattleRun(a_stacks, d_stacks, attacker_chances=a_ch, defender_chances=d_ch, rng=Random(st["seed"]))
     for entry in st["log"]:
-        a_extra, d_extra = _extras(entry["a"].get("as") or entry["a"]["code"], entry["d"].get("as") or entry["d"]["code"], run.weights, run)
+        lst = entry.get("lst") or [[], []]
+        a_extra, d_extra = _extras(entry["a"].get("as") or entry["a"]["code"], entry["d"].get("as") or entry["d"]["code"], run.weights, run,
+                                   lst[0], lst[1])
         run.play_round(a_extra, d_extra, entry["a"]["dmg"], entry["d"]["dmg"])
     return run
 
@@ -189,14 +206,24 @@ def _action_mods(code: str, foe_build=None) -> tuple[CombatMods, CombatMods]:
     own = perk.self_mods
     if perk.copy_share and foe_build is not None:
         own = own + sum_mods(m for _, m in foe_build.by_source).scale(perk.copy_share)
+    if perk.copy_path_share and foe_build is not None:  # «Слепок»: пассивки путей противника
+        own = own + sum_mods(m for s, m in foe_build.by_source if s in (SOURCE_PATH, SOURCE_PATH2)).scale(perk.copy_path_share)
     return own, perk.enemy_mods
 
 
-def _extras(a_code: str, d_code: str, w: dict[str, float] | None = None, run: BattleRun | None = None) -> tuple[CombatMods, CombatMods]:
-    """Модификаторы действий раунда; `w` — доля прокачки сторон (влияние мощи, `BattleRun.weights`)."""
+def _extras(a_code: str, d_code: str, w: dict[str, float] | None = None, run: BattleRun | None = None,
+            a_lasting=(), d_lasting=()) -> tuple[CombatMods, CombatMods]:
+    """Модификаторы действий раунда; `w` — доля прокачки сторон (влияние мощи, `BattleRun.weights`). `*_lasting` —
+    коды приёмов прошлых раундов, чей эффект ещё держится (`Perk.lasting`)."""
     wa, wd = (w or {}).get("a", 1.0), (w or {}).get("d", 1.0)
     a_own, a_enemy = _action_mods(a_code, run.d.chances.build if run else None)
     d_own, d_enemy = _action_mods(d_code, run.a.chances.build if run else None)
+    for code in a_lasting:
+        own, enemy = _action_mods(code, run.d.chances.build if run else None)
+        a_own, a_enemy = a_own + own, a_enemy + enemy
+    for code in d_lasting:
+        own, enemy = _action_mods(code, run.a.chances.build if run else None)
+        d_own, d_enemy = d_own + own, d_enemy + enemy
     if wa < 1:
         a_own, a_enemy = a_own.scale(wa), a_enemy.scale(wa)
     if wd < 1:
@@ -243,8 +270,12 @@ _VALUE_FIELDS = {  # вклад поля модификаторов в «сил�
 def perk_value(p: Perk) -> float:
     """Оценка силы перка для автоатаки: прирост урона + взвешенные модификаторы + мини-игра (средне) — на единицу энергии."""
     v = (p.damage - 1) + (1 - p.enemy_damage)
-    if p.mirror:  # повтор чужого приёма — сила как у среднего перка (своего эффекта у «Копии» нет)
+    if p.mirror or p.repeat_tech:  # повтор чужого/своего приёма — сила как у среднего перка
         v += 0.5
+    v += (1 - p.vs_perk_enemy_damage) * 0.5 + p.revenge * 0.15 + p.per_round * 4 + p.lesson * 0.5
+    v += (p.clean_round_damage - 1) * 0.5 + p.copy_path_share * 0.8 + 0.05 * p.reveal
+    if p.lasting:
+        v *= 1 + 0.6 * min(p.lasting, 4)
     for name, w in _VALUE_FIELDS.items():
         v += w * float(getattr(p.self_mods, name, 0) or 0) + 0.5 * w * float(getattr(p.enemy_mods, name, 0) or 0)
     if p.minigame:
@@ -266,6 +297,8 @@ def ai_action(side: dict, round_no: int, own_power: float, enemy_power: float, e
     по мощи он не слабее — защита; сильно проигрываешь — защита; иначе атака. Мини-игры — средний результат."""
     ready = [PERK_REGISTRY[c] for c in side["perks"] if _ready(side, c, round_no)]
     ready = [p for p in ready if lost_last or not p.self_mods.heal]
+    # повторять нечего: «Копия» в 1-м раунде, повтор техники — до первого приёма техники
+    ready = [p for p in ready if not (p.mirror and round_no <= 1) and not (p.repeat_tech and not side.get("last_tech"))]
     if ready:
         best = max(ready, key=lambda p: (perk_value(p), p.code))
         regen = side.get("regen", ARENA_ENERGY_REGEN)
@@ -408,8 +441,47 @@ async def _play(redis: Redis, st: dict) -> dict:
                     a_dmg = mirrored.damage
                 else:
                     d_dmg = mirrored.damage
+    # Приёмы ветвей v3 (2026-11-24): множители своего урона — до влияния мощи, как и сам урон приёма.
+    dmg = {"a": a_dmg, "d": d_dmg}
+    perks = {"a": a_perk, "d": d_perk}
+    for me, other in (("a", "d"), ("d", "a")):
+        perk, s = perks[me], st[me]
+        if perk is None:
+            continue
+        if perk.repeat_tech:  # «Ученик превзошёл»: повтор своего последнего приёма техники
+            prev_tech = next((e[me].get("as") or e[me]["code"] for e in reversed(st["log"])
+                              if (e[me].get("as") or e[me]["code"]).startswith("tech:")), None)
+            if prev_tech in PERK_REGISTRY:
+                as_code[me] = prev_tech
+                dmg[me] = PERK_REGISTRY[prev_tech].damage
+        if perk.revenge and s.get("power0"):  # «счёт обиды»: сильнее от потерянной армии
+            dmg[me] *= 1 + perk.revenge * max(0.0, 1 - s["power"] / s["power0"])
+        if perk.per_round:  # «опыт боя»
+            dmg[me] *= 1 + perk.per_round * round_no
+        if perk.clean_round_damage > 1 and round_no > 1 and last[1 if me == "a" else 0] == 0:  # в прошлом раунде без потерь
+            dmg[me] *= perk.clean_round_damage
+        if s.get("lesson") and perk.code.startswith("tech:"):  # «Урок» Хансу
+            dmg[me] *= 1 + s.pop("lesson")
+    a_dmg, d_dmg = dmg["a"], dmg["d"]
     w = run.weights
     a_dmg, d_dmg = _weigh(a_dmg, w["a"]), _weigh(d_dmg, w["d"])
+    # Держащиеся эффекты прошлых раундов (`Perk.lasting`): их ослабление урона противника и модификаторы.
+    lasting = {k: [c for c, until in st[k].get("lasting", []) if until >= round_no and c in PERK_REGISTRY] for k in SIDES}
+    for me, other in (("a", "d"), ("d", "a")):
+        for code in lasting[me]:
+            k = 1 - (1 - PERK_REGISTRY[code].enemy_damage) * w[me]
+            if other == "a":
+                a_dmg *= k
+            else:
+                d_dmg *= k
+        # «если противник жмёт приём — его урон ниже»
+        mine, theirs = perks[me], perks[other]
+        if mine is not None and mine.vs_perk_enemy_damage < 1 and theirs is not None:
+            k = 1 - (1 - mine.vs_perk_enemy_damage) * w[me]
+            if other == "a":
+                a_dmg *= k
+            else:
+                d_dmg *= k
     # Чужой перк на этот раунд и навязанная в прошлом раунде мини-игра (их сила — доля прокачки наложившего).
     for me, other, enemy_perk in (("a", "d", d_perk), ("d", "a", a_perk)):
         mult = 1 - (1 - enemy_perk.enemy_damage) * w[other] if enemy_perk else 1.0
@@ -421,7 +493,7 @@ async def _play(redis: Redis, st: dict) -> dict:
             a_dmg *= mult
         else:
             d_dmg *= mult
-    a_extra, d_extra = _extras(as_code["a"] or a_code, as_code["d"] or d_code, w, run)
+    a_extra, d_extra = _extras(as_code["a"] or a_code, as_code["d"] or d_code, w, run, lasting["a"], lasting["d"])
     entry_log = run.play_round(a_extra, d_extra, a_dmg, d_dmg)
     for me, code, perk, other in (("a", a_code, a_perk, "d"), ("d", d_code, d_perk, "a")):
         s = st[me]
@@ -440,12 +512,22 @@ async def _play(redis: Redis, st: dict) -> dict:
                 s["free"] = perk.code
             if perk.minigame == "enemy":
                 st[other]["pending_game"] = {"game": perk.game, "power": perk.power, "from": round_no, "score": 0.0}
+            if perk.lasting:
+                s.setdefault("lasting", []).append([perk.code, round_no + perk.lasting])
+            if perk.lesson:
+                s["lesson"] = perk.lesson
+            if perk.reveal:
+                s["reveal_until"] = round_no + perk.reveal
+            if (as_code[me] or perk.code).startswith("tech:"):
+                s["last_tech"] = as_code[me] or perk.code
+        s["lasting"] = [x for x in s.get("lasting", []) if x[1] > round_no]
         if code == DEFEND:
             s["energy"] += ARENA_DEFEND_ENERGY
         s["energy"] = min(s.get("emax", ARENA_ENERGY_MAX), s["energy"] + s.get("regen", ARENA_ENERGY_REGEN))
         s["action"] = None
     st["log"].append({"a": {"code": a_code, "dmg": a_dmg, **({"as": as_code["a"]} if as_code["a"] else {})},
                       "d": {"code": d_code, "dmg": d_dmg, **({"as": as_code["d"]} if as_code["d"] else {})},
+                      **({"lst": [lasting["a"], lasting["d"]]} if lasting["a"] or lasting["d"] else {}),
                       "kills": [entry_log.attacker_kills, entry_log.defender_kills] if entry_log else [0, 0],
                       # для живого журнала в Mini App: урон сторон и сработавшие навыки/события раунда
                       "hit": [entry_log.attacker_damage, entry_log.defender_damage] if entry_log else [0, 0],
@@ -543,3 +625,25 @@ async def sweep(redis: Redis) -> int:
             await tick(redis, battle_id)
             played += 1
     return played
+
+
+def foe_intel(st: dict, side: str) -> dict:
+    """Что сторона `side` видит о сопернике (2026-11-24): энергию (её прячет «Тень» Куроды, если не открыта
+    «Видением исхода»), выбранное действие («Прочитать ход» Предвидения) и готовые приёмы (`Perk.reveal`)."""
+    from bot.config.arena import ARENA_READ_KIND_LEVEL, ARENA_READ_PERK_LEVEL
+
+    s, o = st[side], st["d" if side == "a" else "a"]
+    next_round = st["round"] + 1
+    revealed = s.get("reveal_until", 0) >= next_round
+    hidden = bool(o.get("shadow")) and not revealed
+    read = None
+    act = o.get("action")
+    if act and s.get("read", 0) >= ARENA_READ_KIND_LEVEL and not o["auto"]:
+        kind = act.get("kind")
+        if kind == PERK and s.get("read", 0) >= ARENA_READ_PERK_LEVEL:
+            p = _perk(act.get("perk"))
+            read = p.name if p else "приём"
+        else:
+            read = {ATTACK: "атака", DEFEND: "защита", PERK: "приём"}.get(kind)
+    ready = [PERK_REGISTRY[c].name for c in o["perks"] if c in PERK_REGISTRY and _ready(o, c, next_round)] if revealed else None
+    return {"energy": None if hidden else o["energy"], "hidden": hidden, "read": read, "ready": ready}

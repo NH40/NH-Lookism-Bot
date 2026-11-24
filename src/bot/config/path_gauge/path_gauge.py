@@ -47,8 +47,7 @@ GAUGE_COPY_TECH_LEVEL = 3.0
 # по одному за каждые `COPY_GAUGE_PER_SLOT` шкалы, до `COPY_SLOTS_MAX`, — и перк «Копия» в онлайн-бою.
 COPY_GAUGE_PER_SLOT = 25.0
 COPY_SLOTS_MAX = 5
-COPY_PERK_GAUGE = 30.0
-COPY_PERK_CODE = "copy:mirror"
+COPY_PERK_GAUGE = 30.0  # приём «Копия» (1-й приём пути) открывается шкалой, а не уровнем
 
 
 @dataclass(frozen=True, slots=True)

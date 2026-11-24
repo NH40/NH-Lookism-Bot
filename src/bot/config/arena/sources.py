@@ -12,7 +12,7 @@ from bot.config.arena.perks import Perk
 from bot.config.bloodline import LEVELS as BLOODLINE_LEVELS
 from bot.config.mastery.techniques import MASTERY_TREES
 from bot.config.unique_path import LEVELS as PATH_LEVELS
-from bot.config.arena.moves import BLOOD_MOVES, TECH_MOVES
+from bot.config.arena.moves import TECH_MOVES
 from bot.config.unique_technique import LEVELS as TECH_LEVELS
 from bot.services.combat.mods import CombatMods
 
@@ -93,18 +93,16 @@ def _true_about(p: Perk, prefix: str = "") -> Perk:
 
 
 def build_source_perks() -> dict[str, Perk]:
-    from bot.texts.bloodline import BLOODLINE_NAMES
-    from bot.texts.unique_path import PATH_NAMES
     from bot.texts.unique_technique import TECHNIQUE_NAMES
 
     perks: list[Perk] = []
     for i, code in enumerate(TECH_LEVELS):
         perks += _move_perks("tech", TECH_LEVELS, code, i) if code in TECH_MOVES else _tier_perks("tech", TECH_LEVELS, code, TECHNIQUE_NAMES.get(code, code), i)
-    for i, code in enumerate(PATH_LEVELS):
-        perks += _tier_perks("path", PATH_LEVELS, code, PATH_NAMES.get(code, code), i)
-    for i, code in enumerate(BLOODLINE_LEVELS):
-        perks += _move_perks("blood", BLOODLINE_LEVELS, code, i) if code in BLOOD_MOVES else _tier_perks("blood", BLOODLINE_LEVELS, code, BLOODLINE_NAMES.get(code, code), i)
-    perks += ABSOLUTE_PERKS + POSITION_PERKS + mastery_perks() + [COPY_PATH_PERK]
+    # Пути и родословные — приёмы ветвей v3 (2026-11-24): 2–3 приёма, сила от уровня (`config/arena/branches`).
+    from bot.config.arena.branches import build_branch_perks
+
+    perks += build_branch_perks("path", PATH_LEVELS) + build_branch_perks("blood", BLOODLINE_LEVELS)
+    perks += ABSOLUTE_PERKS + POSITION_PERKS + mastery_perks()
     return {p.code: p for p in perks}
 
 
@@ -129,15 +127,6 @@ ABSOLUTE_PERKS: list[Perk] = [
     _p("abs:arian_absolute", "Абсолют Ариана", "Глушит противника: его урон ×0.75 и мини-игра.", 5, 4,
        enemy_damage=0.75, minigame="enemy", game="parry", power=0.4),
 ]
-
-# Путь Копирования (пользователь 2026-11-24): шкала копирования с `COPY_PERK_GAUGE` открывает этот перк.
-def _copy_path_perk() -> Perk:
-    from bot.config.path_gauge import COPY_PERK_CODE
-
-    return _p(COPY_PERK_CODE, "Копия", "Повторяет последний приём противника — его урон и эффекты.", 4, 3, mirror=True)
-
-
-COPY_PATH_PERK = _copy_path_perk()
 
 # Позиции банды: уник на позиции даёт перк своей роли.
 POSITION_PERKS: list[Perk] = [

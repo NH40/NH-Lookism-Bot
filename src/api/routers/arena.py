@@ -129,6 +129,7 @@ def view(st: dict, user_id: int) -> dict:
     s, o = st[me], st[foe]
     i = 0 if me == "a" else 1
     pw = st.get("pw")
+    intel = svc.foe_intel(st, me)
     return {
         "power_line": explain.power_line(pw["ratio"], pw["stronger"] == me, pw["w"]) if pw else None,
         "id": st["id"], "kind": st["kind"], "status": st["status"], "round": st["round"],
@@ -138,7 +139,8 @@ def view(st: dict, user_id: int) -> dict:
                "ava": s.get("ava"), "bot": s["uid"] is None,
                "chosen": _act_name((s["action"] or {}).get("perk") or (s["action"] or {}).get("kind")) if s["action"] else None,
                "units": s.get("units"), "units0": s.get("units0")},
-        "foe": {"name": o["name"], "power": o["power"], "energy": o["energy"], "emax": o.get("emax", 10), "auto": o["auto"], "afk": o.get("afk", False),
+        "foe": {"name": o["name"], "power": o["power"], "energy": intel["energy"], "emax": o.get("emax", 10), "auto": o["auto"], "afk": o.get("afk", False),
+                "hidden": intel["hidden"], "read": intel["read"], "ready": intel["ready"],
                 "ava": o.get("ava"), "bot": o["uid"] is None,
                 "waiting": o["action"] is not None, "power0": o.get("power0", o["power"]), "units": o.get("units"), "units0": o.get("units0")},
         # действия характеристик (2026-11-23): код без ранга — ранг подставит сервер

@@ -13,7 +13,8 @@ import "./Battle.css";
 // мощью, статистами и энергией; аккуратный список перков с окном описания; живая лента раундов.
 interface Perk { code: string; name: string; about: string; cost: number; ready_in: number; affordable: boolean; minigame?: string | null; game?: string | null }
 interface Side {
-  name: string; power: number; power0?: number; units?: number | null; units0?: number | null; energy: number; emax?: number;
+  name: string; power: number; power0?: number; units?: number | null; units0?: number | null; energy: number | null; emax?: number;
+  hidden?: boolean; read?: string | null; ready?: string[] | null; // «Тень» Куроды, «Прочитать ход» и «Видение исхода» (2026-11-24)
   auto: boolean; afk?: boolean; waiting?: boolean; chosen?: string | null; ava?: string | null; bot?: boolean;
   game?: { game: string; power: number } | null;
 }
@@ -102,9 +103,10 @@ function Fighter({ side, mine, kind }: { side: Side; mine: boolean; kind: string
       <div className="bt-hp"><i style={{ width: `${hp * 100}%` }} /></div>
       <div className="bt-f-row">
         <span><Users size={11} /> {side.units != null ? fmt(side.units) : "—"}</span>
-        <span className="bt-en"><Zap size={11} /> {side.energy}/{emax}</span>
+        <span className="bt-en"><Zap size={11} /> {side.hidden ? "🥷 ?" : `${side.energy}/${emax}`}</span>
       </div>
-      <div className="bt-pips">{Array.from({ length: emax }, (_, i) => <i key={i} className={i < side.energy ? "on" : ""} />)}</div>
+      <div className="bt-pips">{Array.from({ length: emax }, (_, i) => <i key={i} className={!side.hidden && i < (side.energy ?? 0) ? "on" : ""} />)}</div>
+      {side.ready && <small className="bt-f-status">👁 готово: {side.ready.join(", ") || "ничего"}</small>}
     </div>
   );
 }
@@ -335,7 +337,7 @@ export function BattlePage() {
           <div className="bt-now">
             <span className="bt-live">LIVE</span>
             <span>Раунд {b.round + 1}: ты — <b>{b.me.waiting || b.me.auto ? (b.me.chosen ?? (b.me.auto ? "автоатака" : "выбрал")) : "выбираешь…"}</b>
-              {" · "}соперник — <b>{b.foe.waiting ? "сходил" : b.foe.auto ? "автоатака" : "думает…"}</b></span>
+              {" · "}соперник — <b>{b.foe.waiting ? (b.foe.read ? `сходил: ${b.foe.read} 👁` : "сходил") : b.foe.auto ? "автоатака" : "думает…"}</b></span>
           </div>
         )}
         {b.log.length > 0 && (

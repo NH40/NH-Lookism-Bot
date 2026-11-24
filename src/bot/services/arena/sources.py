@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.config.arena.branches import perk_base
 from bot.config.arena.sources import TIER_LEVELS
 
 
@@ -27,20 +28,21 @@ async def perks_for(session: AsyncSession, user_id: int, *, include_off: bool = 
     codes = list(BASE_PERKS)
     if row is not None:
         codes += _tiers("tech", row.technique, row.technique_level)
-        codes += _tiers("path", row.path, row.path_level) + _tiers("path", row.path2, row.path2_level)
-        codes += _tiers("blood", row.bloodline, row.bloodline_level) + _tiers("blood", row.bloodline2, row.bloodline2_level)
+        # пути и родословные — приёмы ветвей v3: 2–3 на ветку, сила от уровня (2026-11-24)
+        from bot.config.arena.branches import branch_codes
+        from bot.config.path_gauge import COPY_PERK_GAUGE
+        from bot.constant.unique_path import PATH_COPY
+
+        for path, level, gauge in ((row.path, row.path_level, row.path_gauge), (row.path2, row.path2_level, row.path2_gauge)):
+            got = branch_codes("path", path, level)
+            if path == PATH_COPY and gauge < COPY_PERK_GAUGE:  # «Копию» открывает шкала копирования
+                got = [c for c in got if not c.startswith(f"path:{PATH_COPY}:1@")]
+            codes += got
+        codes += branch_codes("blood", row.bloodline, row.bloodline_level) + branch_codes("blood", row.bloodline2, row.bloodline2_level)
     codes += [f"abs:{a}" for a in sorted(await active_absolutes(session, user_id))]
     codes += [f"pos:{p.position}" for p in await list_positions(session, user_id) if p.card_code]
     learned = (await session.execute(select(MasteryTechnique.code).where(MasteryTechnique.user_id == user_id))).scalars().all()
     codes += [f"mt:{c}" for c in learned]
-    # Путь Копирования: шкала открывает перк «Копия» (2026-11-24).
-    if row is not None:
-        from bot.config.path_gauge import COPY_PERK_CODE, COPY_PERK_GAUGE
-        from bot.constant.unique_path import PATH_COPY
-
-        gauge = row.path_gauge if row.path == PATH_COPY else row.path2_gauge if row.path2 == PATH_COPY else None
-        if gauge is not None and gauge >= COPY_PERK_GAUGE:
-            codes.append(COPY_PERK_CODE)
     seen: set[str] = set()
     out = [c for c in codes if c in PERK_REGISTRY and not (c in seen or seen.add(c))]
     if include_off:
@@ -48,7 +50,7 @@ async def perks_for(session: AsyncSession, user_id: int, *, include_off: bool = 
     from bot.db.models.user import User
 
     off = set(await session.scalar(select(User.arena_perks_off).where(User.id == user_id)) or [])
-    return _cap([c for c in out if c not in off])
+    return _cap([c for c in out if perk_base(c) not in off])
 
 
 def _cap(enabled: list[str]) -> list[str]:
@@ -76,7 +78,7 @@ async def loadout(session: AsyncSession, user_id: int) -> tuple[list[str], list[
     row = (await session.execute(select(User.arena_perks_off, User.arena_auto_default).where(User.id == user_id))).one()
     every = await perks_for(session, user_id, include_off=True)
     off = set(row[0] or [])
-    return every, _cap([c for c in every if c not in off]), bool(row[1])
+    return every, _cap([c for c in every if perk_base(c) not in off]), bool(row[1])
 
 
 async def toggle_loadout(session: AsyncSession, user_id: int, code: str) -> None:
@@ -88,12 +90,13 @@ async def toggle_loadout(session: AsyncSession, user_id: int, code: str) -> None
     from bot.db.models.user import User
 
     every, chosen, _ = await loadout(session, user_id)
-    if code not in every:
+    code = next((c for c in every if perk_base(c) == perk_base(code)), None)  # уровень ветки мог вырасти с экрана
+    if code is None:
         return
     chosen = [c for c in chosen if c != code] if code in chosen else chosen + [code]
     if len(chosen) > ARENA_LOADOUT_MAX:
         raise LoadoutFullError
-    off = [c for c in every if c not in chosen]
+    off = [perk_base(c) for c in every if c not in chosen]  # без уровня: прокачка ветки набор не сбивает
     await session.execute(update(User).where(User.id == user_id).values(arena_perks_off=off))
     await session.commit()
 

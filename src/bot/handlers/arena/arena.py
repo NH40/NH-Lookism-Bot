@@ -58,7 +58,7 @@ def _act_name(code: str | None) -> str:
     return perk.name if perk else "Перк"
 
 
-def _side_lines(mark: str, side: dict, mine: bool) -> list[str]:
+def _side_lines(mark: str, side: dict, mine: bool, intel: dict | None = None) -> list[str]:
     p0 = side.get("power0") or side["power"] or 1
     units = side.get("units")
     if side.get("afk"):
@@ -66,15 +66,20 @@ def _side_lines(mark: str, side: dict, mine: bool) -> list[str]:
     elif side["auto"]:
         state = "🤖 автоатака"
     elif side["action"] is not None:
-        state = f"✅ {_act_name(side['action'].get('perk') or side['action'].get('kind'))}" if mine else "✅ сходил"
+        state = f"✅ {_act_name(side['action'].get('perk') or side['action'].get('kind'))}" if mine else (
+            f"✅ сходил: {intel['read']} 👁" if intel and intel.get("read") else "✅ сходил")
     else:
         state = "⌛ твой ход" if mine else "🤔 думает"
     unit_txt = f"👥 {format_number(units)}/{format_number(side.get('units0') or units)} · " if units is not None else ""
-    return [
+    energy = "🥷 ?" if intel and intel.get("hidden") else f"{side['energy']}/{side.get('emax', 10)}"
+    out = [
         f"{mark} <b>{esc(side['name'])}</b> — {format_number(side['power'])}",
         f"   {_bar(side['power'], p0)} {round(100 * side['power'] / max(1, p0))}%",
-        f"   {unit_txt}⚡ {side['energy']}/{side.get('emax', 10)} · {state}",
+        f"   {unit_txt}⚡ {energy} · {state}",
     ]
+    if intel and intel.get("ready") is not None:
+        out.append(f"   👁 готово: {esc(', '.join(intel['ready']) or 'ничего')}")
+    return out
 
 
 def render(st: dict, user_id: int, *, perks_help: bool = False, detail: bool = False) -> tuple[str, InlineKeyboardMarkup]:
@@ -88,7 +93,7 @@ def render(st: dict, user_id: int, *, perks_help: bool = False, detail: bool = F
     live = st["status"] == "live"
     head = f"⚔️ <b>{KIND_TITLE.get(st['kind'], 'Бой')}</b>"
     head += f" · раунд {st['round'] + 1} · ⏳ {left} с" if live else f" · раундов: {st['round']}"
-    lines = [head, SEP, *_side_lines("🟦", s, True), "", *_side_lines("🟥", o, False), SEP]
+    lines = [head, SEP, *_side_lines("🟦", s, True), "", *_side_lines("🟥", o, False, svc.foe_intel(st, me)), SEP]
     pw = st.get("pw")
     if pw:
         lines.append(esc(explain.power_line(pw["ratio"], pw["stronger"] == me, pw["w"])))

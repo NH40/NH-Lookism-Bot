@@ -248,14 +248,14 @@ LEVELS: dict[str, tuple[dict, ...]] = {
     PATH_BUSINESS: (
         _e(income=0.10),
         _e(storage_hours=4, fragment_bonus=0.10),
-        _e(upgrade_discount=0.10, income=0.05),
+        _s({"durability": 0.04}, {"upgrade_discount": 0.10, "income": 0.05}),  # v3: охрана и снаряжение на деньги
         _e(income=0.10, tax_relief=0.05),
         _e(build_discount=0.10, fragment_bonus=0.15),
-        _e(tax_relief=0.10, income=0.08),
+        _s({"attack": 0.04}, {"tax_relief": 0.10, "income": 0.08}),
         _e(income=0.12, storage_hours=4),
         _e(storage_hours=8, fragment_bonus=0.15),
-        _e(upgrade_discount=0.10, build_discount=0.10, income=0.10),
-        _e(income=0.25, fragment_bonus=0.20),
+        _s({"durability": 0.04}, {"upgrade_discount": 0.10, "build_discount": 0.10, "income": 0.10}),
+        _s({"attack": 0.06, "durability": 0.04}, {"income": 0.25, "fragment_bonus": 0.20}),
     ),
 }
 
@@ -275,6 +275,11 @@ PATH_BALANCE: dict[str, float] = {
 # Онлайн-бой (2026-11-20, этап 6): подстройка симуляцией — 150 равных билдов × 30 соперников, автоатака с перками;
 # множители к прежнему балансу, чтобы доля побед каждого кода была около 50%.
 for _code, _k in {"overcome": 0.736, "despair": 0.617, "reflection": 0.438, "absorption": 0.944, "copy": 1.839, "infinite": 1.41, "foresight": 1.377, "sure_hit": 0.442, "adaptation": 0.687, "evasion": 0.584}.items():
+    PATH_BALANCE[_code] = round(PATH_BALANCE.get(_code, 1.0) * _k, 3)
+# Пути v3 (2026-11-24, `docs/design/paths_bloodlines_v3.md`): новые приёмы сильнее прежних «вспышек» — пассивки
+# переделанных путей подобраны симуляцией (150 билдов × 30 соперников, онлайн-бой с приёмами) до уровня популярных
+# Преодоления и Отчаяния (~55% побед), а не 50%: иначе переделанные так и остались бы слабее.
+for _code, _k in {"absorption": 1.113, "copy": 3.0, "foresight": 0.927, "sure_hit": 0.609, "adaptation": 1.491, "evasion": 0.607}.items():
     PATH_BALANCE[_code] = round(PATH_BALANCE.get(_code, 1.0) * _k, 3)
 LEVELS = scale_levels(LEVELS, PATH_BALANCE)
 

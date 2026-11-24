@@ -187,7 +187,18 @@ KEPT_PATH_NAMES: dict[str, tuple[str, str, str]] = {
 
 # Сила приёмов ветки (подбирается симуляцией): множитель всех эффектов приёма. Ключ «вид:код».
 # Нетронутые родословные — прежние множители их приёмов.
-BRANCH_BOOST: dict[str, float] = {"blood:yamazaki": 1.8, "blood:gapryong": 0.85, "blood:jinyeong": 2.11}
+BRANCH_BOOST: dict[str, float] = {
+    "blood:yamazaki": 1.8, "blood:gapryong": 0.85, "blood:jinyeong": 2.11,
+    # v3 (2026-11-24): экономические ветки — приёмы сильнее (×1.6). Симуляция просила ×3, но это «урон ×4» и лечение
+    # >100% — выглядит багом; их главная сила — доход, контракты, КПД и метки, которых симуляция не видит.
+    "path:sensory": 1.6, "path:training": 1.6, "path:business": 1.6,
+    "blood:samdak": 1.6, "blood:jincheol": 1.6, "blood:hansu": 1.6, "blood:penguan": 1.6,
+}
+# Потолки приёма после всех множителей — чтобы ни одна ветка не дала абсурдных чисел.
+CAP_DAMAGE = 3.0
+CAP_ENEMY_DAMAGE = 0.35  # урон противника не ниже ×0.35
+CAP_MINIGAME_POWER = 0.6
+CAP_HEAL = 0.6
 
 
 def _kept_path_moves(levels: dict, code: str) -> tuple[BranchMove, ...]:
@@ -200,6 +211,12 @@ def _kept_path_moves(levels: dict, code: str) -> tuple[BranchMove, ...]:
             mods = mods + CombatMods.of(spec.get("combat", {}))
         out.append(B(name, mods.scale(1.25 + 0.25 * i), damage=1.1 + 0.1 * i, power=0.5 if i == 2 else 0.0))
     return tuple(out)
+
+
+def _cap_mods(mods: CombatMods) -> CombatMods:
+    from dataclasses import replace
+
+    return replace(mods, heal=min(CAP_HEAL, mods.heal)) if mods.heal > CAP_HEAL else mods
 
 
 def _up(x: float, k: float) -> float:
@@ -246,11 +263,12 @@ def _perk(kind: str, code: str, n: int, mv: BranchMove, level: int, idx: int, bo
     game = ((_SELF_GAMES if mv.minigame_self else _ENEMY_GAMES)[idx % 4]) if top else None
     p = Perk(
         code=f"{kind}:{code}:{n}@{level}", name=mv.name, about="", cost=BRANCH_COST[n - 1], cooldown=BRANCH_COOLDOWN[n - 1],
-        self_mods=mv.mods.scale(k), enemy_mods=mv.enemy.scale(k), damage=_up(mv.damage, k), enemy_damage=_down(mv.enemy_damage, k),
-        minigame=minigame, game=game, power=mv.power * boost if top else 0.0,
+        self_mods=_cap_mods(mv.mods.scale(k)), enemy_mods=mv.enemy.scale(k), damage=min(CAP_DAMAGE, _up(mv.damage, k)),
+        enemy_damage=max(CAP_ENEMY_DAMAGE, _down(mv.enemy_damage, k)),
+        minigame=minigame, game=game, power=min(CAP_MINIGAME_POWER, mv.power * boost) if top else 0.0,
         first_round_damage=_up(mv.first_round_damage, k) if mv.first_round_damage else 0.0,
         copy_share=mv.copy_share * k, mirror=mv.mirror, energy_gain=mv.energy_gain,
-        lasting=mv.lasting, vs_perk_enemy_damage=_down(mv.vs_perk_enemy_damage, k), revenge=mv.revenge * k,
+        lasting=mv.lasting, vs_perk_enemy_damage=max(CAP_ENEMY_DAMAGE, _down(mv.vs_perk_enemy_damage, k)), revenge=mv.revenge * k,
         per_round=mv.per_round * k, lesson=mv.lesson * k, repeat_tech=mv.repeat_tech,
         clean_round_damage=_up(mv.clean_round_damage, k), copy_path_share=mv.copy_path_share * k, reveal=mv.reveal,
     )

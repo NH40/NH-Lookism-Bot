@@ -220,7 +220,18 @@ BLOODLINE_BALANCE: dict[str, float] = {
 # множители к прежнему балансу, чтобы доля побед каждого кода была около 50%.
 for _code, _k in {"mujin": 0.558, "jinyeong": 0.696, "gapryong": 2.379, "yamazaki": 0.38, "sophia": 0.618, "kuroda": 1.279, "jincheol": 1.691}.items():
     BLOODLINE_BALANCE[_code] = round(BLOODLINE_BALANCE.get(_code, 1.0) * _k, 3)
+# Родословные v3 (2026-11-24): та же симуляция, цель — уровень популярных Ямадзаки и Джинёна (~55%). Муджин был
+# сильнейшим (87% побед) из-за «мощи каждого бойца» (+37% на 10-м) — она не проходит через боевой множитель, поэтому
+# режется отдельно (`MUJIN_ARMY_POWER_BALANCE`).
+for _code, _k in {"elite": 2.827, "mujin": 0.289, "sophia": 0.844, "kuroda": 1.323}.items():
+    BLOODLINE_BALANCE[_code] = round(BLOODLINE_BALANCE.get(_code, 1.0) * _k, 3)
+MUJIN_ARMY_POWER_BALANCE = 0.289
 LEVELS = scale_levels(LEVELS, BLOODLINE_BALANCE)
+LEVELS[BLOODLINE_MUJIN] = tuple(
+    {**spec, "eco": {f: (round(v * MUJIN_ARMY_POWER_BALANCE, 4) if f == "army_power" else v) for f, v in spec["eco"].items()}}
+    if spec.get("eco") else spec
+    for spec in LEVELS[BLOODLINE_MUJIN]
+)
 
 
 BLOODLINE_START_LEVEL = 1  # даётся при выборе

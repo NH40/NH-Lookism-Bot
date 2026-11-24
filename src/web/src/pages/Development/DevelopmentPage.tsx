@@ -9,6 +9,7 @@ import type {
   UltraData,
   DevItem,
   DevLevel,
+  DevMove,
   DevQuest,
   DevTab,
   DevelopmentResponse,
@@ -113,6 +114,28 @@ function Segments({ level, floor, max }: { level: number; floor: number; max: nu
     <div className="dev-lvl" aria-label={`Уровень ${level} из ${max}`}>
       {Array.from({ length: max }, (_, i) => (
         <span key={i} className={i < level ? "f" : i < floor ? "p" : ""} />
+      ))}
+    </div>
+  );
+}
+
+/** Приёмы ветки в онлайн-бою (v3): 2–3 приёма, сила растёт с уровнем. */
+function Moves({ moves }: { moves?: DevMove[] }) {
+  if (!moves?.length) return null;
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div className="muted" style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>
+        <Swords size={13} /> Приёмы в бою · сила растёт с уровнем
+      </div>
+      {moves.map((m) => (
+        <div key={m.name} className={`dev-buff ${m.unlocked ? "" : "locked"}`}>
+          {m.unlocked ? <Swords size={16} color="var(--cyan)" /> : <Lock size={16} color="var(--muted)" />}
+          <div>
+            <b>{m.name}</b> · ⚡{m.cost}{m.minigame ? " · 🎯" : ""}
+            {!m.unlocked && <span className="muted"> · с {m.unlock_level} ур.</span>}
+            <div className="muted" style={{ fontSize: 12 }}>{m.about}</div>
+          </div>
+        </div>
       ))}
     </div>
   );
@@ -229,6 +252,7 @@ function ItemPanel({
         </div>
       )}
       {item.theme && <div className="muted" style={{ fontSize: 12, fontWeight: 600, marginTop: 8, lineHeight: 1.4 }}>{item.theme}</div>}
+      <Moves moves={item.moves} />
       <Buffs levels={item.levels} all={all} />
       <button type="button" className="btn ghost small" style={{ marginTop: 8 }} onClick={() => setAll(!all)}>
         {all ? "Скрыть закрытые уровни" : "Все уровни"}
@@ -607,6 +631,7 @@ function BloodTab({ d, max, post, busy }: { d: BloodData; max: number; post: Pos
               <div style={{ padding: "8px 2px 0" }}>
                 <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.45 }}>{o.description}</div>
                 <div className="muted dev-note">Уровень 1: {o.first || "—"}</div>
+                <Moves moves={o.moves} />
                 <button type="button" className="btn red block" style={{ marginTop: 10 }} disabled={busy} onClick={() => post("/bloodline/choose", { code: o.code })}>
                   Выбрать {o.name}
                 </button>

@@ -126,6 +126,9 @@ async def render_path(session: AsyncSession, redis: Redis, user_id: int):
         owned_line=OWNED_LINE.format(paths=", ".join(PATH_NAMES[c] for c in others)) if others else "",
     )
     text += gauge_line(view.active, view.gauge, level)
+    from bot.utils.branch_moves import branch_moves_block
+
+    text += branch_moves_block("path", view.active, level)
     if PATH_TRAINING in (view.active, view.active2):
         kpd = (await get_build(session, user_id)).training_kpd
         text += TRAINING_KPD_LINE.format(p=round(kpd * 100), cap=round(view.owned.get(PATH_TRAINING, 0) * TRAINING_KPD_CAP_PER_LEVEL * 100))

@@ -30,6 +30,18 @@ export interface DevItem {
   next_cost: number | null;
   next_frag?: number | null;
   levels: DevLevel[];
+  moves?: DevMove[]; // приёмы в бою (пути и родословные v3)
+}
+
+/** Приём ветки в онлайн-бою: сила на текущем уровне, закрытый — на уровне открытия. */
+export interface DevMove {
+  name: string;
+  about: string;
+  unlocked: boolean;
+  unlock_level: number;
+  cost: number;
+  cooldown: number;
+  minigame: boolean;
 }
 
 export interface TrainingStatus {
@@ -92,6 +104,7 @@ export interface BloodOption {
   name: string;
   description: string;
   first: string;
+  moves?: DevMove[]; // приёмы на 10-м уровне
 }
 
 export interface BloodData {

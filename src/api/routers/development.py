@@ -90,6 +90,7 @@ class ItemOut(BaseModel):
     next_cost: int | None = None
     next_frag: int | None = None  # путь: ещё и фрагменты пути
     levels: list[LevelOut]
+    moves: list[dict] = []  # приёмы в бою (пути и родословные v3): сила на текущем уровне, закрытые — на уровне открытия
 
 
 class DevelopmentOut(BaseModel):
@@ -132,10 +133,19 @@ def _levels(specs, level: int, floor: int = 0, special: dict | None = None) -> l
     return out
 
 
-def _item(code: str, name: str, theme: str, level: int, floor: int, next_cost: int | None, specs, special=None) -> dict:
+def _moves(kind: str, code: str | None, level: int) -> list[dict]:
+    from dataclasses import asdict
+
+    from bot.utils.branch_moves import branch_move_rows
+
+    return [asdict(r) for r in branch_move_rows(kind, code, level)]
+
+
+def _item(code: str, name: str, theme: str, level: int, floor: int, next_cost: int | None, specs, special=None,
+          moves_kind: str | None = None) -> dict:
     return ItemOut(
         code=code, name=name, theme=theme, level=level, floor=floor, next_cost=next_cost,
-        levels=_levels(specs, level, floor, special),
+        levels=_levels(specs, level, floor, special), moves=_moves(moves_kind, code, level) if moves_kind else [],
     ).model_dump()
 
 
@@ -202,7 +212,7 @@ async def _path_tab(session: AsyncSession, redis: Redis, user_id: int) -> dict:
         cost = path_cfg.path_level_cost(level + 1) if level < MAX_LEVEL else None
         out = _item(
             code, t_path.PATH_NAMES[code], t_path.PATH_THEMES[code], level, floors.get(code, 0), cost,
-            path_cfg.LEVELS[code], t_path.SPECIAL_EFFECTS,
+            path_cfg.LEVELS[code], t_path.SPECIAL_EFFECTS, moves_kind="path",
         )
         out["next_frag"] = path_cfg.path_level_fragments(level + 1) if cost is not None else None
         return out
@@ -294,13 +304,14 @@ async def _blood_tab(session: AsyncSession, redis: Redis, user_id: int) -> dict:
                     "name": t_blood.BLOODLINE_NAMES[c],
                     "description": t_blood.BLOODLINE_DESCRIPTIONS.get(c, t_blood.BLOODLINE_NO_DESCRIPTION),
                     "first": describe_level(bloodline_cfg.LEVELS[c][0], t_blood.SPECIAL_EFFECTS),
+                    "moves": _moves("blood", c, 10),  # приёмы на 10-м уровне — чтобы было видно, во что растёт
                 }
                 for c in BLOODLINES
             ],
         }
     first = _item(
         state.code, t_blood.BLOODLINE_NAMES[state.code], t_blood.BLOODLINE_DESCRIPTIONS.get(state.code, ""),
-        state.level, 0, state.next_cost, bloodline_cfg.LEVELS[state.code], t_blood.SPECIAL_EFFECTS,
+        state.level, 0, state.next_cost, bloodline_cfg.LEVELS[state.code], t_blood.SPECIAL_EFFECTS, moves_kind="blood",
     )
     second = None
     options2: list[dict] = []
@@ -310,7 +321,7 @@ async def _blood_tab(session: AsyncSession, redis: Redis, user_id: int) -> dict:
             cost2 = bloodline_cfg.bloodline_level_cost(level2 + 1) if level2 < MAX_LEVEL else None
             second = _item(
                 code2, t_blood.BLOODLINE_NAMES[code2], t_blood.BLOODLINE_DESCRIPTIONS.get(code2, ""),
-                level2, 0, cost2, bloodline_cfg.LEVELS[code2], t_blood.SPECIAL_EFFECTS,
+                level2, 0, cost2, bloodline_cfg.LEVELS[code2], t_blood.SPECIAL_EFFECTS, moves_kind="blood",
             )
         else:
             options2 = [{"code": c, "name": t_blood.BLOODLINE_NAMES[c]} for c in BLOODLINES if c != state.code]

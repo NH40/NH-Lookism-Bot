@@ -144,6 +144,9 @@ async def _render_bloodline(session: AsyncSession, user_id: int):
         drops=format_number(state.blood_drops),
         next_line=NEXT_LEVEL_LINE.format(cost=cost) if cost else MAX_LEVEL_LINE,
     )
+    from bot.utils.branch_moves import branch_moves_block
+
+    text += branch_moves_block("blood", state.code, state.level)
     eco = (await get_build(session, user_id)).eco
     free_change = await has_free_change(session, user_id)
     if free_change:
@@ -176,6 +179,9 @@ async def render_bloodline2(session: AsyncSession, user_id: int):
         levels=levels, drops=format_number(state.blood_drops if state else 0),
         next_line=NEXT_LEVEL_LINE.format(cost=cost2) if cost2 else MAX_LEVEL_LINE,
     )
+    from bot.utils.branch_moves import branch_moves_block
+
+    text += branch_moves_block("blood", code2, level2)
     return text, detail2_menu(cost2)
 
 

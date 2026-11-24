@@ -84,3 +84,14 @@ async def remember(session: AsyncSession, user_id: int, opponent_id: int, path: 
         .offset(keep)
     )
     await session.execute(delete(BattleMemory).where(BattleMemory.id.in_(old)))
+
+
+async def mark_flags(session: AsyncSession, attacker_id: int, defender_id: int) -> tuple[bool, bool]:
+    """(нападающий пометил защитника, защитник пометил нападающего) — для бонуса Сенсорики в PvP. Один запрос."""
+    from sqlalchemy import or_
+
+    rows = (await session.execute(select(PlayerMark.user_id).where(or_(
+        (PlayerMark.user_id == attacker_id) & (PlayerMark.target_id == defender_id),
+        (PlayerMark.user_id == defender_id) & (PlayerMark.target_id == attacker_id),
+    )))).scalars().all()
+    return attacker_id in rows, defender_id in rows

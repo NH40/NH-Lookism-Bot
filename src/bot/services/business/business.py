@@ -38,7 +38,7 @@ from bot.db.repositories import potion as potion_repo
 from bot.db.repositories import clan as clan_repo
 from bot.config.clan import CLAN_DEPUTY_SHARE, CLAN_OWNER_SHARE
 
-from bot.config.path_gauge import GAUGE_BUSINESS_COINS
+from bot.config.path_gauge import GAUGE_BUSINESS_PER_HOUR
 from bot.constant.unique_path import PATH_BUSINESS
 from bot.config.game import (
     BUSINESS_ACCRUAL_CAP_MINUTES,
@@ -117,8 +117,9 @@ class NothingToDemolishError(Exception):
 
 
 def _level_multiplier(level: int) -> float:
-    # Уровень выше 10 (было до 15 через бонусы систем) доход больше не растит (экономика 2026-11-20).
-    return 1 + BUSINESS_LEVEL_INCOME_BONUS_PERCENT * min(level, BUSINESS_MAX_UPGRADE) / 100
+    # 2026-11-20 уровень дохода срезали до 10 «при любых бонусах», но выше 10 его поднимает только родословная Элиты
+    # (`business_cap`) — срез выключал её главную механику. 2026-11-24: уровни 11–15 Элиты снова растят доход.
+    return 1 + BUSINESS_LEVEL_INCOME_BONUS_PERCENT * level / 100
 
 
 def _shop_total_per_minute(shops: float) -> float:
@@ -228,8 +229,8 @@ async def _wealth_potion_bonus(session: AsyncSession, user_id: int, start: datet
 def upgrade_cost(kind: str, current: int, discount: float = 0.0, extra_cap: int = 0) -> int | None:
     """Цена следующего уровня прокачки; None — уже максимум. `discount` — скидка систем
     развития (Элита, гений бизнеса), режется потолком."""
-    # Уровень дохода — не выше 10 при любых бонусах систем (экономика 2026-11-20), вместимость — как раньше.
-    if current >= BUSINESS_MAX_UPGRADE + (0 if kind == UPGRADE_LEVEL else extra_cap):
+    # Выше 10 — только с бонусом Элиты (`extra_cap`), и для уровня дохода, и для вместимости (2026-11-24).
+    if current >= BUSINESS_MAX_UPGRADE + extra_cap:
         return None
     base = BUSINESS_LEVEL_UPGRADE_BASE_COST if kind == UPGRADE_LEVEL else BUSINESS_CAPACITY_UPGRADE_BASE_COST
     return max(1, int(base * BUSINESS_UPGRADE_COST_MULT * 2**current * (1 - capped(discount, 0.6))))
@@ -404,10 +405,12 @@ async def accrue(session: AsyncSession, user_id: int, *, now: datetime | None = 
     from bot.services.bank import slave_cut
 
     amount -= await slave_cut(session, user_id, amount + share)
-    if PATH_BUSINESS in build_.paths:  # шкала Бизнесмена растёт от заработанных денег
+    if PATH_BUSINESS in build_.paths and amount > 0:
+        # Шкала Бизнесмена — от ЧАСОВ дохода, а не от суммы (2026-11-24): раньше 100 шкалы = 10 млн NHCoin, у игрока с
+        # доходом 100 тыс./ч это ~100 часов, у топа — минуты. Теперь заполняется у всех одинаково.
         from bot.services.path_gauge import add as add_gauge
 
-        await add_gauge(session, user_id, PATH_BUSINESS, amount / GAUGE_BUSINESS_COINS)
+        await add_gauge(session, user_id, PATH_BUSINESS, minutes / 60 * GAUGE_BUSINESS_PER_HOUR)
     if feast_bonus:
         from bot.constant.ledger import REASON_EMPIRE_EVENT
         from bot.utils.log_context import coin_reason

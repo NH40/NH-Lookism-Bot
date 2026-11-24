@@ -27,6 +27,7 @@ from bot.constant.unique_path import (
     PATH_FORESIGHT,
     PATH_INFINITE,
     PATH_OVERCOME,
+    PATH_SENSORY,
     PATH_SURE_HIT,
 )
 from bot.db.models.development import UserPath
@@ -114,6 +115,8 @@ def _battle_gain(code: str, side, foe, won: bool) -> float:
         return 0.5 + (1.0 if won else 0.0)
     if code in (PATH_COPY, PATH_INFINITE):
         return 1.0
+    if code == PATH_SENSORY:  # 2026-11-24: шкала Сенсорики и за бои, не только за разведку и саботаж
+        return 0.5
     return 0.0
 
 

@@ -62,7 +62,8 @@ class Matchup:
 
 def matchup(attacker, defender=None, *, vs: tuple[str, ...], defender_chances: CombatChances | None = None,
             attacker_kw: dict | None = None, defender_role: str = ROLE_DEFENSE, scouted: bool = False,
-            attacker_stacks=None, defender_stacks=None, rng: Random | None = None) -> Matchup:
+            attacker_stacks=None, defender_stacks=None, rng: Random | None = None,
+            marked: tuple[bool, bool] = (False, False)) -> Matchup:
     """`attacker`/`defender` — `CombatProfile` игроков (защитник `None` — боты/босс, тогда его
     шансы — `defender_chances`). `defender_role` — `ROLE_ATTACK`, если защитник принял вызов и
     бьётся лагерем атаки (навыки «в защите» тогда не работают)."""
@@ -96,10 +97,15 @@ def matchup(attacker, defender=None, *, vs: tuple[str, ...], defender_chances: C
     if scouted and apos.get("scouted_enemy_block"):
         a = replace(a, enemy_mods=a.enemy_mods + CombatMods(block=apos.get("scouted_enemy_block")))
     extra = extra + _stack_bonus(apos, attacker_stacks)
+    # Метки Сенсорики (2026-11-24): `marked` — (нападающий пометил защитника, защитник пометил нападающего).
+    if marked[0] and attacker.eco.mark_attack:
+        extra = extra + CombatMods(attack=attacker.eco.mark_attack)
     if extra != NO_MODS:
         a = replace(a, build=a.build.with_total(a.build.total + extra))
-    if defender is not None and defender_stacks:
-        d_extra = _stack_bonus(target, defender_stacks)
+    if defender is not None:
+        d_extra = _stack_bonus(target, defender_stacks) if defender_stacks else NO_MODS
+        if marked[1] and defender.eco.mark_attack:
+            d_extra = d_extra + CombatMods(attack=defender.eco.mark_attack)
         if d_extra != NO_MODS:
             d = replace(d, build=d.build.with_total(d.build.total + d_extra))
     return Matchup(attacker=a, defender=d, spy=spy, arian=arian)

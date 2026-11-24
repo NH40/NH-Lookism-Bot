@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.services.absolute import after_battle
 from bot.services.intel.scout import has_report as has_scout_report
+from bot.db.repositories.activity.activity import mark_flags
 from bot.constant.position_skill import VS_THRONE
 from bot.services.position_skill.battle import journal, matchup
 from bot.constant.extra import CAMP_ATTACK, CAMP_DEFENSE
@@ -67,6 +68,7 @@ async def throne_context(session: AsyncSession, contender_id: int, opponent_id: 
     m = matchup(
         await get_combat_profile(session, contender_id), await get_combat_profile(session, opponent_id), vs=(VS_THRONE,),
         scouted=await has_scout_report(session, contender_id, opponent_id),
+        marked=await mark_flags(session, contender_id, opponent_id),
         attacker_stacks=camps[contender_id], defender_stacks=camps[opponent_id],
     )
     return camps, m

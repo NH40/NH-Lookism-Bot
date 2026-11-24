@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bot.services.absolute import after_battle
 from bot.services.intel.scout import has_report as has_scout_report
+from bot.db.repositories.activity.activity import mark_flags
 from bot.constant.position_skill import ROLE_ATTACK, ROLE_DEFENSE, VS_WAR
 from bot.services.position_skill.battle import journal, matchup
 from bot.cache.keys import empire_war_cooldown, empire_war_shield
@@ -304,7 +305,7 @@ async def _resolve(session: AsyncSession, redis: Redis, war, resolution: str, *,
         m = matchup(
             await get_combat_profile(session, attacker_id), await get_combat_profile(session, defender_id),
             vs=(VS_WAR,), defender_role=ROLE_ATTACK if resolution == WAR_ACCEPTED else ROLE_DEFENSE, rng=rng,
-            scouted=await has_scout_report(session, attacker_id, defender_id),
+            scouted=await has_scout_report(session, attacker_id, defender_id), marked=await mark_flags(session, attacker_id, defender_id),
             attacker_stacks=camps[attacker_id], defender_stacks=camps[defender_id],
         )
         result = result_override if result_override is not None else simulate_battle(
@@ -416,6 +417,7 @@ async def war_fight(session: AsyncSession, war, accepted: bool = True):
     m = matchup(
         await get_combat_profile(session, attacker_id), await get_combat_profile(session, defender_id),
         vs=(VS_WAR,), defender_role=ROLE_ATTACK if accepted else ROLE_DEFENSE, scouted=await has_scout_report(session, attacker_id, defender_id),
+        marked=await mark_flags(session, attacker_id, defender_id),
         attacker_stacks=camps[attacker_id], defender_stacks=camps[defender_id],
     )
     return camps[attacker_id], camps[defender_id], m

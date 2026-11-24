@@ -49,7 +49,7 @@ from bot.constant.genius import GENIUS_MEDICINE
 from bot.db.repositories import business as business_repo
 from bot.db.repositories import district as district_repo
 from bot.constant.build import SOURCE_BLOODLINE, SOURCE_BLOODLINE2, SOURCE_PATH2, SOURCE_GENIUS, SOURCE_PATH, SOURCE_TECHNIQUE
-from bot.constant.unique_path import COPYING_PATHS, PATH_ADAPTATION, PATH_INFINITE, PATH_OVERCOME
+from bot.constant.unique_path import COPYING_PATHS, PATH_ADAPTATION, PATH_INFINITE, PATH_OVERCOME, PATH_TRAINING
 from bot.constant.unique_technique import TECH_KYOKUSHIN, TECH_NINJUTSU, TECH_OVERCOME
 from bot.db.repositories import build as build_repo
 from bot.db.repositories.build import BuildRow
@@ -373,6 +373,10 @@ async def _compute_build(session: AsyncSession, user_id: int) -> Build:
             dev_points=training_kpd, personal_cooldown=training_kpd / 2,
             extras_training=training_kpd * TRAINING_KPD_EXTRAS_PP, extras_training_cooldown=training_kpd / 2,
         )
+        if PATH_TRAINING in (row.path, row.path2):  # v3: выученная армия бьёт сильнее
+            from bot.config.unique_path import TRAINING_KPD_ATTACK
+
+            battle = battle.with_total(battle.total + CombatMods(attack=training_kpd * TRAINING_KPD_ATTACK))
     from bot.services.absolute import active as active_absolutes
 
     absolutes = await active_absolutes(session, user_id)

@@ -44,17 +44,19 @@ def _s(combat: dict | None = None, eco: dict | None = None, **special) -> dict:
 LEVELS: dict[str, tuple[dict, ...]] = {
     # Элита: бизнес. Потолок прокачки бизнеса выше обычного (до 15), доход, хранилище, налог меньше.
     # В боях забирает часть NHCoin проигравшего.
+    # v3 (2026-11-24): уровни бизнеса 11–15 снова растят доход, «Охрана корпорации» — прочность армии до +25%,
+    # добыча с проигравшего до 15%.
     BLOODLINE_ELITE: (
         _e(income=0.10),
-        _e(business_cap=1),
+        _s({"durability": 0.05}, {"business_cap": 1}),
         _e(storage_hours=6, upgrade_discount=0.10),
         _e(business_cap=1, tax_relief=0.15),
-        _e(battle_loot=0.03),
+        _s({"durability": 0.05}, {"battle_loot": 0.03}),
         _e(business_cap=1, income=0.10),
         _e(tax_relief=0.15, build_discount=0.15),
-        _e(business_cap=1, battle_loot=0.03),
+        _s({"durability": 0.05}, {"business_cap": 1, "battle_loot": 0.03}),
         _e(income=0.15, gacha_luck=0.03),
-        _e(business_cap=1, income=0.15, battle_loot=0.04, tax_relief=0.10),
+        _s({"durability": 0.10}, {"business_cap": 1, "income": 0.15, "battle_loot": 0.06, "tax_relief": 0.10}),
     ),
     # Муджина: огромнейшая сила и удар до боя: часть армии бьёт прежде, чем начнётся сражение.
     BLOODLINE_MUJIN: (
@@ -118,14 +120,14 @@ LEVELS: dict[str, tuple[dict, ...]] = {
     BLOODLINE_SAMDAK: (
         _e(extras_training=3, dev_points=0.10),
         _e(rank_hold=True, personal_cooldown=0.05),
-        _e(extras_training_cooldown=0.10, training_cap_mult=0.25),
+        _e(extras_training_cooldown=0.10, training_cap_mult=0.25, overload=0.05),  # «Перегрузка» (v3)
         _e(extras_coverage=5, personal_cooldown=0.10),
-        _e(training_cap_mult=0.25, extras_training=3),
+        _e(training_cap_mult=0.25, extras_training=3, overload=0.05),
         _s(None, {"mastery_delay": 0.20, "stat_cost_discount": 0.08}, training_kpd_boost=0.25),
-        _e(training_cap_mult=0.25, extras_extra_roll=0.10),
+        _e(training_cap_mult=0.25, extras_extra_roll=0.10, overload=0.05),
         _e(extras_training_cooldown=0.10, dev_points=0.15),
         _e(extras_coverage=5, extras_extra_roll=0.10, stat_cost_discount=0.08),
-        _e(training_cap_mult=0.25, extras_training=5, dev_points=0.25, mastery_delay=0.20),
+        _e(training_cap_mult=0.25, extras_training=5, dev_points=0.25, mastery_delay=0.20, overload=0.05),
     ),
     # Александровых: контратаки и терпение. Контратака и отражение, пока терпишь — урон гасится, с каждым
     # раундом статисты и уники сильнее. Лучше всего с путём Адаптации.
@@ -161,28 +163,28 @@ LEVELS: dict[str, tuple[dict, ...]] = {
     BLOODLINE_JINCHEOL: (
         _e(contract_discount=0.10, contract_retain=0.05),
         _e(recruit_quantity=0.25),
-        _e(contract_bonus=0.10, recruit_cap=5),
+        _e(contract_bonus=0.10, recruit_cap=5, contract_power=0.10),  # «Свои люди» (v3): наёмники сильнее
         _e(contract_discount=0.10, recruit_cooldown=0.15),
         _e(contract_retain=0.01, contract_duration=0.25),
-        _e(recruit_rank_bonus=1, contract_bonus=0.10),
+        _e(recruit_rank_bonus=1, contract_bonus=0.10, contract_power=0.10),
         _s({"attack": 0.04}, {"contract_discount": 0.10}),
         _e(contract_retain=0.02, recruit_quantity=0.25),
-        _e(contract_bonus=0.15, recruit_cap=25),
+        _e(contract_bonus=0.15, recruit_cap=25, contract_power=0.10),
         _e(contract_discount=0.15, contract_retain=0.02, contract_bonus=0.15, recruit_rank_bonus=1),
     ),
     # Хансу: обучение. Быстрее личные тренировки, тренировки статистов и занятия школ, сильнее все техники,
     # учатся дешевле и быстрее, часть заданий учителя засчитывается сама.
     BLOODLINE_HANSU: (
-        _s(None, {"dev_points": 0.10, "tech_fragment_discount": 0.05}, boost_all_techniques=0.03),
+        _s(None, {"dev_points": 0.10, "tech_fragment_discount": 0.05}, boost_all_techniques=0.05),  # v3: всего +30%
         _e(personal_cooldown=0.10, extras_training_cooldown=0.10),
         _e(technique_quest_speed=0.10, school_cooldown=0.10),
-        _s(None, {"mastery_delay": 0.15}, boost_all_techniques=0.04),
+        _s(None, {"mastery_delay": 0.15}, boost_all_techniques=0.06),
         _e(auto_tech_task=1, tech_fragment_discount=0.10),
         _e(personal_cooldown=0.10, extras_training_cooldown=0.10, school_cooldown=0.10),
-        _s(None, {"technique_quest_speed": 0.15}, boost_all_techniques=0.05),
+        _s(None, {"technique_quest_speed": 0.15}, boost_all_techniques=0.07),
         _e(dev_points=0.15, tech_fragment_discount=0.10),
         _e(personal_cooldown=0.10, extras_training_cooldown=0.10, school_cooldown=0.10),
-        _s(None, {"auto_tech_task": 1, "technique_quest_speed": 0.15, "tech_fragment_discount": 0.15, "dev_points": 0.25}, boost_all_techniques=0.08),
+        _s(None, {"auto_tech_task": 1, "technique_quest_speed": 0.15, "tech_fragment_discount": 0.15, "dev_points": 0.25}, boost_all_techniques=0.12),
     ),
 }
 

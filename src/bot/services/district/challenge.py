@@ -28,6 +28,7 @@ from bot.services.admin.live_config import battle_cooldown_seconds
 from bot.services.absolute import after_battle
 from bot.services.build import get_build
 from bot.services.intel.scout import has_report as has_scout_report
+from bot.db.repositories.activity.activity import mark_flags
 from bot.constant.position_skill import ROLE_ATTACK, ROLE_DEFENSE, VS_PVP
 from bot.services.position_skill.battle import journal, matchup
 from bot.constant.cooldown import CD_BATTLE
@@ -489,6 +490,7 @@ async def challenge_context(session: AsyncSession, challenge, resolution: str):
         attacker_profile, defender_profile, vs=(VS_PVP,),
         defender_role=ROLE_ATTACK if resolution == RESOLUTION_ACCEPTED else ROLE_DEFENSE,
         scouted=await has_scout_report(session, challenge.attacker_id, challenge.defender_id),
+        marked=await mark_flags(session, challenge.attacker_id, challenge.defender_id),
         attacker_stacks=locked[challenge.attacker_id], defender_stacks=locked[challenge.defender_id],
     )
     return ChallengeFight(challenge, resolution, base, row, is_city, district_number, defender_camp,

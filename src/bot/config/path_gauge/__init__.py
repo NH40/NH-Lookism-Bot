@@ -3,7 +3,7 @@ from bot.config.path_gauge.path_gauge import (  # noqa: F401
     COPY_GAUGE_PER_SLOT,
     COPY_PERK_GAUGE,
     COPY_SLOTS_MAX,
-    GAUGE_BUSINESS_COINS,
+    GAUGE_BUSINESS_PER_HOUR,
     GAUGE_CAP_PER_LEVEL,
     GAUGE_COPY_TECH_LEVEL,
     GAUGE_FORESIGHT_SCOUT,

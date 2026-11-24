@@ -173,17 +173,18 @@ LEVELS: dict[str, tuple[dict, ...]] = {
     ),
     # Сенсорика (менеджер Ким): война вне сражения. Метки, слежка, снятие чужой безопасности, личные
     # саботажи. В самом бою почти не помогает.
+    # v3 (2026-11-24): метки на любого игрока дают атаку в PvP против него (до +20%), шкала — и за бои.
     PATH_SENSORY: (
-        _e(marks=1, sabotage_chance=0.05),
+        _e(marks=1, sabotage_chance=0.05, mark_attack=0.05),
         _e(logs=1, security_pierce=1),
-        _e(marks=1, sabotage_cooldown=0.15),
+        _e(marks=1, sabotage_cooldown=0.15, mark_attack=0.03),
         _s(sabotage_marked=True),
-        _e(scout=1, spy_chance=0.05),
+        _e(scout=1, spy_chance=0.05, mark_attack=0.04),
         _e(marks=1, sabotage_loot=0.20),
-        _s(neutralize_security=True),
+        _s(None, {"mark_attack": 0.03}, neutralize_security=True),
         _e(logs=2, security_pierce=1, sabotage_chance=0.05),
         _e(marks=2, sabotage_cooldown=0.15),
-        _e(scout=3, logs=3, sabotage_loot=0.30, security_pierce=2, spy_chance=0.10),
+        _e(scout=3, logs=3, sabotage_loot=0.30, security_pierce=2, spy_chance=0.10, mark_attack=0.05),
     ),
     # Гарантированный удар: самый военный путь. Урон проходит сквозь уклонение и броню, атака растёт,
     # оборона держит. Шкала войны — за победы и убитых.
@@ -242,17 +243,19 @@ LEVELS: dict[str, tuple[dict, ...]] = {
         _c(dodge=0.06, counter=0.03, dodge_cap=0.05, dodge_surge=0.15, dodge_true=0.25, dodge_counter=0.10),
     ),
     # Бизнесмена: огромный доход, пассивные деньги и фрагменты. Шкала — от заработанных денег.
+    # v3 (2026-11-24): плоский пассивный доход 300–1 500/ч ничего не значил при медиане ~1,5 млн/ч — вместо него
+    # доля дохода (всего +80% на 10-м), шкала — от часов дохода (`GAUGE_BUSINESS_PER_HOUR`).
     PATH_BUSINESS: (
-        _e(income=0.10, passive_income=300),
+        _e(income=0.10),
         _e(storage_hours=4, fragment_bonus=0.10),
-        _e(upgrade_discount=0.10, passive_income=300),
+        _e(upgrade_discount=0.10, income=0.05),
         _e(income=0.10, tax_relief=0.05),
         _e(build_discount=0.10, fragment_bonus=0.15),
-        _e(tax_relief=0.10, passive_income=500),
+        _e(tax_relief=0.10, income=0.08),
         _e(income=0.12, storage_hours=4),
         _e(storage_hours=8, fragment_bonus=0.15),
-        _e(upgrade_discount=0.10, build_discount=0.10, passive_income=900),
-        _e(income=0.20, fragment_bonus=0.20, passive_income=1500),
+        _e(upgrade_discount=0.10, build_discount=0.10, income=0.10),
+        _e(income=0.25, fragment_bonus=0.20),
     ),
 }
 
@@ -337,6 +340,7 @@ TRAINING_KPD_PER_DAY = 0.02
 TRAINING_KPD_PER_REP = 0.005
 TRAINING_KPD_CAP_PER_LEVEL = 0.06  # 10-й уровень — до +60%
 TRAINING_KPD_EXTRAS_PP = 20  # КПД 1.0 = +20 п.п. к шансам тренировки статистов и занятий школ
+TRAINING_KPD_ATTACK = 0.2  # v3 (2026-11-24): КПД 1.0 = +20% атаки армии (выученная армия бьёт сильнее; 60% КПД — +12%)
 
 # Путь Бесконечной техники (пользователь 2026-11-04): сколько техник активно одновременно решает
 # шкала копирования. Выбранные работают с этой силой (активная — 100%), уровни пути её поднимают.

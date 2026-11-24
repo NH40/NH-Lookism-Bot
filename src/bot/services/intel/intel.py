@@ -217,3 +217,4 @@ async def get_marks_feed(session: AsyncSession, viewer_id: int) -> tuple[int, li
         entries = [] if hidden else await activity_repo.recent(session, target_id, _ALL_KINDS, MARK_FEED_ENTRIES)
         feeds.append(MarkFeed(target_id, target.username, target.display_name, hidden, entries))
     return access.marks, feeds
+

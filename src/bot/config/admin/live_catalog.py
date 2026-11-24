@@ -291,7 +291,7 @@ SCALARS: dict[str, tuple[str, str, str]] = {
     "GAUGE_CAP_PER_LEVEL": ("dev", "bot.config.path_gauge.path_gauge", "Шкала пути: потолок за уровень"),
     "GAUGE_PVP_WEIGHT": ("dev", "bot.config.path_gauge.path_gauge", "Шкала пути: вес PvP"),
     "GAUGE_MAX_PER_BATTLE": ("dev", "bot.config.path_gauge.path_gauge", "Шкала пути: максимум за бой"),
-    "GAUGE_BUSINESS_COINS": ("dev", "bot.config.path_gauge.path_gauge", "Шкала Бизнесмена: NHCoin за единицу"),
+    "GAUGE_BUSINESS_PER_HOUR": ("dev", "bot.config.path_gauge.path_gauge", "Шкала Бизнесмена: за час дохода"),
     "GAUGE_SENSORY_SCOUT": ("dev", "bot.config.path_gauge.path_gauge", "Шкала Чувств: за разведку"),
     "GAUGE_SENSORY_SABOTAGE": ("dev", "bot.config.path_gauge.path_gauge", "Шкала Чувств: за саботаж"),
     "GAUGE_FORESIGHT_SCOUT": ("dev", "bot.config.path_gauge.path_gauge", "Шкала Предвидения: за разведку"),

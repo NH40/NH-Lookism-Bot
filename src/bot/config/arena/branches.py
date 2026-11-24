@@ -199,6 +199,8 @@ CAP_DAMAGE = 3.0
 CAP_ENEMY_DAMAGE = 0.35  # урон противника не ниже ×0.35
 CAP_MINIGAME_POWER = 0.6
 CAP_HEAL = 0.6
+CAP_MOD = 0.6  # любая доля приёма (уклонение, пробитие, подавление…)
+CAP_MOD_BIG = 0.8  # атака и прочность
 
 
 def _kept_path_moves(levels: dict, code: str) -> tuple[BranchMove, ...]:
@@ -214,9 +216,17 @@ def _kept_path_moves(levels: dict, code: str) -> tuple[BranchMove, ...]:
 
 
 def _cap_mods(mods: CombatMods) -> CombatMods:
-    from dataclasses import replace
+    """Любая доля в приёме — не выше 60% (атака и прочность — 80%): иначе усиление ветки даёт «реакции −96%»."""
+    from dataclasses import fields, replace
 
-    return replace(mods, heal=min(CAP_HEAL, mods.heal)) if mods.heal > CAP_HEAL else mods
+    capped = {}
+    for f in fields(mods):
+        v = getattr(mods, f.name)
+        if isinstance(v, float):
+            cap = CAP_MOD_BIG if f.name in ("attack", "durability") else CAP_HEAL if f.name == "heal" else CAP_MOD
+            if v > cap:
+                capped[f.name] = cap
+    return replace(mods, **capped) if capped else mods
 
 
 def _up(x: float, k: float) -> float:
@@ -263,7 +273,7 @@ def _perk(kind: str, code: str, n: int, mv: BranchMove, level: int, idx: int, bo
     game = ((_SELF_GAMES if mv.minigame_self else _ENEMY_GAMES)[idx % 4]) if top else None
     p = Perk(
         code=f"{kind}:{code}:{n}@{level}", name=mv.name, about="", cost=BRANCH_COST[n - 1], cooldown=BRANCH_COOLDOWN[n - 1],
-        self_mods=_cap_mods(mv.mods.scale(k)), enemy_mods=mv.enemy.scale(k), damage=min(CAP_DAMAGE, _up(mv.damage, k)),
+        self_mods=_cap_mods(mv.mods.scale(k)), enemy_mods=_cap_mods(mv.enemy.scale(k)), damage=min(CAP_DAMAGE, _up(mv.damage, k)),
         enemy_damage=max(CAP_ENEMY_DAMAGE, _down(mv.enemy_damage, k)),
         minigame=minigame, game=game, power=min(CAP_MINIGAME_POWER, mv.power * boost) if top else 0.0,
         first_round_damage=_up(mv.first_round_damage, k) if mv.first_round_damage else 0.0,

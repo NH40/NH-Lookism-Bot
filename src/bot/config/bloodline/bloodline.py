@@ -222,8 +222,8 @@ for _code, _k in {"mujin": 0.558, "jinyeong": 0.696, "gapryong": 2.379, "yamazak
     BLOODLINE_BALANCE[_code] = round(BLOODLINE_BALANCE.get(_code, 1.0) * _k, 3)
 # Родословные v3 (2026-11-24): та же симуляция, цель — уровень популярных Ямадзаки и Джинёна (~55%). Муджин был
 # сильнейшим (87% побед) из-за «мощи каждого бойца» (+37% на 10-м) — она не проходит через боевой множитель, поэтому
-# режется отдельно (`MUJIN_ARMY_POWER_BALANCE`).
-for _code, _k in {"elite": 2.827, "mujin": 0.289, "sophia": 0.844, "kuroda": 1.323}.items():
+# режется отдельно (`MUJIN_ARMY_POWER_BALANCE`); боевые пассивки Муджина не тронуты (с ними 58% — уровень Джинёна).
+for _code, _k in {"elite": 2.827, "sophia": 0.844, "kuroda": 1.323}.items():
     BLOODLINE_BALANCE[_code] = round(BLOODLINE_BALANCE.get(_code, 1.0) * _k, 3)
 MUJIN_ARMY_POWER_BALANCE = 0.289
 LEVELS = scale_levels(LEVELS, BLOODLINE_BALANCE)

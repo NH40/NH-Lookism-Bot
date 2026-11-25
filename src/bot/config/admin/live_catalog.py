@@ -66,6 +66,7 @@ SCALARS: dict[str, tuple[str, str, str]] = {
     "BATTLE_GROW_ON_KILL_CAP": ("battle", "bot.config.game.game", "Рост за убийства, потолок ×"),
     "BATTLE_HEAL_MAX": ("battle", "bot.config.game.game", "Потолок лечения за раунд"),
     "BATTLE_LOSS_SAVE_MAX": ("battle", "bot.config.game.game", "Потолок сохранения потерь"),
+    "BATTLE_LOSS_SAVE_SOURCE_MULT": ("battle", "bot.config.game.game", "Сохранение потерь: множитель всех источников"),
     "BATTLE_REACTION_MAX": ("battle", "bot.config.game.game", "Потолок одной реакции с бафами"),
     "BATTLE_REACTIONS_TOTAL_MAX": ("battle", "bot.config.game.game", "Потолок суммы реакций с бафами"),
     "BATTLE_FIRST_STRIKE_MAX": ("battle", "bot.config.game.game", "Потолок первого удара"),

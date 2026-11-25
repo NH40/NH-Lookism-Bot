@@ -69,6 +69,7 @@ from bot.config.game import (
     BATTLE_VS_STRONGER_CAP,
     BATTLE_HEAL_MAX,
     BATTLE_LOSS_SAVE_MAX,
+    BATTLE_LOSS_SAVE_SOURCE_MULT,
     BATTLE_MAX_ROUNDS,
     BATTLE_OVERCOME_CROWD_CAP,
     BATTLE_OVERCOME_TAKEN_CAP,
@@ -745,7 +746,7 @@ def _loss_save(side: _Side, opponent: _Side) -> float:
     value = side.chances.loss_save + m.loss_save
     if m.despair:
         value += m.despair * _despair_gauge(side, opponent, m) * 0.5
-    return min(BATTLE_LOSS_SAVE_MAX, value)
+    return min(BATTLE_LOSS_SAVE_MAX, value * BATTLE_LOSS_SAVE_SOURCE_MULT)
 
 
 def _trigger_active(t: TriggerSpec, side: _Side, opponent: _Side, r: int) -> bool:
@@ -855,7 +856,7 @@ def _loss_save_after(side: _Side, opponent: _Side, won: bool) -> float:
     extra = sum(t.loss_save for t in side.chances.triggers if t.when == ps.WHEN_ON_LOSS) if not won else 0.0
     if won:
         extra += side.mods.win_loss_save
-    return min(BATTLE_LOSS_SAVE_MAX, _loss_save(side, opponent) + extra)
+    return min(BATTLE_LOSS_SAVE_MAX, _loss_save(side, opponent) + extra * BATTLE_LOSS_SAVE_SOURCE_MULT)
 
 
 def _stacks_power(stacks: Sequence[CombatStack]) -> float:

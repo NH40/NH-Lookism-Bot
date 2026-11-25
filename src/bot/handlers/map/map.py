@@ -163,6 +163,13 @@ def _city_label(city) -> str:
 
 
 async def show_country_map(message: Message, session: AsyncSession, user: User, page: int, *, edit: bool) -> None:
+    from bot.services.district import crown_if_free
+    from bot.texts.map import THRONE_CROWNED_FREE
+
+    crowned = await crown_if_free(session, user.id)
+    if crowned:
+        await session.commit()
+        await session.refresh(user)
     country_map = await get_country_map(session, user)
     header = COUNTRY_MAP_HEADER_EMPEROR if is_emperor(user.phase) else COUNTRY_MAP_HEADER
     text = header.format(
@@ -172,6 +179,8 @@ async def show_country_map(message: Message, session: AsyncSession, user: User, 
         influence=await get_influence(session, user.id),
     )
     line, rows = await _events_block(session, user.id)
+    if crowned:
+        line = THRONE_CROWNED_FREE + line
     # Бой за трон по кнопке (2026-10-20): круг со всей страной — вызвать императора/держателей.
     from aiogram.types import InlineKeyboardButton
 

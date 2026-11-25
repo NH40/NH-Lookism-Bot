@@ -277,6 +277,31 @@ async def throne_status(session: AsyncSession, user_id: int) -> ThroneStatus:
     return ThroneStatus(missing == 0 and bool(holders or incumbent), missing, incumbent, holders, tuple(queue))
 
 
+async def crown_if_free(session: AsyncSession, user_id: int) -> bool:
+    """Круг держит все районы своей страны, а трон свободен (чужих держателей и местного императора
+    нет) — коронация сразу. Баг 2026-11-25: после победы в последнем бою за освобождение (или когда
+    местный император отрёкся/свергнут/удалён) коронацию никто не вызывал — захватывать уже нечего,
+    кнопки боя нет, игрок застревал кругом со всей страной. → коронован ли. НЕ коммитит."""
+    from bot.constant.phase import PHASE_CIRCLE, PHASE_FIST
+    from bot.services.phase import crown_with_autobuild
+
+    current = await phase_repo.get_phase(session, user_id)
+    if current is None or current[0] != PHASE_CIRCLE or current[1] is None:
+        return False
+    country = current[1]
+    if await phase_repo.count_not_owned_in_country(session, country, user_id):
+        return False
+    if await phase_repo.foreign_holders(session, country):
+        return False
+    if await phase_repo.country_emperor(session, country, exclude_user_id=user_id) is not None:
+        return False
+    # Правило 1: параллельный вызов не коронует дважды (влияние за районы не задвоится).
+    if not await phase_repo.promote(session, user_id, PHASE_CIRCLE, PHASE_FIST):
+        return False
+    await crown_with_autobuild(session, user_id, country)
+    return True
+
+
 async def challenge_throne(session: AsyncSession, redis, user_id: int):
     """Вызов на трон (и бои за освобождение) по кнопке. КД — как у боя круга. Коммитит.
     → (новая фаза или None, итог трона или None, бои за освобождение)."""

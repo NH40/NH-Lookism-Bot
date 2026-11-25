@@ -41,6 +41,9 @@ async def after_battle(session: AsyncSession, m, result, *, attacker_id: int, at
     attacker_abs = await active(session, attacker_id)
     defender_abs = frozenset() if defender_id is None or m.arian else await active(session, defender_id)
     if m.arian and defender_id is not None:
+        from bot.services.arena.sources import freeze_without_absolutes
+
+        await freeze_without_absolutes(session, defender_id)  # набор не перестраивается (2026-11-25)
         until = datetime.now(timezone.utc) + timedelta(seconds=ARIAN_BLOCK_SECONDS)
         await session.execute(update(User).where(User.id == defender_id).values(absolute_blocked_until=until))
         lines.append(JOURNAL_ARIAN)

@@ -84,10 +84,7 @@ async def loadout(session: AsyncSession, user_id: int) -> tuple[list[str], list[
 async def toggle_loadout(session: AsyncSession, user_id: int, code: str) -> None:
     """Перк в набор / из набора. Первое изменение фиксирует набор (то, что не влезло в 8, — выключается), девятый
     не включить. Коммитит."""
-    from sqlalchemy import update
-
     from bot.config.arena import ARENA_LOADOUT_MAX
-    from bot.db.models.user import User
 
     every, chosen, _ = await loadout(session, user_id)
     code = next((c for c in every if perk_base(c) == perk_base(code)), None)  # уровень ветки мог вырасти с экрана
@@ -96,9 +93,34 @@ async def toggle_loadout(session: AsyncSession, user_id: int, code: str) -> None
     chosen = [c for c in chosen if c != code] if code in chosen else chosen + [code]
     if len(chosen) > ARENA_LOADOUT_MAX:
         raise LoadoutFullError
-    off = [perk_base(c) for c in every if c not in chosen]  # без уровня: прокачка ветки набор не сбивает
-    await session.execute(update(User).where(User.id == user_id).values(arena_perks_off=off))
+    await _save_off(session, user_id, every, chosen)
     await session.commit()
+
+
+async def _save_off(session: AsyncSession, user_id: int, every: list[str], chosen: list[str]) -> None:
+    """Записать набор как список выключенных (без уровня: прокачка ветки набор не сбивает). Выключенные перки,
+    которых сейчас нет среди доступных (абсолют под блоком Ариана), остаются выключенными — иначе по концу блока
+    перк сам вернулся бы в набор и вытеснил выбранный игроком (2026-11-25). НЕ коммитит."""
+    from sqlalchemy import select, update
+
+    from bot.db.models.user import User
+
+    old = await session.scalar(select(User.arena_perks_off).where(User.id == user_id)) or []
+    bases = {perk_base(c) for c in every}
+    off = [perk_base(c) for c in every if c not in chosen] + [b for b in old if b not in bases]
+    await session.execute(update(User).where(User.id == user_id).values(arena_perks_off=list(dict.fromkeys(off))))
+
+
+async def freeze_without_absolutes(session: AsyncSession, user_id: int) -> None:
+    """Ариан гасит абсолюты цели (пользователь 2026-11-25): набор не перестраивается. Перки абсолютов выключаются,
+    их слоты остаются пустыми (бьётся 7 из 8, пока сам не поставит другой), остальное — как было. По концу блока
+    абсолют появится выключенным — включит сам. Вызывать ДО записи блока. НЕ коммитит."""
+    from bot.services.absolute import owned
+
+    if not await owned(session, user_id):
+        return  # абсолютов нет — набору нечего терять
+    every, chosen, _ = await loadout(session, user_id)
+    await _save_off(session, user_id, every, [c for c in chosen if not c.startswith("abs:")])
 
 
 async def set_auto_default(session: AsyncSession, user_id: int, on: bool) -> None:

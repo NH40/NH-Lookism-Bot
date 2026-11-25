@@ -50,5 +50,5 @@ from bot.services.district.district import (  # noqa: F401
     seed,
 )
 from bot.services.district.tom import TomFightResult, fight_tom  # noqa: F401,E402
-from bot.services.district.throne import LiberationOutcome, NoThroneTargetError, NotThroneContenderError, ThroneOutcome, ThroneStatus, challenge_throne, promote_or_throne, resolve_liberation, resolve_throne, throne_status  # noqa: F401,E402
+from bot.services.district.throne import LiberationOutcome, NoThroneTargetError, NotThroneContenderError, ThroneOutcome, ThroneStatus, challenge_throne, crown_if_free, promote_or_throne, resolve_liberation, resolve_throne, throne_status  # noqa: F401,E402
 from bot.services.district.boss import BossAlreadyDefeatedError, BossFightResult, EventGoneError, fight_boss  # noqa: F401,E402

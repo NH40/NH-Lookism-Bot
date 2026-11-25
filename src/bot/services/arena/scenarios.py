@@ -267,11 +267,22 @@ async def _finish_throne(redis: Redis, st: dict, result) -> None:
                         else f"🏴 «{o.contender_label}» не смог освободить страну — города твои.")
         await session.commit()
         more = (await throne_status(session, a_id)).can_challenge
+        # Последний держатель освобождён, местного императора нет — коронация сразу (баг 2026-11-25:
+        # раньше игрок оставался кругом со всей страной, а кнопки боя уже не было).
+        crowned = False
+        if o.contender_won and not more:
+            from bot.services.district.throne import crown_if_free
+
+            crowned = await crown_if_free(session, a_id)
+            if crowned:
+                await session.commit()
     won = bool(o.contender_won)
     st["report"] = {"won": won}
     await core.save(redis, st)
     if won and more:
         text += " Следующий бой очереди — «👑 Бой за трон»."
+    if crowned:
+        text += " Трон свободен — ты коронован, теперь ты Император!"
     await _notify(a_id, "🏁 " + text)
     await _notify(opp, "🏁 " + foe_text)
 

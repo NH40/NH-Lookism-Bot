@@ -84,20 +84,22 @@ async def _tech_quest(session: AsyncSession, user_id: int, code: str, *, for_upd
 
 
 async def _mastery_quest(session: AsyncSession, user_id: int, *, for_update: bool = False):
-    from bot.services.mastery import lock_quest_for_tom
+    # Баг 2026-11-25: зачёт брал строку через `lock_quest_for_tom`, а тот с 2026-11-23 требует ВСЕ 4 игры
+    # пройденными (вход в бой с Томом) — ни одна игра не засчитывалась («этап не засчитан»). Здесь своя
+    # блокировка: этап активен и задания до Тома выполнены, игры — нет.
     from bot.services.mastery.mastery import QuestNotActiveError, TomLockedError
 
     try:
-        return await lock_quest_for_tom(session, user_id) if for_update else await _mastery_peek(session, user_id)
+        return await _mastery_peek(session, user_id, for_update=for_update)
     except (QuestNotActiveError, TomLockedError) as exc:
         raise MinigameError("locked") from exc
 
 
-async def _mastery_peek(session: AsyncSession, user_id: int):
+async def _mastery_peek(session: AsyncSession, user_id: int, *, for_update: bool = False):
     from bot.db.repositories import mastery as mastery_repo
     from bot.services.mastery.mastery import QUEST_ACTIVE, QuestNotActiveError, TomLockedError, _tom_unlocked
 
-    quest = await mastery_repo.get(session, user_id)
+    quest = await mastery_repo.get(session, user_id, for_update=for_update)
     if quest is None or quest.status != QUEST_ACTIVE:
         raise QuestNotActiveError
     if not _tom_unlocked(quest):

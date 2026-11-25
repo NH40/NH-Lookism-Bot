@@ -88,8 +88,12 @@ async def get_country(user_id: int = Depends(get_current_user_id), session: Asyn
     user = await require_user(session, user_id)
     if not is_city_conqueror(user.phase):
         return CountryOut(available=False, country=None, emperor=False, influence=0, cities_mine=0, cities=[])
+    from bot.services.district import crown_if_free, throne_status
+
+    if await crown_if_free(session, user_id):  # трон свободен — коронация сразу (баг 2026-11-25)
+        await session.commit()
+        await session.refresh(user)
     cm = await get_country_map(session, user)
-    from bot.services.district import throne_status
 
     ts = await throne_status(session, user_id)
     return CountryOut(

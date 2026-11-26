@@ -220,7 +220,7 @@ async def effective_tom_power(session: AsyncSession, user_id: int, quest: Master
     армия падала — переход ранга на капе, войны — а Том оставался прежним, ×4…×2000 сильнее; игры и бой с Томом
     становились непроходимыми, «этап не засчитывает»). Растёт армия — Том не растёт (снимок — потолок)."""
     attack_power = (await get_army_stats(session, user_id)).attack.power
-    current = max(TOM_POWER_MIN, attack_power * TOM_POWER_PERCENT[quest.stage] // 100)
+    current = max(TOM_POWER_MIN, int(attack_power * TOM_POWER_PERCENT[quest.stage] // 100))  # колонка BIGINT — int
     return min(quest.tom_power, current) if quest.tom_power else current
 
 

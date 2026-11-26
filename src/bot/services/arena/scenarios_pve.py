@@ -234,10 +234,13 @@ async def start_tom(session: AsyncSession, redis: Redis, user, *, auto: bool = F
     from bot.services.district.district import BattleOnCooldownError, NoAttackersError, load_camp
     from bot.services.mastery import lock_quest_for_tom
 
-    if await core.current_of(redis, user.id):
+    # Баг 2026-11-26 (MissingGreenlet): после `session.rollback()` ниже `user.id` — просроченный атрибут ORM,
+    # ленивая загрузка в async падала 500-кой уже после старта боя. Id берём заранее.
+    user_id = user.id
+    if await core.current_of(redis, user_id):
         raise core.ArenaError("in_battle")
     await ensure_battles_open(session, user.country_code)
-    quest = await lock_quest_for_tom(session, user.id)
+    quest = await lock_quest_for_tom(session, user_id)
     stacks = await load_camp(session, user.id, CAMP_ATTACK, for_update=True)
     if not stacks:
         raise NoAttackersError
@@ -248,7 +251,7 @@ async def start_tom(session: AsyncSession, redis: Redis, user, *, auto: bool = F
     st = await _create_pve(session, redis, user, KIND_TOM, stacks, _tom_army(quest), _tom_matchup(profile, stacks),
                            "🥋 Том Ли", {"stage": quest.stage}, auto)
     await session.rollback()  # бой идёт без открытой транзакции
-    await schedule_ready(redis, user.id, CD_BATTLE, await redis.ttl(key))
+    await schedule_ready(redis, user_id, CD_BATTLE, await redis.ttl(key))
     return st
 
 

@@ -132,7 +132,9 @@ async def _mastery_params(session: AsyncSession, user_id: int, mastery: str, que
     d = difficulty_for_stage(quest.stage)
     p = mastery_params(MASTERY_GAMES[mastery], d)
     army = max(1, (await get_army_stats(session, user_id)).total_power)
-    target = max(1, quest.tom_power)
+    from bot.services.mastery.mastery import effective_tom_power
+
+    target = max(1, await effective_tom_power(session, user_id, quest))  # не сильнее текущей армии (2026-11-27)
     if mastery == MASTERY_STRENGTH:  # шквал: каждое нажатие — доля мощи армии, набить мощь Тома
         taps = min(MASTERY_TAPS_MAX, max(MASTERY_TAPS_MIN, math.ceil(target / (army * MASTERY_POWER_PER_TAP))))
         return {"seconds": MASTERY_STRENGTH_SECONDS, "need": taps, "max_score": MASTERY_STRENGTH_SECONDS * 16,

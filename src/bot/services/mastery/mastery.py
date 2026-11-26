@@ -215,6 +215,15 @@ async def check_unlock(session: AsyncSession, user_id: int) -> bool:
     return True
 
 
+async def effective_tom_power(session: AsyncSession, user_id: int, quest: MasteryQuest) -> int:
+    """Мощь Тома сейчас: снимок на выдаче этапа, но не больше 80/100/120% ТЕКУЩЕГО лагеря атаки (баг 2026-11-27:
+    армия падала — переход ранга на капе, войны — а Том оставался прежним, ×4…×2000 сильнее; игры и бой с Томом
+    становились непроходимыми, «этап не засчитывает»). Растёт армия — Том не растёт (снимок — потолок)."""
+    attack_power = (await get_army_stats(session, user_id)).attack.power
+    current = max(TOM_POWER_MIN, attack_power * TOM_POWER_PERCENT[quest.stage] // 100)
+    return min(quest.tom_power, current) if quest.tom_power else current
+
+
 async def _activate(session: AsyncSession, user_id: int, stage: int) -> bool:
     """`pending → active` со снимком мощи Тома от текущего лагеря атаки. НЕ коммитит."""
     attack_power = (await get_army_stats(session, user_id)).attack.power
@@ -282,7 +291,7 @@ async def get_view(session: AsyncSession, user_id: int) -> MasteryView:
         status=quest.status,
         stage=quest.stage,
         tasks=_tasks(quest) if in_progress else [],
-        tom_power=quest.tom_power,
+        tom_power=await effective_tom_power(session, user_id, quest) if quest.status == QUEST_ACTIVE else quest.tom_power,
         tom_unlocked=_tom_unlocked(quest),
         games_done=games_ready(quest),
         points_bought=quest.points_bought,
@@ -333,6 +342,7 @@ async def lock_quest_for_tom(session: AsyncSession, user_id: int) -> MasteryQues
         raise QuestNotActiveError
     if not _tom_unlocked(quest) or not games_ready(quest):
         raise TomLockedError
+    quest.tom_power = await effective_tom_power(session, user_id, quest)  # армия упала — Том слабее (2026-11-27)
     return quest
 
 

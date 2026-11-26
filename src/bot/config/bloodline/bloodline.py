@@ -85,21 +85,21 @@ LEVELS: dict[str, tuple[dict, ...]] = {
         _s(None, {"teacher_quest_cut": 1}, copy_sources=(SOURCE_TECHNIQUE, SOURCE_BLOODLINE, SOURCE_PATH), copy_strength=0.10),
         _s(None, {"potion_heal": 0.03, "potion_duration": 0.25}, copy_strength=0.15, copy_path_boost=0.30, medicine_power=0.25, copy_gauge_speed=0.50),
     ),
-    # Вербовка ослаблена 2026-11-20 (жалоба: «+500 статистов каждые 5 минут», у топа 565 за нажатие):
-    # потолок 50/100/250 → 15/30/60, количество +25/25/50% → +10/10/20%.
+    # Вербовка: 2026-11-20 ослабляли (потолок 15/30/60, количество +10/10/20%), 2026-11-27 вернули 50/100/250 и
+    # +25/25/50% — взамен бонусы вербовки и тренировок не действуют в автоматике Ямадзаки (`services/ultra_instinct`).
     # Ким Гапрена: огромные характеристики со старта, техника Преодоления без учителя, бафы пути и техники
     # Преодоления, огромное влияние и массовая вербовка.
     BLOODLINE_GAPRYONG: (
         _e(stat_floor=RANK_INDEX["S"], influence_bonus=0.05, recruit_influence_cut=0.10),
-        _s(None, {"recruit_quantity": 0.10}, grant_overcome=True),
+        _s(None, {"recruit_quantity": 0.25}, grant_overcome=True),
         _s({"overcome": 0.10}, {"influence_bonus": 0.05}),
-        _e(stat_floor=RANK_INDEX["S+"], recruit_influence_cut=0.15, recruit_cap=15),
+        _e(stat_floor=RANK_INDEX["S+"], recruit_influence_cut=0.15, recruit_cap=50),
         _s({"influence_power": 0.02}, resonance_bonus=0.50),
-        _s({"durability": 0.06}, {"recruit_quantity": 0.10, "influence_rank_cut": 0.10}),
+        _s({"durability": 0.06}, {"recruit_quantity": 0.25, "influence_rank_cut": 0.10}),
         _e(stat_floor=RANK_INDEX["SS"], influence_bonus=0.10),
-        _s({"overcome": 0.15}, {"recruit_influence_cut": 0.15, "recruit_cap": 30}),
+        _s({"overcome": 0.15}, {"recruit_influence_cut": 0.15, "recruit_cap": 100}),
         _s({"influence_gap": 0.05}, {"influence_rank_cut": 0.15}, resonance_bonus=0.50),
-        _s({"overcome": 0.20}, {"stat_floor": RANK_INDEX["SSS"], "influence_bonus": 0.30, "recruit_quantity": 0.20, "recruit_cap": 60}),
+        _s({"overcome": 0.20}, {"stat_floor": RANK_INDEX["SSS"], "influence_bonus": 0.30, "recruit_quantity": 0.50, "recruit_cap": 250}),
     ),
     # Ямадзаки: чёрные кости (прочность, первый удар по армии не проходит), усиление Киокушинкая и Ультра
     # инстинкт: всё само (вербовка, тренировки, школы, крутка, на вершине боссы), каждый пункт выключается.

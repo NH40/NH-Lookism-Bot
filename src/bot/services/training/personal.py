@@ -41,11 +41,12 @@ class PersonalTrainResult:
 
 
 async def train_personal(
-    session: AsyncSession, redis: Redis, user_id: int, rng: random.Random | None = None
+    session: AsyncSession, redis: Redis, user_id: int, rng: random.Random | None = None, *, auto: bool = False
 ) -> PersonalTrainResult:
+    """`auto` — автотренировка Ямадзаки: без бонусов родословных и путей, только гений, зелья, здания."""
     rng = rng or random
     key = personal_training_cooldown(user_id)
-    profile = await get_combat_profile(session, user_id)
+    profile = await get_combat_profile(session, user_id, auto=auto)
     from bot.services.empire.events import drill_reduction
 
     # Военные сборы императора (−% КД) складываются с сокращением от систем развития.

@@ -162,6 +162,9 @@ class Build:
     paths: tuple[str, ...] = ()
     # Безопасность снята «Нейтрализацией» Сенсорики.
     security_off: bool = False
+    # Автоматика Ямадзаки (2026-11-27): небоевые бонусы и влияние только от гения, зелий и зданий.
+    auto_eco: EconomyMods = NO_ECO
+    auto_influence: int = 0
 
 
 EMPTY_BUILD = Build()
@@ -207,6 +210,9 @@ async def _compute_build(session: AsyncSession, user_id: int) -> Build:
         SOURCE_TECHNIQUE: level_effect(TECHNIQUE_LEVELS, row.technique, row.technique_level),
         SOURCE_GENIUS: level_effect(GENIUS_LEVELS, row.genius, row.genius_level),
     }
+    # Автоматика Ямадзаки (2026-11-27): из систем развития — только гений, как есть, без усилений от родословной.
+    genius_eco = effects[SOURCE_GENIUS].eco
+    monster_cut = 0.0  # 67 MONSTER: Ультра инстинкт чаще — это свойство самой автоматики, в ней остаётся
     # Второе тело (донат): второй путь и вторая родословная действуют одновременно с первыми.
     if row.path2:
         effects[SOURCE_PATH2] = level_effect(PATH_LEVELS, row.path2, row.path2_level)
@@ -219,6 +225,7 @@ async def _compute_build(session: AsyncSession, user_id: int) -> Build:
                 continue
             base = effects[source]
             cut = MONSTER_UI_COOLDOWN_CUT if level >= 2 else 0.0
+            monster_cut = max(monster_cut, cut)
             eco = base.eco + EconomyMods(recruit_cooldown=cut, personal_cooldown=cut, extras_training_cooldown=cut)
             effects[source] = LevelEffect(combat=base.combat.scale(MONSTER_YAMAZAKI_MULT), eco=eco, special=base.special)
     special: dict = {}
@@ -357,7 +364,8 @@ async def _compute_build(session: AsyncSession, user_id: int) -> Build:
     eco = eco + potion_eco
     # Клан: здания на землях клана и донат-уровень — небоевые бафы участникам (боевые бафы
     # донат-уровня работают только у клановой роты в войне, `services/clan/war`).
-    eco = eco + await _clan_eco(session, user_id)
+    clan_eco = await _clan_eco(session, user_id)
+    eco = eco + clan_eco
     # Бафф лиги: за каждую ступень выше первой (пользователь 2026-11-09).
     if row.league:
         eco = eco + EconomyMods(income=LEAGUE_INCOME_STEP * row.league)
@@ -365,6 +373,14 @@ async def _compute_build(session: AsyncSession, user_id: int) -> Build:
         battle = battle.with_total(battle.total + CombatMods(attack=power, durability=power))
     positions = await _positions(session, user_id)
     eco = eco + positions.eco
+    # Бонусы для автоматики Ямадзаки (пользователь 2026-11-27): вербовка и тренировки «как у всех» — гений, зелья,
+    # здания (клановые здесь, тренажёрные залы бизнеса — в самой тренировке). Родословные, пути, техники, пробуждение,
+    # позиции, КПД пути тренировок не действуют. Правила рангов Самдака (запрет перехода, кап ×2) остаются —
+    # это не бонус, а выбор игрока: без них автотренировка гнала бы статистов на новый ранг с потерей мощи.
+    auto_eco = genius_eco + potion_eco + clan_eco + EconomyMods(
+        rank_hold=eco.rank_hold, training_cap_mult=eco.training_cap_mult,
+        recruit_cooldown=monster_cut, personal_cooldown=monster_cut, extras_training_cooldown=monster_cut,
+    )
     training_kpd = await _training_kpd(session, user_id, row) * (1 + special.get("training_kpd_boost", 0.0))
     if training_kpd:
         from bot.config.unique_path import TRAINING_KPD_EXTRAS_PP
@@ -385,25 +401,28 @@ async def _compute_build(session: AsyncSession, user_id: int) -> Build:
     flags = frozenset(key for key, value in special.items() if value is True)
     from datetime import datetime, timezone
 
+    influence_base_auto = await _influence_base(session, user_id, row)
+    influence_base = influence_base_auto + int(positions.get("influence"))
     security_off = row.security_off_until is not None and row.security_off_until > datetime.now(timezone.utc)
     return Build(
         battle=battle, eco=eco, awakening=multiplier, resonance=resonance, flags=flags, positions=positions,
         potion_combat=potion_combat, absolutes=absolutes, training_kpd=training_kpd,
-        influence=await _influence(session, user_id, row, positions, eco),
+        influence=int(influence_base * (1 + eco.influence_bonus)),
+        auto_eco=auto_eco,
+        auto_influence=int(influence_base_auto * (1 + auto_eco.influence_bonus)),
         paths=tuple(filter(None, (row.path, row.path2))),
         security_off=security_off,
         pg=pg,
     )
 
 
-async def _influence(session: AsyncSession, user_id: int, row: BuildRow, positions, eco: EconomyMods) -> int:
-    """Влияние: старт + районы + парламенты + навык «Авторитет» + копилка императора, всё × бонус
-    систем развития (Ким Гапрен, Преодоление)."""
+async def _influence_base(session: AsyncSession, user_id: int, row: BuildRow) -> int:
+    """Влияние без навыков позиций и бонусов систем: старт + районы + парламенты + копилка императора.
+    Полное влияние = (это + навык «Авторитет») × бонус систем развития (Ким Гапрен, Преодоление)."""
     districts = await district_repo.count_owned(session, user_id)
     parliaments = (await business_repo.count_by_type(session, user_id)).get(BIZ_PARLIAMENT, 0)
     base = INFLUENCE_STARTING + INFLUENCE_PER_DISTRICT * districts + BUSINESS_PARLIAMENT_INFLUENCE * parliaments
-    base += int(positions.get("influence")) + row.influence_banked
-    return int(base * (1 + eco.influence_bonus))
+    return base + row.influence_banked
 
 
 async def _training_kpd(session: AsyncSession, user_id: int, row: BuildRow) -> float:

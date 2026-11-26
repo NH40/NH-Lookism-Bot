@@ -106,7 +106,9 @@ async def get_offer(session: AsyncSession, user_id: int, phase: str) -> RecruitO
     return RecruitOffer(crowd=crowd, select=max(1, crowd // RECRUIT_SELECT_DIVISOR), ceiling=RANK_LADDER[ceiling], influence=influence)
 
 
-async def recruit_extra(session: AsyncSession, redis: Redis, user_id: int, phase: str, *, select: bool = False) -> RecruitResult:
+async def recruit_extra(
+    session: AsyncSession, redis: Redis, user_id: int, phase: str, *, select: bool = False, auto: bool = False
+) -> RecruitResult:
     """Атомарный `SET NX EX` — сам ключ и есть КД (правило 4, см. `cache/keys.
     recruit_extra_cooldown`): если он не взят, вербовка недоступна ещё
     `retry_after_seconds`. Единственный шаг после — +1 к стопке (ранг, 0, 0),
@@ -115,9 +117,10 @@ async def recruit_extra(session: AsyncSession, redis: Redis, user_id: int, phase
 
     Бойцов за нажатие решает влияние (`config/game.recruit_quantity`), у каждого свой случайный ранг —
     одним биномиальным проходом, а не циклом по бойцам: партия у Ким Гапрена — сотни. `select` — отбор:
-    вчетверо меньше бойцов, зато ранг только из верхней половины доступных."""
+    вчетверо меньше бойцов, зато ранг только из верхней половины доступных. `auto` — автовербовка Ямадзаки:
+    без бонусов родословных, путей и техник, только гений, зелья, здания (2026-11-27)."""
     key = recruit_extra_cooldown(user_id)
-    profile = await get_combat_profile(session, user_id)
+    profile = await get_combat_profile(session, user_id, auto=auto)
     acquired = await redis.set(key, "1", nx=True, ex=profile.cooldown(cooldown_seconds(KEY_CD_RECRUIT), profile.eco.recruit_cooldown))
     if not acquired:
         ttl = await redis.ttl(key)

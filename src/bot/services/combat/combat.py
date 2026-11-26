@@ -744,9 +744,27 @@ def _copied(build: BattleBuild, opponent: BattleBuild) -> CombatMods:
 def _loss_save(side: _Side, opponent: _Side) -> float:
     m = side.mods
     value = side.chances.loss_save + m.loss_save
+    return min(BATTLE_LOSS_SAVE_MAX, value * BATTLE_LOSS_SAVE_SOURCE_MULT)
+
+
+def _despair_save_allowed(side: _Side, opponent: _Side, won: bool) -> bool:
+    """Спасение павших от Отчаяния (пользователь 2026-11-27): только если бой проигран или на старте
+    своя армия была слабее. Сильный, который победил, своих не спасает — иначе он и выигрывает,
+    и почти ничего не теряет, а соперник падает в силе."""
+    return not won or side.initial_power < opponent.initial_power
+
+
+def _despair_loss_save(side: _Side, opponent: _Side, won: bool) -> float:
+    """Вся часть спасения павших от Отчаяния: шкала пути, шкала отчаяния, бонус победы — под одним условием."""
+    if not _despair_save_allowed(side, opponent, won):
+        return 0.0
+    m = side.mods
+    value = m.despair_loss_save
     if m.despair:
         value += m.despair * _despair_gauge(side, opponent, m) * 0.5
-    return min(BATTLE_LOSS_SAVE_MAX, value * BATTLE_LOSS_SAVE_SOURCE_MULT)
+    if won:
+        value += m.win_loss_save
+    return value
 
 
 def _trigger_active(t: TriggerSpec, side: _Side, opponent: _Side, r: int) -> bool:
@@ -854,8 +872,7 @@ def _despair(side: _Side, opponent: _Side, won: bool, rng: Random) -> tuple[str,
 
 def _loss_save_after(side: _Side, opponent: _Side, won: bool) -> float:
     extra = sum(t.loss_save for t in side.chances.triggers if t.when == ps.WHEN_ON_LOSS) if not won else 0.0
-    if won:
-        extra += side.mods.win_loss_save
+    extra += _despair_loss_save(side, opponent, won)
     return min(BATTLE_LOSS_SAVE_MAX, _loss_save(side, opponent) + extra * BATTLE_LOSS_SAVE_SOURCE_MULT)
 
 

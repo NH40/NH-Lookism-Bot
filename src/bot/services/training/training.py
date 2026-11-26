@@ -200,7 +200,7 @@ def _coverage(stacks, phase: str, fraction: float, rules: RankRules = NO_RULES) 
     return covered
 
 
-async def train_extras(session: AsyncSession, redis: Redis, user_id: int, phase: str) -> TrainResult:
+async def train_extras(session: AsyncSession, redis: Redis, user_id: int, phase: str, *, auto: bool = False) -> TrainResult:
     """Атомарный `SET NX EX` — тот же приём, что у вербовки. Если у игрока вообще нет
     статистов — КД НЕ тратится (нечего тренировать, это не действие, а его отсутствие).
 
@@ -220,7 +220,8 @@ async def train_extras(session: AsyncSession, redis: Redis, user_id: int, phase:
     if not stacks:
         return TrainResult(attempted=0, stage1=0, stage2=0, stage3=0)
 
-    profile = await get_combat_profile(session, user_id)
+    # `auto` — автотренировка Ямадзаки (2026-11-27): без бонусов родословных и путей, только гений, зелья, здания.
+    profile = await get_combat_profile(session, user_id, auto=auto)
     rules = await _rank_rules(session, user_id, profile.eco)
     trainable = [s for s in stacks if not _is_maxed(s.rank, s.training_level, phase, rules)]
     if not trainable:

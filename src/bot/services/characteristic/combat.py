@@ -197,6 +197,13 @@ class CombatProfile:
         return (rng or random).random() * 100 < self.free_attack_percent()
 
 
-async def get_combat_profile(session: AsyncSession, user_id: int) -> CombatProfile:
+async def get_combat_profile(session: AsyncSession, user_id: int, *, auto: bool = False) -> CombatProfile:
+    """`auto` — для автоматики Ямадзаки (2026-11-27): небоевые бонусы и влияние только от гения, зелий и зданий
+    (`Build.auto_eco`), КПД пути тренировок не действует. Боевая часть профиля та же."""
+    from dataclasses import replace
+
     row = await char_repo.get_combat_row(session, user_id)
-    return CombatProfile(ranks=row.ranks, mastery=row.mastery, build=await get_build(session, user_id))
+    build = await get_build(session, user_id)
+    if auto:
+        build = replace(build, eco=build.auto_eco, influence=build.auto_influence, training_kpd=0.0)
+    return CombatProfile(ranks=row.ranks, mastery=row.mastery, build=build)

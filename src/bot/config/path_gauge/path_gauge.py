@@ -65,8 +65,9 @@ PATH_GAUGES: dict[str, GaugeSpec] = {
         combat={"attack": 0.40, "durability": 0.25},
         eco={"influence_bonus": 0.25, "recruit_influence_cut": 0.10},
     ),
-    # За победы и убитых: чем больше побеждал, тем сильнее и тем больше своих сохраняешь.
-    PATH_DESPAIR: GaugeSpec(combat={"attack": 0.35, "loss_save": 0.10, "win_loss_save": 0.10}),
+    # За победы и убитых: чем больше побеждал, тем сильнее. Своих сохраняешь, только если проиграл или
+    # был слабее (2026-11-27).
+    PATH_DESPAIR: GaugeSpec(combat={"attack": 0.35, "despair_loss_save": 0.10, "win_loss_save": 0.10}),
     # За поглощённый урон.
     PATH_ABSORPTION: GaugeSpec(combat={"durability": 0.20, "attack": 0.20, "absorb_store": 0.04}),
     # За бои с другими игроками. Сила копии растёт, Джинен ускоряет.

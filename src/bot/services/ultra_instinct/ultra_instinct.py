@@ -10,6 +10,11 @@
 сервисами, с теми же КД и атомарностью (действие на КД просто пропускается). Каждое
 действие — своя транзакция: сбой одного не мешает остальным.
 
+**Автовербовка и автотренировки — «как у всех»** (пользователь 2026-11-27, жалоба на топ-1 с Ямадзаки + Гапреном:
+×80 мощи за 5 дней в АФК): бонусы родословных, путей, техник, пробуждения и позиций на них не действуют, только
+гений, зелья и здания (`Build.auto_eco`, `get_combat_profile(auto=True)`). Хочешь бонусы Гапрена/Преодоления —
+жми вербовку сам. Взамен нерфы вербовки от 2026-11-20 откачены.
+
 **Автобой с боссом может стоить много армии** (пользователь: «игрок может так терять очень много
 статистов»). Поэтому перед каждым автобоем считается прогноз тем же движком боя: бой идёт, только если
 шанс победы не ниже `ULTRA_BOSS_MIN_WIN_RATE` и ожидаемые потери не выше потолка, который игрок задал сам.
@@ -291,11 +296,11 @@ async def run_once(session_factory: async_sessionmaker[AsyncSession], redis: Red
         async with session_factory() as session:
             eco = (await get_build(session, user_id)).eco
         if eco.auto_recruit and _enabled(settings, ACTION_RECRUIT):
-            await attempt("recruited", lambda s: recruit_extra(s, redis, user_id, phase), (RecruitOnCooldownError,))
+            await attempt("recruited", lambda s: recruit_extra(s, redis, user_id, phase, auto=True), (RecruitOnCooldownError,))
         if eco.auto_train and _enabled(settings, ACTION_TRAIN):
-            await attempt("trained", lambda s: train_personal(s, redis, user_id), (TrainingOnCooldownError,))
+            await attempt("trained", lambda s: train_personal(s, redis, user_id, auto=True), (TrainingOnCooldownError,))
         if eco.auto_train and _enabled(settings, ACTION_EXTRAS):
-            await attempt("extras_trained", lambda s: train_extras(s, redis, user_id, phase), (TrainingOnCooldownError,))
+            await attempt("extras_trained", lambda s: train_extras(s, redis, user_id, phase, auto=True), (TrainingOnCooldownError,))
         if eco.auto_school and _enabled(settings, ACTION_SCHOOL):
             await _school_lessons(session_factory, redis, user_id, attempt)
         if eco.auto_roll and _enabled(settings, ACTION_ROLL):

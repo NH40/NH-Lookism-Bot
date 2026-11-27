@@ -197,13 +197,20 @@ class CombatProfile:
         return (rng or random).random() * 100 < self.free_attack_percent()
 
 
-async def get_combat_profile(session: AsyncSession, user_id: int, *, auto: bool = False) -> CombatProfile:
-    """`auto` — для автоматики Ямадзаки (2026-11-27): небоевые бонусы и влияние только от гения, зелий и зданий
-    (`Build.auto_eco`), КПД пути тренировок не действует. Боевая часть профиля та же."""
+async def get_combat_profile(session: AsyncSession, user_id: int, *, auto: str = "") -> CombatProfile:
+    """`auto` — для автоматики Ямадзаки (2026-11-27): `AUTO_RECRUIT` — бонусы автовербовки
+    (`Build.auto_recruit_eco`, влияние без позиций), `AUTO_TRAIN` — автотренировок (`Build.auto_train_eco`,
+    КПД пути тренировок по доле пути). Боевая часть профиля та же."""
     from dataclasses import replace
+
+    from bot.constant.build import AUTO_RECRUIT, AUTO_TRAIN
 
     row = await char_repo.get_combat_row(session, user_id)
     build = await get_build(session, user_id)
-    if auto:
-        build = replace(build, eco=build.auto_eco, influence=build.auto_influence, training_kpd=0.0)
+    if auto == AUTO_RECRUIT:
+        build = replace(build, eco=build.auto_recruit_eco, influence=build.auto_influence, training_kpd=0.0)
+    elif auto == AUTO_TRAIN:
+        build = replace(build, eco=build.auto_train_eco, influence=build.auto_influence, training_kpd=build.auto_train_kpd)
+    elif auto:
+        raise ValueError(f"unknown auto mode: {auto}")
     return CombatProfile(ranks=row.ranks, mastery=row.mastery, build=build)

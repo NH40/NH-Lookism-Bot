@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +31,7 @@ from bot.db.repositories import clan as clan_repo
 from bot.config.clan import CLAN_BUILDINGS, CLAN_DONATE_LEVELS
 
 from bot.config.awakening import LEVELS as AWAKENING_LEVELS
+from bot.config.bloodline import AUTO_RECRUIT_PATH_SHARE, AUTO_TRAIN_BLOODLINE_SHARE, AUTO_TRAIN_PATH_SHARE
 from bot.config.bloodline import LEVELS as BLOODLINE_LEVELS
 from bot.config.development import (
     OVERCOME_RESONANCE,
@@ -163,7 +164,9 @@ class Build:
     # Безопасность снята «Нейтрализацией» Сенсорики.
     security_off: bool = False
     # Автоматика Ямадзаки (2026-11-27): небоевые бонусы и влияние только от гения, зелий и зданий.
-    auto_eco: EconomyMods = NO_ECO
+    auto_recruit_eco: EconomyMods = NO_ECO  # автовербовка: + путь ×0.5
+    auto_train_eco: EconomyMods = NO_ECO  # автотренировки: + путь, Хансу/Самдак ×0.5
+    auto_train_kpd: float = 0.0  # КПД пути тренировок в автотренировках
     auto_influence: int = 0
 
 
@@ -352,6 +355,13 @@ async def _compute_build(session: AsyncSession, user_id: int) -> Build:
     for e in effects.values():
         eco = eco + e.eco
     eco = eco.scale(multiplier)
+    # Автоматика Ямадзаки (2026-11-27, вечер): путь и Хансу/Самдак снова действуют — долями из `config/bloodline`.
+    auto_path_eco = sum((effects[s].eco for s in (SOURCE_PATH, SOURCE_PATH2) if s in effects), NO_ECO).scale(multiplier)
+    auto_blood_eco = sum(
+        (effects[s].eco.share(AUTO_TRAIN_BLOODLINE_SHARE[code]) for s, code in ((SOURCE_BLOODLINE, row.bloodline), (SOURCE_BLOODLINE2, row.bloodline2))
+         if s in effects and code in AUTO_TRAIN_BLOODLINE_SHARE),
+        NO_ECO,
+    ).scale(multiplier)
     # Собственные бафы этапов пробуждения — сверх множителя, сам множитель на них не действует.
     own = level_effect({"awakening": AWAKENING_LEVELS}, "awakening", row.awakening_level)
     battle = battle.with_total(battle.total + own.combat)
@@ -373,26 +383,33 @@ async def _compute_build(session: AsyncSession, user_id: int) -> Build:
         battle = battle.with_total(battle.total + CombatMods(attack=power, durability=power))
     positions = await _positions(session, user_id)
     eco = eco + positions.eco
-    # Бонусы для автоматики Ямадзаки (пользователь 2026-11-27): вербовка и тренировки «как у всех» — гений, зелья,
-    # здания (клановые здесь, тренажёрные залы бизнеса — в самой тренировке). Родословные, пути, техники, пробуждение,
-    # позиции, КПД пути тренировок не действуют. Правила рангов Самдака (запрет перехода, кап ×2) остаются —
-    # это не бонус, а выбор игрока: без них автотренировка гнала бы статистов на новый ранг с потерей мощи.
-    auto_eco = genius_eco + potion_eco + clan_eco + EconomyMods(
-        rank_hold=eco.rank_hold, training_cap_mult=eco.training_cap_mult,
+    # Бонусы для автоматики Ямадзаки (пользователь 2026-11-27): всегда — гений, зелья, здания (клановые здесь,
+    # тренажёрные залы бизнеса — в самой тренировке). Вечерняя правка того же дня: автовербовке — путь ×0.5,
+    # автотренировкам — путь целиком (с КПД пути тренировок) и Хансу/Самдак ×0.5 (`config/bloodline.AUTO_*`).
+    # Остальные родословные, техники, позиции не действуют. Правила рангов Самдака (запрет перехода, кап ×2)
+    # остаются целиком — это не бонус, а выбор игрока: без них автотренировка гнала бы статистов на новый ранг.
+    auto_base = genius_eco + potion_eco + clan_eco + EconomyMods(
         recruit_cooldown=monster_cut, personal_cooldown=monster_cut, extras_training_cooldown=monster_cut,
     )
+    auto_recruit_eco = auto_base + auto_path_eco.share(AUTO_RECRUIT_PATH_SHARE)
     training_kpd = await _training_kpd(session, user_id, row) * (1 + special.get("training_kpd_boost", 0.0))
+    kpd_eco = NO_ECO
     if training_kpd:
         from bot.config.unique_path import TRAINING_KPD_EXTRAS_PP
 
-        eco = eco + EconomyMods(
+        kpd_eco = EconomyMods(
             dev_points=training_kpd, personal_cooldown=training_kpd / 2,
             extras_training=training_kpd * TRAINING_KPD_EXTRAS_PP, extras_training_cooldown=training_kpd / 2,
         )
+        eco = eco + kpd_eco
         if PATH_TRAINING in (row.path, row.path2):  # v3: выученная армия бьёт сильнее
             from bot.config.unique_path import TRAINING_KPD_ATTACK
 
             battle = battle.with_total(battle.total + CombatMods(attack=training_kpd * TRAINING_KPD_ATTACK))
+    auto_train_eco = replace(
+        auto_base + (auto_path_eco + kpd_eco).share(AUTO_TRAIN_PATH_SHARE) + auto_blood_eco,
+        rank_hold=eco.rank_hold, training_cap_mult=eco.training_cap_mult,
+    )
     from bot.services.absolute import active as active_absolutes
 
     absolutes = await active_absolutes(session, user_id)
@@ -408,8 +425,10 @@ async def _compute_build(session: AsyncSession, user_id: int) -> Build:
         battle=battle, eco=eco, awakening=multiplier, resonance=resonance, flags=flags, positions=positions,
         potion_combat=potion_combat, absolutes=absolutes, training_kpd=training_kpd,
         influence=int(influence_base * (1 + eco.influence_bonus)),
-        auto_eco=auto_eco,
-        auto_influence=int(influence_base_auto * (1 + auto_eco.influence_bonus)),
+        auto_recruit_eco=auto_recruit_eco,
+        auto_train_eco=auto_train_eco,
+        auto_train_kpd=training_kpd * AUTO_TRAIN_PATH_SHARE,
+        auto_influence=int(influence_base_auto * (1 + auto_recruit_eco.influence_bonus)),
         paths=tuple(filter(None, (row.path, row.path2))),
         security_off=security_off,
         pg=pg,

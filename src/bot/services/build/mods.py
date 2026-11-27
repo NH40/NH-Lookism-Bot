@@ -129,6 +129,22 @@ class EconomyMods:
             values[f.name] = v if isinstance(v, bool) or f.name in _UNSCALED else v * k
         return EconomyMods(**values)
 
+    def share(self, k: float) -> "EconomyMods":
+        """Доля бонусов источника (автоматика Ямадзаки): в отличие от `scale` режет и ступени-счётчики
+        (`recruit_cap` 50 → 25), флаги и поля-уровни не трогает."""
+        if k == 1:
+            return self
+        values = {}
+        for f in fields(self):
+            v = getattr(self, f.name)
+            if isinstance(v, bool) or f.name in _MAX_FIELDS:
+                values[f.name] = v
+            elif f.type in ("int", int):  # ступени по типу поля: в конфигах дробные поля бывают записаны целыми
+                values[f.name] = int(v * k)
+            else:
+                values[f.name] = v * k
+        return EconomyMods(**values)
+
     @classmethod
     def of(cls, values: dict) -> "EconomyMods":
         unknown = set(values) - {f.name for f in fields(cls)}

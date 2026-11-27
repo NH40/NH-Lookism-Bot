@@ -40,6 +40,7 @@ from bot.config.characteristic import training_cap_with, training_level_cap
 from bot.constant.characteristic import RANK_INDEX, RANK_LADDER
 from bot.db.models.user import User
 from bot.db.repositories.extra import add_to_stack, add_to_stacks, list_stacks, stack_key
+from bot.constant.build import AUTO_TRAIN
 from bot.constant.dev_quest import TASK_TRAIN_EXTRAS
 from bot.services.dev_quest import emit as quest_event
 from bot.services.business import gym_training_bonus_percent
@@ -220,8 +221,8 @@ async def train_extras(session: AsyncSession, redis: Redis, user_id: int, phase:
     if not stacks:
         return TrainResult(attempted=0, stage1=0, stage2=0, stage3=0)
 
-    # `auto` — автотренировка Ямадзаки (2026-11-27): без бонусов родословных и путей, только гений, зелья, здания.
-    profile = await get_combat_profile(session, user_id, auto=auto)
+    # `auto` — автотренировка Ямадзаки (2026-11-27): гений, зелья, здания, путь и Хансу/Самдак ×0.5.
+    profile = await get_combat_profile(session, user_id, auto=AUTO_TRAIN if auto else "")
     rules = await _rank_rules(session, user_id, profile.eco)
     trainable = [s for s in stacks if not _is_maxed(s.rank, s.training_level, phase, rules)]
     if not trainable:

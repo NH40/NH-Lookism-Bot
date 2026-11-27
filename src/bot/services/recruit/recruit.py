@@ -26,6 +26,7 @@ from bot.config.characteristic import extra_power_for_rank
 from bot.config.game import RECRUIT_SELECT_DIVISOR, RECRUIT_SELECT_FLOOR, influence_rank_index, recruit_quantity
 from bot.constant.characteristic import RANK_INDEX, RANK_LADDER
 from bot.constant.phase import PHASE_CIRCLE, PHASE_FIST, PHASE_GANG
+from bot.constant.build import AUTO_RECRUIT
 from bot.constant.dev_quest import TASK_RECRUIT
 from bot.services.dev_quest import emit as quest_event
 from bot.services.extra import recruit_into_stack
@@ -118,9 +119,9 @@ async def recruit_extra(
     Бойцов за нажатие решает влияние (`config/game.recruit_quantity`), у каждого свой случайный ранг —
     одним биномиальным проходом, а не циклом по бойцам: партия у Ким Гапрена — сотни. `select` — отбор:
     вчетверо меньше бойцов, зато ранг только из верхней половины доступных. `auto` — автовербовка Ямадзаки:
-    без бонусов родословных, путей и техник, только гений, зелья, здания (2026-11-27)."""
+    только гений, зелья, здания и путь ×0.5 (2026-11-27)."""
     key = recruit_extra_cooldown(user_id)
-    profile = await get_combat_profile(session, user_id, auto=auto)
+    profile = await get_combat_profile(session, user_id, auto=AUTO_RECRUIT if auto else "")
     acquired = await redis.set(key, "1", nx=True, ex=profile.cooldown(cooldown_seconds(KEY_CD_RECRUIT), profile.eco.recruit_cooldown))
     if not acquired:
         ttl = await redis.ttl(key)

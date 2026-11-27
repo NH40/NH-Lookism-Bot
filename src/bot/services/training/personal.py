@@ -25,6 +25,7 @@ from bot.services.cooldown import schedule as schedule_ready
 from bot.cache.keys import personal_training_cooldown
 from bot.config.characteristic import MONSTER_POTENTIAL_MULT, POTENTIAL_TRAINING
 from bot.db.repositories import characteristic as char_repo
+from bot.constant.build import AUTO_TRAIN
 from bot.constant.dev_quest import TASK_PERSONAL_TRAIN
 from bot.services.dev_quest import emit as quest_event
 from bot.services.characteristic import ensure_potential, get_combat_profile
@@ -43,10 +44,10 @@ class PersonalTrainResult:
 async def train_personal(
     session: AsyncSession, redis: Redis, user_id: int, rng: random.Random | None = None, *, auto: bool = False
 ) -> PersonalTrainResult:
-    """`auto` — автотренировка Ямадзаки: без бонусов родословных и путей, только гений, зелья, здания."""
+    """`auto` — автотренировка Ямадзаки: гений, зелья, здания, путь и Хансу/Самдак ×0.5."""
     rng = rng or random
     key = personal_training_cooldown(user_id)
-    profile = await get_combat_profile(session, user_id, auto=auto)
+    profile = await get_combat_profile(session, user_id, auto=AUTO_TRAIN if auto else "")
     from bot.services.empire.events import drill_reduction
 
     # Военные сборы императора (−% КД) складываются с сокращением от систем развития.

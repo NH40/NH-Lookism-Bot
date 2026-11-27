@@ -1,5 +1,7 @@
 """Публичное API домена build (константы)."""
 from bot.constant.build.build import (  # noqa: F401
+    AUTO_RECRUIT,
+    AUTO_TRAIN,
     SOURCES,
     SOURCE_BLOODLINE,
     SOURCE_BLOODLINE2,

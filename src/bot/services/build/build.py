@@ -399,7 +399,7 @@ async def _compute_build(session: AsyncSession, user_id: int) -> Build:
 
         kpd_eco = EconomyMods(
             dev_points=training_kpd, personal_cooldown=training_kpd / 2,
-            extras_training=training_kpd * TRAINING_KPD_EXTRAS_PP, extras_training_cooldown=training_kpd / 2,
+            extras_coverage=training_kpd * TRAINING_KPD_EXTRAS_PP, extras_training_cooldown=training_kpd / 2,
         )
         eco = eco + kpd_eco
         if PATH_TRAINING in (row.path, row.path2):  # v3: выученная армия бьёт сильнее

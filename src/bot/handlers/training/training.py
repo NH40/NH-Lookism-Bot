@@ -61,7 +61,7 @@ async def show_train_menu(message: Message, session: AsyncSession, user_id: int,
     )
     await message.answer(
         TRAIN_MENU_HEADER.format(personal_line=personal_line, army_block=army_block),
-        reply_markup=train_menu(ranks=(await get_build(session, user_id)).eco.rank_hold),
+        reply_markup=train_menu(ranks=(eco := (await get_build(session, user_id)).eco).rank_hold, focus=eco.focus_slots > 0),
     )
 
 

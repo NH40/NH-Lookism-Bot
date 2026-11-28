@@ -49,3 +49,13 @@ from bot.texts.training.training import (  # noqa: F401
     TRAIN_NO_EXTRAS,
     TRAIN_RESULT,
 )
+from bot.texts.training.training import (  # noqa: F401,E402
+    BTN_FOCUS,
+    BTN_FOCUS_ROW,
+    FOCUS_CAMPS,
+    FOCUS_HINT,
+    FOCUS_NO_ARMY,
+    FOCUS_NOT_AVAILABLE_ALERT,
+    FOCUS_SCREEN,
+    FOCUS_SLOTS_FULL_ALERT,
+)

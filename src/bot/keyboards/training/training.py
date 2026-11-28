@@ -23,7 +23,7 @@ BTN_TRAIN_EXTRAS_RUN = "🏋️ Тренировать статистов"
 from bot.constant.training import CB_TRAIN_SCHOOLS_OPEN, CB_TRAIN_TECH_OPEN  # noqa: E402
 from bot.texts.training import BTN_SCHOOLS, BTN_TECH_TRAINING  # noqa: E402
 
-def train_menu(*, ranks: bool = False) -> InlineKeyboardMarkup:
+def train_menu(*, ranks: bool = False, focus: bool = False) -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton(text=BTN_PERSONAL_TRAINING, callback_data=CB_TRAIN_PERSONAL)],
         [InlineKeyboardButton(text=BTN_TRAIN_EXTRAS_RUN, callback_data=CB_TRAIN_EXTRAS_RUN)],
@@ -32,8 +32,16 @@ def train_menu(*, ranks: bool = False) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text=BTN_SCHOOLS, callback_data=CB_TRAIN_SCHOOLS_OPEN),
         ],
     ]
+    extra = []
     if ranks:  # родословная Самдака
-        rows.append([InlineKeyboardButton(text=BTN_RANKS, callback_data=CB_RANKS_OPEN)])
+        extra.append(InlineKeyboardButton(text=BTN_RANKS, callback_data=CB_RANKS_OPEN))
+    if focus:  # родословная Хансу
+        from bot.constant.training import CB_FOCUS_OPEN_PREFIX
+        from bot.texts.training import BTN_FOCUS
+
+        extra.append(InlineKeyboardButton(text=BTN_FOCUS, callback_data=f"{CB_FOCUS_OPEN_PREFIX}0"))
+    if extra:
+        rows.append(extra)
     rows.append([InlineKeyboardButton(text=BTN_BACK_TO_PROFILE, callback_data=CB_PROFILE_OPEN)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -102,3 +110,33 @@ def schools_menu(rows: list[tuple[str, str]]) -> InlineKeyboardMarkup:
     kb = [[InlineKeyboardButton(text=label, callback_data=f"{CB_TRAIN_SCHOOL_LESSON_PREFIX}{school}")] for school, label in rows]
     kb.append([InlineKeyboardButton(text=BTN_BACK_TO_TRAINING, callback_data=CB_TRAIN_EXTRAS_OPEN)])
     return InlineKeyboardMarkup(inline_keyboard=kb)
+
+
+FOCUS_PAGE_SIZE = 8
+
+
+def focus_menu(view, page: int) -> InlineKeyboardMarkup:
+    """Строка на отряд (лагерь+ранг+школа): переключить фокус. Страницы — по `FOCUS_PAGE_SIZE`."""
+    from bot.constant.training import CB_FOCUS_OPEN_PREFIX, CB_FOCUS_TOGGLE_PREFIX
+    from bot.texts.common import BTN_NEXT_PAGE, BTN_PREV_PAGE
+    from bot.texts.school import SCHOOL_NAMES
+    from bot.texts.training import BTN_FOCUS_ROW, FOCUS_CAMPS
+
+    pages = max(1, -(-len(view.rows) // FOCUS_PAGE_SIZE))
+    page = min(max(page, 0), pages - 1)
+    keyboard = []
+    for r in view.rows[page * FOCUS_PAGE_SIZE:(page + 1) * FOCUS_PAGE_SIZE]:
+        text = BTN_FOCUS_ROW.format(
+            mark="✅" if r.focused else "▫️", rank=r.rank, camp=FOCUS_CAMPS.get(r.camp, r.camp),
+            school=f" · {SCHOOL_NAMES[r.school]}" if r.school in SCHOOL_NAMES else "", quantity=format_number(r.quantity),
+        )
+        keyboard.append([InlineKeyboardButton(text=text, callback_data=f"{CB_FOCUS_TOGGLE_PREFIX}{page}:{r.camp}:{r.rank}:{r.school}")])
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton(text=BTN_PREV_PAGE, callback_data=f"{CB_FOCUS_OPEN_PREFIX}{page - 1}"))
+    if page < pages - 1:
+        nav.append(InlineKeyboardButton(text=BTN_NEXT_PAGE, callback_data=f"{CB_FOCUS_OPEN_PREFIX}{page + 1}"))
+    if nav:
+        keyboard.append(nav)
+    keyboard.append([InlineKeyboardButton(text=BTN_BACK_TO_TRAINING, callback_data=CB_TRAIN_EXTRAS_OPEN)])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)

@@ -1,18 +1,23 @@
 import { useState } from "react";
 import { TechniquesPanel } from "./TechniquesPanel";
 import { SchoolsPanel } from "./SchoolsPanel";
-import type { ExtrasResult, RanksResponse, TrainingResponse } from "../../types";
+import type { ExtrasResult, FocusResponse, RanksResponse, TrainingResponse } from "../../types";
 import { BackHeader, Bar, Panel, Screen, countdown, fmt } from "../../components/ui";
 import { ROUTE_DEVELOPMENT } from "../../constants/constants";
 import { useAction, useApi } from "../../hooks/useApi";
 import "../../styles/development.css";
 
+const CAMP_LABELS: Record<string, string> = { attack: "атака", defense: "защита" };
+const SCHOOL_LABELS: Record<string, string> = { str: "Сила", agi: "Ловкость", spd: "Скорость", tec: "Техника" };
+
 export function TrainingPage() {
   const { data, status, error, reload } = useApi<TrainingResponse>("/training");
   const ranks = useApi<RanksResponse>("/training/ranks");
+  const focus = useApi<FocusResponse>("/training/focus");
   const { run, busy } = useAction(() => {
     reload();
     ranks.reload();
+    focus.reload();
   });
   const [fresh, setLast] = useState<ExtrasResult | null>(null);
   const last = fresh ?? data?.last_extras ?? null;
@@ -31,14 +36,14 @@ export function TrainingPage() {
           {ranks.data?.available && (
             <Panel title="РАНГИ СТАТИСТОВ" tone="violet">
               <div className="muted" style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.45, marginBottom: 8 }}>
-                Родословная Самдака: запрети переход на следующий ранг или переведи вручную тех, кто дошёл до обычного капа.
+                Родословная Самдака: кап уровня тренировки выше у всех статистов. Запрети переход на следующий ранг или переведи вручную тех, кто дошёл до обычного капа.
               </div>
               {ranks.data.rows.length === 0 && <div className="muted dev-note">В армии пока нет статистов.</div>}
               {ranks.data.rows.map((r) => (
                 <div key={r.rank} className="row" style={{ borderBottom: "1px dashed var(--line-dash)", padding: "6px 0", gap: 6 }}>
                   <div style={{ fontSize: 12, fontWeight: 700 }}>
                     {r.rank} · {fmt(r.quantity)}
-                    <div className="muted" style={{ fontSize: 11 }}>кап ур. {r.cap} · готовы {fmt(r.ready)}</div>
+                    <div className="muted" style={{ fontSize: 11 }}>кап ур. {r.base_cap} → {r.cap} · готовы {fmt(r.ready)}</div>
                   </div>
                   <div style={{ display: "flex", gap: 6 }}>
                     <button type="button" className={`btn small ${r.locked ? "violet" : "ghost"}`} disabled={busy} onClick={() => run("/training/ranks/lock", { rank: r.rank })}>
@@ -50,6 +55,34 @@ export function TrainingPage() {
                       </button>
                     )}
                   </div>
+                </div>
+              ))}
+            </Panel>
+          )}
+
+          {focus.data?.available && (
+            <Panel title={`ФОКУС ТРЕНИРОВКИ · ${focus.data.used}/${focus.data.slots}`} tone="violet">
+              <div className="muted" style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.45, marginBottom: 8 }}>
+                Родословная Хансу: отмеченные отряды забирают весь охват тренировки статистов. Если в фокусе бойцов меньше, чем мест в тренировке, остаток достаётся остальной армии. Боец, перешедший на следующий ранг, из фокуса выходит.
+              </div>
+              {focus.data.rows.length === 0 && <div className="muted dev-note">В армии пока нет статистов.</div>}
+              {focus.data.rows.map((r) => (
+                <div key={`${r.camp}:${r.rank}:${r.school}`} className="row" style={{ borderBottom: "1px dashed var(--line-dash)", padding: "6px 0", gap: 6 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>
+                    {r.rank} · {fmt(r.quantity)}
+                    <div className="muted" style={{ fontSize: 11 }}>
+                      {CAMP_LABELS[r.camp] ?? r.camp}
+                      {r.school && SCHOOL_LABELS[r.school] ? ` · ${SCHOOL_LABELS[r.school]}` : ""}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`btn small ${r.focused ? "violet" : "ghost"}`}
+                    disabled={busy || (!r.focused && focus.data!.used >= focus.data!.slots)}
+                    onClick={() => run("/training/focus/toggle", { camp: r.camp, rank: r.rank, school: r.school })}
+                  >
+                    {r.focused ? "В фокусе" : "Добавить"}
+                  </button>
                 </div>
               ))}
             </Panel>

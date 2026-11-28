@@ -9,6 +9,8 @@ NO_EXTRAS = "Статистов пока нет."
 
 BTN_BACK = "◀️ Назад"
 BTN_BACK_TO_PROFILE = "◀️ В профиль"
+BTN_PREV_PAGE = "⬅️"
+BTN_NEXT_PAGE = "➡️"
 
 
 def render_army_block(

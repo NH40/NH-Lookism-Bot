@@ -32,17 +32,27 @@ from bot.services.characteristic import get_combat_profile, get_stats_view
 from bot.services.extra import get_army_stats
 from bot.services.gang import get_gang
 from bot.services.training import (
+    FocusSlotsFullError,
+    FocusUnavailableError,
     NothingToPromoteError,
     RankHoldUnavailableError,
     TrainingOnCooldownError,
     personal_cooldown_left,
     promote_rank,
     rank_control,
+    focus_view,
+    toggle_focus,
     toggle_rank_lock,
     train_extras,
     train_personal,
 )
-from bot.texts.training import RANKS_NOT_AVAILABLE_ALERT, RANKS_NOTHING_TO_PROMOTE_ALERT, RANKS_PROMOTED_ALERT
+from bot.texts.training import (
+    FOCUS_NOT_AVAILABLE_ALERT,
+    FOCUS_SLOTS_FULL_ALERT,
+    RANKS_NOT_AVAILABLE_ALERT,
+    RANKS_NOTHING_TO_PROMOTE_ALERT,
+    RANKS_PROMOTED_ALERT,
+)
 from bot.texts.profile import POTENTIAL_LABELS
 from bot.utils.formatting import format_countdown, format_number
 
@@ -409,7 +419,8 @@ async def get_ranks(user_id: int = Depends(get_current_user_id), session: AsyncS
     return {
         "available": True,
         "rows": [
-            {"rank": r.rank, "quantity": r.quantity, "locked": r.locked, "cap": r.cap, "ready": r.ready, "next_rank": r.next_rank}
+            {"rank": r.rank, "quantity": r.quantity, "locked": r.locked, "cap": r.cap, "base_cap": r.base_cap, "ready": r.ready,
+             "next_rank": r.next_rank}
             for r in rows
         ],
     }
@@ -435,6 +446,40 @@ async def post_rank_promote(body: RankBody, user_id: int = Depends(get_current_u
     except NothingToPromoteError:
         raise HTTPException(400, RANKS_NOTHING_TO_PROMOTE_ALERT)
     return {"message": RANKS_PROMOTED_ALERT.format(count=format_number(moved))}
+
+
+class FocusBody(BaseModel):
+    camp: str
+    rank: str
+    school: str = ""
+
+
+@router.get("/focus")
+async def get_focus(user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    """Фокус тренировки (родословная Хансу). `available=false` — способности нет."""
+    await _user(session, user_id)
+    try:
+        view = await focus_view(session, user_id)
+    except FocusUnavailableError:
+        return {"available": False, "slots": 0, "used": 0, "rows": []}
+    return {
+        "available": True,
+        "slots": view.slots,
+        "used": view.used,
+        "rows": [{"camp": r.camp, "rank": r.rank, "school": r.school, "quantity": r.quantity, "focused": r.focused} for r in view.rows],
+    }
+
+
+@router.post("/focus/toggle")
+async def post_focus_toggle(body: FocusBody, user_id: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)) -> dict:
+    await _user(session, user_id)
+    try:
+        focused = await toggle_focus(session, user_id, body.camp, body.rank, body.school)
+    except FocusUnavailableError:
+        raise HTTPException(400, FOCUS_NOT_AVAILABLE_ALERT)
+    except FocusSlotsFullError as e:
+        raise HTTPException(400, FOCUS_SLOTS_FULL_ALERT.format(slots=e.slots))
+    return {"message": f"{body.rank}: {'в фокусе' if focused else 'убран из фокуса'}"}
 
 
 @router.post("/extras")

@@ -161,6 +161,8 @@ class User(Base):
     ultra_settings: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
     # Самдак: ранги, на которых статистам запрещено переходить на следующий ранг.
     rank_locks: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
+    # Хансу «Фокус тренировки» (2026-11-28): отряды [лагерь, ранг, школа], которым достаётся весь охват тренировки статистов.
+    training_focus: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
     # Онлайн-бои: коды перков, которые игрок отключил (их нет в бою, автоатака их не жмёт) — 2026-11-20.
     arena_perks_off: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
     # Начинать онлайн-бои на автобое (2026-11-23) — можно выключить в самом бою.

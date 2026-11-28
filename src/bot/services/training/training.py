@@ -118,6 +118,7 @@ class RankControlRow:
     cap: int  # кап с бонусом Самдака
     ready: int  # бойцов, готовых перейти вручную (уровень не ниже обычного капа)
     next_rank: str | None
+    base_cap: int = 0  # обычный кап ранга (без Самдака)
 
 
 async def rank_control(session: AsyncSession, user_id: int, phase: str) -> list[RankControlRow]:
@@ -135,6 +136,7 @@ async def rank_control(session: AsyncSession, user_id: int, phase: str) -> list[
     return [
         RankControlRow(
             rank=rank, quantity=qty, locked=rank in rules.locks, cap=training_cap_with(rank, rules.cap_mult), ready=ready,
+            base_cap=training_level_cap(rank),
             next_rank=(nxt if (nxt := _next_rank(rank, phase)) != rank else None),
         )
         for rank, (qty, ready) in sorted(totals.items(), key=lambda kv: -RANK_INDEX[kv[0]])
@@ -180,12 +182,50 @@ async def promote_rank(session: AsyncSession, user_id: int, rank: str, phase: st
     return moved
 
 
-def _coverage(stacks, phase: str, fraction: float, rules: RankRules = NO_RULES) -> list[int]:
+def _spread(covered: list[int], stacks, indices: list[int], amount: int) -> int:
+    """Раздать `amount` мест в тренировке по стопкам `indices` пропорционально ещё не попавшим бойцам. → сколько роздано."""
+    indices = list(indices)
+    shuffle(indices)
+    left = sum(stacks[i].quantity - covered[i] for i in indices)
+    given = 0
+    for i in indices:
+        if amount <= 0 or left <= 0:
+            break
+        room = stacks[i].quantity - covered[i]
+        extra = min(room, binomialvariate(amount, room / left))
+        covered[i] += extra
+        amount -= extra
+        given += extra
+        left -= room
+    return given
+
+
+def _coverage(stacks, phase: str, fraction: float, rules: RankRules = NO_RULES, focus: frozenset = frozenset()) -> list[int]:
     """Сколько бойцов каждой стопки попало в тренировку. Выпавшие бойцы на максимуме не тренируются —
     вместо них берутся другие случайные статисты (пользователь 2026-11-04), поэтому их доля
-    раздаётся по остальным стопкам пропорционально числу ещё не попавших бойцов."""
+    раздаётся по остальным стопкам пропорционально числу ещё не попавших бойцов.
+
+    `focus` — Хансу «Фокус тренировки» (2026-11-28): вся квота (сколько бойцов попало бы без фокуса) сперва
+    достаётся отрядам в фокусе, остаток — остальной армии."""
     covered = [binomialvariate(s.quantity, fraction) for s in stacks]
     free = [i for i, s in enumerate(stacks) if not _is_maxed(s.rank, s.training_level, phase, rules)]
+    if focus:
+        from bot.services.training.focus import focus_key
+
+        focused = [i for i in free if focus_key(stacks[i].camp, stacks[i].rank, stacks[i].school) in focus]
+        if focused:
+            quota = sum(covered)
+            result = [0] * len(stacks)
+            in_focus = sum(stacks[i].quantity for i in focused)
+            if quota >= in_focus:  # все в фокусе помещаются — тренируются все
+                for i in focused:
+                    result[i] = stacks[i].quantity
+                quota -= in_focus
+            else:
+                quota -= _spread(result, stacks, focused, quota)
+            chosen = set(focused)
+            _spread(result, stacks, [i for i in free if i not in chosen], quota)
+            return result
     spare = sum(c for i, c in enumerate(covered) if i not in free)
     covered = [c if i in free else 0 for i, c in enumerate(covered)]
     shuffle(free)
@@ -250,7 +290,9 @@ async def train_extras(session: AsyncSession, redis: Redis, user_id: int, phase:
 
     totals = {"attempted": 0, "stage1": 0, "stage2": 0, "stage3": 0}
 
-    covered_by_stack = _coverage(stacks, phase, coverage_fraction, rules)
+    from bot.services.training.focus import active_focus
+
+    covered_by_stack = _coverage(stacks, phase, coverage_fraction, rules, await active_focus(session, user_id))
     if not any(covered_by_stack):
         # Мало статистов, разбросанных по отрядам: охват 20% мог не задеть никого — тогда игрок
         # видел «нечего тренировать», а КД уже потрачен (баг 2026-10-13). Хотя бы один боец —

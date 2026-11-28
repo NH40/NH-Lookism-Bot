@@ -69,13 +69,14 @@ async def get_army_stats(session: AsyncSession, user_id: int) -> ArmyStats:
     тренировки), а не размером армии — даже при "сотнях миллиардов" статистов
     агрегация здесь работает над МАЛЫМ числом строк-стопок, не над единицами (правило 3)."""
     stacks = await list_stacks(session, user_id)
-    cap_mult = (await get_build(session, user_id)).eco.training_cap_mult
+    eco = (await get_build(session, user_id)).eco
+    cap_mult, level_power = eco.training_cap_mult, eco.level_power
 
     by_rank_totals: dict[str, int] = {}
     camp_qty = {camp: 0 for camp in CAMPS}
     camp_power = {camp: 0 for camp in CAMPS}
     for s in stacks:
-        unit_power = statist_unit_power(s.rank, s.stars, s.training_level, s.school, s.school_level, cap_mult)
+        unit_power = statist_unit_power(s.rank, s.stars, s.training_level, s.school, s.school_level, cap_mult, level_power)
         by_rank_totals[s.rank] = by_rank_totals.get(s.rank, 0) + s.quantity
         camp_qty[s.camp] += s.quantity
         camp_power[s.camp] += s.quantity * unit_power
@@ -112,7 +113,8 @@ async def list_squads(session: AsyncSession, user_id: int) -> list[Squad]:
     """Сильнейшие отряды — первыми (по мощи одного бойца). Число отрядов ограничено
     комбинаторикой ранг×звёзды×уровень тренировки, не размером армии."""
     by_key: dict[tuple[str, int, int, str, int], dict[str, int]] = {}
-    cap_mult = (await get_build(session, user_id)).eco.training_cap_mult
+    eco = (await get_build(session, user_id)).eco
+    cap_mult, level_power = eco.training_cap_mult, eco.level_power
     for s in await list_stacks(session, user_id):
         key = (s.rank, s.stars, s.training_level, s.school, s.school_level)
         camps = by_key.setdefault(key, {camp: 0 for camp in CAMPS})
@@ -120,7 +122,7 @@ async def list_squads(session: AsyncSession, user_id: int) -> list[Squad]:
     squads = [
         Squad(
             rank=rank, stars=stars, training_level=level,
-            unit_power=round(statist_unit_power(rank, stars, level, school, school_level, cap_mult)),
+            unit_power=round(statist_unit_power(rank, stars, level, school, school_level, cap_mult, level_power)),
             attack=camps[CAMP_ATTACK], defense=camps[CAMP_DEFENSE], school=school, school_level=school_level,
         )
         for (rank, stars, level, school, school_level), camps in by_key.items()

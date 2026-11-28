@@ -14,3 +14,4 @@ from bot.constant.training.training import (  # noqa: F401
     CB_TRAIN_TECH_PAY_PREFIX,
     CB_TRAIN_TECH_VIEW_PREFIX,
 )
+from bot.constant.training.training import CB_FOCUS_OPEN_PREFIX, CB_FOCUS_TOGGLE_PREFIX  # noqa: F401,E402

@@ -217,16 +217,18 @@ LEVELS: dict[str, tuple[dict, ...]] = {
     # Бесконечная тренировка: всё про тренировки, своя шкала — КПД. Лучше всего с родословными Самдака
     # и Ямадзаки.
     PATH_TRAINING: (
-        _e(extras_training=3, dev_points=0.05),
-        _e(extras_extra_roll=0.10, extras_coverage=3),
-        _e(extras_training_cooldown=0.10, personal_cooldown=0.05),
-        _e(extras_training=3, dev_points=0.05),
-        _e(extras_extra_roll=0.10, extras_coverage=3),
-        _e(dev_points=0.15, personal_cooldown=0.05),
-        _e(extras_training_cooldown=0.10, extras_coverage=4),
-        _e(extras_extra_roll=0.15, dev_points=0.10),
-        _e(extras_training=4, personal_cooldown=0.10),
-        _e(extras_extra_roll=0.25, extras_training=5, extras_coverage=5, dev_points=0.20),
+        # level_power (2026-11-28): после линейной тренировки путь только ускорял дорогу до капа — +8 п.п. к росту
+        # мощи за уровень на 10-м уровне пути дают долгосрочно ≈×2, как вербовка и Самдак (модель роста армии).
+        _e(extras_coverage=2, dev_points=0.05, level_power=0.5),
+        _e(extras_extra_roll=0.10, extras_coverage=3, level_power=0.5),
+        _e(extras_training_cooldown=0.10, personal_cooldown=0.05, level_power=0.5),
+        _e(extras_coverage=2, dev_points=0.05, level_power=1.0),
+        _e(extras_extra_roll=0.10, extras_coverage=3, level_power=0.5),
+        _e(dev_points=0.15, personal_cooldown=0.05, level_power=1.0),
+        _e(extras_training_cooldown=0.10, extras_coverage=4, level_power=0.5),
+        _e(extras_extra_roll=0.15, dev_points=0.10, level_power=1.0),
+        _e(extras_training_cooldown=0.05, personal_cooldown=0.10, level_power=1.0),
+        _e(extras_extra_roll=0.25, extras_coverage=8, dev_points=0.20, level_power=1.5),
     ),
     # Уклонение: уклонение выше обычного потолка и работает там, где от удара «не увернуться»;
     # уклонившиеся бьют в ответ, армия разгоняется от каждого уклонения. Шкала — за уклонения.
@@ -344,7 +346,7 @@ def path_level_fragments(next_level: int) -> int:
 TRAINING_KPD_PER_DAY = 0.02
 TRAINING_KPD_PER_REP = 0.005
 TRAINING_KPD_CAP_PER_LEVEL = 0.06  # 10-й уровень — до +60%
-TRAINING_KPD_EXTRAS_PP = 20  # КПД 1.0 = +20 п.п. к шансам тренировки статистов и занятий школ
+TRAINING_KPD_EXTRAS_PP = 20  # КПД 1.0 = +20 п.п. к охвату тренировки статистов (было к шансам — до 2026-11-28)
 TRAINING_KPD_ATTACK = 0.2  # v3 (2026-11-24): КПД 1.0 = +20% атаки армии (выученная армия бьёт сильнее; 60% КПД — +12%)
 
 # Путь Бесконечной техники (пользователь 2026-11-04): сколько техник активно одновременно решает

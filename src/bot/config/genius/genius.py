@@ -64,17 +64,19 @@ LEVELS: dict[str, tuple[dict, ...]] = {
         _e(recruit_rank_bonus=1),
         _c(attack=0.06, crit_chance=0.10),
     ),
+    # Гений тренировок (переработка 2026-11-28): скорость тренировок статистов + очки развития и КД личной.
+    # Без «+п.п. к шансам»: от ~90 тренажёрных залов шанс этапов и так 100% — шансы дают только залы и зелья.
     GENIUS_TRAINING: (
         _e(dev_points=0.10),
-        _e(personal_cooldown=0.10),
-        _e(extras_training=2),
-        _e(stat_cost_discount=0.10),
+        _e(extras_training_cooldown=0.10),
+        _e(extras_coverage=3),
+        _e(extras_coverage=3),
         _e(dev_points=0.10),
         _e(extras_training_cooldown=0.15),
-        _e(mastery_delay=0.25),
-        _e(extras_training=3),
+        _e(extras_extra_roll=0.15),
+        _e(extras_training_cooldown=0.10),
         _e(personal_cooldown=0.10),
-        _e(dev_points=0.20, stat_cost_discount=0.10),
+        _e(dev_points=0.20, extras_coverage=4, extras_extra_roll=0.15),
     ),
     GENIUS_WEAPONS: (
         _e(technique_power=0.05),

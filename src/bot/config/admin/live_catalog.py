@@ -249,7 +249,7 @@ SCALARS: dict[str, tuple[str, str, str]] = {
     "TRAINING_KPD_PER_DAY": ("dev", "bot.config.unique_path.unique_path", "Путь тренировок: КПД за день"),
     "TRAINING_KPD_PER_REP": ("dev", "bot.config.unique_path.unique_path", "Путь тренировок: КПД за тренировку"),
     "TRAINING_KPD_CAP_PER_LEVEL": ("dev", "bot.config.unique_path.unique_path", "Путь тренировок: потолок КПД за уровень"),
-    "TRAINING_KPD_EXTRAS_PP": ("dev", "bot.config.unique_path.unique_path", "Путь тренировок: п.п. шансов за КПД 1.0"),
+    "TRAINING_KPD_EXTRAS_PP": ("dev", "bot.config.unique_path.unique_path", "Путь тренировок: п.п. охвата за КПД 1.0"),
     "INFINITE_EXTRA_TECHNIQUE_POWER": ("dev", "bot.config.unique_path.unique_path", "Бесконечная техника: сила доп. техник"),
     "TECHNIQUE_LEVEL_COST_PER_LEVEL": ("dev", "bot.config.unique_technique.unique_technique", "Техника: цена уровня, шаг"),
     "TECH_TRAINING_PRICE_PER_LEVEL": ("dev", "bot.config.unique_technique.unique_technique", "Техника: цена обучения за уровень"),

@@ -133,8 +133,24 @@ export interface RankRow {
   quantity: number;
   locked: boolean;
   cap: number;
+  base_cap: number;
   ready: number;
   next_rank: string | null;
+}
+
+export interface FocusRow {
+  camp: string;
+  rank: string;
+  school: string;
+  quantity: number;
+  focused: boolean;
+}
+
+export interface FocusResponse {
+  available: boolean;
+  slots: number;
+  used: number;
+  rows: FocusRow[];
 }
 
 export interface RanksResponse {

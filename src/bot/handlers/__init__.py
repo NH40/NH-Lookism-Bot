@@ -32,6 +32,7 @@ from bot.handlers.training import router as training_router
 from bot.handlers.training import technique_router as training_technique_router
 from bot.handlers.training import schools_router as training_schools_router
 from bot.handlers.training import ranks_router as training_ranks_router
+from bot.handlers.training import focus_router as training_focus_router
 from bot.handlers.teacher import router as teacher_router
 from bot.handlers.mastery import router as mastery_router
 from bot.handlers.empire import router as empire_router
@@ -95,6 +96,7 @@ def get_routers() -> list[Router]:
         training_technique_router,
         training_schools_router,
         training_ranks_router,
+        training_focus_router,
         teacher_router,
         mastery_router,
         empire_router,

@@ -19,3 +19,5 @@ CB_TRAIN_SCHOOL_LESSON_PREFIX = "training:sl:"  # f"{...}{школа}" — за�
 CB_RANKS_OPEN = "ranks:open"  # управление рангами (родословная Самдака)
 CB_RANKS_LOCK_PREFIX = "ranks:lock:"
 CB_RANKS_PROMOTE_PREFIX = "ranks:up:"
+CB_FOCUS_OPEN_PREFIX = "focus:open:"  # f"{...}{страница}" — фокус тренировки (родословная Хансу)
+CB_FOCUS_TOGGLE_PREFIX = "focus:t:"  # f"{...}{страница}:{лагерь}:{ранг}:{школа}"

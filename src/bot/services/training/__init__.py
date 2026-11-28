@@ -11,3 +11,11 @@ from bot.services.training.training import (  # noqa: F401
     toggle_rank_lock,
     train_extras,
 )
+from bot.services.training.focus import (  # noqa: F401
+    FocusRow,
+    FocusSlotsFullError,
+    FocusUnavailableError,
+    FocusView,
+    focus_view,
+    toggle_focus,
+)

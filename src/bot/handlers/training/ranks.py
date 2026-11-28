@@ -47,7 +47,7 @@ async def _show(callback: CallbackQuery, session: AsyncSession, alert: str | Non
     await callback.answer(alert or "")
     lines = "\n".join(
         RANKS_ROW.format(
-            mark="🔒" if r.locked else "🔓", rank=r.rank, quantity=format_number(r.quantity), cap=r.cap, ready=format_number(r.ready)
+            mark="🔒" if r.locked else "🔓", rank=r.rank, quantity=format_number(r.quantity), cap=r.cap, base_cap=r.base_cap, ready=format_number(r.ready)
         )
         for r in rows
     ) or RANKS_NO_ARMY

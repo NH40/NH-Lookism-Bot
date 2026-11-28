@@ -15,7 +15,7 @@ _MAX_FIELDS = frozenset({"stat_floor", "scout", "foresight", "logs", "potion_tie
 # Поля, которые не масштабируются пробуждением (ступени, уровни, флаги).
 _UNSCALED = _MAX_FIELDS | frozenset({
     "recruit_rank_bonus", "ticket_cap", "marks", "business_cap", "recruit_cap", "security", "security_pierce",
-    "teacher_quest_cut", "auto_tech_task",
+    "teacher_quest_cut", "auto_tech_task", "focus_slots",
 })
 
 
@@ -48,7 +48,9 @@ class EconomyMods:
     extras_extra_roll: float = 0.0  # не прошедшие 1-й этап пробуют ещё раз (путь тренировок)
     extras_coverage: float = 0.0  # +п.п. к доле статистов, попадающих в тренировку
     training_cap_mult: float = 0.0  # кап уровня тренировки выше на эту долю (Самдак, до ×2)
+    level_power: float = 0.0  # +п.п. к росту мощи статиста за уровень тренировки (путь тренировок, 2026-11-28)
     rank_hold: bool = False  # можно запретить статистам переходить на следующий ранг (Самдак)
+    focus_slots: int = 0  # Хансу «Фокус тренировки»: столько отрядов (лагерь+ранг+школа) забирают весь охват тренировки
     school_cooldown: float = 0.0  # −доля КД занятий школ (Хансу)
     dev_points: float = 0.0  # +доля очков развития с личной тренировки
     personal_cooldown: float = 0.0  # −доля КД личной тренировки

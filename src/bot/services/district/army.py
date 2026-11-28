@@ -34,7 +34,7 @@ _KIND_CARD = "u"
 _KIND_CONTRACT = "c"  # наёмники по контракту (магазин, родословная Джинчоля)
 
 
-def combat_stacks(stacks: Sequence[Extra], cap_mult: float = 0.0, overload: float = 0.0) -> list[CombatStack]:
+def combat_stacks(stacks: Sequence[Extra], cap_mult: float = 0.0, overload: float = 0.0, level_power: float = 0.0) -> list[CombatStack]:
     """Стопки статистов одного лагеря → армия для боевого движка. Ключ — (вид, ранг,
     звёзды, уровень тренировки, школа, уровень школы): лагерь у всех стопок одной стороны
     один и тот же. Школа учителя даёт стопке свою мощь и реакции (`config/school`). `overload` — «Перегрузка»
@@ -44,7 +44,7 @@ def combat_stacks(stacks: Sequence[Extra], cap_mult: float = 0.0, overload: floa
     result = []
     for s in stacks:
         level = s.school_level if s.school else 0
-        power = statist_unit_power(s.rank, s.stars, s.training_level, s.school, s.school_level, cap_mult)
+        power = statist_unit_power(s.rank, s.stars, s.training_level, s.school, s.school_level, cap_mult, level_power)
         if overload and s.training_level > training_level_cap(s.rank):
             power *= 1 + overload
         result.append(
@@ -68,7 +68,7 @@ async def load_camp(session: AsyncSession, user_id: int, camp: str, *, for_updat
     стопки статистов → стопки уников."""
     profile = await get_combat_profile(session, user_id)
     stacks = combat_stacks(await list_stacks(session, user_id, camp=camp, for_update=for_update), profile.eco.training_cap_mult,
-                           profile.eco.overload)
+                           profile.eco.overload, profile.eco.level_power)
     for c in await card_repo.list_stacks(session, user_id, camp=camp, for_update=for_update):
         if c.card_code in ABSOLUTES:  # абсолюты не воюют и не гибнут — пассивка за обладание
             continue

@@ -115,19 +115,20 @@ LEVELS: dict[str, tuple[dict, ...]] = {
         _s({"first_hit_ward": 0.25}, boost_kyokushin=0.25),
         _s({"durability": 0.10, "reduction": 0.03}, {"auto_boss": True}),
     ),
-    # Самдака: контрпик капа тренировки. Статист растёт выше капа (до ×2), игрок сам решает, когда ему
-    # переходить на следующий ранг, и может запретить переход. Вся родословная про тренировки.
+    # Самдака: кап и ранги (переработка 2026-11-28). Кап уровня тренировки у ВСЕХ статистов выше на 10% с
+    # каждым уровнем (до ×2 на 10-м), со 2-го — запрет перехода на следующий ранг и ручной перевод по рангам.
+    # «Перегрузка» — бойцы выше обычного капа бьют сильнее. Скорость тренировок — у гения тренировок, не здесь.
     BLOODLINE_SAMDAK: (
-        _e(extras_training=3, dev_points=0.10),
-        _e(rank_hold=True, personal_cooldown=0.05),
-        _e(extras_training_cooldown=0.10, training_cap_mult=0.25, overload=0.05),  # «Перегрузка» (v3)
-        _e(extras_coverage=5, personal_cooldown=0.10),
-        _e(training_cap_mult=0.25, extras_training=3, overload=0.05),
-        _s(None, {"mastery_delay": 0.20, "stat_cost_discount": 0.08}, training_kpd_boost=0.25),
-        _e(training_cap_mult=0.25, extras_extra_roll=0.10, overload=0.05),
-        _e(extras_training_cooldown=0.10, dev_points=0.15),
-        _e(extras_coverage=5, extras_extra_roll=0.10, stat_cost_discount=0.08),
-        _e(training_cap_mult=0.25, extras_training=5, dev_points=0.25, mastery_delay=0.20, overload=0.05),
+        _e(training_cap_mult=0.10, dev_points=0.10),
+        _e(training_cap_mult=0.10, rank_hold=True, personal_cooldown=0.05),
+        _e(training_cap_mult=0.10, overload=0.05),  # «Перегрузка» (v3)
+        _e(training_cap_mult=0.10, personal_cooldown=0.10),
+        _e(training_cap_mult=0.10, overload=0.05),
+        _s(None, {"training_cap_mult": 0.10, "mastery_delay": 0.20, "stat_cost_discount": 0.08}, training_kpd_boost=0.25),
+        _e(training_cap_mult=0.10, overload=0.05),
+        _e(training_cap_mult=0.10, dev_points=0.15),
+        _e(training_cap_mult=0.10, stat_cost_discount=0.08),
+        _e(training_cap_mult=0.10, dev_points=0.25, mastery_delay=0.20, overload=0.05),
     ),
     # Александровых: контратаки и терпение. Контратака и отражение, пока терпишь — урон гасится, с каждым
     # раундом статисты и уники сильнее. Лучше всего с путём Адаптации.
@@ -173,18 +174,20 @@ LEVELS: dict[str, tuple[dict, ...]] = {
         _e(contract_discount=0.15, contract_retain=0.02, contract_bonus=0.15, recruit_rank_bonus=1),
     ),
     # Хансу: обучение. Быстрее личные тренировки, тренировки статистов и занятия школ, сильнее все техники,
-    # учатся дешевле и быстрее, часть заданий учителя засчитывается сама.
+    # учатся дешевле и быстрее, часть заданий учителя засчитывается сама. «Фокус тренировки» (2026-11-28): выбранные
+    # отряды забирают весь охват тренировки статистов — слоты 1/2/3/5 на 1/4/7/10-м уровне.
     BLOODLINE_HANSU: (
-        _s(None, {"dev_points": 0.10, "tech_fragment_discount": 0.05}, boost_all_techniques=0.05),  # v3: всего +30%
+        _s(None, {"dev_points": 0.10, "tech_fragment_discount": 0.05, "focus_slots": 1}, boost_all_techniques=0.05),  # v3: всего +30%
         _e(personal_cooldown=0.10, extras_training_cooldown=0.10),
         _e(technique_quest_speed=0.10, school_cooldown=0.10),
-        _s(None, {"mastery_delay": 0.15}, boost_all_techniques=0.06),
+        _s(None, {"mastery_delay": 0.15, "focus_slots": 1}, boost_all_techniques=0.06),
         _e(auto_tech_task=1, tech_fragment_discount=0.10),
         _e(personal_cooldown=0.10, extras_training_cooldown=0.10, school_cooldown=0.10),
-        _s(None, {"technique_quest_speed": 0.15}, boost_all_techniques=0.07),
+        _s(None, {"technique_quest_speed": 0.15, "focus_slots": 1}, boost_all_techniques=0.07),
         _e(dev_points=0.15, tech_fragment_discount=0.10),
         _e(personal_cooldown=0.10, extras_training_cooldown=0.10, school_cooldown=0.10),
-        _s(None, {"auto_tech_task": 1, "technique_quest_speed": 0.15, "tech_fragment_discount": 0.15, "dev_points": 0.25}, boost_all_techniques=0.12),
+        _s(None, {"auto_tech_task": 1, "technique_quest_speed": 0.15, "tech_fragment_discount": 0.15, "dev_points": 0.25, "focus_slots": 2},
+           boost_all_techniques=0.12),
     ),
 }
 

@@ -136,7 +136,7 @@ _COOLDOWN_KEYS = (
 
 # Границы, которые нельзя вывести из значения: ноль здесь ломает формулу или отключает механику.
 _BOUNDS: dict[str, tuple[float, float]] = {
-    "EXTRA_TRAINING_STAGE1_POWER_MULTIPLIER": (1.0, 1.5),
+    "EXTRA_TRAINING_STAGE1_POWER_PERCENT": (1, 50),
     "EXTRA_TRAINING_LEVEL_CAP_BASE": (1, 1000),
     "EXTRA_TRAINING_LEVEL_CAP_STEP": (0, 1000),
     "EMPIRE_WAR_BIG_GAP_RATIO": (1.1, 100.0),

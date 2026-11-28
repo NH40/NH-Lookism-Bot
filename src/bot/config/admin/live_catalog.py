@@ -83,7 +83,7 @@ SCALARS: dict[str, tuple[str, str, str]] = {
     # 🏋️ Статисты и тренировки
     "EXTRA_TRAINING_LEVEL_CAP_BASE": ("statist", "bot.config.game.game", "Кап уровня у ранга F-"),
     "EXTRA_TRAINING_LEVEL_CAP_STEP": ("statist", "bot.config.game.game", "Прибавка к капу за каждый ранг"),
-    "EXTRA_TRAINING_STAGE1_POWER_MULTIPLIER": ("statist", "bot.config.game.game", "Рост мощи за уровень, ×"),
+    "EXTRA_TRAINING_STAGE1_POWER_PERCENT": ("statist", "bot.config.game.game", "Рост мощи за уровень, % от базы ранга"),
     "EXTRA_TRAINING_COVERAGE_PERCENT": ("statist", "bot.config.game.game", "Доля статистов в тренировке, %"),
     "EXTRA_TRAINING_STAGE1_SUCCESS_PERCENT": ("statist", "bot.config.game.game", "Этап 1: шанс уровня, %"),
     "EXTRA_TRAINING_STAGE2_SUCCESS_PERCENT": ("statist", "bot.config.game.game", "Этап 2: шанс звезды, %"),

@@ -23,7 +23,7 @@ from typing import NamedTuple
 from bot.config.game import (
     EXTRA_TRAINING_LEVEL_CAP_BASE,
     EXTRA_TRAINING_LEVEL_CAP_STEP,
-    EXTRA_TRAINING_STAGE1_POWER_MULTIPLIER,
+    EXTRA_TRAINING_STAGE1_POWER_PERCENT,
     EXTRA_TRAINING_STAGE2_POWER_BONUS_PERCENT,
 )
 from bot.constant.characteristic import (
@@ -62,12 +62,12 @@ def extra_unit_power(rank: str, stars: int, training_level: int, cap_mult: float
     """Мощь ОДНОЙ единицы статиста в стопке (см. `db/models/extra.py` — статисты
     хранятся стопками, мощь никогда не хранится поштучно, всегда считается по этой
     формуле). `training_level` — сколько раз статист прошёл этап 1 тренировки (мощь
-    ×`EXTRA_TRAINING_STAGE1_POWER_MULTIPLIER` каждый раз, накопительно; стопки, накачанные
+    +`EXTRA_TRAINING_STAGE1_POWER_PERCENT`% от базы ранга каждый раз, линейно (2026-11-28); стопки, накачанные
     до капа, считаются по капу — уровень в ключе стопки не переписываем), `stars` — сколько
     раз прошёл этап 2 (+50% каждая звезда) — оба множителя берутся из `config/game`
     (см. `services/training`), чтобы не дублировать числа в двух местах."""
     base = extra_power_for_rank(rank)
-    power = base * (EXTRA_TRAINING_STAGE1_POWER_MULTIPLIER ** min(training_level, training_cap_with(rank, cap_mult)))
+    power = base * (1 + EXTRA_TRAINING_STAGE1_POWER_PERCENT / 100 * min(training_level, training_cap_with(rank, cap_mult)))
     power *= (1 + EXTRA_TRAINING_STAGE2_POWER_BONUS_PERCENT / 100) ** stars
     return round(power)
 

@@ -20,7 +20,7 @@ from bot.config.school import SCHOOL_LESSON_PRICE
 from bot.config.game import (
     EXTRA_TRAINING_COVERAGE_PERCENT,
     EXTRA_TRAINING_MAX_STARS,
-    EXTRA_TRAINING_STAGE1_POWER_MULTIPLIER,
+    EXTRA_TRAINING_STAGE1_POWER_PERCENT,
     EXTRA_TRAINING_STAGE1_SUCCESS_PERCENT,
     EXTRA_TRAINING_STAGE2_POWER_BONUS_PERCENT,
     EXTRA_TRAINING_STAGE2_SUCCESS_PERCENT,
@@ -251,7 +251,7 @@ async def get_training(
     stages = [
         StageOut(
             n=1,
-            label=f"Мощь ×{EXTRA_TRAINING_STAGE1_POWER_MULTIPLIER:g}".replace(".", ","),
+            label=f"Мощь +{EXTRA_TRAINING_STAGE1_POWER_PERCENT:g}% от базы ранга",
             percent=chance(EXTRA_TRAINING_STAGE1_SUCCESS_PERCENT),
         ),
         StageOut(

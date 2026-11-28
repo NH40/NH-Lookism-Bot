@@ -220,15 +220,15 @@ LEVELS: dict[str, tuple[dict, ...]] = {
         # level_power (2026-11-28): после линейной тренировки путь только ускорял дорогу до капа — +8 п.п. к росту
         # мощи за уровень на 10-м уровне пути дают долгосрочно ≈×2, как вербовка и Самдак (модель роста армии).
         _e(extras_coverage=2, dev_points=0.05, level_power=0.5),
-        _e(extras_extra_roll=0.10, extras_coverage=3, level_power=0.5),
+        _e(extras_coverage=5, level_power=0.5),
         _e(extras_training_cooldown=0.10, personal_cooldown=0.05, level_power=0.5),
         _e(extras_coverage=2, dev_points=0.05, level_power=1.0),
-        _e(extras_extra_roll=0.10, extras_coverage=3, level_power=0.5),
+        _e(extras_coverage=5, level_power=0.5),
         _e(dev_points=0.15, personal_cooldown=0.05, level_power=1.0),
         _e(extras_training_cooldown=0.10, extras_coverage=4, level_power=0.5),
-        _e(extras_extra_roll=0.15, dev_points=0.10, level_power=1.0),
+        _e(extras_training_cooldown=0.05, dev_points=0.10, level_power=1.0),
         _e(extras_training_cooldown=0.05, personal_cooldown=0.10, level_power=1.0),
-        _e(extras_extra_roll=0.25, extras_coverage=8, dev_points=0.20, level_power=1.5),
+        _e(extras_coverage=10, dev_points=0.20, level_power=1.5),
     ),
     # Уклонение: уклонение выше обычного потолка и работает там, где от удара «не увернуться»;
     # уклонившиеся бьют в ответ, армия разгоняется от каждого уклонения. Шкала — за уклонения.

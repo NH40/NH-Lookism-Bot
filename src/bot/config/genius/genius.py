@@ -65,7 +65,8 @@ LEVELS: dict[str, tuple[dict, ...]] = {
         _c(attack=0.06, crit_chance=0.10),
     ),
     # Гений тренировок (переработка 2026-11-28): скорость тренировок статистов + очки развития и КД личной.
-    # Без «+п.п. к шансам»: от ~90 тренажёрных залов шанс этапов и так 100% — шансы дают только залы и зелья.
+    # Без «+п.п. к шансам» и повторного броска: от ~90 тренажёрных залов шанс этапов и так 100% — оба бонуса были
+    # мёртвыми. Шансы дают только залы и зелья; ветки ускоряют через КД и охват.
     GENIUS_TRAINING: (
         _e(dev_points=0.10),
         _e(extras_training_cooldown=0.10),
@@ -73,10 +74,10 @@ LEVELS: dict[str, tuple[dict, ...]] = {
         _e(extras_coverage=3),
         _e(dev_points=0.10),
         _e(extras_training_cooldown=0.15),
-        _e(extras_extra_roll=0.15),
+        _e(extras_coverage=3),
         _e(extras_training_cooldown=0.10),
         _e(personal_cooldown=0.10),
-        _e(dev_points=0.20, extras_coverage=4, extras_extra_roll=0.15),
+        _e(dev_points=0.20, extras_coverage=4, extras_training_cooldown=0.05),
     ),
     GENIUS_WEAPONS: (
         _e(technique_power=0.05),
